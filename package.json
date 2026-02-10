@@ -109,6 +109,11 @@
         "category": "Look Git"
       },
       {
+        "command": "lookGit.pushUpTo",
+        "title": "Push All Up To Here",
+        "category": "Look Git"
+      },
+      {
         "command": "lookGit.copyCommitHash",
         "title": "Copy Commit Hash",
         "category": "Look Git"
@@ -174,6 +179,11 @@
           "group": "2_destructive@4"
         },
         {
+          "command": "lookGit.pushUpTo",
+          "when": "view == lookGit.commitHistory && viewItem == commit",
+          "group": "1_operations@6"
+        },
+        {
           "command": "lookGit.copyCommitHash",
           "when": "view == lookGit.commitHistory && viewItem == commit",
           "group": "3_utility@1"
@@ -219,6 +229,10 @@
         },
         {
           "command": "lookGit.fixup",
+          "when": "lookGit.hasRepository"
+        },
+        {
+          "command": "lookGit.pushUpTo",
           "when": "lookGit.hasRepository"
         },
         {

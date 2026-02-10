@@ -167,4 +167,26 @@ export class GitService {
             { GIT_SEQUENCE_EDITOR: sedCommand }
         );
     }
+
+    public async pushUpTo(commitHash: string, remoteName: string, branchName: string): Promise<string> {
+        return this.exec(['push', remoteName, `${commitHash}:refs/heads/${branchName}`]);
+    }
+
+    public async getRemotes(): Promise<string[]> {
+        const output = await this.exec(['remote']);
+        if (!output) {
+            return [];
+        }
+        return output.split('\n');
+    }
+
+    public async getTrackingBranch(): Promise<{ remote: string; branch: string } | undefined> {
+        try {
+            const upstream = await this.exec(['rev-parse', '--abbrev-ref', '@{upstream}']);
+            const [remote, ...branchParts] = upstream.split('/');
+            return { remote, branch: branchParts.join('/') };
+        } catch {
+            return undefined;
+        }
+    }
 }

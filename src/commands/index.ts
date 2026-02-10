@@ -11,6 +11,7 @@ import { handleRenameCommit } from './renameCommit';
 import { handleCheckout } from './checkout';
 import { handleSquash } from './squash';
 import { handleFixup } from './fixup';
+import { handlePushUpTo } from './pushUpTo';
 
 export function registerCommands(
     context: vscode.ExtensionContext,
@@ -80,6 +81,12 @@ export function registerCommands(
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.fixup', (item?: CommitItem) => {
             handleFixup(gitService, historyProvider, item);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.pushUpTo', (item?: CommitItem) => {
+            handlePushUpTo(gitService, historyProvider, item);
         })
     );
 
