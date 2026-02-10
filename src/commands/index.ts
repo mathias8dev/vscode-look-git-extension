@@ -13,6 +13,15 @@ import { handleSquash } from './squash';
 import { handleFixup } from './fixup';
 import { handlePushUpTo } from './pushUpTo';
 
+// Helper to filter CommitItems from a mixed selection
+function filterCommitItems(items?: readonly unknown[]): CommitItem[] | undefined {
+    if (!items || items.length === 0) {
+        return undefined;
+    }
+    const commits = items.filter((i): i is CommitItem => i instanceof CommitItem);
+    return commits.length > 0 ? commits : undefined;
+}
+
 export function registerCommands(
     context: vscode.ExtensionContext,
     gitService: GitService,
@@ -30,11 +39,34 @@ export function registerCommands(
         })
     );
 
+    // Multi-select capable commands
+    // VS Code passes (clickedItem, allSelectedItems) for tree context menus
+
     context.subscriptions.push(
-        vscode.commands.registerCommand('lookGit.cherryPick', (item?: CommitItem) => {
-            handleCherryPick(gitService, historyProvider, item);
+        vscode.commands.registerCommand('lookGit.cherryPick', (item?: CommitItem, selected?: unknown[]) => {
+            handleCherryPick(gitService, historyProvider, item, filterCommitItems(selected));
         })
     );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.revert', (item?: CommitItem, selected?: unknown[]) => {
+            handleRevert(gitService, historyProvider, item, filterCommitItems(selected));
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.drop', (item?: CommitItem, selected?: unknown[]) => {
+            handleDrop(gitService, historyProvider, item, filterCommitItems(selected));
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.squash', (item?: CommitItem, selected?: unknown[]) => {
+            handleSquash(gitService, historyProvider, item, filterCommitItems(selected));
+        })
+    );
+
+    // Single-select only commands
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.rebase', (item?: CommitItem) => {
@@ -45,18 +77,6 @@ export function registerCommands(
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.reset', (item?: CommitItem) => {
             handleReset(gitService, historyProvider, item);
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('lookGit.revert', (item?: CommitItem) => {
-            handleRevert(gitService, historyProvider, item);
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('lookGit.drop', (item?: CommitItem) => {
-            handleDrop(gitService, historyProvider, item);
         })
     );
 
@@ -73,12 +93,6 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('lookGit.squash', (item?: CommitItem) => {
-            handleSquash(gitService, historyProvider, item);
-        })
-    );
-
-    context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.fixup', (item?: CommitItem) => {
             handleFixup(gitService, historyProvider, item);
         })
@@ -90,10 +104,18 @@ export function registerCommands(
         })
     );
 
+    // Copy commit hash — supports multi-select
     context.subscriptions.push(
-        vscode.commands.registerCommand('lookGit.copyCommitHash', (item: CommitItem) => {
-            vscode.env.clipboard.writeText(item.commitInfo.hash);
-            vscode.window.showInformationMessage(`Copied: ${item.commitInfo.shortHash}`);
+        vscode.commands.registerCommand('lookGit.copyCommitHash', (item: CommitItem, selected?: unknown[]) => {
+            const commits = filterCommitItems(selected);
+            if (commits && commits.length > 1) {
+                const hashes = commits.map((c) => c.commitInfo.hash).join('\n');
+                vscode.env.clipboard.writeText(hashes);
+                vscode.window.showInformationMessage(`Copied ${commits.length} commit hashes.`);
+            } else {
+                vscode.env.clipboard.writeText(item.commitInfo.hash);
+                vscode.window.showInformationMessage(`Copied: ${item.commitInfo.shortHash}`);
+            }
         })
     );
 

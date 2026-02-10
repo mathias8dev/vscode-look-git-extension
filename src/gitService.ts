@@ -100,11 +100,20 @@ export class GitService {
     }
 
     public async dropCommit(commitHash: string): Promise<string> {
-        const shortHash = commitHash.substring(0, 7);
-        const sedCommand = `sed -i 's/^pick ${shortHash}/drop ${shortHash}/'`;
+        return this.dropCommits([commitHash]);
+    }
 
+    public async dropCommits(commitHashes: string[]): Promise<string> {
+        // Find the oldest commit to use as rebase base
+        const sedCommands = commitHashes
+            .map((h) => `s/^pick ${h.substring(0, 7)}/drop ${h.substring(0, 7)}/`)
+            .join(';');
+        const sedCommand = `sed -i '${sedCommands}'`;
+
+        // Use the oldest commit's parent as the rebase starting point
+        const oldestHash = commitHashes[commitHashes.length - 1];
         return this.exec(
-            ['rebase', '-i', `${commitHash}~1`],
+            ['rebase', '-i', `${oldestHash}~1`],
             { GIT_SEQUENCE_EDITOR: sedCommand }
         );
     }

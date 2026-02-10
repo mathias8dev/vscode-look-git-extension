@@ -35,6 +35,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const treeView = vscode.window.createTreeView('lookGit.commitHistory', {
         treeDataProvider: commitHistoryProvider,
         showCollapseAll: false,
+        canSelectMany: true,
     });
 
     vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', !!repository);

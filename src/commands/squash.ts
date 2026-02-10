@@ -7,31 +7,38 @@ import { confirmDangerousOperation } from '../utils/confirmation';
 export async function handleSquash(
     gitService: GitService,
     historyProvider: CommitHistoryProvider,
-    item?: CommitItem
+    item?: CommitItem,
+    selectedItems?: CommitItem[]
 ): Promise<void> {
-    // Load commits for multi-select
+    // If multi-selected from tree view, use those directly
+    if (selectedItems && selectedItems.length >= 2) {
+        const commits = await gitService.getLog(100, 0);
+        await squashCommits(gitService, historyProvider, commits, selectedItems.map((i) => i.commitInfo));
+        return;
+    }
+
+    // Otherwise show QuickPick for manual selection
     const commits = await gitService.getLog(100, 0);
     if (commits.length < 2) {
         vscode.window.showWarningMessage('Need at least 2 commits to squash.');
         return;
     }
 
-    const items = commits.map((c) => ({
+    const quickPickItems = commits.map((c) => ({
         label: `${c.shortHash}  ${c.message}`,
         description: `${c.authorName} - ${c.authorDate.toLocaleDateString()}`,
         commit: c,
         picked: false,
     }));
 
-    // If invoked from context menu, pre-select that commit
     if (item) {
-        const match = items.find((i) => i.commit.hash === item.commitInfo.hash);
+        const match = quickPickItems.find((i) => i.commit.hash === item.commitInfo.hash);
         if (match) {
             match.picked = true;
         }
     }
 
-    const selected = await vscode.window.showQuickPick(items, {
+    const selected = await vscode.window.showQuickPick(quickPickItems, {
         placeHolder: 'Select commits to squash (they must be consecutive)',
         canPickMany: true,
     });
@@ -41,9 +48,18 @@ export async function handleSquash(
         return;
     }
 
+    await squashCommits(gitService, historyProvider, commits, selected.map((s) => s.commit));
+}
+
+async function squashCommits(
+    gitService: GitService,
+    historyProvider: CommitHistoryProvider,
+    allCommits: GitCommitInfo[],
+    selectedCommits: GitCommitInfo[]
+): Promise<void> {
     // Verify commits are consecutive by checking their positions in the log
-    const selectedHashes = new Set(selected.map((s) => s.commit.hash));
-    const indices = commits
+    const selectedHashes = new Set(selectedCommits.map((c) => c.hash));
+    const indices = allCommits
         .map((c, i) => selectedHashes.has(c.hash) ? i : -1)
         .filter((i) => i !== -1)
         .sort((a, b) => a - b);
@@ -57,10 +73,9 @@ export async function handleSquash(
         }
     }
 
-    // Sort selected commits in log order (oldest last in log = highest index)
-    const orderedCommits: GitCommitInfo[] = indices.map((i) => commits[i]);
+    // Sort selected commits in log order (oldest last = highest index)
+    const orderedCommits: GitCommitInfo[] = indices.map((i) => allCommits[i]);
     const oldestCommit = orderedCommits[orderedCommits.length - 1];
-    // Commits to squash = all except the oldest (which keeps "pick")
     const commitsToSquash = orderedCommits.slice(0, -1);
 
     const confirmed = await confirmDangerousOperation('squash into', oldestCommit);
@@ -80,7 +95,7 @@ export async function handleSquash(
         await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
-                title: `Squashing ${selected.length} commits...`,
+                title: `Squashing ${selectedCommits.length} commits...`,
                 cancellable: false,
             },
             async () => {
@@ -92,7 +107,7 @@ export async function handleSquash(
         );
 
         vscode.window.showInformationMessage(
-            `Squashed ${selected.length} commits into ${oldestCommit.shortHash}.`
+            `Squashed ${selectedCommits.length} commits into ${oldestCommit.shortHash}.`
         );
         historyProvider.refresh();
     } catch (error: unknown) {
