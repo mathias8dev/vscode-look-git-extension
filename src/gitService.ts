@@ -188,19 +188,33 @@ export class GitService {
     }
 
     public async getCommitFiles(commitHash: string): Promise<GitFileChange[]> {
+        // Use --root so the initial commit (no parent) also shows its files
+        // Use -m so merge commits show changes against each parent
         const output = await this.exec([
-            'diff-tree', '--no-commit-id', '-r', '--name-status', commitHash,
+            'diff-tree', '--root', '--no-commit-id', '-r', '-m', '--name-status', commitHash,
         ]);
 
         if (!output) {
             return [];
         }
 
-        return output.split('\n').map((line) => {
+        const seen = new Set<string>();
+        const result: GitFileChange[] = [];
+
+        for (const line of output.split('\n')) {
+            if (!line || !line.includes('\t')) {
+                continue;
+            }
             const [status, ...fileParts] = line.split('\t');
             const filePath = fileParts.join('\t');
-            return { status: status as GitFileStatus, filePath };
-        });
+            // Deduplicate (merge commits can list files multiple times)
+            if (filePath && !seen.has(filePath)) {
+                seen.add(filePath);
+                result.push({ status: status.charAt(0) as GitFileStatus, filePath });
+            }
+        }
+
+        return result;
     }
 
     public getWorkingDirectory(): string {

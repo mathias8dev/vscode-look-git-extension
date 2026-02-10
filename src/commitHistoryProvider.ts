@@ -40,11 +40,16 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
         if (element instanceof CommitItem) {
             try {
                 const files = await this.gitService.getCommitFiles(element.commitInfo.hash);
+                if (files.length === 0) {
+                    return [];
+                }
                 const repoRoot = this.gitService.getWorkingDirectory();
                 const tree = buildFolderTree(files);
 
                 return this.folderNodeToItems(tree, element.commitInfo.hash, repoRoot);
-            } catch {
+            } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                console.error(`Look Git: failed to get files for ${element.commitInfo.shortHash}: ${msg}`);
                 return [];
             }
         }
