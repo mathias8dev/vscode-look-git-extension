@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import type { GitService, GitCommitInfo } from './gitService';
-import { CommitItem, FileChangeItem, LoadMoreItem } from './commitItem';
+import { CommitItem, FileChangeItem, FolderItem, LoadMoreItem, buildFolderTree } from './commitItem';
 
-export type TreeItem = CommitItem | FileChangeItem | LoadMoreItem;
+export type TreeItem = CommitItem | FileChangeItem | FolderItem | LoadMoreItem;
 
 export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> {
 
@@ -36,15 +36,26 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
     }
 
     async getChildren(element?: TreeItem): Promise<TreeItem[]> {
-        // Expanding a commit → show its changed files
+        // Expanding a commit → build folder tree from changed files
         if (element instanceof CommitItem) {
             try {
                 const files = await this.gitService.getCommitFiles(element.commitInfo.hash);
                 const repoRoot = this.gitService.getWorkingDirectory();
-                return files.map((f) => new FileChangeItem(f, element.commitInfo.hash, repoRoot));
+                const tree = buildFolderTree(files);
+
+                return this.folderNodeToItems(tree, element.commitInfo.hash, repoRoot);
             } catch {
                 return [];
             }
+        }
+
+        // Expanding a folder → show its subfolders and files
+        if (element instanceof FolderItem) {
+            return this.folderNodeToItems(
+                element.folderNode,
+                element.commitHash,
+                element.repoRoot
+            );
         }
 
         // FileChangeItem and LoadMoreItem have no children
@@ -68,6 +79,28 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
 
         if (this.hasMore) {
             items.push(new LoadMoreItem());
+        }
+
+        return items;
+    }
+
+    private folderNodeToItems(
+        node: { children: Map<string, import('./commitItem').FolderNode>; files: import('./gitService').GitFileChange[] },
+        commitHash: string,
+        repoRoot: string
+    ): TreeItem[] {
+        const items: TreeItem[] = [];
+
+        // Folders first (sorted alphabetically)
+        const sortedFolders = [...node.children.entries()].sort(([a], [b]) => a.localeCompare(b));
+        for (const [, child] of sortedFolders) {
+            items.push(new FolderItem(child, commitHash, repoRoot));
+        }
+
+        // Then files (sorted alphabetically)
+        const sortedFiles = [...node.files].sort((a, b) => a.filePath.localeCompare(b.filePath));
+        for (const file of sortedFiles) {
+            items.push(new FileChangeItem(file, commitHash, repoRoot));
         }
 
         return items;
