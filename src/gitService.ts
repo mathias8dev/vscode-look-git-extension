@@ -143,4 +143,17 @@ export class GitService {
     public async checkoutNewBranch(branchName: string, startPoint: string): Promise<string> {
         return this.exec(['checkout', '-b', branchName, startPoint]);
     }
+
+    public async squashCommits(oldestCommitHash: string, commitHashes: string[]): Promise<string> {
+        // Change "pick" to "squash" for all commits except the oldest one
+        const sedCommands = commitHashes
+            .map((h) => `s/^pick ${h.substring(0, 7)}/squash ${h.substring(0, 7)}/`)
+            .join(';');
+        const sedCommand = `sed -i '${sedCommands}'`;
+
+        return this.exec(
+            ['rebase', '-i', `${oldestCommitHash}~1`],
+            { GIT_SEQUENCE_EDITOR: sedCommand }
+        );
+    }
 }
