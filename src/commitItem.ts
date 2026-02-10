@@ -93,44 +93,40 @@ export class FileChangeItem extends vscode.TreeItem {
 
         // Click to open diff
         const fileUri = vscode.Uri.file(path.join(repoRoot, fileChange.filePath));
+        const emptyUri = vscode.Uri.parse(`lookgit-empty:${fileChange.filePath}`);
+        const shortRef = commitHash.substring(0, 7);
 
-        if (fileChange.status === 'D') {
-            // Deleted: show the file as it was before deletion
-            const leftUri = toGitUri(fileUri, `${commitHash}~1`);
-            const rightUri = toGitUri(fileUri, commitHash);
-            this.command = {
-                command: 'vscode.diff',
-                title: 'Show Changes',
-                arguments: [
-                    leftUri,
-                    rightUri,
-                    `${fileName} (Deleted in ${commitHash.substring(0, 7)})`,
-                ],
-            };
-        } else if (fileChange.status === 'A') {
-            // Added: diff empty → new file
-            const emptyUri = toGitUri(fileUri, `${commitHash}~1`);
-            const rightUri = toGitUri(fileUri, commitHash);
+        if (fileChange.status === 'A') {
+            // Added: empty → new file
             this.command = {
                 command: 'vscode.diff',
                 title: 'Show Changes',
                 arguments: [
                     emptyUri,
-                    rightUri,
-                    `${fileName} (Added in ${commitHash.substring(0, 7)})`,
+                    toGitUri(fileUri, commitHash),
+                    `${fileName} (Added in ${shortRef})`,
                 ],
             };
-        } else {
-            // Modified/Renamed/etc: diff parent → commit
-            const leftUri = toGitUri(fileUri, `${commitHash}~1`);
-            const rightUri = toGitUri(fileUri, commitHash);
+        } else if (fileChange.status === 'D') {
+            // Deleted: old file → empty
             this.command = {
                 command: 'vscode.diff',
                 title: 'Show Changes',
                 arguments: [
-                    leftUri,
-                    rightUri,
-                    `${fileName} (${commitHash.substring(0, 7)})`,
+                    toGitUri(fileUri, `${commitHash}~1`),
+                    emptyUri,
+                    `${fileName} (Deleted in ${shortRef})`,
+                ],
+            };
+        } else {
+            // Modified/Renamed/etc: parent → commit
+            this.command = {
+                command: 'vscode.diff',
+                title: 'Show Changes',
+                arguments: [
+                    toGitUri(fileUri, `${commitHash}~1`),
+                    toGitUri(fileUri, commitHash),
+                    `${fileName} (${shortRef})`,
                 ],
             };
         }

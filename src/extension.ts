@@ -4,7 +4,23 @@ import { CommitHistoryProvider } from './commitHistoryProvider';
 import { getBuiltInGitApi } from './utils/gitExtension';
 import { registerCommands } from './commands';
 
+// Content provider that always returns empty content — used as the
+// "empty" side when diffing added or deleted files.
+class EmptyContentProvider implements vscode.TextDocumentContentProvider {
+    provideTextDocumentContent(): string {
+        return '';
+    }
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+    // Register the empty content provider
+    context.subscriptions.push(
+        vscode.workspace.registerTextDocumentContentProvider(
+            'lookgit-empty',
+            new EmptyContentProvider()
+        )
+    );
+
     const gitApi = await getBuiltInGitApi();
     if (!gitApi) {
         vscode.window.showErrorMessage('Look Git: Built-in Git extension is not available.');
