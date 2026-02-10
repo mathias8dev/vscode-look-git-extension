@@ -1,10 +1,12 @@
 import * as vscode from 'vscode';
 import type { GitService, GitCommitInfo } from './gitService';
-import { CommitItem, LoadMoreItem } from './commitItem';
+import { CommitItem, FileChangeItem, LoadMoreItem } from './commitItem';
 
-export class CommitHistoryProvider implements vscode.TreeDataProvider<CommitItem | LoadMoreItem> {
+export type TreeItem = CommitItem | FileChangeItem | LoadMoreItem;
 
-    private _onDidChangeTreeData = new vscode.EventEmitter<CommitItem | LoadMoreItem | undefined | null | void>();
+export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> {
+
+    private _onDidChangeTreeData = new vscode.EventEmitter<TreeItem | undefined | null | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
     private commits: GitCommitInfo[] = [];
@@ -29,15 +31,28 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<CommitItem
         this._onDidChangeTreeData.fire();
     }
 
-    getTreeItem(element: CommitItem | LoadMoreItem): vscode.TreeItem {
+    getTreeItem(element: TreeItem): vscode.TreeItem {
         return element;
     }
 
-    async getChildren(element?: CommitItem | LoadMoreItem): Promise<(CommitItem | LoadMoreItem)[]> {
+    async getChildren(element?: TreeItem): Promise<TreeItem[]> {
+        // Expanding a commit → show its changed files
+        if (element instanceof CommitItem) {
+            try {
+                const files = await this.gitService.getCommitFiles(element.commitInfo.hash);
+                const repoRoot = this.gitService.getWorkingDirectory();
+                return files.map((f) => new FileChangeItem(f, element.commitInfo.hash, repoRoot));
+            } catch {
+                return [];
+            }
+        }
+
+        // FileChangeItem and LoadMoreItem have no children
         if (element) {
             return [];
         }
 
+        // Root: load commits
         if (this.commits.length === 0) {
             try {
                 this.commits = await this.gitService.getLog(this.pageSize, 0);
@@ -47,7 +62,7 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<CommitItem
             }
         }
 
-        const items: (CommitItem | LoadMoreItem)[] = this.commits.map(
+        const items: TreeItem[] = this.commits.map(
             (commit, index) => new CommitItem(commit, index === 0)
         );
 

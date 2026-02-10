@@ -15,6 +15,13 @@ export interface GitCommitInfo {
 
 export type ResetMode = 'soft' | 'mixed' | 'hard';
 
+export type GitFileStatus = 'A' | 'M' | 'D' | 'R' | 'C' | 'T' | 'U';
+
+export interface GitFileChange {
+    status: GitFileStatus;
+    filePath: string;
+}
+
 export class GitService {
     private cwd: string;
 
@@ -178,6 +185,26 @@ export class GitService {
             return [];
         }
         return output.split('\n');
+    }
+
+    public async getCommitFiles(commitHash: string): Promise<GitFileChange[]> {
+        const output = await this.exec([
+            'diff-tree', '--no-commit-id', '-r', '--name-status', commitHash,
+        ]);
+
+        if (!output) {
+            return [];
+        }
+
+        return output.split('\n').map((line) => {
+            const [status, ...fileParts] = line.split('\t');
+            const filePath = fileParts.join('\t');
+            return { status: status as GitFileStatus, filePath };
+        });
+    }
+
+    public getWorkingDirectory(): string {
+        return this.cwd;
     }
 
     public async getTrackingBranch(): Promise<{ remote: string; branch: string } | undefined> {
