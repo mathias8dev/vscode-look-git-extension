@@ -4,6 +4,24 @@ import type { CommitHistoryProvider } from '../commitHistoryProvider';
 import type { CommitItem } from '../commitItem';
 import { confirmDangerousOperation, selectCommitFromQuickPick } from '../utils/confirmation';
 
+async function checkRebaseState(gitService: GitService): Promise<boolean> {
+    const inProgress = await gitService.isRebaseInProgress();
+    if (inProgress) {
+        const action = await vscode.window.showWarningMessage(
+            'A rebase is already in progress. Abort it first?',
+            { modal: true },
+            'Abort Rebase',
+            'Cancel'
+        );
+        if (action === 'Abort Rebase') {
+            await gitService.rebaseAbort();
+            return true; // Rebase aborted, can proceed
+        }
+        return false; // User cancelled
+    }
+    return true; // No rebase in progress
+}
+
 export async function handleDrop(
     gitService: GitService,
     historyProvider: CommitHistoryProvider,
@@ -35,6 +53,11 @@ export async function handleDrop(
             return;
         }
 
+        const canProceed = await checkRebaseState(gitService);
+        if (!canProceed) {
+            return;
+        }
+
         try {
             await vscode.window.withProgress(
                 {
@@ -43,8 +66,6 @@ export async function handleDrop(
                     cancellable: false,
                 },
                 async () => {
-                    // Pass hashes in tree order (newest first), dropCommits
-                    // uses the last one (oldest) as the rebase base
                     await gitService.dropCommits(commits.map((c) => c.hash));
                 }
             );
@@ -93,6 +114,11 @@ export async function handleDrop(
         vscode.window.showWarningMessage(
             'You have uncommitted changes. Please commit or stash them before dropping a commit.'
         );
+        return;
+    }
+
+    const canProceed = await checkRebaseState(gitService);
+    if (!canProceed) {
         return;
     }
 

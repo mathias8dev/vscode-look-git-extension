@@ -104,14 +104,14 @@ export class GitService {
     }
 
     public async dropCommits(commitHashes: string[]): Promise<string> {
-        // Find the oldest commit to use as rebase base
+        // Find the oldest commit by asking git for the topological order
+        const oldestHash = await this.findOldestCommit(commitHashes);
+
         const sedCommands = commitHashes
             .map((h) => `s/^pick ${h.substring(0, 7)}/drop ${h.substring(0, 7)}/`)
             .join(';');
         const sedCommand = `sed -i '${sedCommands}'`;
 
-        // Use the oldest commit's parent as the rebase starting point
-        const oldestHash = commitHashes[commitHashes.length - 1];
         return this.exec(
             ['rebase', '-i', `${oldestHash}~1`],
             { GIT_SEQUENCE_EDITOR: sedCommand }
@@ -137,6 +137,46 @@ export class GitService {
 
     public async amendMessage(newMessage: string): Promise<string> {
         return this.exec(['commit', '--amend', '-m', newMessage]);
+    }
+
+    public async isRebaseInProgress(): Promise<boolean> {
+        try {
+            // Check for rebase-merge or rebase-apply directories
+            const output = await this.exec(['rev-parse', '--git-dir']);
+            const fs = await import('fs');
+            const path = await import('path');
+            const gitDir = path.resolve(this.cwd, output);
+            return fs.existsSync(path.join(gitDir, 'rebase-merge'))
+                || fs.existsSync(path.join(gitDir, 'rebase-apply'));
+        } catch {
+            return false;
+        }
+    }
+
+    public async findOldestCommit(commitHashes: string[]): Promise<string> {
+        // Use git log to find which commit comes last (is oldest) in history
+        // rev-list outputs in reverse chronological order, so the last match is oldest
+        const hashArgs = commitHashes.map((h) => h.substring(0, 7));
+        const output = await this.exec([
+            'log', '--format=%H', '--reverse',
+            `${commitHashes[0]}~1...HEAD`,
+        ]);
+
+        if (!output) {
+            return commitHashes[commitHashes.length - 1];
+        }
+
+        const logHashes = output.split('\n');
+        const hashSet = new Set(commitHashes);
+
+        // Walk from oldest to newest; the first match is the oldest selected commit
+        for (const h of logHashes) {
+            if (hashSet.has(h)) {
+                return h;
+            }
+        }
+
+        return commitHashes[commitHashes.length - 1];
     }
 
     public async hasUncommittedChanges(): Promise<boolean> {
