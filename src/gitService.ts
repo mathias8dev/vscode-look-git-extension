@@ -135,4 +135,12 @@ export class GitService {
     public async getCommitMessage(commitHash: string): Promise<string> {
         return this.exec(['log', '-1', '--format=%B', commitHash]);
     }
+
+    public async checkout(ref: string): Promise<string> {
+        return this.exec(['checkout', ref]);
+    }
+
+    public async checkoutNewBranch(branchName: string, startPoint: string): Promise<string> {
+        return this.exec(['checkout', '-b', branchName, startPoint]);
+    }
 }

@@ -94,6 +94,11 @@
         "category": "Look Git"
       },
       {
+        "command": "lookGit.checkout",
+        "title": "Checkout Revision",
+        "category": "Look Git"
+      },
+      {
         "command": "lookGit.copyCommitHash",
         "title": "Copy Commit Hash",
         "category": "Look Git"
@@ -132,6 +137,11 @@
           "command": "lookGit.revert",
           "when": "view == lookGit.commitHistory && viewItem == commit",
           "group": "1_operations@4"
+        },
+        {
+          "command": "lookGit.checkout",
+          "when": "view == lookGit.commitHistory && viewItem == commit",
+          "group": "1_operations@5"
         },
         {
           "command": "lookGit.drop",
@@ -177,6 +187,10 @@
         },
         {
           "command": "lookGit.renameCommit",
+          "when": "lookGit.hasRepository"
+        },
+        {
+          "command": "lookGit.checkout",
           "when": "lookGit.hasRepository"
         },
         {

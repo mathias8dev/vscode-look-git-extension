@@ -8,6 +8,7 @@ import { handleReset } from './reset';
 import { handleRevert } from './revert';
 import { handleDrop } from './drop';
 import { handleRenameCommit } from './renameCommit';
+import { handleCheckout } from './checkout';
 
 export function registerCommands(
     context: vscode.ExtensionContext,
@@ -59,6 +60,12 @@ export function registerCommands(
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.renameCommit', (item?: CommitItem) => {
             handleRenameCommit(gitService, historyProvider, item);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.checkout', (item?: CommitItem) => {
+            handleCheckout(gitService, historyProvider, item);
         })
     );
 
