@@ -1,0 +1,233 @@
+{
+  "name": "look-git",
+  "displayName": "Look Git",
+  "description": "Advanced Git operations: cherry-pick, rebase, reset, revert, drop, and rename commits",
+  "version": "0.0.1",
+  "publisher": "mathias8dev",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "SCM Providers"
+  ],
+  "keywords": [
+    "git",
+    "cherry-pick",
+    "rebase",
+    "reset",
+    "revert",
+    "interactive rebase"
+  ],
+  "main": "./dist/extension.js",
+  "extensionDependencies": [
+    "vscode.git"
+  ],
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "look-git",
+          "title": "Look Git",
+          "icon": "resources/look-git-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "look-git": [
+        {
+          "id": "lookGit.commitHistory",
+          "name": "Commit History",
+          "icon": "resources/look-git-icon.svg",
+          "contextualTitle": "Look Git"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "lookGit.commitHistory",
+        "contents": "No Git repository found.\n[Open a folder with a Git repository](command:vscode.openFolder)",
+        "when": "!lookGit.hasRepository"
+      }
+    ],
+    "commands": [
+      {
+        "command": "lookGit.refreshHistory",
+        "title": "Refresh Commit History",
+        "category": "Look Git",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "lookGit.loadMore",
+        "title": "Load More Commits",
+        "category": "Look Git",
+        "icon": "$(ellipsis)"
+      },
+      {
+        "command": "lookGit.cherryPick",
+        "title": "Cherry-pick Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.rebase",
+        "title": "Rebase onto Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.reset",
+        "title": "Reset to Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.revert",
+        "title": "Revert Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.drop",
+        "title": "Drop Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.renameCommit",
+        "title": "Edit Commit Message",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.copyCommitHash",
+        "title": "Copy Commit Hash",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.viewCommitDetails",
+        "title": "View Commit Details",
+        "category": "Look Git"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "lookGit.refreshHistory",
+          "when": "view == lookGit.commitHistory",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "lookGit.cherryPick",
+          "when": "view == lookGit.commitHistory && viewItem == commit",
+          "group": "1_operations@1"
+        },
+        {
+          "command": "lookGit.rebase",
+          "when": "view == lookGit.commitHistory && viewItem == commit",
+          "group": "1_operations@2"
+        },
+        {
+          "command": "lookGit.reset",
+          "when": "view == lookGit.commitHistory && viewItem == commit",
+          "group": "1_operations@3"
+        },
+        {
+          "command": "lookGit.revert",
+          "when": "view == lookGit.commitHistory && viewItem == commit",
+          "group": "1_operations@4"
+        },
+        {
+          "command": "lookGit.drop",
+          "when": "view == lookGit.commitHistory && viewItem == commit",
+          "group": "2_destructive@1"
+        },
+        {
+          "command": "lookGit.renameCommit",
+          "when": "view == lookGit.commitHistory && viewItem == commit",
+          "group": "2_destructive@2"
+        },
+        {
+          "command": "lookGit.copyCommitHash",
+          "when": "view == lookGit.commitHistory && viewItem == commit",
+          "group": "3_utility@1"
+        },
+        {
+          "command": "lookGit.viewCommitDetails",
+          "when": "view == lookGit.commitHistory && viewItem == commit",
+          "group": "3_utility@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "lookGit.cherryPick",
+          "when": "lookGit.hasRepository"
+        },
+        {
+          "command": "lookGit.rebase",
+          "when": "lookGit.hasRepository"
+        },
+        {
+          "command": "lookGit.reset",
+          "when": "lookGit.hasRepository"
+        },
+        {
+          "command": "lookGit.revert",
+          "when": "lookGit.hasRepository"
+        },
+        {
+          "command": "lookGit.drop",
+          "when": "lookGit.hasRepository"
+        },
+        {
+          "command": "lookGit.renameCommit",
+          "when": "lookGit.hasRepository"
+        },
+        {
+          "command": "lookGit.refreshHistory",
+          "when": "lookGit.hasRepository"
+        },
+        {
+          "command": "lookGit.loadMore",
+          "when": "lookGit.hasRepository"
+        },
+        {
+          "command": "lookGit.copyCommitHash",
+          "when": "false"
+        },
+        {
+          "command": "lookGit.viewCommitDetails",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Look Git",
+      "properties": {
+        "lookGit.maxCommits": {
+          "type": "number",
+          "default": 50,
+          "description": "Number of commits to load initially in the history view"
+        },
+        "lookGit.confirmDangerousOperations": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show confirmation dialogs before destructive operations (reset --hard, drop)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && node esbuild.js",
+    "check-types": "tsc --noEmit",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && node esbuild.js --production",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.11.0",
+    "esbuild": "^0.20.0",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.3.0"
+  }
+}
