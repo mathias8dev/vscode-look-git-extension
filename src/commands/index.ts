@@ -10,6 +10,7 @@ import { handleDrop } from './drop';
 import { handleRenameCommit } from './renameCommit';
 import { handleCheckout } from './checkout';
 import { handleSquash } from './squash';
+import { handleFixup } from './fixup';
 
 export function registerCommands(
     context: vscode.ExtensionContext,
@@ -73,6 +74,12 @@ export function registerCommands(
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.squash', (item?: CommitItem) => {
             handleSquash(gitService, historyProvider, item);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.fixup', (item?: CommitItem) => {
+            handleFixup(gitService, historyProvider, item);
         })
     );
 

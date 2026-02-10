@@ -104,6 +104,11 @@
         "category": "Look Git"
       },
       {
+        "command": "lookGit.fixup",
+        "title": "Fixup Commit",
+        "category": "Look Git"
+      },
+      {
         "command": "lookGit.copyCommitHash",
         "title": "Copy Commit Hash",
         "category": "Look Git"
@@ -164,6 +169,11 @@
           "group": "2_destructive@3"
         },
         {
+          "command": "lookGit.fixup",
+          "when": "view == lookGit.commitHistory && viewItem == commit",
+          "group": "2_destructive@4"
+        },
+        {
           "command": "lookGit.copyCommitHash",
           "when": "view == lookGit.commitHistory && viewItem == commit",
           "group": "3_utility@1"
@@ -205,6 +215,10 @@
         },
         {
           "command": "lookGit.squash",
+          "when": "lookGit.hasRepository"
+        },
+        {
+          "command": "lookGit.fixup",
           "when": "lookGit.hasRepository"
         },
         {

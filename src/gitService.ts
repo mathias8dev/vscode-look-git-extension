@@ -156,4 +156,15 @@ export class GitService {
             { GIT_SEQUENCE_EDITOR: sedCommand }
         );
     }
+
+    public async fixupCommit(commitHash: string, targetCommitHash: string): Promise<string> {
+        // Change "pick" to "fixup" for the commit to fold into its predecessor
+        const shortHash = commitHash.substring(0, 7);
+        const sedCommand = `sed -i 's/^pick ${shortHash}/fixup ${shortHash}/'`;
+
+        return this.exec(
+            ['rebase', '-i', `${targetCommitHash}~1`],
+            { GIT_SEQUENCE_EDITOR: sedCommand }
+        );
+    }
 }
