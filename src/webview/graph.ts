@@ -1312,6 +1312,9 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .toolbar input[type="text"]:focus { border-color: var(--vscode-focusBorder); }
 .toolbar button { padding: 3px 10px; border: 1px solid var(--vscode-button-border, transparent); background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-radius: 3px; cursor: pointer; font-size: var(--vscode-font-size); }
 .toolbar button:hover { background: var(--vscode-button-hoverBackground); }
+.toggle-graph-btn { opacity: 0.5; background: transparent !important; border-color: var(--vscode-input-border) !important; color: var(--vscode-foreground) !important; }
+.toggle-graph-btn:hover { opacity: 0.8; background: var(--vscode-list-hoverBackground) !important; }
+.toggle-graph-btn.active { opacity: 1; background: var(--vscode-badge-background) !important; color: var(--vscode-badge-foreground) !important; border-color: var(--vscode-badge-background) !important; }
 
 .filter-bar { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .filter-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border: 1px solid var(--vscode-input-border); border-radius: 12px; font-size: 11px; cursor: pointer; white-space: nowrap; color: var(--vscode-descriptionForeground); background: transparent; }
