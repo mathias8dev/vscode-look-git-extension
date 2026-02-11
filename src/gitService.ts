@@ -387,6 +387,14 @@ export class GitService {
         });
     }
 
+    public async getUserName(): Promise<string> {
+        try {
+            return (await this.exec(['config', 'user.name'])).trim();
+        } catch {
+            return '';
+        }
+    }
+
     public async getTrackingBranch(): Promise<{ remote: string; branch: string } | undefined> {
         try {
             const upstream = await this.exec(['rev-parse', '--abbrev-ref', '@{upstream}']);

@@ -40,12 +40,19 @@ interface GraphData {
     rows: GraphRow[];
     maxLane: number;
     currentBranch: string;
+    currentUser: string;
 }
 
 let graphData: GraphData | null = null;
 let selectedCommitHash: string | null = null;
 let selectedBranch: string | null = null; // null = all branches
 let searchFilter = '';
+
+// Filters
+let filterAuthors: string[] = [];
+let filterDateFrom: string | null = null; // ISO date string (YYYY-MM-DD)
+let filterDateTo: string | null = null;
+let filterPath: string | null = null;
 
 // Pane widths (persisted via vscode state)
 const DEFAULT_BRANCH_WIDTH = 200;
@@ -94,6 +101,8 @@ function init(): void {
         vscode.postMessage({ type: 'refresh' });
     });
 
+    renderFilterBar();
+
     // Tell extension we're ready
     vscode.postMessage({ type: 'ready' });
 }
@@ -103,6 +112,7 @@ function getShellHtml(): string {
         <div class="graph-container" id="graph-container"
              style="grid-template-columns: ${paneState.branchWidth}px 4px 1fr 4px ${paneState.detailsWidth}px;">
             <div class="toolbar">
+                <div class="filter-bar" id="filter-bar"></div>
                 <input type="text" id="search-input" placeholder="Search commits..." />
                 <button id="refresh-btn">Refresh</button>
             </div>
@@ -182,6 +192,370 @@ function setupResize(
 function applyPaneWidths(container: HTMLElement): void {
     container.style.gridTemplateColumns =
         `${paneState.branchWidth}px 4px 1fr 4px ${paneState.detailsWidth}px`;
+}
+
+// ── Filter Bar ──
+
+let activeDropdown: HTMLElement | null = null;
+
+function closeDropdown(): void {
+    if (activeDropdown) {
+        activeDropdown.remove();
+        activeDropdown = null;
+    }
+}
+
+function showDropdown(anchorEl: HTMLElement, items: { label: string; value: string }[], onSelect: (value: string) => void): void {
+    closeDropdown();
+
+    const rect = anchorEl.getBoundingClientRect();
+    const dropdown = document.createElement('div');
+    dropdown.className = 'filter-dropdown';
+    dropdown.style.left = `${rect.left}px`;
+    dropdown.style.top = `${rect.bottom + 2}px`;
+
+    for (const item of items) {
+        const el = document.createElement('div');
+        el.className = 'filter-dropdown-item';
+        el.textContent = item.label;
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeDropdown();
+            onSelect(item.value);
+        });
+        dropdown.appendChild(el);
+    }
+
+    document.body.appendChild(dropdown);
+    activeDropdown = dropdown;
+
+    // Adjust if off-screen
+    const dropRect = dropdown.getBoundingClientRect();
+    if (dropRect.right > window.innerWidth) {
+        dropdown.style.left = `${window.innerWidth - dropRect.width - 4}px`;
+    }
+    if (dropRect.bottom > window.innerHeight) {
+        dropdown.style.maxHeight = `${window.innerHeight - rect.bottom - 8}px`;
+    }
+
+    setTimeout(() => {
+        const close = () => { closeDropdown(); document.removeEventListener('click', close); };
+        document.addEventListener('click', close);
+    }, 0);
+}
+
+function showUserDropdown(anchorEl: HTMLElement, authors: string[]): void {
+    closeDropdown();
+
+    const rect = anchorEl.getBoundingClientRect();
+    const dropdown = document.createElement('div');
+    dropdown.className = 'filter-dropdown user-dropdown';
+    dropdown.style.left = `${rect.left}px`;
+    dropdown.style.top = `${rect.bottom + 2}px`;
+
+    const currentUser = graphData?.currentUser || '';
+    const selected = new Set(filterAuthors);
+
+    let html = '';
+
+    // "Me" shortcut at the top
+    if (currentUser) {
+        const meChecked = selected.has(currentUser) ? ' checked' : '';
+        html += `<label class="filter-dropdown-check me-option">
+            <input type="checkbox" value="${escapeHtml(currentUser)}"${meChecked} />
+            <span>Me</span>
+            <span class="me-name">(${escapeHtml(currentUser)})</span>
+        </label>`;
+        html += '<div class="user-dropdown-separator"></div>';
+    }
+
+    // All authors with checkboxes
+    for (const author of authors) {
+        const checked = selected.has(author) ? ' checked' : '';
+        html += `<label class="filter-dropdown-check">
+            <input type="checkbox" value="${escapeHtml(author)}"${checked} />
+            <span>${escapeHtml(author)}</span>
+        </label>`;
+    }
+
+    dropdown.innerHTML = html;
+    document.body.appendChild(dropdown);
+    activeDropdown = dropdown;
+
+    // Adjust if off-screen
+    const dropRect = dropdown.getBoundingClientRect();
+    if (dropRect.right > window.innerWidth) {
+        dropdown.style.left = `${window.innerWidth - dropRect.width - 4}px`;
+    }
+    if (dropRect.bottom > window.innerHeight) {
+        dropdown.style.maxHeight = `${window.innerHeight - rect.bottom - 8}px`;
+    }
+
+    // Listen to checkbox changes
+    dropdown.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+        cb.addEventListener('change', () => {
+            const checkbox = cb as HTMLInputElement;
+            const value = checkbox.value;
+            if (checkbox.checked) {
+                if (!filterAuthors.includes(value)) {
+                    filterAuthors.push(value);
+                }
+            } else {
+                filterAuthors = filterAuthors.filter((a) => a !== value);
+            }
+            // Keep "Me" checkbox in sync with the matching author checkbox
+            dropdown.querySelectorAll(`input[type="checkbox"]`).forEach((other) => {
+                const otherCb = other as HTMLInputElement;
+                if (otherCb !== checkbox && otherCb.value === value) {
+                    otherCb.checked = checkbox.checked;
+                }
+            });
+            renderFilterBar();
+            renderGraphTable();
+        });
+    });
+
+    // Prevent closing when clicking inside
+    dropdown.addEventListener('click', (e) => e.stopPropagation());
+
+    setTimeout(() => {
+        const close = () => { closeDropdown(); document.removeEventListener('click', close); };
+        document.addEventListener('click', close);
+    }, 0);
+}
+
+function showDateDropdown(anchorEl: HTMLElement): void {
+    closeDropdown();
+
+    const rect = anchorEl.getBoundingClientRect();
+    const dropdown = document.createElement('div');
+    dropdown.className = 'filter-dropdown date-dropdown';
+    dropdown.style.left = `${rect.left}px`;
+    dropdown.style.top = `${rect.bottom + 2}px`;
+
+    dropdown.innerHTML = `
+        <div class="date-field"><label>From</label><input type="date" id="filter-date-from" value="${filterDateFrom || ''}" /></div>
+        <div class="date-field"><label>To</label><input type="date" id="filter-date-to" value="${filterDateTo || ''}" /></div>
+        <div class="date-actions">
+            <button id="date-apply-btn">Apply</button>
+            <button id="date-clear-btn">Clear</button>
+        </div>
+    `;
+
+    document.body.appendChild(dropdown);
+    activeDropdown = dropdown;
+
+    dropdown.querySelector('#date-apply-btn')!.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const from = (dropdown.querySelector('#filter-date-from') as HTMLInputElement).value;
+        const to = (dropdown.querySelector('#filter-date-to') as HTMLInputElement).value;
+        filterDateFrom = from || null;
+        filterDateTo = to || null;
+        closeDropdown();
+        renderFilterBar();
+        renderGraphTable();
+    });
+
+    dropdown.querySelector('#date-clear-btn')!.addEventListener('click', (e) => {
+        e.stopPropagation();
+        filterDateFrom = null;
+        filterDateTo = null;
+        closeDropdown();
+        renderFilterBar();
+        renderGraphTable();
+    });
+
+    // Prevent closing when clicking inside the dropdown
+    dropdown.addEventListener('click', (e) => e.stopPropagation());
+
+    setTimeout(() => {
+        const close = () => { closeDropdown(); document.removeEventListener('click', close); };
+        document.addEventListener('click', close);
+    }, 0);
+}
+
+function showPathInput(anchorEl: HTMLElement): void {
+    closeDropdown();
+
+    const rect = anchorEl.getBoundingClientRect();
+    const dropdown = document.createElement('div');
+    dropdown.className = 'filter-dropdown path-dropdown';
+    dropdown.style.left = `${rect.left}px`;
+    dropdown.style.top = `${rect.bottom + 2}px`;
+
+    dropdown.innerHTML = `
+        <div class="path-field">
+            <input type="text" id="filter-path-input" placeholder="e.g. src/commands" value="${filterPath || ''}" />
+        </div>
+        <div class="date-actions">
+            <button id="path-apply-btn">Apply</button>
+            <button id="path-clear-btn">Clear</button>
+        </div>
+    `;
+
+    document.body.appendChild(dropdown);
+    activeDropdown = dropdown;
+
+    const input = dropdown.querySelector('#filter-path-input') as HTMLInputElement;
+    input.focus();
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            filterPath = input.value || null;
+            closeDropdown();
+            renderFilterBar();
+            renderGraphTable();
+        }
+    });
+
+    dropdown.querySelector('#path-apply-btn')!.addEventListener('click', (e) => {
+        e.stopPropagation();
+        filterPath = input.value || null;
+        closeDropdown();
+        renderFilterBar();
+        renderGraphTable();
+    });
+
+    dropdown.querySelector('#path-clear-btn')!.addEventListener('click', (e) => {
+        e.stopPropagation();
+        filterPath = null;
+        closeDropdown();
+        renderFilterBar();
+        renderGraphTable();
+    });
+
+    dropdown.addEventListener('click', (e) => e.stopPropagation());
+
+    setTimeout(() => {
+        const close = () => { closeDropdown(); document.removeEventListener('click', close); };
+        document.addEventListener('click', close);
+    }, 0);
+}
+
+function getUniqueAuthors(): string[] {
+    if (!graphData) { return []; }
+    const authors = new Set<string>();
+    for (const row of graphData.rows) {
+        authors.add(row.commit.authorName);
+    }
+    return [...authors].sort((a, b) => a.localeCompare(b));
+}
+
+function renderFilterBar(): void {
+    const bar = document.getElementById('filter-bar')!;
+    let html = '';
+
+    // Branch chip
+    if (selectedBranch) {
+        html += `<span class="filter-chip active" data-filter="branch">
+            Branch: <strong>${escapeHtml(truncate(selectedBranch, 20))}</strong>
+            <span class="filter-chip-clear" data-clear="branch">&times;</span>
+        </span>`;
+    } else {
+        html += `<span class="filter-chip" data-filter="branch">Branch</span>`;
+    }
+
+    // User chip
+    if (filterAuthors.length > 0) {
+        const label = filterAuthors.length === 1
+            ? truncate(filterAuthors[0], 15)
+            : `${filterAuthors.length} users`;
+        html += `<span class="filter-chip active" data-filter="user">
+            User: <strong>${escapeHtml(label)}</strong>
+            <span class="filter-chip-clear" data-clear="user">&times;</span>
+        </span>`;
+    } else {
+        html += `<span class="filter-chip" data-filter="user">User &#9662;</span>`;
+    }
+
+    // Date chip
+    if (filterDateFrom || filterDateTo) {
+        const label = formatDateRange(filterDateFrom, filterDateTo);
+        html += `<span class="filter-chip active" data-filter="date">
+            Date: <strong>${escapeHtml(label)}</strong>
+            <span class="filter-chip-clear" data-clear="date">&times;</span>
+        </span>`;
+    } else {
+        html += `<span class="filter-chip" data-filter="date">Date &#9662;</span>`;
+    }
+
+    // Paths chip
+    if (filterPath) {
+        html += `<span class="filter-chip active" data-filter="paths">
+            Paths: <strong>${escapeHtml(truncate(filterPath, 18))}</strong>
+            <span class="filter-chip-clear" data-clear="paths">&times;</span>
+        </span>`;
+    } else {
+        html += `<span class="filter-chip" data-filter="paths">Paths &#9662;</span>`;
+    }
+
+    bar.innerHTML = html;
+    wireFilterBarHandlers(bar);
+}
+
+function wireFilterBarHandlers(bar: HTMLElement): void {
+    // Chip clicks — open dropdowns
+    bar.querySelectorAll('.filter-chip').forEach((el) => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const filter = (el as HTMLElement).dataset.filter!;
+            switch (filter) {
+                case 'branch':
+                    // Branch filter is controlled by the left pane; clicking the chip
+                    // just focuses the branch pane (no dropdown needed)
+                    break;
+                case 'user': {
+                    const authors = getUniqueAuthors();
+                    showUserDropdown(el as HTMLElement, authors);
+                    break;
+                }
+                case 'date':
+                    showDateDropdown(el as HTMLElement);
+                    break;
+                case 'paths':
+                    showPathInput(el as HTMLElement);
+                    break;
+            }
+        });
+    });
+
+    // Clear buttons
+    bar.querySelectorAll('.filter-chip-clear').forEach((el) => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const clear = (el as HTMLElement).dataset.clear!;
+            switch (clear) {
+                case 'branch':
+                    selectedBranch = null;
+                    vscode.postMessage({ type: 'selectBranch', branches: undefined });
+                    renderBranchPane();
+                    break;
+                case 'user':
+                    filterAuthors = [];
+                    break;
+                case 'date':
+                    filterDateFrom = null;
+                    filterDateTo = null;
+                    break;
+                case 'paths':
+                    filterPath = null;
+                    break;
+            }
+            renderFilterBar();
+            renderGraphTable();
+        });
+    });
+}
+
+function truncate(str: string, maxLen: number): string {
+    return str.length > maxLen ? str.substring(0, maxLen) + '...' : str;
+}
+
+function formatDateRange(from: string | null, to: string | null): string {
+    if (from && to) { return `${from} \u2013 ${to}`; }
+    if (from) { return `from ${from}`; }
+    if (to) { return `until ${to}`; }
+    return '';
 }
 
 // ── Branch Pane ──
@@ -379,6 +753,7 @@ function wireBranchPaneHandlers(pane: HTMLElement): void {
                 selectedBranch = branch;
                 vscode.postMessage({ type: 'selectBranch', branches: [branch] });
             }
+            renderFilterBar();
             renderBranchPane();
         });
     });
@@ -406,6 +781,8 @@ function renderGraphTable(): void {
     const tagNames = new Set(graphData.tags.map((t) => t.name));
 
     let rows = graphData.rows;
+
+    // Apply filters
     if (searchFilter) {
         rows = rows.filter((r) => {
             const c = r.commit;
@@ -414,10 +791,37 @@ function renderGraphTable(): void {
                 || c.authorName.toLowerCase().includes(searchFilter);
         });
     }
+    if (filterAuthors.length > 0) {
+        const authors = new Set(filterAuthors);
+        rows = rows.filter((r) => authors.has(r.commit.authorName));
+    }
+    if (filterDateFrom) {
+        const from = new Date(filterDateFrom).getTime();
+        rows = rows.filter((r) => new Date(r.commit.authorDate).getTime() >= from);
+    }
+    if (filterDateTo) {
+        const to = new Date(filterDateTo).getTime() + 86400000; // include the full day
+        rows = rows.filter((r) => new Date(r.commit.authorDate).getTime() < to);
+    }
+    if (filterPath) {
+        const pathLower = filterPath.toLowerCase();
+        // Path filtering requires commit file data which we don't have client-side for all commits.
+        // Filter by checking if the path string appears in the commit message as a fallback,
+        // or filter by refs that contain the path. For a proper implementation we'd need
+        // server-side filtering. Here we filter messages/hashes that mention the path.
+        rows = rows.filter((r) => {
+            const c = r.commit;
+            return c.message.toLowerCase().includes(pathLower)
+                || c.refs.some((ref) => ref.toLowerCase().includes(pathLower));
+        });
+    }
+
+    const hasFilter = !!(searchFilter || filterAuthors.length > 0 || filterDateFrom || filterDateTo || filterPath);
+    const graphColWidth = hasFilter ? 24 : (graphData.maxLane + 2) * 16 + 16;
 
     let html = `<table class="graph-table">
         <thead><tr>
-            <th style="width: ${(graphData.maxLane + 2) * 16 + 16}px;"></th>
+            <th style="width: ${graphColWidth}px;"></th>
             <th class="hash-col">Hash</th>
             <th class="message-col">Message</th>
             <th class="author-col">Author</th>
@@ -427,14 +831,21 @@ function renderGraphTable(): void {
 
     for (const row of rows) {
         const c = row.commit;
-        const svgHtml = renderGraphSvg(row, graphData.maxLane);
         const refs = parseRefs(c.refs, tagNames);
         const badges = renderRefBadges(refs);
         const isSelected = c.hash === selectedCommitHash ? ' selected' : '';
         const date = formatRelativeDate(new Date(c.authorDate));
 
+        let graphCell: string;
+        if (hasFilter) {
+            // Simple colored bullet when filtering
+            graphCell = `<span class="filter-bullet" style="background: ${row.laneData.color};"></span>`;
+        } else {
+            graphCell = renderGraphSvg(row, graphData.maxLane);
+        }
+
         html += `<tr class="graph-row${isSelected}" data-hash="${c.hash}">
-            <td class="graph-cell">${svgHtml}</td>
+            <td class="graph-cell">${graphCell}</td>
             <td class="hash-col">${escapeHtml(c.shortHash)}</td>
             <td class="message-col">${badges}${escapeHtml(c.message)}</td>
             <td class="author-col">${escapeHtml(c.authorName)}</td>
@@ -564,6 +975,7 @@ window.addEventListener('message', (event) => {
     switch (msg.type) {
         case 'graphData':
             graphData = msg.data;
+            renderFilterBar();
             renderBranchPane();
             renderGraphTable();
             // Clear details if selected commit no longer exists
@@ -607,6 +1019,40 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .toolbar button { padding: 3px 10px; border: 1px solid var(--vscode-button-border, transparent); background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-radius: 3px; cursor: pointer; font-size: var(--vscode-font-size); }
 .toolbar button:hover { background: var(--vscode-button-hoverBackground); }
 
+.filter-bar { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.filter-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border: 1px solid var(--vscode-input-border); border-radius: 12px; font-size: 11px; cursor: pointer; white-space: nowrap; color: var(--vscode-descriptionForeground); background: transparent; }
+.filter-chip:hover { background: var(--vscode-list-hoverBackground); color: var(--vscode-foreground); }
+.filter-chip.active { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); border-color: var(--vscode-badge-background); }
+.filter-chip-clear { margin-left: 2px; font-size: 13px; line-height: 1; cursor: pointer; opacity: 0.7; }
+.filter-chip-clear:hover { opacity: 1; }
+
+.filter-dropdown { position: fixed; z-index: 100; min-width: 160px; max-height: 240px; overflow-y: auto; background: var(--vscode-menu-background); color: var(--vscode-menu-foreground); border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border)); border-radius: 4px; padding: 4px 0; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
+.filter-dropdown-item { padding: 4px 12px; cursor: pointer; white-space: nowrap; font-size: 12px; }
+.filter-dropdown-item:hover { background: var(--vscode-menu-selectionBackground); color: var(--vscode-menu-selectionForeground); }
+
+.user-dropdown { min-width: 200px; padding: 4px 0; }
+.filter-dropdown-check { display: flex; align-items: center; gap: 6px; padding: 4px 12px; cursor: pointer; white-space: nowrap; font-size: 12px; }
+.filter-dropdown-check:hover { background: var(--vscode-list-hoverBackground); }
+.filter-dropdown-check input[type="checkbox"] { margin: 0; cursor: pointer; accent-color: var(--vscode-focusBorder); }
+.filter-dropdown-check .me-name { color: var(--vscode-descriptionForeground); font-size: 11px; }
+.me-option { font-weight: 500; }
+.user-dropdown-separator { height: 1px; margin: 4px 0; background: var(--vscode-menu-separatorBackground, var(--vscode-panel-border)); }
+
+.date-dropdown { padding: 8px 12px; min-width: 200px; }
+.date-field { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.date-field label { font-size: 11px; min-width: 32px; color: var(--vscode-descriptionForeground); }
+.date-field input[type="date"] { flex: 1; padding: 2px 6px; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 3px; font-size: 12px; }
+.date-actions { display: flex; gap: 6px; margin-top: 4px; }
+.date-actions button { flex: 1; padding: 3px 8px; border: 1px solid var(--vscode-button-border, transparent); border-radius: 3px; cursor: pointer; font-size: 11px; }
+.date-actions button:first-child { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+.date-actions button:first-child:hover { background: var(--vscode-button-hoverBackground); }
+.date-actions button:last-child { background: transparent; color: var(--vscode-descriptionForeground); border-color: var(--vscode-input-border); }
+.date-actions button:last-child:hover { background: var(--vscode-list-hoverBackground); }
+
+.path-dropdown { padding: 8px 12px; min-width: 220px; }
+.path-field input[type="text"] { width: 100%; padding: 3px 8px; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 3px; font-size: 12px; margin-bottom: 6px; outline: none; }
+.path-field input[type="text"]:focus { border-color: var(--vscode-focusBorder); }
+
 .branch-pane { overflow-y: auto; border-right: 1px solid var(--vscode-panel-border); padding: 8px 0; }
 .branch-section-header { padding: 4px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vscode-descriptionForeground); letter-spacing: 0.5px; }
 .branch-item { display: flex; align-items: center; gap: 6px; padding: 3px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -641,6 +1087,8 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .graph-cell { padding: 0 !important; overflow: visible !important; }
 .graph-cell svg { display: block; }
 .commit-dot { stroke-width: 2; }
+.filter-bullet { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 auto; vertical-align: middle; }
+.graph-cell { text-align: center; }
 
 .ref-badge { display: inline-block; padding: 0 6px; margin-right: 4px; border-radius: 3px; font-size: 11px; line-height: 18px; font-weight: 500; vertical-align: middle; }
 .ref-badge.branch-local { background: var(--vscode-gitDecoration-addedResourceForeground, #28a745); color: #fff; }
