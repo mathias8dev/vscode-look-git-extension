@@ -74,12 +74,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
     });
 
-    if (repository) {
-        repository.state.onDidChange(() => {
+    // Debounced refresh for all views when git state changes
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    const debouncedRefreshAll = () => {
+        if (refreshTimer) { clearTimeout(refreshTimer); }
+        refreshTimer = setTimeout(() => {
             commitHistoryProvider.refresh();
+            graphViewProvider.refresh();
             changesViewProvider.refresh();
-        });
+        }, 150);
+    };
+
+    if (repository) {
+        repository.state.onDidChange(debouncedRefreshAll);
     }
+
+    // Also watch for file saves to catch changes the git extension may lag on
+    const fileWatcher = vscode.workspace.createFileSystemWatcher('**/*');
+    fileWatcher.onDidChange(debouncedRefreshAll);
+    fileWatcher.onDidCreate(debouncedRefreshAll);
+    fileWatcher.onDidDelete(debouncedRefreshAll);
+    context.subscriptions.push(fileWatcher);
 
     context.subscriptions.push(treeView);
 }
