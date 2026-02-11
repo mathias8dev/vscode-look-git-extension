@@ -12,6 +12,7 @@ import { handleCheckout } from './checkout';
 import { handleSquash } from './squash';
 import { handleFixup } from './fixup';
 import { handlePushUpTo } from './pushUpTo';
+import { GraphPanel } from '../graphView/graphPanel';
 
 // Helper to filter CommitItems from a mixed selection
 function filterCommitItems(items?: readonly unknown[]): CommitItem[] | undefined {
@@ -25,8 +26,15 @@ function filterCommitItems(items?: readonly unknown[]): CommitItem[] | undefined
 export function registerCommands(
     context: vscode.ExtensionContext,
     gitService: GitService,
-    historyProvider: CommitHistoryProvider
+    historyProvider: CommitHistoryProvider,
 ): void {
+    // Open Git Graph webview
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.openGraph', () => {
+            GraphPanel.createOrShow(context.extensionUri, gitService);
+        })
+    );
+
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.refreshHistory', () => {
             historyProvider.refresh();

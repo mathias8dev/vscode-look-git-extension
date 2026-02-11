@@ -1,0 +1,364 @@
+/* Reset */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-foreground);
+    background: var(--vscode-editor-background);
+}
+
+/* 3-pane layout */
+.graph-container {
+    display: grid;
+    grid-template-columns: 200px 1fr 300px;
+    grid-template-rows: auto 1fr;
+    height: 100vh;
+}
+
+/* Toolbar */
+.toolbar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--vscode-titleBar-activeBackground);
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.toolbar input[type="text"] {
+    flex: 1;
+    max-width: 300px;
+    padding: 3px 8px;
+    border: 1px solid var(--vscode-input-border);
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border-radius: 3px;
+    font-size: var(--vscode-font-size);
+    outline: none;
+}
+
+.toolbar input[type="text"]:focus {
+    border-color: var(--vscode-focusBorder);
+}
+
+.toolbar button {
+    padding: 3px 10px;
+    border: 1px solid var(--vscode-button-border, transparent);
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: var(--vscode-font-size);
+}
+
+.toolbar button:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+
+/* Branch list pane (left) */
+.branch-pane {
+    overflow-y: auto;
+    border-right: 1px solid var(--vscode-panel-border);
+    padding: 8px 0;
+}
+
+.branch-section-header {
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--vscode-descriptionForeground);
+    letter-spacing: 0.5px;
+}
+
+.branch-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.branch-item:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.branch-item.active {
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.branch-item.current::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--vscode-gitDecoration-addedResourceForeground, #85e89d);
+    flex-shrink: 0;
+}
+
+.branch-item .branch-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Graph pane (center) */
+.graph-pane {
+    overflow: auto;
+    position: relative;
+}
+
+.graph-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.graph-table th {
+    position: sticky;
+    top: 0;
+    background: var(--vscode-editor-background);
+    border-bottom: 1px solid var(--vscode-panel-border);
+    padding: 4px 8px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--vscode-descriptionForeground);
+    z-index: 1;
+}
+
+.graph-row {
+    cursor: pointer;
+}
+
+.graph-row:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.graph-row.selected {
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.graph-row td {
+    padding: 2px 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    line-height: 24px;
+}
+
+.graph-cell {
+    padding: 0 !important;
+    overflow: visible !important;
+}
+
+.graph-cell svg {
+    display: block;
+}
+
+.commit-dot {
+    stroke-width: 2;
+}
+
+/* Ref badges */
+.ref-badge {
+    display: inline-block;
+    padding: 0 6px;
+    margin-right: 4px;
+    border-radius: 3px;
+    font-size: 11px;
+    line-height: 18px;
+    font-weight: 500;
+    vertical-align: middle;
+}
+
+.ref-badge.branch-local {
+    background: var(--vscode-gitDecoration-addedResourceForeground, #28a745);
+    color: #fff;
+}
+
+.ref-badge.branch-remote {
+    background: var(--vscode-gitDecoration-modifiedResourceForeground, #2188ff);
+    color: #fff;
+}
+
+.ref-badge.tag {
+    background: var(--vscode-gitDecoration-ignoredResourceForeground, #6a737d);
+    color: #fff;
+}
+
+.ref-badge.head {
+    background: var(--vscode-gitDecoration-untrackedResourceForeground, #f97583);
+    color: #fff;
+}
+
+.hash-col {
+    font-family: var(--vscode-editor-font-family, monospace);
+    color: var(--vscode-textLink-foreground);
+    width: 70px;
+}
+
+.message-col {
+    /* grows to fill */
+}
+
+.author-col {
+    width: 120px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.date-col {
+    width: 130px;
+    color: var(--vscode-descriptionForeground);
+}
+
+/* Details pane (right) */
+.details-pane {
+    overflow-y: auto;
+    border-left: 1px solid var(--vscode-panel-border);
+    padding: 12px;
+}
+
+.details-pane.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--vscode-descriptionForeground);
+}
+
+.details-header {
+    margin-bottom: 12px;
+}
+
+.details-header h3 {
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.details-field {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 4px;
+    font-size: 12px;
+}
+
+.details-field .label {
+    color: var(--vscode-descriptionForeground);
+    min-width: 60px;
+    flex-shrink: 0;
+}
+
+.details-field .value {
+    word-break: break-all;
+}
+
+.details-field .value.mono {
+    font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.details-message {
+    margin: 12px 0;
+    padding: 8px;
+    background: var(--vscode-textBlockQuote-background);
+    border-left: 3px solid var(--vscode-textBlockQuote-border);
+    white-space: pre-wrap;
+    font-size: 12px;
+}
+
+.details-files-header {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 4px;
+    cursor: pointer;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+.file-item:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.file-status {
+    width: 16px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.file-status.added { color: var(--vscode-gitDecoration-addedResourceForeground, #28a745); }
+.file-status.modified { color: var(--vscode-gitDecoration-modifiedResourceForeground, #2188ff); }
+.file-status.deleted { color: var(--vscode-gitDecoration-deletedResourceForeground, #d73a49); }
+.file-status.renamed { color: var(--vscode-gitDecoration-renamedResourceForeground, #e36209); }
+
+.file-path {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Context menu */
+.context-menu {
+    position: fixed;
+    z-index: 100;
+    min-width: 180px;
+    background: var(--vscode-menu-background);
+    color: var(--vscode-menu-foreground);
+    border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
+    border-radius: 4px;
+    padding: 4px 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.context-menu-item {
+    padding: 4px 24px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.context-menu-item:hover {
+    background: var(--vscode-menu-selectionBackground);
+    color: var(--vscode-menu-selectionForeground);
+}
+
+.context-menu-separator {
+    height: 1px;
+    margin: 4px 0;
+    background: var(--vscode-menu-separatorBackground, var(--vscode-panel-border));
+}
+
+/* Resize handles */
+.resize-handle {
+    width: 4px;
+    cursor: col-resize;
+    background: transparent;
+    position: relative;
+    z-index: 2;
+}
+
+.resize-handle:hover,
+.resize-handle.active {
+    background: var(--vscode-focusBorder);
+}

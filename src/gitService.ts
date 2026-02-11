@@ -22,6 +22,23 @@ export interface GitFileChange {
     filePath: string;
 }
 
+export interface BranchInfo {
+    name: string;
+    isRemote: boolean;
+    isCurrent: boolean;
+    hash: string;
+    upstream?: string;
+}
+
+export interface TagInfo {
+    name: string;
+    hash: string;
+}
+
+export interface GraphCommitInfo extends GitCommitInfo {
+    refs: string[];
+}
+
 export class GitService {
     private cwd: string;
 
@@ -268,6 +285,106 @@ export class GitService {
 
     public getWorkingDirectory(): string {
         return this.cwd;
+    }
+
+    public async getAllBranches(): Promise<BranchInfo[]> {
+        const SEP = '<<SEP>>';
+        const FORMAT = [
+            '%(refname:short)',
+            '%(HEAD)',
+            '%(objectname:short)',
+            '%(upstream:short)',
+        ].join(SEP);
+
+        const output = await this.exec([
+            'branch', '-a', `--format=${FORMAT}`,
+        ]);
+
+        if (!output) {
+            return [];
+        }
+
+        return output.split('\n').map((line) => {
+            const parts = line.split(SEP);
+            return {
+                name: parts[0],
+                isCurrent: parts[1] === '*',
+                hash: parts[2],
+                upstream: parts[3] || undefined,
+                isRemote: parts[0].startsWith('origin/') || parts[0].includes('/'),
+            };
+        });
+    }
+
+    public async getAllTags(): Promise<TagInfo[]> {
+        const SEP = '<<SEP>>';
+        const FORMAT = `%(refname:short)${SEP}%(objectname:short)`;
+
+        const output = await this.exec([
+            'tag', `--format=${FORMAT}`,
+        ]);
+
+        if (!output) {
+            return [];
+        }
+
+        return output.split('\n').map((line) => {
+            const parts = line.split(SEP);
+            return {
+                name: parts[0],
+                hash: parts[1],
+            };
+        });
+    }
+
+    public async getGraphLog(maxCount: number = 300, branches?: string[]): Promise<GraphCommitInfo[]> {
+        const SEP = '<<SEP>>';
+        const FORMAT = [
+            '%H',   // full hash
+            '%h',   // short hash
+            '%s',   // subject
+            '%an',  // author name
+            '%ae',  // author email
+            '%aI',  // author date ISO 8601
+            '%P',   // parent hashes
+            '%D',   // ref names
+        ].join(SEP);
+
+        const args = [
+            'log',
+            `--format=${FORMAT}`,
+            `--max-count=${maxCount}`,
+            '--topo-order',
+        ];
+
+        if (branches && branches.length > 0) {
+            args.push(...branches);
+        } else {
+            args.push('--all');
+        }
+
+        const output = await this.exec(args);
+
+        if (!output) {
+            return [];
+        }
+
+        return output.split('\n').map((line) => {
+            const parts = line.split(SEP);
+            const refs = parts[7]
+                ? parts[7].split(',').map((r) => r.trim()).filter(Boolean)
+                : [];
+            return {
+                hash: parts[0],
+                shortHash: parts[1],
+                message: parts[2],
+                authorName: parts[3],
+                authorEmail: parts[4],
+                authorDate: new Date(parts[5]),
+                parentHashes: parts[6] ? parts[6].split(' ') : [],
+                refs,
+            };
+        });
     }
 
     public async getTrackingBranch(): Promise<{ remote: string; branch: string } | undefined> {

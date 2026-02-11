@@ -122,12 +122,23 @@
         "command": "lookGit.viewCommitDetails",
         "title": "View Commit Details",
         "category": "Look Git"
+      },
+      {
+        "command": "lookGit.openGraph",
+        "title": "Open Git Graph",
+        "category": "Look Git",
+        "icon": "$(git-branch)"
       }
     ],
     "menus": {
       "view/title": [
         {
           "command": "lookGit.refreshHistory",
+          "when": "view == lookGit.commitHistory",
+          "group": "navigation"
+        },
+        {
+          "command": "lookGit.openGraph",
           "when": "view == lookGit.commitHistory",
           "group": "navigation"
         }
@@ -250,6 +261,10 @@
         {
           "command": "lookGit.viewCommitDetails",
           "when": "false"
+        },
+        {
+          "command": "lookGit.openGraph",
+          "when": "lookGit.hasRepository"
         }
       ]
     },
@@ -272,7 +287,7 @@
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "npm run check-types && node esbuild.js",
-    "check-types": "tsc --noEmit",
+    "check-types": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json",
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",

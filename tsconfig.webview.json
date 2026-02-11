@@ -1,21 +1,18 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "ESNext",
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM"],
     "outDir": "out",
     "sourceMap": true,
     "strict": true,
-    "rootDir": "src",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "moduleResolution": "bundler"
   },
-  "exclude": [
-    "node_modules",
-    ".vscode-test",
-    "dist",
-    "src/webview"
+  "include": [
+    "src/webview/**/*",
+    "src/graphView/graphLaneAssigner.ts"
   ]
 }
