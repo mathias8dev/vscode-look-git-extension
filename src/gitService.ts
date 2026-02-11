@@ -29,6 +29,11 @@ export interface GitStatusEntry {
     origPath?: string;
 }
 
+export interface StashEntry {
+    index: number;
+    message: string;
+}
+
 export interface BranchInfo {
     name: string;
     isRemote: boolean;
@@ -555,6 +560,14 @@ export class GitService {
         return this.exec(['commit', '--amend', '-m', message]);
     }
 
+    public async fetchAll(): Promise<string> {
+        return this.exec(['fetch', '--all']);
+    }
+
+    public async pull(): Promise<string> {
+        return this.exec(['pull']);
+    }
+
     public async push(): Promise<string> {
         return this.exec(['push']);
     }
@@ -572,5 +585,47 @@ export class GitService {
         } catch {
             return undefined;
         }
+    }
+
+    public async stashList(): Promise<StashEntry[]> {
+        try {
+            const output = await this.exec(['stash', 'list', '--format=%gd %s']);
+            if (!output) { return []; }
+            return output.split('\n').map((line) => {
+                // Format: "stash@{0} WIP on main: abc1234 message"
+                const match = line.match(/^stash@\{(\d+)\}\s+(.*)/);
+                if (!match) { return { index: 0, message: line }; }
+                return { index: parseInt(match[1], 10), message: match[2] };
+            });
+        } catch {
+            return [];
+        }
+    }
+
+    public async stash(message?: string): Promise<string> {
+        const args = ['stash', 'push'];
+        if (message) { args.push('-m', message); }
+        return this.exec(args);
+    }
+
+    public async stashPop(index: number = 0): Promise<string> {
+        return this.exec(['stash', 'pop', `stash@{${index}}`]);
+    }
+
+    public async stashApply(index: number = 0): Promise<string> {
+        return this.exec(['stash', 'apply', `stash@{${index}}`]);
+    }
+
+    public async stashDrop(index: number = 0): Promise<string> {
+        return this.exec(['stash', 'drop', `stash@{${index}}`]);
+    }
+
+    public async getStashFiles(index: number): Promise<GitFileChange[]> {
+        const output = await this.exec(['stash', 'show', '--name-status', `stash@{${index}}`]);
+        if (!output) { return []; }
+        return output.split('\n').filter(Boolean).map((line) => {
+            const [status, ...fileParts] = line.split('\t');
+            return { status: status.charAt(0) as GitFileStatus, filePath: fileParts.join('\t') };
+        });
     }
 }

@@ -13,11 +13,22 @@ interface StatusEntry {
     origPath?: string;
 }
 
+interface StashEntry {
+    index: number;
+    message: string;
+}
+
 interface StatusData {
     staged: StatusEntry[];
     unstaged: StatusEntry[];
     conflicts: StatusEntry[];
     conflictState: 'none' | 'merge' | 'rebase';
+    stashes: StashEntry[];
+}
+
+interface StashFileEntry {
+    status: string;
+    filePath: string;
 }
 
 interface ViewState {
@@ -26,6 +37,7 @@ interface ViewState {
     stagedCollapsed: boolean;
     unstagedCollapsed: boolean;
     conflictsCollapsed: boolean;
+    stashesCollapsed: boolean;
 }
 
 let statusData: StatusData | null = null;
@@ -34,6 +46,11 @@ let commitMode = 'commit';
 let stagedCollapsed = false;
 let unstagedCollapsed = false;
 let conflictsCollapsed = false;
+let stashesCollapsed = true;
+
+// Track which stashes are expanded and their cached file lists
+const expandedStashes = new Set<number>();
+const stashFilesCache = new Map<number, StashFileEntry[]>();
 
 function loadState(): void {
     const state = vscode.getState() as ViewState | null;
@@ -43,11 +60,12 @@ function loadState(): void {
         stagedCollapsed = state.stagedCollapsed ?? false;
         unstagedCollapsed = state.unstagedCollapsed ?? false;
         conflictsCollapsed = state.conflictsCollapsed ?? false;
+        stashesCollapsed = state.stashesCollapsed ?? true;
     }
 }
 
 function saveState(): void {
-    vscode.setState({ commitMessage, commitMode, stagedCollapsed, unstagedCollapsed, conflictsCollapsed });
+    vscode.setState({ commitMessage, commitMode, stagedCollapsed, unstagedCollapsed, conflictsCollapsed, stashesCollapsed });
 }
 
 function escapeHtml(text: string): string {
@@ -71,6 +89,9 @@ const ICON_CHECK = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M3.
 const ICON_MERGE_EDITOR = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 3v10M13 3v10M3 8h10" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg>`;
 const ICON_ACCEPT_OURS = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 8h9M8 5l3 3-3 3" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="13" y1="3" x2="13" y2="13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
 const ICON_ACCEPT_THEIRS = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M14 8H5M8 5L5 8l3 3" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="3" y1="3" x2="3" y2="13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+const ICON_STASH_POP = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 12V4M5 7l3-3 3 3" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICON_STASH_APPLY = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 11V5M5.5 8l2.5-3 2.5 3" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`;
+const ICON_TRASH = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4h10M5 4v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 const COMMIT_MODES: { id: string; label: string }[] = [
     { id: 'commit', label: 'Commit' },
@@ -208,7 +229,9 @@ function renderFilesList(): void {
     const hasStaged = statusData?.staged && statusData.staged.length > 0;
     const hasUnstaged = statusData?.unstaged && statusData.unstaged.length > 0;
 
-    if (!statusData || (!hasConflicts && !hasStaged && !hasUnstaged)) {
+    const hasStashes = statusData?.stashes && statusData.stashes.length > 0;
+
+    if (!statusData || (!hasConflicts && !hasStaged && !hasUnstaged && !hasStashes)) {
         section.innerHTML = '<div class="empty-state">No changes detected</div>';
         updateCommitButton();
         return;
@@ -296,6 +319,28 @@ function renderFilesList(): void {
         }
     }
 
+    // Stashes section
+    if (hasStashes) {
+        const chevron = stashesCollapsed ? ICON_CHEVRON_RIGHT : ICON_CHEVRON_DOWN;
+        html += `
+            <div class="section-header" data-section="stashes">
+                <div class="section-title-row">
+                    <span class="section-chevron">${chevron}</span>
+                    <span class="section-title">Stashes</span>
+                    <span class="section-count">${statusData!.stashes.length}</span>
+                </div>
+                <div class="section-actions">
+                    <button class="icon-btn" id="stash-btn" title="Stash Changes">${ICON_PLUS}</button>
+                </div>
+            </div>`;
+
+        if (!stashesCollapsed) {
+            for (const stash of statusData!.stashes) {
+                html += renderStashRow(stash);
+            }
+        }
+    }
+
     section.innerHTML = html;
     wireFileHandlers();
     updateCommitButton();
@@ -345,6 +390,50 @@ function renderConflictFileRow(entry: StatusEntry): string {
         </div>`;
 }
 
+function renderStashRow(stash: StashEntry): string {
+    const isExpanded = expandedStashes.has(stash.index);
+    const chevron = isExpanded ? ICON_CHEVRON_DOWN : ICON_CHEVRON_RIGHT;
+    let html = `
+        <div class="file-row stash-row" data-stash-index="${stash.index}">
+            <span class="stash-chevron">${chevron}</span>
+            <span class="stash-label">stash@{${stash.index}}</span>
+            <span class="file-name" title="${escapeHtml(stash.message)}">${escapeHtml(stash.message)}</span>
+            <div class="file-actions">
+                <button class="icon-btn stash-pop-btn" data-index="${stash.index}" title="Pop Stash">${ICON_STASH_POP}</button>
+                <button class="icon-btn stash-apply-btn" data-index="${stash.index}" title="Apply Stash">${ICON_STASH_APPLY}</button>
+                <button class="icon-btn stash-drop-btn" data-index="${stash.index}" title="Drop Stash">${ICON_TRASH}</button>
+            </div>
+        </div>`;
+
+    if (isExpanded) {
+        const files = stashFilesCache.get(stash.index);
+        if (files) {
+            for (const file of files) {
+                html += renderStashFileRow(stash.index, file);
+            }
+        } else {
+            html += `<div class="stash-loading">Loading...</div>`;
+        }
+    }
+
+    return html;
+}
+
+function renderStashFileRow(stashIndex: number, file: StashFileEntry): string {
+    const statusClass = getStatusClass(file.status);
+    const fileName = file.filePath.split('/').pop() || file.filePath;
+    const dirPath = file.filePath.includes('/')
+        ? file.filePath.substring(0, file.filePath.lastIndexOf('/'))
+        : '';
+
+    return `
+        <div class="file-row stash-file-row" data-stash-index="${stashIndex}" data-file="${escapeHtml(file.filePath)}" data-status="${file.status}">
+            <span class="file-name" title="${escapeHtml(file.filePath)}">${escapeHtml(fileName)}</span>
+            ${dirPath ? `<span class="file-dir">${escapeHtml(dirPath)}</span>` : ''}
+            <span class="file-status-indicator ${statusClass}">${file.status}</span>
+        </div>`;
+}
+
 function wireFileHandlers(): void {
     // Section collapse toggles
     document.querySelectorAll('.section-header').forEach((el) => {
@@ -354,6 +443,7 @@ function wireFileHandlers(): void {
             const sectionId = (el as HTMLElement).dataset.section!;
             if (sectionId === 'staged') { stagedCollapsed = !stagedCollapsed; }
             else if (sectionId === 'conflicts') { conflictsCollapsed = !conflictsCollapsed; }
+            else if (sectionId === 'stashes') { stashesCollapsed = !stashesCollapsed; }
             else { unstagedCollapsed = !unstagedCollapsed; }
             saveState();
             renderFilesList();
@@ -454,10 +544,67 @@ function wireFileHandlers(): void {
         });
     });
 
-    document.querySelectorAll('.file-row').forEach((el) => {
+    document.querySelectorAll('.file-row:not(.stash-row)').forEach((el) => {
         el.addEventListener('click', () => {
             const d = (el as HTMLElement).dataset;
             vscode.postMessage({ type: 'openDiff', filePath: d.file, isStaged: d.staged === 'true', status: d.status });
+        });
+    });
+
+    // Stash actions
+    document.getElementById('stash-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        vscode.postMessage({ type: 'stash' });
+    });
+
+    document.querySelectorAll('.stash-pop-btn').forEach((el) => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            vscode.postMessage({ type: 'stashPop', index: parseInt((el as HTMLElement).dataset.index!, 10) });
+        });
+    });
+
+    document.querySelectorAll('.stash-apply-btn').forEach((el) => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            vscode.postMessage({ type: 'stashApply', index: parseInt((el as HTMLElement).dataset.index!, 10) });
+        });
+    });
+
+    document.querySelectorAll('.stash-drop-btn').forEach((el) => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            vscode.postMessage({ type: 'stashDrop', index: parseInt((el as HTMLElement).dataset.index!, 10) });
+        });
+    });
+
+    // Stash row expand/collapse
+    document.querySelectorAll('.stash-row').forEach((el) => {
+        el.addEventListener('click', () => {
+            const index = parseInt((el as HTMLElement).dataset.stashIndex!, 10);
+            if (expandedStashes.has(index)) {
+                expandedStashes.delete(index);
+            } else {
+                expandedStashes.add(index);
+                if (!stashFilesCache.has(index)) {
+                    vscode.postMessage({ type: 'getStashFiles', index });
+                }
+            }
+            renderFilesList();
+        });
+    });
+
+    // Stash file row click → open diff
+    document.querySelectorAll('.stash-file-row').forEach((el) => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const d = (el as HTMLElement).dataset;
+            vscode.postMessage({
+                type: 'openStashDiff',
+                filePath: d.file,
+                index: parseInt(d.stashIndex!, 10),
+                status: d.status,
+            });
         });
     });
 }
@@ -481,6 +628,10 @@ window.addEventListener('message', (event) => {
     switch (msg.type) {
         case 'statusData':
             statusData = msg.data;
+            renderFilesList();
+            break;
+        case 'stashFiles':
+            stashFilesCache.set(msg.index as number, msg.files as StashFileEntry[]);
             renderFilesList();
             break;
         case 'error':
@@ -574,6 +725,14 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 
 .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 1; }
 .file-dir { color: var(--vscode-descriptionForeground); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 2; margin-left: 4px; }
+
+/* Stash rows */
+.stash-row { cursor: pointer; }
+.stash-chevron { display: flex; align-items: center; flex-shrink: 0; }
+.stash-chevron svg { width: 14px; height: 14px; }
+.stash-label { font-size: 11px; color: var(--vscode-descriptionForeground); white-space: nowrap; flex-shrink: 0; margin-right: 4px; }
+.stash-file-row { padding-left: 38px !important; cursor: pointer; }
+.stash-loading { padding: 4px 8px 4px 38px; font-size: 11px; color: var(--vscode-descriptionForeground); }
 `;
 
 // ── Boot ──

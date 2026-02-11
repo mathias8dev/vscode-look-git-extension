@@ -39,8 +39,17 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     public async refresh(): Promise<void> {
         if (!this.view) { return; }
         try {
-            const status = await this.gitService.getStatus();
-            this.view.webview.postMessage({ type: 'statusData', data: status });
+            const [status, stashes] = await Promise.all([
+                this.gitService.getStatus(),
+                this.gitService.stashList(),
+            ]);
+            this.view.webview.postMessage({ type: 'statusData', data: { ...status, stashes } });
+
+            // Show total change count as a badge on the view
+            const total = status.staged.length + status.unstaged.length + status.conflicts.length;
+            this.view.badge = total > 0
+                ? { value: total, tooltip: `${total} change${total !== 1 ? 's' : ''}` }
+                : undefined;
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             this.view.webview.postMessage({ type: 'error', message });
@@ -212,6 +221,64 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     break;
                 }
 
+                case 'stash': {
+                    const stashMsg = (msg.message as string || '').trim() || undefined;
+                    await this.gitService.stash(stashMsg);
+                    vscode.window.showInformationMessage('Changes stashed.');
+                    this.refresh();
+                    break;
+                }
+
+                case 'stashPop': {
+                    const index = msg.index as number;
+                    await this.gitService.stashPop(index);
+                    vscode.window.showInformationMessage('Stash popped.');
+                    this.refresh();
+                    break;
+                }
+
+                case 'stashApply': {
+                    const index = msg.index as number;
+                    await this.gitService.stashApply(index);
+                    vscode.window.showInformationMessage('Stash applied.');
+                    this.refresh();
+                    break;
+                }
+
+                case 'stashDrop': {
+                    const index = msg.index as number;
+                    const choice = await vscode.window.showWarningMessage(
+                        `Drop stash@{${index}}? This cannot be undone.`,
+                        { modal: true },
+                        'Drop',
+                    );
+                    if (choice === 'Drop') {
+                        await this.gitService.stashDrop(index);
+                        vscode.window.showInformationMessage('Stash dropped.');
+                        this.refresh();
+                    }
+                    break;
+                }
+
+                case 'getStashFiles': {
+                    const index = msg.index as number;
+                    const files = await this.gitService.getStashFiles(index);
+                    this.view!.webview.postMessage({
+                        type: 'stashFiles',
+                        index,
+                        files,
+                    });
+                    break;
+                }
+
+                case 'openStashDiff': {
+                    const filePath = msg.filePath as string;
+                    const stashIndex = msg.index as number;
+                    const status = msg.status as string;
+                    this.openStashDiff(filePath, stashIndex, status);
+                    break;
+                }
+
                 case 'refresh':
                     this.refresh();
                     break;
@@ -257,6 +324,41 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             vscode.commands.executeCommand(
                 'vscode.diff', leftUri, fileUri,
                 `${filePath} (Working Tree)`,
+            );
+        }
+    }
+
+    private openStashDiff(filePath: string, stashIndex: number, status: string): void {
+        const cwd = this.gitService.getWorkingDirectory();
+        const fileUri = vscode.Uri.file(`${cwd}/${filePath}`);
+        const emptyUri = vscode.Uri.parse(`lookgit-empty:${filePath}`);
+
+        const toGitUri = (uri: vscode.Uri, ref: string): vscode.Uri => {
+            const query = JSON.stringify({ path: uri.fsPath, ref });
+            return uri.with({ scheme: 'git', path: uri.path, query });
+        };
+
+        const stashRef = `stash@{${stashIndex}}`;
+        const parentRef = `stash@{${stashIndex}}^`;
+
+        if (status === 'A') {
+            const rightUri = toGitUri(fileUri, stashRef);
+            vscode.commands.executeCommand(
+                'vscode.diff', emptyUri, rightUri,
+                `${filePath} (Stash #${stashIndex})`,
+            );
+        } else if (status === 'D') {
+            const leftUri = toGitUri(fileUri, parentRef);
+            vscode.commands.executeCommand(
+                'vscode.diff', leftUri, emptyUri,
+                `${filePath} (Stash #${stashIndex} - Deleted)`,
+            );
+        } else {
+            const leftUri = toGitUri(fileUri, parentRef);
+            const rightUri = toGitUri(fileUri, stashRef);
+            vscode.commands.executeCommand(
+                'vscode.diff', leftUri, rightUri,
+                `${filePath} (Stash #${stashIndex})`,
             );
         }
     }

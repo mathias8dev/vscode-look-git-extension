@@ -151,6 +151,24 @@
         "title": "Refresh Changes",
         "category": "Look Git",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "lookGit.fetchAll",
+        "title": "Fetch All Remotes",
+        "category": "Look Git",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "lookGit.pull",
+        "title": "Pull",
+        "category": "Look Git",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "lookGit.push",
+        "title": "Push",
+        "category": "Look Git",
+        "icon": "$(arrow-up)"
       }
     ],
     "menus": {
@@ -168,7 +186,22 @@
         {
           "command": "lookGit.refreshChanges",
           "when": "view == lookGit.changesView",
-          "group": "navigation"
+          "group": "navigation@5"
+        },
+        {
+          "command": "lookGit.fetchAll",
+          "when": "view == lookGit.changesView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "lookGit.pull",
+          "when": "view == lookGit.changesView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "lookGit.push",
+          "when": "view == lookGit.changesView",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [

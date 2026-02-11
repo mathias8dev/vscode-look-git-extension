@@ -51,6 +51,47 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.fetchAll', async () => {
+            try {
+                await gitService.fetchAll();
+                vscode.window.showInformationMessage('Fetched from all remotes.');
+                historyProvider.refresh();
+                changesViewProvider.refresh();
+            } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                vscode.window.showErrorMessage(`Fetch failed: ${msg}`);
+            }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.pull', async () => {
+            try {
+                await gitService.pull();
+                vscode.window.showInformationMessage('Pull completed.');
+                historyProvider.refresh();
+                changesViewProvider.refresh();
+            } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                vscode.window.showErrorMessage(`Pull failed: ${msg}`);
+            }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.push', async () => {
+            try {
+                await gitService.push();
+                vscode.window.showInformationMessage('Push completed.');
+                historyProvider.refresh();
+            } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                vscode.window.showErrorMessage(`Push failed: ${msg}`);
+            }
+        })
+    );
+
+    context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.loadMore', () => {
             historyProvider.loadMore();
         })
