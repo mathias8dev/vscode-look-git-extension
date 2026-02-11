@@ -608,6 +608,12 @@ export class GitService {
         return this.exec(args);
     }
 
+    public async stashStaged(message?: string): Promise<string> {
+        const args = ['stash', 'push', '--staged'];
+        if (message) { args.push('-m', message); }
+        return this.exec(args);
+    }
+
     public async stashPop(index: number = 0): Promise<string> {
         return this.exec(['stash', 'pop', `stash@{${index}}`]);
     }

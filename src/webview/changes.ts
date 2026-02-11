@@ -285,6 +285,7 @@ function renderFilesList(): void {
                     <span class="section-count">${statusData.staged.length}</span>
                 </div>
                 <div class="section-actions">
+                    <button class="icon-btn" id="stash-staged-btn" title="Stash Staged Changes">${ICON_PLUS}</button>
                     <button class="icon-btn" id="unstage-all-btn" title="Unstage All">${ICON_MINUS}</button>
                 </div>
             </div>`;
@@ -354,9 +355,11 @@ function renderFileRow(entry: StatusEntry, isStaged: boolean): string {
         ? entry.filePath.substring(0, entry.filePath.lastIndexOf('/'))
         : '';
 
+    const openFileBtn = `<button class="icon-btn open-file-btn" data-file="${escapeHtml(entry.filePath)}" title="Open File">${ICON_OPEN_FILE}</button>`;
+
     const actions = isStaged
-        ? `<button class="icon-btn unstage-btn" data-file="${escapeHtml(entry.filePath)}" title="Unstage">${ICON_MINUS}</button>`
-        : `<button class="icon-btn discard-btn" data-file="${escapeHtml(entry.filePath)}" title="Discard Changes">${ICON_DISCARD}</button>
+        ? `${openFileBtn}<button class="icon-btn unstage-btn" data-file="${escapeHtml(entry.filePath)}" title="Unstage">${ICON_MINUS}</button>`
+        : `${openFileBtn}<button class="icon-btn discard-btn" data-file="${escapeHtml(entry.filePath)}" title="Discard Changes">${ICON_DISCARD}</button>
            <button class="icon-btn stage-btn" data-file="${escapeHtml(entry.filePath)}" title="Stage">${ICON_PLUS}</button>`;
 
     return `
@@ -513,6 +516,11 @@ function wireFileHandlers(): void {
         vscode.postMessage({ type: 'stageAll' });
     });
 
+    document.getElementById('stash-staged-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        vscode.postMessage({ type: 'stashStaged' });
+    });
+
     document.getElementById('unstage-all-btn')?.addEventListener('click', (e) => {
         e.stopPropagation();
         vscode.postMessage({ type: 'unstageAll' });
@@ -541,6 +549,13 @@ function wireFileHandlers(): void {
         el.addEventListener('click', (e) => {
             e.stopPropagation();
             vscode.postMessage({ type: 'discardFile', filePath: (el as HTMLElement).dataset.file! });
+        });
+    });
+
+    document.querySelectorAll('.open-file-btn').forEach((el) => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            vscode.postMessage({ type: 'openFile', filePath: (el as HTMLElement).dataset.file! });
         });
     });
 

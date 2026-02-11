@@ -144,6 +144,14 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     break;
                 }
 
+                case 'openFile': {
+                    const filePath = msg.filePath as string;
+                    const cwd = this.gitService.getWorkingDirectory();
+                    const fileUri = vscode.Uri.file(`${cwd}/${filePath}`);
+                    vscode.commands.executeCommand('vscode.open', fileUri);
+                    break;
+                }
+
                 case 'openDiff': {
                     const filePath = msg.filePath as string;
                     const isStaged = msg.isStaged as boolean;
@@ -218,6 +226,14 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                         vscode.window.showInformationMessage(`${label.charAt(0).toUpperCase() + label.slice(1)} aborted.`);
                         this.refresh();
                     }
+                    break;
+                }
+
+                case 'stashStaged': {
+                    const stashMsg = (msg.message as string || '').trim() || undefined;
+                    await this.gitService.stashStaged(stashMsg);
+                    vscode.window.showInformationMessage('Staged changes stashed.');
+                    this.refresh();
                     break;
                 }
 
