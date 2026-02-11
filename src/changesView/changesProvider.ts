@@ -33,6 +33,12 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             (msg) => this.handleMessage(msg),
         );
 
+        webviewView.onDidChangeVisibility(() => {
+            if (webviewView.visible) {
+                this.refresh();
+            }
+        });
+
         this.refresh();
     }
 
