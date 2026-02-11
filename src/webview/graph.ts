@@ -52,9 +52,12 @@ const DEFAULT_BRANCH_WIDTH = 200;
 const DEFAULT_DETAILS_WIDTH = 300;
 const MIN_PANE_WIDTH = 100;
 
+type BranchViewMode = 'list' | 'tree';
+
 interface PaneState {
     branchWidth: number;
     detailsWidth: number;
+    branchViewMode: BranchViewMode;
 }
 
 function loadPaneState(): PaneState {
@@ -62,6 +65,7 @@ function loadPaneState(): PaneState {
     return {
         branchWidth: state?.branchWidth ?? DEFAULT_BRANCH_WIDTH,
         detailsWidth: state?.detailsWidth ?? DEFAULT_DETAILS_WIDTH,
+        branchViewMode: state?.branchViewMode ?? 'list',
     };
 }
 
@@ -182,19 +186,135 @@ function applyPaneWidths(container: HTMLElement): void {
 
 // ── Branch Pane ──
 
+interface BranchTreeNode {
+    name: string;         // segment name (e.g. "feature" or "login")
+    fullPath: string;     // full branch name for leaves
+    children: Map<string, BranchTreeNode>;
+    branch?: BranchInfo;  // set only on leaf nodes
+}
+
+// Track which tree folders are collapsed (persisted across renders, not across sessions)
+const collapsedFolders = new Set<string>();
+
+function buildBranchTree(branches: BranchInfo[]): BranchTreeNode {
+    const root: BranchTreeNode = { name: '', fullPath: '', children: new Map() };
+
+    for (const b of branches) {
+        const segments = b.name.split('/');
+        let node = root;
+
+        for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i];
+            const path = segments.slice(0, i + 1).join('/');
+
+            if (!node.children.has(seg)) {
+                node.children.set(seg, {
+                    name: seg,
+                    fullPath: path,
+                    children: new Map(),
+                });
+            }
+            node = node.children.get(seg)!;
+        }
+
+        // Mark leaf
+        node.branch = b;
+    }
+
+    return root;
+}
+
+const BRANCH_ICON_SVG = `<svg class="tree-branch-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M5 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0 9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm9-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM3.5 5v4.5a2 2 0 0 0 2 2H9v-2l3.5 2.5L9 14.5v-2H5.5a4 4 0 0 1-4-4V5h2z" fill="currentColor"/>
+</svg>`;
+
+function renderTreeNodes(node: BranchTreeNode, depth: number): string {
+    let html = '';
+
+    // Sort: folders first, then leaves, both alphabetically
+    const entries = [...node.children.values()].sort((a, b) => {
+        const aIsFolder = a.children.size > 0 && !a.branch;
+        const bIsFolder = b.children.size > 0 && !b.branch;
+        if (aIsFolder !== bIsFolder) { return aIsFolder ? -1 : 1; }
+        return a.name.localeCompare(b.name);
+    });
+
+    for (const child of entries) {
+        const isFolder = child.children.size > 0 && !child.branch;
+        const indent = depth * 16;
+
+        if (isFolder) {
+            const collapsed = collapsedFolders.has(child.fullPath);
+            const arrow = collapsed ? '&#9654;' : '&#9660;';
+            html += `<div class="branch-tree-folder" data-folder="${escapeHtml(child.fullPath)}" style="padding-left: ${indent}px;">
+                <span class="tree-arrow">${arrow}</span>
+                <span class="tree-folder-icon">&#128193;</span>
+                <span class="tree-folder-name">${escapeHtml(child.name)}</span>
+            </div>`;
+
+            if (!collapsed) {
+                html += renderTreeNodes(child, depth + 1);
+            }
+        } else if (child.branch) {
+            const b = child.branch;
+            const isCurrent = b.isCurrent ? ' current' : '';
+            const isActive = selectedBranch === b.name ? ' active' : '';
+            html += `<div class="branch-item tree-leaf${isCurrent}${isActive}" data-branch="${escapeHtml(b.name)}" style="padding-left: ${indent + 4}px;">
+                ${BRANCH_ICON_SVG}
+                <span class="branch-name">${escapeHtml(child.name)}</span>
+            </div>`;
+        }
+
+        // If the node is both a folder and a leaf (branch named same as a prefix),
+        // render the leaf too
+        if (isFolder && child.branch) {
+            const b = child.branch;
+            const isCurrent = b.isCurrent ? ' current' : '';
+            const isActive = selectedBranch === b.name ? ' active' : '';
+            html += `<div class="branch-item tree-leaf${isCurrent}${isActive}" data-branch="${escapeHtml(b.name)}" style="padding-left: ${(depth + 1) * 16 + 4}px;">
+                ${BRANCH_ICON_SVG}
+                <span class="branch-name">${escapeHtml(child.name)}</span>
+            </div>`;
+        }
+    }
+
+    return html;
+}
+
 function renderBranchPane(): void {
     if (!graphData) { return; }
 
     const pane = document.getElementById('branch-pane')!;
     const local = graphData.branches.filter((b) => !b.isRemote);
     const remote = graphData.branches.filter((b) => b.isRemote);
+    const mode = paneState.branchViewMode;
 
-    let html = '';
+    // View switcher + "All branches"
+    const listActiveClass = mode === 'list' ? ' active' : '';
+    const treeActiveClass = mode === 'tree' ? ' active' : '';
 
-    // "All branches" item
-    html += `<div class="branch-item ${selectedBranch === null ? 'active' : ''}" data-branch="__all__">
-        <span class="branch-name">All Branches</span>
+    let html = `<div class="branch-pane-toolbar">
+        <div class="branch-item ${selectedBranch === null ? 'active' : ''}" data-branch="__all__">
+            <span class="branch-name">All Branches</span>
+        </div>
+        <div class="view-switcher">
+            <button class="view-switch-btn${listActiveClass}" data-mode="list" title="List view">&#9776;</button>
+            <button class="view-switch-btn${treeActiveClass}" data-mode="tree" title="Tree view">&#128466;</button>
+        </div>
     </div>`;
+
+    if (mode === 'list') {
+        html += renderBranchList(local, remote);
+    } else {
+        html += renderBranchTreeView(local, remote);
+    }
+
+    pane.innerHTML = html;
+    wireBranchPaneHandlers(pane);
+}
+
+function renderBranchList(local: BranchInfo[], remote: BranchInfo[]): string {
+    let html = '';
 
     html += '<div class="branch-section-header">Local</div>';
     for (const b of local) {
@@ -215,9 +335,40 @@ function renderBranchPane(): void {
         }
     }
 
-    pane.innerHTML = html;
+    return html;
+}
 
-    // Add click handlers
+function renderBranchTreeView(local: BranchInfo[], remote: BranchInfo[]): string {
+    let html = '';
+
+    if (local.length > 0) {
+        html += '<div class="branch-section-header">Local</div>';
+        const localTree = buildBranchTree(local);
+        html += renderTreeNodes(localTree, 1);
+    }
+
+    if (remote.length > 0) {
+        html += '<div class="branch-section-header">Remote</div>';
+        const remoteTree = buildBranchTree(remote);
+        html += renderTreeNodes(remoteTree, 1);
+    }
+
+    return html;
+}
+
+function wireBranchPaneHandlers(pane: HTMLElement): void {
+    // View switcher buttons
+    pane.querySelectorAll('.view-switch-btn').forEach((el) => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const mode = (el as HTMLElement).dataset.mode as BranchViewMode;
+            paneState.branchViewMode = mode;
+            savePaneState(paneState);
+            renderBranchPane();
+        });
+    });
+
+    // Branch item clicks
     pane.querySelectorAll('.branch-item').forEach((el) => {
         el.addEventListener('click', () => {
             const branch = (el as HTMLElement).dataset.branch!;
@@ -228,7 +379,20 @@ function renderBranchPane(): void {
                 selectedBranch = branch;
                 vscode.postMessage({ type: 'selectBranch', branches: [branch] });
             }
-            renderBranchPane(); // re-render to update active state
+            renderBranchPane();
+        });
+    });
+
+    // Tree folder toggle clicks
+    pane.querySelectorAll('.branch-tree-folder').forEach((el) => {
+        el.addEventListener('click', () => {
+            const folder = (el as HTMLElement).dataset.folder!;
+            if (collapsedFolders.has(folder)) {
+                collapsedFolders.delete(folder);
+            } else {
+                collapsedFolders.add(folder);
+            }
+            renderBranchPane();
         });
     });
 }
@@ -450,6 +614,22 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .branch-item.active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
 .branch-item.current::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--vscode-gitDecoration-addedResourceForeground, #85e89d); flex-shrink: 0; }
 .branch-item .branch-name { overflow: hidden; text-overflow: ellipsis; }
+
+.branch-pane-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 4px 0; border-bottom: 1px solid var(--vscode-panel-border); margin-bottom: 4px; }
+.branch-pane-toolbar .branch-item { flex: 1; }
+
+.view-switcher { display: flex; gap: 2px; flex-shrink: 0; }
+.view-switch-btn { width: 24px; height: 22px; border: 1px solid transparent; background: transparent; color: var(--vscode-descriptionForeground); border-radius: 3px; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; padding: 0; }
+.view-switch-btn:hover { background: var(--vscode-toolbar-hoverBackground, rgba(90, 93, 94, 0.31)); }
+.view-switch-btn.active { color: var(--vscode-foreground); background: var(--vscode-toolbar-activeBackground, rgba(99, 102, 103, 0.31)); border-color: var(--vscode-focusBorder); }
+
+.branch-tree-folder { display: flex; align-items: center; gap: 4px; padding: 3px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+.branch-tree-folder:hover { background: var(--vscode-list-hoverBackground); }
+.tree-arrow { font-size: 9px; width: 12px; text-align: center; flex-shrink: 0; color: var(--vscode-descriptionForeground); }
+.tree-folder-icon { font-size: 13px; flex-shrink: 0; }
+.tree-folder-name { overflow: hidden; text-overflow: ellipsis; }
+.tree-branch-icon { flex-shrink: 0; color: var(--vscode-descriptionForeground); vertical-align: middle; }
+.branch-item.tree-leaf { gap: 4px; }
 
 .graph-pane { overflow: auto; position: relative; }
 .graph-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
