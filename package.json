@@ -46,12 +46,23 @@
           "name": "Git Graph",
           "type": "webview",
           "contextualTitle": "Look Git"
+        },
+        {
+          "id": "lookGit.changesView",
+          "name": "Changes",
+          "type": "webview",
+          "contextualTitle": "Look Git"
         }
       ]
     },
     "viewsWelcome": [
       {
         "view": "lookGit.commitHistory",
+        "contents": "No Git repository found.\n[Open a folder with a Git repository](command:vscode.openFolder)",
+        "when": "!lookGit.hasRepository"
+      },
+      {
+        "view": "lookGit.changesView",
         "contents": "No Git repository found.\n[Open a folder with a Git repository](command:vscode.openFolder)",
         "when": "!lookGit.hasRepository"
       }
@@ -134,6 +145,12 @@
         "title": "Open Git Graph",
         "category": "Look Git",
         "icon": "$(git-branch)"
+      },
+      {
+        "command": "lookGit.refreshChanges",
+        "title": "Refresh Changes",
+        "category": "Look Git",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -146,6 +163,11 @@
         {
           "command": "lookGit.openGraph",
           "when": "view == lookGit.commitHistory || view == lookGit.graphView",
+          "group": "navigation"
+        },
+        {
+          "command": "lookGit.refreshChanges",
+          "when": "view == lookGit.changesView",
           "group": "navigation"
         }
       ],

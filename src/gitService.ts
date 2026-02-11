@@ -22,6 +22,13 @@ export interface GitFileChange {
     filePath: string;
 }
 
+export interface GitStatusEntry {
+    indexStatus: string;
+    workTreeStatus: string;
+    filePath: string;
+    origPath?: string;
+}
+
 export interface BranchInfo {
     name: string;
     isRemote: boolean;
@@ -417,6 +424,85 @@ export class GitService {
 
     public async fetchBranch(remote: string, branchName: string): Promise<string> {
         return this.exec(['fetch', remote, branchName]);
+    }
+
+    public async getStatus(): Promise<{ staged: GitStatusEntry[]; unstaged: GitStatusEntry[] }> {
+        const output = await this.exec(['status', '--porcelain', '-u']);
+        const staged: GitStatusEntry[] = [];
+        const unstaged: GitStatusEntry[] = [];
+
+        if (!output) {
+            return { staged, unstaged };
+        }
+
+        for (const line of output.split('\n')) {
+            if (!line || line.length < 3) { continue; }
+
+            const indexStatus = line[0];
+            const workTreeStatus = line[1];
+            const rawPath = line.substring(3);
+            let filePath = rawPath;
+            let origPath: string | undefined;
+
+            const arrowIdx = rawPath.indexOf(' -> ');
+            if (arrowIdx !== -1) {
+                origPath = rawPath.substring(0, arrowIdx);
+                filePath = rawPath.substring(arrowIdx + 4);
+            }
+
+            const entry: GitStatusEntry = { indexStatus, workTreeStatus, filePath, origPath };
+
+            if (indexStatus !== ' ' && indexStatus !== '?') {
+                staged.push(entry);
+            }
+
+            if (workTreeStatus !== ' ' || indexStatus === '?') {
+                unstaged.push(entry);
+            }
+        }
+
+        return { staged, unstaged };
+    }
+
+    public async stageFile(filePath: string): Promise<string> {
+        return this.exec(['add', '--', filePath]);
+    }
+
+    public async stageAll(): Promise<string> {
+        return this.exec(['add', '-A']);
+    }
+
+    public async unstageFile(filePath: string): Promise<string> {
+        return this.exec(['restore', '--staged', '--', filePath]);
+    }
+
+    public async unstageAll(): Promise<string> {
+        return this.exec(['restore', '--staged', '.']);
+    }
+
+    public async discardFile(filePath: string): Promise<string> {
+        try {
+            return await this.exec(['restore', '--', filePath]);
+        } catch {
+            return this.exec(['clean', '-f', '--', filePath]);
+        }
+    }
+
+    public async commit(message: string): Promise<string> {
+        return this.exec(['commit', '-m', message]);
+    }
+
+    public async commitAmend(message: string): Promise<string> {
+        return this.exec(['commit', '--amend', '-m', message]);
+    }
+
+    public async push(): Promise<string> {
+        return this.exec(['push']);
+    }
+
+    public async pullAndPush(): Promise<string> {
+        await this.exec(['pull']);
+        return this.exec(['push']);
     }
 
     public async getTrackingBranch(): Promise<{ remote: string; branch: string } | undefined> {

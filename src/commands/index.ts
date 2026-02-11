@@ -13,6 +13,7 @@ import { handleSquash } from './squash';
 import { handleFixup } from './fixup';
 import { handlePushUpTo } from './pushUpTo';
 import type { GraphViewProvider } from '../graphView/graphPanel';
+import type { ChangesViewProvider } from '../changesView/changesProvider';
 
 // Helper to filter CommitItems from a mixed selection
 function filterCommitItems(items?: readonly unknown[]): CommitItem[] | undefined {
@@ -28,6 +29,7 @@ export function registerCommands(
     gitService: GitService,
     historyProvider: CommitHistoryProvider,
     graphViewProvider: GraphViewProvider,
+    changesViewProvider: ChangesViewProvider,
 ): void {
     // Focus Git Graph view (user can drag it anywhere in the UI)
     context.subscriptions.push(
@@ -39,6 +41,12 @@ export function registerCommands(
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.refreshHistory', () => {
             historyProvider.refresh();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.refreshChanges', () => {
+            changesViewProvider.refresh();
         })
     );
 
