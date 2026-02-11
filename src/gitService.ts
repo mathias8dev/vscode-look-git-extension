@@ -115,6 +115,26 @@ export class GitService {
         return this.exec(['rebase', '--abort']);
     }
 
+    public async rebaseContinue(): Promise<string> {
+        return this.exec(['rebase', '--continue'], { GIT_EDITOR: 'true' });
+    }
+
+    public async mergeAbort(): Promise<string> {
+        return this.exec(['merge', '--abort']);
+    }
+
+    public async mergeContinue(): Promise<string> {
+        return this.exec(['merge', '--continue'], { GIT_EDITOR: 'true' });
+    }
+
+    public async acceptOurs(filePath: string): Promise<string> {
+        return this.exec(['checkout', '--ours', '--', filePath]);
+    }
+
+    public async acceptTheirs(filePath: string): Promise<string> {
+        return this.exec(['checkout', '--theirs', '--', filePath]);
+    }
+
     public async reset(commitHash: string, mode: ResetMode): Promise<string> {
         return this.exec(['reset', `--${mode}`, commitHash]);
     }
@@ -172,6 +192,18 @@ export class GitService {
             const gitDir = path.resolve(this.cwd, output);
             return fs.existsSync(path.join(gitDir, 'rebase-merge'))
                 || fs.existsSync(path.join(gitDir, 'rebase-apply'));
+        } catch {
+            return false;
+        }
+    }
+
+    public async isMergeInProgress(): Promise<boolean> {
+        try {
+            const output = await this.exec(['rev-parse', '--git-dir']);
+            const fs = await import('fs');
+            const path = await import('path');
+            const gitDir = path.resolve(this.cwd, output);
+            return fs.existsSync(path.join(gitDir, 'MERGE_HEAD'));
         } catch {
             return false;
         }
@@ -426,14 +458,23 @@ export class GitService {
         return this.exec(['fetch', remote, branchName]);
     }
 
-    public async getStatus(): Promise<{ staged: GitStatusEntry[]; unstaged: GitStatusEntry[] }> {
+    public async getStatus(): Promise<{
+        staged: GitStatusEntry[];
+        unstaged: GitStatusEntry[];
+        conflicts: GitStatusEntry[];
+        conflictState: 'none' | 'merge' | 'rebase';
+    }> {
         const output = await this.exec(['status', '--porcelain', '-u']);
         const staged: GitStatusEntry[] = [];
         const unstaged: GitStatusEntry[] = [];
+        const conflicts: GitStatusEntry[] = [];
 
         if (!output) {
-            return { staged, unstaged };
+            const conflictState = await this.detectConflictState();
+            return { staged, unstaged, conflicts, conflictState };
         }
+
+        const conflictCodes = new Set(['U', 'A', 'D']);
 
         for (const line of output.split('\n')) {
             if (!line || line.length < 3) { continue; }
@@ -452,16 +493,34 @@ export class GitService {
 
             const entry: GitStatusEntry = { indexStatus, workTreeStatus, filePath, origPath };
 
-            if (indexStatus !== ' ' && indexStatus !== '?') {
-                staged.push(entry);
-            }
+            // Unmerged: both sides have a conflict code (UU, AA, DD, AU, UA, DU, UD)
+            const isConflict = indexStatus === 'U' || workTreeStatus === 'U'
+                || (conflictCodes.has(indexStatus) && conflictCodes.has(workTreeStatus));
 
-            if (workTreeStatus !== ' ' || indexStatus === '?') {
-                unstaged.push(entry);
+            if (isConflict) {
+                conflicts.push(entry);
+            } else {
+                if (indexStatus !== ' ' && indexStatus !== '?') {
+                    staged.push(entry);
+                }
+                if (workTreeStatus !== ' ' || indexStatus === '?') {
+                    unstaged.push(entry);
+                }
             }
         }
 
-        return { staged, unstaged };
+        const conflictState = await this.detectConflictState();
+        return { staged, unstaged, conflicts, conflictState };
+    }
+
+    private async detectConflictState(): Promise<'none' | 'merge' | 'rebase'> {
+        const [isMerge, isRebase] = await Promise.all([
+            this.isMergeInProgress(),
+            this.isRebaseInProgress(),
+        ]);
+        if (isMerge) { return 'merge'; }
+        if (isRebase) { return 'rebase'; }
+        return 'none';
     }
 
     public async stageFile(filePath: string): Promise<string> {

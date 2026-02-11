@@ -143,6 +143,75 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     break;
                 }
 
+                case 'openMergeEditor': {
+                    const filePath = msg.filePath as string;
+                    const cwd = this.gitService.getWorkingDirectory();
+                    const fileUri = vscode.Uri.file(`${cwd}/${filePath}`);
+                    try {
+                        await vscode.commands.executeCommand('merge-conflict.accept.select', fileUri);
+                    } catch {
+                        // Fallback: open the file so VS Code shows inline conflict decorations
+                        vscode.commands.executeCommand('vscode.open', fileUri);
+                    }
+                    break;
+                }
+
+                case 'acceptOurs': {
+                    const filePath = msg.filePath as string;
+                    await this.gitService.acceptOurs(filePath);
+                    await this.gitService.stageFile(filePath);
+                    this.refresh();
+                    break;
+                }
+
+                case 'acceptTheirs': {
+                    const filePath = msg.filePath as string;
+                    await this.gitService.acceptTheirs(filePath);
+                    await this.gitService.stageFile(filePath);
+                    this.refresh();
+                    break;
+                }
+
+                case 'markResolved': {
+                    const filePath = msg.filePath as string;
+                    await this.gitService.stageFile(filePath);
+                    this.refresh();
+                    break;
+                }
+
+                case 'continueOp': {
+                    const state = msg.conflictState as string;
+                    if (state === 'merge') {
+                        await this.gitService.mergeContinue();
+                        vscode.window.showInformationMessage('Merge completed.');
+                    } else if (state === 'rebase') {
+                        await this.gitService.rebaseContinue();
+                        vscode.window.showInformationMessage('Rebase step completed.');
+                    }
+                    this.refresh();
+                    break;
+                }
+
+                case 'abortOp': {
+                    const state = msg.conflictState as string;
+                    const label = state === 'merge' ? 'merge' : 'rebase';
+                    const choice = await vscode.window.showWarningMessage(
+                        `Abort the current ${label}?`,
+                        { modal: true },
+                        'Abort',
+                    );
+                    if (choice === 'Abort') {
+                        if (state === 'merge') {
+                            await this.gitService.mergeAbort();
+                        } else if (state === 'rebase') {
+                            await this.gitService.rebaseAbort();
+                        }
+                        vscode.window.showInformationMessage(`${label.charAt(0).toUpperCase() + label.slice(1)} aborted.`);
+                        this.refresh();
+                    }
+                    break;
+                }
+
                 case 'refresh':
                     this.refresh();
                     break;
