@@ -68,6 +68,7 @@ interface PaneState {
     detailsWidth: number;
     branchViewMode: BranchViewMode;
     filesViewMode: FilesViewMode;
+    showGraph: boolean;
 }
 
 function loadPaneState(): PaneState {
@@ -77,6 +78,7 @@ function loadPaneState(): PaneState {
         detailsWidth: state?.detailsWidth ?? DEFAULT_DETAILS_WIDTH,
         branchViewMode: state?.branchViewMode ?? 'list',
         filesViewMode: state?.filesViewMode ?? 'list',
+        showGraph: state?.showGraph ?? true,
     };
 }
 
@@ -105,6 +107,15 @@ function init(): void {
         vscode.postMessage({ type: 'refresh' });
     });
 
+    const toggleGraphBtn = document.getElementById('toggle-graph-btn')!;
+    toggleGraphBtn.addEventListener('click', () => {
+        paneState.showGraph = !paneState.showGraph;
+        savePaneState(paneState);
+        toggleGraphBtn.classList.toggle('active', paneState.showGraph);
+        toggleGraphBtn.title = paneState.showGraph ? 'Hide graph lines' : 'Show graph lines';
+        renderGraphTable();
+    });
+
     renderFilterBar();
 
     // Tell extension we're ready
@@ -119,6 +130,7 @@ function getShellHtml(): string {
                 <div class="filter-bar" id="filter-bar"></div>
                 <input type="text" id="search-input" placeholder="Search commits..." />
                 <button id="refresh-btn">Refresh</button>
+                <button id="toggle-graph-btn" class="toggle-graph-btn${paneState.showGraph ? ' active' : ''}" title="${paneState.showGraph ? 'Hide graph lines' : 'Show graph lines'}">Graph</button>
             </div>
             <div class="branch-pane" id="branch-pane"></div>
             <div class="resize-handle" id="resize-left"></div>
@@ -868,7 +880,8 @@ function renderGraphTable(): void {
     }
 
     const hasFilter = !!(searchFilter || filterAuthors.length > 0 || filterDateFrom || filterDateTo || filterPath);
-    const graphColWidth = hasFilter ? 24 : (graphData.maxLane + 2) * 16 + 16;
+    const useBullet = hasFilter || !paneState.showGraph;
+    const graphColWidth = useBullet ? 24 : (graphData.maxLane + 2) * 16 + 16;
 
     let html = `<table class="graph-table">
         <thead><tr>
@@ -888,8 +901,8 @@ function renderGraphTable(): void {
         const date = formatRelativeDate(new Date(c.authorDate));
 
         let graphCell: string;
-        if (hasFilter) {
-            // Simple colored bullet when filtering
+        if (useBullet) {
+            // Simple colored bullet when filtering or graph hidden
             graphCell = `<span class="filter-bullet" style="background: ${row.laneData.color};"></span>`;
         } else {
             graphCell = renderGraphSvg(row, graphData.maxLane);
