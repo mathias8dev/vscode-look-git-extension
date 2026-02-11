@@ -395,6 +395,30 @@ export class GitService {
         }
     }
 
+    public async deleteBranch(branchName: string, force?: boolean): Promise<string> {
+        return this.exec(['branch', force ? '-D' : '-d', branchName]);
+    }
+
+    public async deleteRemoteBranch(remote: string, branchName: string): Promise<string> {
+        return this.exec(['push', remote, '--delete', branchName]);
+    }
+
+    public async renameBranch(oldName: string, newName: string): Promise<string> {
+        return this.exec(['branch', '-m', oldName, newName]);
+    }
+
+    public async merge(ref: string): Promise<string> {
+        return this.exec(['merge', ref]);
+    }
+
+    public async pushBranch(remote: string, branchName: string): Promise<string> {
+        return this.exec(['push', '-u', remote, branchName]);
+    }
+
+    public async fetchBranch(remote: string, branchName: string): Promise<string> {
+        return this.exec(['fetch', remote, branchName]);
+    }
+
     public async getTrackingBranch(): Promise<{ remote: string; branch: string } | undefined> {
         try {
             const upstream = await this.exec(['rev-parse', '--abbrev-ref', '@{upstream}']);

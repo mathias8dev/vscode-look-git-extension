@@ -5,7 +5,8 @@ import {
     formatRelativeDate,
     escapeHtml,
 } from './graphRenderer';
-import { showContextMenu, hideContextMenu } from './contextMenu';
+import { showContextMenu, showCommitContextMenu, hideContextMenu } from './contextMenu';
+import type { MenuItem } from './contextMenu';
 import type { GraphRow } from '../graphView/graphLaneAssigner';
 
 // VS Code webview API
@@ -636,7 +637,8 @@ function renderTreeNodes(node: BranchTreeNode, depth: number): string {
             const b = child.branch;
             const isCurrent = b.isCurrent ? ' current' : '';
             const isActive = selectedBranch === b.name ? ' active' : '';
-            html += `<div class="branch-item tree-leaf${isCurrent}${isActive}" data-branch="${escapeHtml(b.name)}" style="padding-left: ${indent + 4}px;">
+            const remoteAttr = b.isRemote ? ' data-remote="true"' : '';
+            html += `<div class="branch-item tree-leaf${isCurrent}${isActive}" data-branch="${escapeHtml(b.name)}"${remoteAttr} style="padding-left: ${indent + 4}px;">
                 ${BRANCH_ICON_SVG}
                 <span class="branch-name">${escapeHtml(child.name)}</span>
             </div>`;
@@ -648,7 +650,8 @@ function renderTreeNodes(node: BranchTreeNode, depth: number): string {
             const b = child.branch;
             const isCurrent = b.isCurrent ? ' current' : '';
             const isActive = selectedBranch === b.name ? ' active' : '';
-            html += `<div class="branch-item tree-leaf${isCurrent}${isActive}" data-branch="${escapeHtml(b.name)}" style="padding-left: ${(depth + 1) * 16 + 4}px;">
+            const remoteAttr = b.isRemote ? ' data-remote="true"' : '';
+            html += `<div class="branch-item tree-leaf${isCurrent}${isActive}" data-branch="${escapeHtml(b.name)}"${remoteAttr} style="padding-left: ${(depth + 1) * 16 + 4}px;">
                 ${BRANCH_ICON_SVG}
                 <span class="branch-name">${escapeHtml(child.name)}</span>
             </div>`;
@@ -706,7 +709,7 @@ function renderBranchList(local: BranchInfo[], remote: BranchInfo[]): string {
         html += '<div class="branch-section-header">Remote</div>';
         for (const b of remote) {
             const isActive = selectedBranch === b.name ? ' active' : '';
-            html += `<div class="branch-item${isActive}" data-branch="${escapeHtml(b.name)}">
+            html += `<div class="branch-item${isActive}" data-branch="${escapeHtml(b.name)}" data-remote="true">
                 <span class="branch-name">${escapeHtml(b.name)}</span>
             </div>`;
         }
@@ -731,6 +734,33 @@ function renderBranchTreeView(local: BranchInfo[], remote: BranchInfo[]): string
     }
 
     return html;
+}
+
+function buildLocalBranchMenu(branch: string, currentBranch: string): MenuItem[] {
+    const isCurrent = branch === currentBranch;
+    return [
+        { label: 'Checkout', command: 'checkout', disabled: isCurrent },
+        { label: `New Branch from ${branch}...`, command: 'newBranchFrom' },
+        { label: 'Rename...', command: 'rename' },
+        { label: '', command: '', separator: true },
+        { label: 'Delete', command: 'delete', disabled: isCurrent },
+        { label: 'Push', command: 'push' },
+        { label: 'Update (Fetch)', command: 'update' },
+        { label: '', command: '', separator: true },
+        { label: `Rebase ${branch} onto ${currentBranch}`, command: 'rebaseOnto', disabled: isCurrent },
+        { label: `Merge ${branch} into ${currentBranch}`, command: 'mergeInto', disabled: isCurrent },
+    ];
+}
+
+function buildRemoteBranchMenu(branch: string, currentBranch: string): MenuItem[] {
+    return [
+        { label: 'Checkout', command: 'checkout' },
+        { label: `New Branch from ${branch}...`, command: 'newBranchFrom' },
+        { label: 'Checkout and Rebase onto', command: 'checkoutRebaseOnto' },
+        { label: '', command: '', separator: true },
+        { label: `Delete ${branch}`, command: 'delete' },
+        { label: `Merge ${branch} into ${currentBranch}`, command: 'mergeInto' },
+    ];
 }
 
 function wireBranchPaneHandlers(pane: HTMLElement): void {
@@ -758,6 +788,24 @@ function wireBranchPaneHandlers(pane: HTMLElement): void {
             }
             renderFilterBar();
             renderBranchPane();
+        });
+    });
+
+    // Branch item right-click context menus
+    pane.querySelectorAll('.branch-item').forEach((el) => {
+        el.addEventListener('contextmenu', (e) => {
+            const branch = (el as HTMLElement).dataset.branch!;
+            if (branch === '__all__') { return; }
+            e.preventDefault();
+            const me = e as MouseEvent;
+            const isRemote = (el as HTMLElement).dataset.remote === 'true';
+            const currentBranch = graphData?.currentBranch ?? '';
+            const items = isRemote
+                ? buildRemoteBranchMenu(branch, currentBranch)
+                : buildLocalBranchMenu(branch, currentBranch);
+            showContextMenu(me.clientX, me.clientY, items, (command) => {
+                vscode.postMessage({ type: 'executeBranchCommand', command, branch, isRemote });
+            });
         });
     });
 
@@ -874,13 +922,8 @@ function renderGraphTable(): void {
             const me = e as MouseEvent;
             selectedCommitHash = hash;
             renderGraphTable();
-            showContextMenu(me.clientX, me.clientY, hash, (command, commitHash) => {
-                if (command === 'lookGit.copyCommitHash') {
-                    // Handle copy locally — not a VS Code command in webview
-                    vscode.postMessage({ type: 'executeCommand', command, commitHash });
-                } else {
-                    vscode.postMessage({ type: 'executeCommand', command, commitHash });
-                }
+            showCommitContextMenu(me.clientX, me.clientY, hash, (command, commitHash) => {
+                vscode.postMessage({ type: 'executeCommand', command, commitHash });
             });
         });
     });
@@ -1372,6 +1415,8 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .context-menu { position: fixed; z-index: 100; min-width: 180px; background: var(--vscode-menu-background); color: var(--vscode-menu-foreground); border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border)); border-radius: 4px; padding: 4px 0; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
 .context-menu-item { padding: 4px 24px; cursor: pointer; white-space: nowrap; }
 .context-menu-item:hover { background: var(--vscode-menu-selectionBackground); color: var(--vscode-menu-selectionForeground); }
+.context-menu-item.disabled { opacity: 0.4; cursor: default; }
+.context-menu-item.disabled:hover { background: transparent; color: inherit; }
 .context-menu-separator { height: 1px; margin: 4px 0; background: var(--vscode-menu-separatorBackground, var(--vscode-panel-border)); }
 
 .resize-handle { cursor: col-resize; background: transparent; position: relative; z-index: 2; }

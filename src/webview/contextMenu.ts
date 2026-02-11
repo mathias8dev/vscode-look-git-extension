@@ -2,9 +2,10 @@ export interface MenuItem {
     label: string;
     command: string;
     separator?: boolean;
+    disabled?: boolean;
 }
 
-const COMMIT_MENU_ITEMS: MenuItem[] = [
+export const COMMIT_MENU_ITEMS: MenuItem[] = [
     { label: 'Cherry-pick Commit', command: 'lookGit.cherryPick' },
     { label: 'Revert Commit', command: 'lookGit.revert' },
     { label: 'Rebase onto Commit', command: 'lookGit.rebase' },
@@ -23,8 +24,8 @@ let activeMenu: HTMLElement | null = null;
 export function showContextMenu(
     x: number,
     y: number,
-    commitHash: string,
-    onCommand: (command: string, commitHash: string) => void,
+    items: MenuItem[],
+    onCommand: (command: string) => void,
 ): void {
     hideContextMenu();
 
@@ -33,7 +34,7 @@ export function showContextMenu(
     menu.style.left = `${x}px`;
     menu.style.top = `${y}px`;
 
-    for (const item of COMMIT_MENU_ITEMS) {
+    for (const item of items) {
         if (item.separator) {
             const sep = document.createElement('div');
             sep.className = 'context-menu-separator';
@@ -42,13 +43,15 @@ export function showContextMenu(
         }
 
         const el = document.createElement('div');
-        el.className = 'context-menu-item';
+        el.className = 'context-menu-item' + (item.disabled ? ' disabled' : '');
         el.textContent = item.label;
-        el.addEventListener('click', (e) => {
-            e.stopPropagation();
-            hideContextMenu();
-            onCommand(item.command, commitHash);
-        });
+        if (!item.disabled) {
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                hideContextMenu();
+                onCommand(item.command);
+            });
+        }
         menu.appendChild(el);
     }
 
@@ -80,6 +83,17 @@ export function showContextMenu(
         document.addEventListener('click', closeHandler);
         document.addEventListener('keydown', escHandler);
     }, 0);
+}
+
+export function showCommitContextMenu(
+    x: number,
+    y: number,
+    commitHash: string,
+    onCommand: (command: string, commitHash: string) => void,
+): void {
+    showContextMenu(x, y, COMMIT_MENU_ITEMS, (command) => {
+        onCommand(command, commitHash);
+    });
 }
 
 export function hideContextMenu(): void {
