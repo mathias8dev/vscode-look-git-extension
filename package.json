@@ -40,6 +40,12 @@
           "name": "Commit History",
           "icon": "resources/look-git-icon.svg",
           "contextualTitle": "Look Git"
+        },
+        {
+          "id": "lookGit.graphView",
+          "name": "Git Graph",
+          "type": "webview",
+          "contextualTitle": "Look Git"
         }
       ]
     },
@@ -139,7 +145,7 @@
         },
         {
           "command": "lookGit.openGraph",
-          "when": "view == lookGit.commitHistory",
+          "when": "view == lookGit.commitHistory || view == lookGit.graphView",
           "group": "navigation"
         }
       ],

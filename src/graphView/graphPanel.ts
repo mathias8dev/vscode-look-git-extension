@@ -2,76 +2,57 @@ import * as vscode from 'vscode';
 import { GraphDataProvider } from './graphDataProvider';
 import type { GitService } from '../gitService';
 
-export class GraphPanel {
-    public static currentPanel: GraphPanel | undefined;
-    private static readonly viewType = 'lookGit.graphView';
+export class GraphViewProvider implements vscode.WebviewViewProvider {
+    public static readonly viewType = 'lookGit.graphView';
 
-    private readonly panel: vscode.WebviewPanel;
+    private view?: vscode.WebviewView;
     private readonly dataProvider: GraphDataProvider;
     private readonly gitService: GitService;
     private readonly extensionUri: vscode.Uri;
-    private disposables: vscode.Disposable[] = [];
 
-    public static createOrShow(
-        extensionUri: vscode.Uri,
-        gitService: GitService,
-    ): GraphPanel {
-        const column = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.One;
-
-        if (GraphPanel.currentPanel) {
-            GraphPanel.currentPanel.panel.reveal(column);
-            GraphPanel.currentPanel.refresh();
-            return GraphPanel.currentPanel;
-        }
-
-        const panel = vscode.window.createWebviewPanel(
-            GraphPanel.viewType,
-            'Git Graph',
-            column,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true,
-                localResourceRoots: [
-                    vscode.Uri.joinPath(extensionUri, 'dist', 'webview'),
-                ],
-            }
-        );
-
-        GraphPanel.currentPanel = new GraphPanel(panel, extensionUri, gitService);
-        return GraphPanel.currentPanel;
-    }
-
-    private constructor(
-        panel: vscode.WebviewPanel,
-        extensionUri: vscode.Uri,
-        gitService: GitService,
-    ) {
-        this.panel = panel;
+    constructor(extensionUri: vscode.Uri, gitService: GitService) {
         this.extensionUri = extensionUri;
         this.gitService = gitService;
         this.dataProvider = new GraphDataProvider(gitService);
+    }
 
-        this.panel.webview.html = this.getHtml();
+    public resolveWebviewView(
+        webviewView: vscode.WebviewView,
+        _context: vscode.WebviewViewResolveContext,
+        _token: vscode.CancellationToken,
+    ): void {
+        this.view = webviewView;
 
-        this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
+        webviewView.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [
+                vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview'),
+            ],
+        };
 
-        this.panel.webview.onDidReceiveMessage(
+        webviewView.webview.html = this.getHtml();
+
+        webviewView.webview.onDidReceiveMessage(
             (msg) => this.handleMessage(msg),
-            null,
-            this.disposables,
         );
 
-        // Send initial data once webview is ready
         this.refresh();
     }
 
     public async refresh(filterBranches?: string[]): Promise<void> {
+        if (!this.view) { return; }
         try {
             const data = await this.dataProvider.getGraphData(300, filterBranches);
-            this.panel.webview.postMessage({ type: 'graphData', data });
+            this.view.webview.postMessage({ type: 'graphData', data });
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            this.panel.webview.postMessage({ type: 'error', message });
+            this.view.webview.postMessage({ type: 'error', message });
+        }
+    }
+
+    public reveal(): void {
+        if (this.view) {
+            this.view.show?.(true);
         }
     }
 
@@ -94,7 +75,7 @@ export class GraphPanel {
                         this.dataProvider.getCommitFiles(hash),
                         this.dataProvider.getCommitMessage(hash),
                     ]);
-                    this.panel.webview.postMessage({
+                    this.view?.webview.postMessage({
                         type: 'commitDetails',
                         hash,
                         files,
@@ -102,7 +83,7 @@ export class GraphPanel {
                     });
                 } catch (error) {
                     const message = error instanceof Error ? error.message : String(error);
-                    this.panel.webview.postMessage({ type: 'error', message });
+                    this.view?.webview.postMessage({ type: 'error', message });
                 }
                 break;
             }
@@ -260,7 +241,7 @@ export class GraphPanel {
     }
 
     private getHtml(): string {
-        const webview = this.panel.webview;
+        const webview = this.view!.webview;
         const scriptUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview', 'graph.js')
         );
@@ -280,15 +261,6 @@ export class GraphPanel {
     <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
-    }
-
-    private dispose(): void {
-        GraphPanel.currentPanel = undefined;
-        this.panel.dispose();
-        for (const d of this.disposables) {
-            d.dispose();
-        }
-        this.disposables = [];
     }
 }
 

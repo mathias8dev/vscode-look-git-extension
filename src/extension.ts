@@ -3,6 +3,7 @@ import { GitService } from './gitService';
 import { CommitHistoryProvider } from './commitHistoryProvider';
 import { getBuiltInGitApi } from './utils/gitExtension';
 import { registerCommands } from './commands';
+import { GraphViewProvider } from './graphView/graphPanel';
 
 // Content provider that always returns empty content — used as the
 // "empty" side when diffing added or deleted files.
@@ -38,9 +39,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         canSelectMany: true,
     });
 
+    const graphViewProvider = new GraphViewProvider(context.extensionUri, gitService);
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(
+            GraphViewProvider.viewType,
+            graphViewProvider,
+            { webviewOptions: { retainContextWhenHidden: true } },
+        )
+    );
+
     vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', !!repository);
 
-    registerCommands(context, gitService, commitHistoryProvider);
+    registerCommands(context, gitService, commitHistoryProvider, graphViewProvider);
 
     gitApi.onDidOpenRepository((repo) => {
         gitService.setWorkingDirectory(repo.rootUri.fsPath);

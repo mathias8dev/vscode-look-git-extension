@@ -12,7 +12,7 @@ import { handleCheckout } from './checkout';
 import { handleSquash } from './squash';
 import { handleFixup } from './fixup';
 import { handlePushUpTo } from './pushUpTo';
-import { GraphPanel } from '../graphView/graphPanel';
+import type { GraphViewProvider } from '../graphView/graphPanel';
 
 // Helper to filter CommitItems from a mixed selection
 function filterCommitItems(items?: readonly unknown[]): CommitItem[] | undefined {
@@ -27,11 +27,12 @@ export function registerCommands(
     context: vscode.ExtensionContext,
     gitService: GitService,
     historyProvider: CommitHistoryProvider,
+    graphViewProvider: GraphViewProvider,
 ): void {
-    // Open Git Graph webview
+    // Focus Git Graph view (user can drag it anywhere in the UI)
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.openGraph', () => {
-            GraphPanel.createOrShow(context.extensionUri, gitService);
+            vscode.commands.executeCommand('lookGit.graphView.focus');
         })
     );
 
