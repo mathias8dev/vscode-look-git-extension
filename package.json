@@ -31,7 +31,9 @@
       { "id": "lookGit.changesView.branch", "label": "Branch" },
       { "id": "lookGit.changesView.remote", "label": "Remote" },
       { "id": "lookGit.changesView.stash", "label": "Stash" },
-      { "id": "lookGit.changesView.tags", "label": "Tags" }
+      { "id": "lookGit.changesView.tags", "label": "Tags" },
+      { "id": "lookGit.changesView.viewAs", "label": "View as" },
+      { "id": "lookGit.historyView.viewAs", "label": "View as" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -180,6 +182,46 @@
         "icon": "$(arrow-up)"
       },
       {
+        "command": "lookGit.viewAsTree",
+        "title": "Tree",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.viewAsList",
+        "title": "List",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.viewAsTreeActive",
+        "title": "$(check) Tree",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.viewAsListActive",
+        "title": "$(check) List",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.historyViewAsTree",
+        "title": "Tree",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.historyViewAsList",
+        "title": "List",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.historyViewAsTreeActive",
+        "title": "$(check) Tree",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.historyViewAsListActive",
+        "title": "$(check) List",
+        "category": "Look Git"
+      },
+      {
         "command": "lookGit.stageAll",
         "title": "Stage All Changes",
         "category": "Look Git"
@@ -206,6 +248,11 @@
           "command": "lookGit.openGraph",
           "when": "view == lookGit.commitHistory || view == lookGit.graphView",
           "group": "navigation"
+        },
+        {
+          "submenu": "lookGit.historyView.viewAs",
+          "when": "view == lookGit.commitHistory",
+          "group": "0_view@1"
         },
         {
           "command": "lookGit.refreshChanges",
@@ -286,6 +333,11 @@
           "submenu": "lookGit.changesView.tags",
           "when": "view == lookGit.changesView",
           "group": "2_submenus@7"
+        },
+        {
+          "submenu": "lookGit.changesView.viewAs",
+          "when": "view == lookGit.changesView",
+          "group": "0_view@1"
         },
         {
           "command": "git.showOutput",
@@ -427,6 +479,38 @@
         {
           "command": "lookGit.discardAll",
           "when": "lookGit.hasRepository"
+        },
+        {
+          "command": "lookGit.viewAsTree",
+          "when": "false"
+        },
+        {
+          "command": "lookGit.viewAsList",
+          "when": "false"
+        },
+        {
+          "command": "lookGit.viewAsTreeActive",
+          "when": "false"
+        },
+        {
+          "command": "lookGit.viewAsListActive",
+          "when": "false"
+        },
+        {
+          "command": "lookGit.historyViewAsTree",
+          "when": "false"
+        },
+        {
+          "command": "lookGit.historyViewAsList",
+          "when": "false"
+        },
+        {
+          "command": "lookGit.historyViewAsTreeActive",
+          "when": "false"
+        },
+        {
+          "command": "lookGit.historyViewAsListActive",
+          "when": "false"
         }
       ],
       "lookGit.changesView.commit": [
@@ -486,6 +570,18 @@
         { "command": "git.createTag",  "group": "1_tags@1" },
         { "command": "git.deleteTag",  "group": "1_tags@2" },
         { "command": "git.pushTags",   "group": "1_tags@3" }
+      ],
+      "lookGit.changesView.viewAs": [
+        { "command": "lookGit.viewAsListActive", "when": "!lookGit.viewAsTree", "group": "1_view@1" },
+        { "command": "lookGit.viewAsList",       "when": "lookGit.viewAsTree",  "group": "1_view@1" },
+        { "command": "lookGit.viewAsTreeActive", "when": "lookGit.viewAsTree",  "group": "1_view@2" },
+        { "command": "lookGit.viewAsTree",       "when": "!lookGit.viewAsTree", "group": "1_view@2" }
+      ],
+      "lookGit.historyView.viewAs": [
+        { "command": "lookGit.historyViewAsListActive", "when": "!lookGit.historyViewAsTree", "group": "1_view@1" },
+        { "command": "lookGit.historyViewAsList",       "when": "lookGit.historyViewAsTree",  "group": "1_view@1" },
+        { "command": "lookGit.historyViewAsTreeActive", "when": "lookGit.historyViewAsTree",  "group": "1_view@2" },
+        { "command": "lookGit.historyViewAsTree",       "when": "!lookGit.historyViewAsTree", "group": "1_view@2" }
       ]
     },
     "configuration": {

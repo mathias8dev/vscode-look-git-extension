@@ -68,7 +68,7 @@ export class FileChangeItem extends vscode.TreeItem {
     public readonly fileChange: GitFileChange;
     public readonly commitHash: string;
 
-    constructor(fileChange: GitFileChange, commitHash: string, repoRoot: string) {
+    constructor(fileChange: GitFileChange, commitHash: string, repoRoot: string, showFullPath = false) {
         const fileName = path.basename(fileChange.filePath);
         super(fileName, vscode.TreeItemCollapsibleState.None);
 
@@ -79,9 +79,12 @@ export class FileChangeItem extends vscode.TreeItem {
         // Use resourceUri so VS Code resolves the file icon from the user's icon theme
         this.resourceUri = vscode.Uri.file(path.join(repoRoot, fileChange.filePath));
 
-        // Show git status letter as description with appropriate color
+        // Show git status letter as description, with directory path in flat mode
         const statusLabel = STATUS_LABELS[fileChange.status] ?? fileChange.status;
-        this.description = statusLabel;
+        const dirPath = path.dirname(fileChange.filePath);
+        this.description = showFullPath && dirPath !== '.'
+            ? `${dirPath} • ${statusLabel}`
+            : statusLabel;
 
         // Apply decorations color to the label
         const color = STATUS_COLORS[fileChange.status];

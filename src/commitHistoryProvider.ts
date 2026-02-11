@@ -12,9 +12,17 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
     private commits: GitCommitInfo[] = [];
     private pageSize: number;
     private hasMore: boolean = true;
+    private viewAsTree = true;
 
     constructor(private gitService: GitService) {
         this.pageSize = vscode.workspace.getConfiguration('lookGit').get('maxCommits', 50);
+        vscode.commands.executeCommand('setContext', 'lookGit.historyViewAsTree', true);
+    }
+
+    public setViewMode(asTree: boolean): void {
+        this.viewAsTree = asTree;
+        vscode.commands.executeCommand('setContext', 'lookGit.historyViewAsTree', asTree);
+        this._onDidChangeTreeData.fire();
     }
 
     public refresh(): void {
@@ -36,7 +44,7 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
     }
 
     async getChildren(element?: TreeItem): Promise<TreeItem[]> {
-        // Expanding a commit → build folder tree from changed files
+        // Expanding a commit → show changed files (tree or flat list)
         if (element instanceof CommitItem) {
             try {
                 const files = await this.gitService.getCommitFiles(element.commitInfo.hash);
@@ -44,9 +52,15 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
                     return [];
                 }
                 const repoRoot = this.gitService.getWorkingDirectory();
-                const tree = buildFolderTree(files);
 
-                return this.folderNodeToItems(tree, element.commitInfo.hash, repoRoot);
+                if (this.viewAsTree) {
+                    const tree = buildFolderTree(files);
+                    return this.folderNodeToItems(tree, element.commitInfo.hash, repoRoot);
+                }
+
+                // Flat list: sort by full path, show directory in description
+                const sorted = [...files].sort((a, b) => a.filePath.localeCompare(b.filePath));
+                return sorted.map(f => new FileChangeItem(f, element.commitInfo.hash, repoRoot, true));
             } catch (error) {
                 const msg = error instanceof Error ? error.message : String(error);
                 console.error(`Look Git: failed to get files for ${element.commitInfo.shortHash}: ${msg}`);

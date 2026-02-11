@@ -183,6 +183,51 @@ export function registerCommands(
         })
     );
 
+    // History view mode toggle
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.historyViewAsTree', () => {
+            historyProvider.setViewMode(true);
+        })
+    );
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.historyViewAsTreeActive', () => {
+            historyProvider.setViewMode(true);
+        })
+    );
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.historyViewAsList', () => {
+            historyProvider.setViewMode(false);
+        })
+    );
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.historyViewAsListActive', () => {
+            historyProvider.setViewMode(false);
+        })
+    );
+
+    // Changes view mode toggle
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.viewAsTree', () => {
+            changesViewProvider.setViewMode(true);
+        })
+    );
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.viewAsTreeActive', () => {
+            changesViewProvider.setViewMode(true);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.viewAsList', () => {
+            changesViewProvider.setViewMode(false);
+        })
+    );
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.viewAsListActive', () => {
+            changesViewProvider.setViewMode(false);
+        })
+    );
+
     // Changes view overflow menu commands
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.stageAll', async () => {

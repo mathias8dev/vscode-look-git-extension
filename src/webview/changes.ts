@@ -38,6 +38,8 @@ interface ViewState {
     unstagedCollapsed: boolean;
     conflictsCollapsed: boolean;
     stashesCollapsed: boolean;
+    viewAsTree: boolean;
+    expandedFolders: string[];
 }
 
 let statusData: StatusData | null = null;
@@ -47,10 +49,12 @@ let stagedCollapsed = false;
 let unstagedCollapsed = false;
 let conflictsCollapsed = false;
 let stashesCollapsed = true;
+let viewAsTree = false;
 
 // Track which stashes are expanded and their cached file lists
 const expandedStashes = new Set<number>();
 const stashFilesCache = new Map<number, StashFileEntry[]>();
+const expandedFolders = new Set<string>();
 
 function loadState(): void {
     const state = vscode.getState() as ViewState | null;
@@ -61,11 +65,19 @@ function loadState(): void {
         unstagedCollapsed = state.unstagedCollapsed ?? false;
         conflictsCollapsed = state.conflictsCollapsed ?? false;
         stashesCollapsed = state.stashesCollapsed ?? true;
+        viewAsTree = state.viewAsTree ?? false;
+        if (state.expandedFolders) {
+            for (const f of state.expandedFolders) { expandedFolders.add(f); }
+        }
     }
 }
 
 function saveState(): void {
-    vscode.setState({ commitMessage, commitMode, stagedCollapsed, unstagedCollapsed, conflictsCollapsed, stashesCollapsed });
+    vscode.setState({
+        commitMessage, commitMode, stagedCollapsed, unstagedCollapsed,
+        conflictsCollapsed, stashesCollapsed, viewAsTree,
+        expandedFolders: [...expandedFolders],
+    });
 }
 
 function escapeHtml(text: string): string {
@@ -117,6 +129,7 @@ function init(): void {
 
     wireStaticHandlers();
     vscode.postMessage({ type: 'ready' });
+    vscode.postMessage({ type: 'viewModeChanged', asTree: viewAsTree });
 }
 
 function getShellHtml(): string {
@@ -222,6 +235,125 @@ function getDisplayStatus(entry: StatusEntry, isStaged: boolean): string {
     return isStaged ? entry.indexStatus : entry.workTreeStatus;
 }
 
+// ── Tree View ──
+
+interface TreeNode {
+    name: string;
+    fullPath: string;
+    children: TreeNode[];
+    entries: StatusEntry[];
+}
+
+function buildTree(entries: StatusEntry[]): TreeNode {
+    const root: TreeNode = { name: '', fullPath: '', children: [], entries: [] };
+
+    for (const entry of entries) {
+        const parts = entry.filePath.split('/');
+        let current = root;
+
+        for (let i = 0; i < parts.length - 1; i++) {
+            const pathSoFar = parts.slice(0, i + 1).join('/');
+            let child = current.children.find(c => c.fullPath === pathSoFar);
+            if (!child) {
+                child = { name: parts[i], fullPath: pathSoFar, children: [], entries: [] };
+                current.children.push(child);
+            }
+            current = child;
+        }
+
+        current.entries.push(entry);
+    }
+
+    compactTree(root);
+    return root;
+}
+
+function compactTree(node: TreeNode): void {
+    for (let i = 0; i < node.children.length; i++) {
+        let child = node.children[i];
+        while (child.children.length === 1 && child.entries.length === 0) {
+            const grandchild = child.children[0];
+            child = {
+                name: child.name + '/' + grandchild.name,
+                fullPath: grandchild.fullPath,
+                children: grandchild.children,
+                entries: grandchild.entries,
+            };
+        }
+        node.children[i] = child;
+        compactTree(child);
+    }
+}
+
+function renderTreeSection(entries: StatusEntry[], isStaged: boolean): string {
+    const tree = buildTree(entries);
+    let html = '';
+
+    const sortedChildren = [...tree.children].sort((a, b) => a.name.localeCompare(b.name));
+    const sortedEntries = [...tree.entries].sort((a, b) => a.filePath.localeCompare(b.filePath));
+
+    for (const child of sortedChildren) {
+        html += renderTreeNode(child, isStaged, 0);
+    }
+    for (const entry of sortedEntries) {
+        html += renderTreeFileRow(entry, isStaged, 0);
+    }
+    return html;
+}
+
+function renderTreeNode(node: TreeNode, isStaged: boolean, depth: number): string {
+    const folderKey = (isStaged ? 'staged:' : 'unstaged:') + node.fullPath;
+    const isExpanded = expandedFolders.has(folderKey);
+    const chevron = isExpanded ? ICON_CHEVRON_DOWN : ICON_CHEVRON_RIGHT;
+    const indent = depth * 16 + 22;
+
+    const folderClass = isExpanded ? 'codicon-folder-opened' : 'codicon-folder';
+    let html = `
+        <div class="tree-folder-row" data-folder-key="${escapeHtml(folderKey)}" style="padding-left:${indent}px">
+            <span class="tree-folder-chevron">${chevron}</span>
+            <span class="codicon ${folderClass} tree-icon folder-icon"></span>
+            <span class="tree-folder-name">${escapeHtml(node.name)}</span>
+        </div>`;
+
+    if (isExpanded) {
+        const sortedChildren = [...node.children].sort((a, b) => a.name.localeCompare(b.name));
+        const sortedEntries = [...node.entries].sort((a, b) => a.filePath.localeCompare(b.filePath));
+
+        for (const child of sortedChildren) {
+            html += renderTreeNode(child, isStaged, depth + 1);
+        }
+        for (const entry of sortedEntries) {
+            html += renderTreeFileRow(entry, isStaged, depth + 1);
+        }
+    }
+
+    return html;
+}
+
+function renderTreeFileRow(entry: StatusEntry, isStaged: boolean, depth: number): string {
+    const statusChar = getDisplayStatus(entry, isStaged);
+    const statusClass = getStatusClass(statusChar);
+    const fileName = entry.filePath.split('/').pop() || entry.filePath;
+    const indent = depth * 16 + 22;
+
+    const openFileBtn = `<button class="icon-btn open-file-btn" data-file="${escapeHtml(entry.filePath)}" title="Open File">${ICON_OPEN_FILE}</button>`;
+
+    const actions = isStaged
+        ? `${openFileBtn}<button class="icon-btn unstage-btn" data-file="${escapeHtml(entry.filePath)}" title="Unstage">${ICON_MINUS}</button>`
+        : `${openFileBtn}<button class="icon-btn discard-btn" data-file="${escapeHtml(entry.filePath)}" title="Discard Changes">${ICON_DISCARD}</button>
+           <button class="icon-btn stage-btn" data-file="${escapeHtml(entry.filePath)}" title="Stage">${ICON_PLUS}</button>`;
+
+    return `
+        <div class="file-row tree-file-row" data-file="${escapeHtml(entry.filePath)}" data-staged="${isStaged}" data-status="${statusChar}" style="padding-left:${indent}px">
+            <span class="codicon codicon-file tree-icon file-icon"></span>
+            <span class="file-name" title="${escapeHtml(entry.filePath)}">${escapeHtml(fileName)}</span>
+            <div class="file-actions">
+                ${actions}
+            </div>
+            <span class="file-status-indicator ${statusClass}">${statusChar}</span>
+        </div>`;
+}
+
 function renderFilesList(): void {
     const section = document.getElementById('files-section')!;
 
@@ -291,8 +423,12 @@ function renderFilesList(): void {
             </div>`;
 
         if (!stagedCollapsed) {
-            for (const entry of statusData.staged) {
-                html += renderFileRow(entry, true);
+            if (viewAsTree) {
+                html += renderTreeSection(statusData.staged, true);
+            } else {
+                for (const entry of statusData.staged) {
+                    html += renderFileRow(entry, true);
+                }
             }
         }
     }
@@ -314,8 +450,12 @@ function renderFilesList(): void {
             </div>`;
 
         if (!unstagedCollapsed) {
-            for (const entry of statusData.unstaged) {
-                html += renderFileRow(entry, false);
+            if (viewAsTree) {
+                html += renderTreeSection(statusData.unstaged, false);
+            } else {
+                for (const entry of statusData.unstaged) {
+                    html += renderFileRow(entry, false);
+                }
             }
         }
     }
@@ -559,10 +699,32 @@ function wireFileHandlers(): void {
         });
     });
 
-    document.querySelectorAll('.file-row:not(.stash-row)').forEach((el) => {
+    document.querySelectorAll('.file-row:not(.stash-row):not(.tree-file-row)').forEach((el) => {
         el.addEventListener('click', () => {
             const d = (el as HTMLElement).dataset;
             vscode.postMessage({ type: 'openDiff', filePath: d.file, isStaged: d.staged === 'true', status: d.status });
+        });
+    });
+
+    document.querySelectorAll('.tree-file-row').forEach((el) => {
+        el.addEventListener('click', () => {
+            const d = (el as HTMLElement).dataset;
+            vscode.postMessage({ type: 'openDiff', filePath: d.file, isStaged: d.staged === 'true', status: d.status });
+        });
+    });
+
+    // Tree folder expand/collapse
+    document.querySelectorAll('.tree-folder-row').forEach((el) => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const key = (el as HTMLElement).dataset.folderKey!;
+            if (expandedFolders.has(key)) {
+                expandedFolders.delete(key);
+            } else {
+                expandedFolders.add(key);
+            }
+            saveState();
+            renderFilesList();
         });
     });
 
@@ -647,6 +809,11 @@ window.addEventListener('message', (event) => {
             break;
         case 'stashFiles':
             stashFilesCache.set(msg.index as number, msg.files as StashFileEntry[]);
+            renderFilesList();
+            break;
+        case 'setViewMode':
+            viewAsTree = msg.asTree as boolean;
+            saveState();
             renderFilesList();
             break;
         case 'error':
@@ -740,6 +907,17 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 
 .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 1; }
 .file-dir { color: var(--vscode-descriptionForeground); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 2; margin-left: 4px; }
+
+/* Tree view */
+.tree-folder-row { display: flex; align-items: center; gap: 3px; cursor: pointer; font-size: 12px; height: 22px; padding-right: 8px; }
+.tree-folder-row:hover { background: var(--vscode-list-hoverBackground); }
+.tree-folder-chevron { display: flex; align-items: center; flex-shrink: 0; }
+.tree-folder-chevron svg { width: 14px; height: 14px; }
+.tree-folder-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-icon { flex-shrink: 0; font-size: 16px; line-height: 1; }
+.folder-icon { color: var(--vscode-icon-foreground, #c5c5c5); opacity: 0.85; }
+.file-icon { color: var(--vscode-icon-foreground, #c5c5c5); opacity: 0.7; }
+.tree-file-row { padding-right: 8px; gap: 3px; }
 
 /* Stash rows */
 .stash-row { cursor: pointer; }

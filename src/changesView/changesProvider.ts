@@ -7,10 +7,17 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     private view?: vscode.WebviewView;
     private readonly gitService: GitService;
     private readonly extensionUri: vscode.Uri;
+    private viewAsTree = false;
 
     constructor(extensionUri: vscode.Uri, gitService: GitService) {
         this.extensionUri = extensionUri;
         this.gitService = gitService;
+    }
+
+    public setViewMode(asTree: boolean): void {
+        this.viewAsTree = asTree;
+        vscode.commands.executeCommand('setContext', 'lookGit.viewAsTree', asTree);
+        this.view?.webview.postMessage({ type: 'setViewMode', asTree });
     }
 
     public resolveWebviewView(
@@ -24,6 +31,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             enableScripts: true,
             localResourceRoots: [
                 vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview'),
+                vscode.Uri.file(vscode.env.appRoot),
             ],
         };
 
@@ -68,6 +76,13 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 case 'ready':
                     this.refresh();
                     break;
+
+                case 'viewModeChanged': {
+                    const asTree = msg.asTree as boolean;
+                    this.viewAsTree = asTree;
+                    vscode.commands.executeCommand('setContext', 'lookGit.viewAsTree', asTree);
+                    break;
+                }
 
                 case 'stageFile':
                     await this.gitService.stageFile(msg.filePath as string);
@@ -390,6 +405,12 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         const scriptUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview', 'changes.js'),
         );
+        const codiconsUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(
+                vscode.Uri.file(vscode.env.appRoot),
+                'out', 'vs', 'base', 'browser', 'ui', 'codicons', 'codicon', 'codicon.css',
+            ),
+        );
         const nonce = getNonce();
 
         return /*html*/`<!DOCTYPE html>
@@ -398,7 +419,8 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy"
-          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+          content="default-src 'none'; style-src 'unsafe-inline' ${webview.cspSource}; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+    <link href="${codiconsUri}" rel="stylesheet" />
     <title>Changes</title>
 </head>
 <body>
