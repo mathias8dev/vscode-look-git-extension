@@ -1,6 +1,6 @@
 import type { GraphRow, LineDef } from '../graphView/graphLaneAssigner';
 
-const ROW_HEIGHT = 24;
+const ROW_HEIGHT = 28;
 const LANE_WIDTH = 16;
 const DOT_RADIUS = 4;
 const GRAPH_PADDING = 8;

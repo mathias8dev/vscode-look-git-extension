@@ -1321,7 +1321,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .graph-row { cursor: pointer; }
 .graph-row:hover { background: var(--vscode-list-hoverBackground); }
 .graph-row.selected { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
-.graph-row td { padding: 2px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; line-height: 24px; }
+.graph-row td { padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; line-height: 28px; }
 .graph-cell { padding: 0 !important; overflow: visible !important; }
 .graph-cell svg { display: block; }
 .commit-dot { stroke-width: 2; }
