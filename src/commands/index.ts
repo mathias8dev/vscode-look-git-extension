@@ -182,4 +182,51 @@ export function registerCommands(
             vscode.commands.executeCommand('git.viewCommit', item.commitInfo.hash);
         })
     );
+
+    // Changes view overflow menu commands
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.stageAll', async () => {
+            try {
+                await gitService.stageAll();
+                changesViewProvider.refresh();
+            } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                vscode.window.showErrorMessage(`Stage all failed: ${msg}`);
+            }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.unstageAll', async () => {
+            try {
+                await gitService.unstageAll();
+                changesViewProvider.refresh();
+            } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                vscode.window.showErrorMessage(`Unstage all failed: ${msg}`);
+            }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.discardAll', async () => {
+            const choice = await vscode.window.showWarningMessage(
+                'Discard all changes? This cannot be undone.',
+                { modal: true },
+                'Discard All',
+            );
+            if (choice === 'Discard All') {
+                try {
+                    const status = await gitService.getStatus();
+                    for (const entry of status.unstaged) {
+                        await gitService.discardFile(entry.filePath);
+                    }
+                    changesViewProvider.refresh();
+                } catch (error) {
+                    const msg = error instanceof Error ? error.message : String(error);
+                    vscode.window.showErrorMessage(`Discard all failed: ${msg}`);
+                }
+            }
+        })
+    );
 }
