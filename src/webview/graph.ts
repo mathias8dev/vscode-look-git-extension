@@ -60,11 +60,13 @@ const DEFAULT_DETAILS_WIDTH = 300;
 const MIN_PANE_WIDTH = 100;
 
 type BranchViewMode = 'list' | 'tree';
+type FilesViewMode = 'list' | 'tree';
 
 interface PaneState {
     branchWidth: number;
     detailsWidth: number;
     branchViewMode: BranchViewMode;
+    filesViewMode: FilesViewMode;
 }
 
 function loadPaneState(): PaneState {
@@ -73,6 +75,7 @@ function loadPaneState(): PaneState {
         branchWidth: state?.branchWidth ?? DEFAULT_BRANCH_WIDTH,
         detailsWidth: state?.detailsWidth ?? DEFAULT_DETAILS_WIDTH,
         branchViewMode: state?.branchViewMode ?? 'list',
+        filesViewMode: state?.filesViewMode ?? 'list',
     };
 }
 
@@ -885,6 +888,191 @@ function renderGraphTable(): void {
 
 // ── Details Pane ──
 
+// File icon SVGs based on file extension — covers common types
+const FILE_ICON_MAP: Record<string, { color: string; letter: string }> = {
+    ts: { color: '#3178c6', letter: 'TS' },
+    tsx: { color: '#3178c6', letter: 'TX' },
+    js: { color: '#f1e05a', letter: 'JS' },
+    jsx: { color: '#f1e05a', letter: 'JX' },
+    json: { color: '#a8b34b', letter: '{}' },
+    css: { color: '#563d7c', letter: '#' },
+    scss: { color: '#c6538c', letter: '#' },
+    less: { color: '#1d365d', letter: '#' },
+    html: { color: '#e34c26', letter: '<>' },
+    md: { color: '#519aba', letter: 'M' },
+    py: { color: '#3572a5', letter: 'Py' },
+    rb: { color: '#cc342d', letter: 'Rb' },
+    go: { color: '#00add8', letter: 'Go' },
+    rs: { color: '#dea584', letter: 'Rs' },
+    java: { color: '#b07219', letter: 'J' },
+    kt: { color: '#a97bff', letter: 'Kt' },
+    swift: { color: '#f05138', letter: 'Sw' },
+    c: { color: '#555555', letter: 'C' },
+    cpp: { color: '#f34b7d', letter: 'C+' },
+    h: { color: '#555555', letter: 'H' },
+    cs: { color: '#178600', letter: 'C#' },
+    php: { color: '#4f5d95', letter: 'P' },
+    sh: { color: '#89e051', letter: '$' },
+    bash: { color: '#89e051', letter: '$' },
+    yml: { color: '#cb171e', letter: 'Y' },
+    yaml: { color: '#cb171e', letter: 'Y' },
+    toml: { color: '#9c4221', letter: 'T' },
+    xml: { color: '#e34c26', letter: '<>' },
+    svg: { color: '#ffb13b', letter: 'Sv' },
+    png: { color: '#a074c4', letter: 'Im' },
+    jpg: { color: '#a074c4', letter: 'Im' },
+    jpeg: { color: '#a074c4', letter: 'Im' },
+    gif: { color: '#a074c4', letter: 'Im' },
+    sql: { color: '#e38c00', letter: 'Sq' },
+    graphql: { color: '#e10098', letter: 'Gq' },
+    vue: { color: '#41b883', letter: 'V' },
+    svelte: { color: '#ff3e00', letter: 'Sv' },
+    lock: { color: '#6a737d', letter: 'Lk' },
+    env: { color: '#6a737d', letter: 'Ev' },
+    gitignore: { color: '#6a737d', letter: 'Gi' },
+    dockerfile: { color: '#384d54', letter: 'Dk' },
+    makefile: { color: '#427819', letter: 'Mk' },
+};
+
+const DEFAULT_FILE_ICON = { color: '#6a737d', letter: 'F' };
+
+function getFileIconInfo(filePath: string): { color: string; letter: string } {
+    const name = filePath.split('/').pop() || '';
+    const nameLower = name.toLowerCase();
+
+    // Check special filenames first
+    if (nameLower === 'dockerfile') { return FILE_ICON_MAP['dockerfile']; }
+    if (nameLower === 'makefile') { return FILE_ICON_MAP['makefile']; }
+    if (nameLower.startsWith('.env')) { return FILE_ICON_MAP['env']; }
+    if (nameLower === '.gitignore') { return FILE_ICON_MAP['gitignore']; }
+
+    const ext = name.includes('.') ? name.split('.').pop()!.toLowerCase() : '';
+    return FILE_ICON_MAP[ext] || DEFAULT_FILE_ICON;
+}
+
+function renderFileIconSvg(filePath: string): string {
+    const info = getFileIconInfo(filePath);
+    return `<svg class="file-icon" width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="1" width="12" height="14" rx="1.5" fill="${info.color}" opacity="0.15" stroke="${info.color}" stroke-width="0.5"/>
+        <text x="8" y="10.5" text-anchor="middle" font-size="6" font-weight="600" fill="${info.color}">${info.letter}</text>
+    </svg>`;
+}
+
+const FOLDER_ICON_SVG = `<svg class="folder-icon" width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path d="M1.5 2A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5V5.5A1.5 1.5 0 0 0 14.5 4H8L6.5 2H1.5z"
+          fill="var(--vscode-icon-foreground, #c09553)" opacity="0.85"/>
+</svg>`;
+
+// File tree structure for the details pane
+interface FileTreeNode {
+    name: string;
+    fullPath: string;
+    children: Map<string, FileTreeNode>;
+    file?: FileChange;  // set on leaf nodes
+}
+
+const collapsedDetailsFolders = new Set<string>();
+
+function buildFileTree(files: FileChange[]): FileTreeNode {
+    const root: FileTreeNode = { name: '', fullPath: '', children: new Map() };
+
+    for (const f of files) {
+        const segments = f.filePath.split('/');
+        let node = root;
+
+        for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i];
+            const path = segments.slice(0, i + 1).join('/');
+
+            if (!node.children.has(seg)) {
+                node.children.set(seg, {
+                    name: seg,
+                    fullPath: path,
+                    children: new Map(),
+                });
+            }
+            node = node.children.get(seg)!;
+        }
+
+        node.file = f;
+    }
+
+    return root;
+}
+
+// Collapse single-child folder chains into one node (e.g. "src/utils" instead of "src" > "utils")
+function collapseFileTree(node: FileTreeNode): FileTreeNode {
+    for (const [key, child] of node.children) {
+        const collapsed = collapseFileTree(child);
+        node.children.set(key, collapsed);
+    }
+
+    // If this non-root folder has exactly one child that is also a folder, merge
+    if (!node.file && node.children.size === 1 && node.name !== '') {
+        const [, onlyChild] = [...node.children.entries()][0];
+        if (!onlyChild.file && onlyChild.children.size > 0) {
+            return {
+                name: `${node.name}/${onlyChild.name}`,
+                fullPath: onlyChild.fullPath,
+                children: onlyChild.children,
+            };
+        }
+    }
+
+    return node;
+}
+
+function renderFileTreeNodes(node: FileTreeNode, hash: string, depth: number): string {
+    let html = '';
+
+    const entries = [...node.children.values()].sort((a, b) => {
+        const aIsFolder = !a.file && a.children.size > 0;
+        const bIsFolder = !b.file && b.children.size > 0;
+        if (aIsFolder !== bIsFolder) { return aIsFolder ? -1 : 1; }
+        return a.name.localeCompare(b.name);
+    });
+
+    for (const child of entries) {
+        const isFolder = !child.file && child.children.size > 0;
+        const indent = depth * 16;
+
+        if (isFolder) {
+            const collapsed = collapsedDetailsFolders.has(child.fullPath);
+            const arrow = collapsed ? '&#9654;' : '&#9660;';
+            html += `<div class="file-tree-folder" data-folder="${escapeHtml(child.fullPath)}" style="padding-left: ${indent}px;">
+                <span class="tree-arrow">${arrow}</span>
+                ${FOLDER_ICON_SVG}
+                <span class="file-tree-folder-name">${escapeHtml(child.name)}</span>
+            </div>`;
+
+            if (!collapsed) {
+                html += renderFileTreeNodes(child, hash, depth + 1);
+            }
+        } else if (child.file) {
+            const f = child.file;
+            const statusClass = getStatusClass(f.status);
+            html += `<div class="file-item file-tree-item" data-file="${escapeHtml(f.filePath)}" data-status="${f.status}" data-hash="${hash}" style="padding-left: ${indent}px;">
+                ${renderFileIconSvg(f.filePath)}
+                <span class="file-path">${escapeHtml(child.name)}</span>
+                <span class="file-status-badge ${statusClass}">${f.status}</span>
+            </div>`;
+        }
+
+        // Node is both folder and file
+        if (isFolder && child.file) {
+            const f = child.file;
+            const statusClass = getStatusClass(f.status);
+            html += `<div class="file-item file-tree-item" data-file="${escapeHtml(f.filePath)}" data-status="${f.status}" data-hash="${hash}" style="padding-left: ${(depth + 1) * 16}px;">
+                ${renderFileIconSvg(f.filePath)}
+                <span class="file-path">${escapeHtml(child.name)}</span>
+                <span class="file-status-badge ${statusClass}">${f.status}</span>
+            </div>`;
+        }
+    }
+
+    return html;
+}
+
 function renderCommitDetails(
     hash: string,
     fullMessage: string,
@@ -931,19 +1119,69 @@ function renderCommitDetails(
         html += `<div class="details-message">${escapeHtml(fullMessage)}</div>`;
     }
 
-    html += `<div class="details-files-header">Changed Files (${files.length})</div>`;
-    for (const f of files) {
-        const statusClass = getStatusClass(f.status);
-        html += `
-            <div class="file-item" data-file="${escapeHtml(f.filePath)}" data-status="${f.status}" data-hash="${hash}">
-                <span class="file-status ${statusClass}">${f.status}</span>
-                <span class="file-path">${escapeHtml(f.filePath)}</span>
-            </div>`;
+    const filesMode = paneState.filesViewMode;
+    const listActive = filesMode === 'list' ? ' active' : '';
+    const treeActive = filesMode === 'tree' ? ' active' : '';
+
+    html += `<div class="details-files-toolbar">
+        <span class="details-files-header">Changed Files (${files.length})</span>
+        <div class="view-switcher">
+            <button class="view-switch-btn${listActive}" data-files-mode="list" title="List view">&#9776;</button>
+            <button class="view-switch-btn${treeActive}" data-files-mode="tree" title="Tree view">&#128466;</button>
+        </div>
+    </div>`;
+
+    if (filesMode === 'list') {
+        for (const f of files) {
+            const statusClass = getStatusClass(f.status);
+            html += `
+                <div class="file-item" data-file="${escapeHtml(f.filePath)}" data-status="${f.status}" data-hash="${hash}">
+                    ${renderFileIconSvg(f.filePath)}
+                    <span class="file-status ${statusClass}">${f.status}</span>
+                    <span class="file-path">${escapeHtml(f.filePath)}</span>
+                </div>`;
+        }
+    } else {
+        const rawTree = buildFileTree(files);
+        const tree = collapseFileTree(rawTree);
+        html += renderFileTreeNodes(tree, hash, 0);
     }
 
     pane.innerHTML = html;
+    wireDetailsPaneHandlers(pane, hash, fullMessage, files);
+}
 
-    // Wire file click handlers
+function wireDetailsPaneHandlers(
+    pane: HTMLElement,
+    hash: string,
+    fullMessage: string,
+    files: FileChange[],
+): void {
+    // View switcher
+    pane.querySelectorAll('[data-files-mode]').forEach((el) => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const mode = (el as HTMLElement).dataset.filesMode as FilesViewMode;
+            paneState.filesViewMode = mode;
+            savePaneState(paneState);
+            renderCommitDetails(hash, fullMessage, files);
+        });
+    });
+
+    // Folder toggle
+    pane.querySelectorAll('.file-tree-folder').forEach((el) => {
+        el.addEventListener('click', () => {
+            const folder = (el as HTMLElement).dataset.folder!;
+            if (collapsedDetailsFolders.has(folder)) {
+                collapsedDetailsFolders.delete(folder);
+            } else {
+                collapsedDetailsFolders.add(folder);
+            }
+            renderCommitDetails(hash, fullMessage, files);
+        });
+    });
+
+    // File click handlers
     pane.querySelectorAll('.file-item').forEach((el) => {
         el.addEventListener('click', () => {
             const d = (el as HTMLElement).dataset;
@@ -1109,7 +1347,8 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .details-field .value { word-break: break-all; }
 .details-field .value.mono { font-family: var(--vscode-editor-font-family, monospace); }
 .details-message { margin: 12px 0; padding: 8px; background: var(--vscode-textBlockQuote-background); border-left: 3px solid var(--vscode-textBlockQuote-border); white-space: pre-wrap; font-size: 12px; }
-.details-files-header { font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--vscode-descriptionForeground); }
+.details-files-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.details-files-header { font-size: 12px; font-weight: 600; color: var(--vscode-descriptionForeground); }
 .file-item { display: flex; align-items: center; gap: 6px; padding: 2px 4px; cursor: pointer; border-radius: 3px; font-size: 12px; }
 .file-item:hover { background: var(--vscode-list-hoverBackground); }
 .file-status { width: 16px; text-align: center; font-weight: 700; font-size: 11px; flex-shrink: 0; }
@@ -1118,6 +1357,17 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .file-status.deleted { color: var(--vscode-gitDecoration-deletedResourceForeground, #d73a49); }
 .file-status.renamed { color: var(--vscode-gitDecoration-renamedResourceForeground, #e36209); }
 .file-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-icon { flex-shrink: 0; }
+.folder-icon { flex-shrink: 0; }
+.file-tree-folder { display: flex; align-items: center; gap: 4px; padding: 2px 4px; cursor: pointer; border-radius: 3px; font-size: 12px; white-space: nowrap; }
+.file-tree-folder:hover { background: var(--vscode-list-hoverBackground); }
+.file-tree-folder-name { overflow: hidden; text-overflow: ellipsis; }
+.file-tree-item { gap: 4px; }
+.file-status-badge { margin-left: auto; font-size: 10px; font-weight: 700; flex-shrink: 0; padding: 0 4px; border-radius: 3px; line-height: 16px; }
+.file-status-badge.added { color: var(--vscode-gitDecoration-addedResourceForeground, #28a745); }
+.file-status-badge.modified { color: var(--vscode-gitDecoration-modifiedResourceForeground, #2188ff); }
+.file-status-badge.deleted { color: var(--vscode-gitDecoration-deletedResourceForeground, #d73a49); }
+.file-status-badge.renamed { color: var(--vscode-gitDecoration-renamedResourceForeground, #e36209); }
 
 .context-menu { position: fixed; z-index: 100; min-width: 180px; background: var(--vscode-menu-background); color: var(--vscode-menu-foreground); border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border)); border-radius: 4px; padding: 4px 0; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
 .context-menu-item { padding: 4px 24px; cursor: pointer; white-space: nowrap; }
