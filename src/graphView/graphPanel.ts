@@ -225,9 +225,18 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
                 }
 
                 case 'update': {
-                    const remotes = await this.gitService.getRemotes();
-                    const remote = remotes[0] ?? 'origin';
-                    await this.gitService.fetchBranch(remote, branch);
+                    let remote: string;
+                    let branchName: string;
+                    if (isRemote) {
+                        const slashIdx = branch.indexOf('/');
+                        remote = slashIdx === -1 ? 'origin' : branch.substring(0, slashIdx);
+                        branchName = slashIdx === -1 ? branch : branch.substring(slashIdx + 1);
+                    } else {
+                        const remotes = await this.gitService.getRemotes();
+                        remote = remotes[0] ?? 'origin';
+                        branchName = branch;
+                    }
+                    await this.gitService.fetchBranch(remote, branchName);
                     break;
                 }
 

@@ -12,10 +12,14 @@ function resetVscodeMock(): void {
 function makeWebviewView() {
     const messages: unknown[] = [];
     let messageHandler: ((msg: unknown) => unknown) | undefined;
+    let visibilityHandler: (() => unknown) | undefined;
     return {
         messages,
         get messageHandler() {
             return messageHandler;
+        },
+        get visibilityHandler() {
+            return visibilityHandler;
         },
         webview: {
             options: {},
@@ -34,7 +38,10 @@ function makeWebviewView() {
         visible: true,
         badge: undefined,
         show: vi.fn(),
-        onDidChangeVisibility: vi.fn(() => ({ dispose: vi.fn() })),
+        onDidChangeVisibility: vi.fn((handler: () => unknown) => {
+            visibilityHandler = handler;
+            return { dispose: vi.fn() };
+        }),
     };
 }
 
@@ -44,6 +51,66 @@ function statusEntry(filePath: string): GitStatusEntry {
 
 describe('ChangesViewProvider webview messages', () => {
     beforeEach(resetVscodeMock);
+
+    describe('webview lifecycle', () => {
+        it('resolveWebviewView wires the real webview contract and publishes initial status data', async () => {
+            const service = {
+                getStatus: vi.fn(async () => ({
+                    staged: [statusEntry('staged.ts')],
+                    unstaged: [statusEntry('unstaged.ts')],
+                    conflicts: [],
+                    conflictState: 'none',
+                })),
+                stashList: vi.fn(async () => [{ index: 0, message: 'wip' }]),
+            };
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+
+            provider.resolveWebviewView(view as any, {} as any, {} as any);
+
+            expect(view.webview.options).toEqual({
+                enableScripts: true,
+                localResourceRoots: [expect.objectContaining({ path: '/ext/dist/webview' })],
+            });
+            expect(view.webview.html).toContain('Content-Security-Policy');
+            expect(view.webview.html).toContain('dist/webview/changes.js');
+            expect(view.webview.html).toMatch(/script-src 'nonce-[^']+'/);
+            expect(view.messageHandler).toEqual(expect.any(Function));
+
+            await vi.waitFor(() => {
+                expect(view.messages).toContainEqual({
+                    type: 'statusData',
+                    data: {
+                        staged: [statusEntry('staged.ts')],
+                        unstaged: [statusEntry('unstaged.ts')],
+                        conflicts: [],
+                        conflictState: 'none',
+                        stashes: [{ index: 0, message: 'wip' }],
+                    },
+                });
+            });
+            expect(view.badge).toEqual({ value: 2, tooltip: '2 changes' });
+        });
+
+        it('visible webviews refresh through the registered visibility handler', async () => {
+            const service = {
+                getStatus: vi.fn(async () => ({
+                    staged: [],
+                    unstaged: [],
+                    conflicts: [],
+                    conflictState: 'none',
+                })),
+                stashList: vi.fn(async () => []),
+            };
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+
+            provider.resolveWebviewView(view as any, {} as any, {} as any);
+            await vi.waitFor(() => expect(service.getStatus).toHaveBeenCalledTimes(1));
+            view.visibilityHandler?.();
+            await vi.waitFor(() => expect(service.getStatus).toHaveBeenCalledTimes(2));
+        });
+    });
 
     describe('discardFile and abortOp with confirmation', () => {
         function baseService(overrides: Record<string, unknown> = {}) {
@@ -333,6 +400,23 @@ describe('ChangesViewProvider webview messages', () => {
             expect((vscode.commands as any).calls[0].command).toBe('merge-conflict.accept.select');
         });
 
+        it('openMergeEditor falls back to opening the file when the merge command is unavailable', async () => {
+            (vscode.commands as any).failCommand(
+                'merge-conflict.accept.select',
+                new Error('command not found'),
+            );
+            const service = makeBaseService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+
+            await (provider as any).handleMessage({ type: 'openMergeEditor', filePath: 'conflict.txt' });
+
+            expect((vscode.commands as any).calls.map((c: any) => c.command)).toEqual([
+                'merge-conflict.accept.select',
+                'vscode.open',
+            ]);
+        });
+
         it('continueOp merge calls service.mergeContinue and shows info', async () => {
             const service = makeBaseService();
             const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
@@ -556,6 +640,51 @@ describe('ChangesViewProvider webview messages', () => {
 describe('GraphViewProvider webview messages', () => {
     beforeEach(resetVscodeMock);
 
+    describe('webview lifecycle', () => {
+        it('resolveWebviewView wires graph html, message handling, and initial graph data', async () => {
+            const commit: GitCommitInfo = {
+                hash: 'abc123456789',
+                shortHash: 'abc1234',
+                message: 'initial graph commit',
+                authorName: 'Author',
+                authorEmail: 'a@example.com',
+                authorDate: new Date('2024-01-01T00:00:00Z'),
+                parentHashes: [],
+            };
+            const service = {
+                getAllBranches: vi.fn(async () => [{ name: 'main', isRemote: false, isCurrent: true, hash: 'abc1234' }]),
+                getAllTags: vi.fn(async () => []),
+                getGraphLog: vi.fn(async () => [commit]),
+                getCurrentBranch: vi.fn(async () => 'main'),
+                getUserName: vi.fn(async () => 'Author'),
+            };
+            const provider = new GraphViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+
+            provider.resolveWebviewView(view as any, {} as any, {} as any);
+
+            expect(view.webview.options).toEqual({
+                enableScripts: true,
+                localResourceRoots: [expect.objectContaining({ path: '/ext/dist/webview' })],
+            });
+            expect(view.webview.html).toContain('Content-Security-Policy');
+            expect(view.webview.html).toContain('dist/webview/graph.js');
+            expect(view.webview.html).toMatch(/script-src 'nonce-[^']+'/);
+            expect(view.messageHandler).toEqual(expect.any(Function));
+
+            await vi.waitFor(() => {
+                expect(view.messages).toContainEqual(expect.objectContaining({
+                    type: 'graphData',
+                    data: expect.objectContaining({
+                        branches: [{ name: 'main', isRemote: false, isCurrent: true, hash: 'abc1234' }],
+                        currentBranch: 'main',
+                        currentUser: 'Author',
+                    }),
+                }));
+            });
+        });
+    });
+
     describe('getCommitDetails and openDiff', () => {
         function makeGraphService(overrides: Record<string, unknown> = {}) {
             return {
@@ -735,6 +864,12 @@ describe('GraphViewProvider webview messages', () => {
             expect(service.fetchBranch).toHaveBeenCalledWith('origin', 'feature');
         });
 
+        it('update remote branch strips the remote prefix before fetching', async () => {
+            const service = makeGraphService();
+            await handle(service, { command: 'update', branch: 'origin/feature/ui', isRemote: true });
+            expect(service.fetchBranch).toHaveBeenCalledWith('origin', 'feature/ui');
+        });
+
         it('rebaseOnto calls service.rebase', async () => {
             const service = makeGraphService();
             await handle(service, { command: 'rebaseOnto', branch: 'feature', isRemote: false });
@@ -797,6 +932,22 @@ describe('GraphViewProvider webview messages', () => {
         expect(service.getCommit).toHaveBeenCalledWith(commit.hash);
         expect((vscode.commands as any).calls[0].command).toBe('lookGit.copyCommitHash');
         expect((vscode.commands as any).calls[0].args[0].commitInfo).toEqual(commit);
+    });
+
+    it('reports an error when an allowed graph command targets a missing commit', async () => {
+        const service = {
+            getCommit: vi.fn(async () => undefined),
+        };
+        const provider = new GraphViewProvider(vscode.Uri.file('/ext') as any, service as any);
+
+        await (provider as any).handleMessage({
+            type: 'executeCommand',
+            command: 'lookGit.copyCommitHash',
+            commitHash: 'missing',
+        });
+
+        expect((vscode.commands as any).calls).toEqual([]);
+        expect((vscode.window as any).errorMessages).toContainEqual('Commit not found: missing');
     });
 
     it('keeps branch and path filters across refreshes', async () => {

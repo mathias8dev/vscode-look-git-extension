@@ -138,6 +138,21 @@ describe('graphLaneAssigner advanced cases', () => {
         }));
     });
 
+    it('allocates one visible lane per additional parent for octopus merges', () => {
+        const rows = assignLanes([
+            commit('merge', ['main', 'feature-a', 'feature-b']),
+            commit('main', ['base']),
+            commit('feature-a', ['base']),
+            commit('feature-b', ['base']),
+            commit('base'),
+        ]);
+
+        const mergeLines = rows[0].laneData.lines.filter((line) => line.type === 'fork-right');
+        expect(mergeLines).toHaveLength(2);
+        expect(mergeLines.map((line) => line.toLane)).toEqual([1, 2]);
+        expect(getMaxLane(rows)).toBe(2);
+    });
+
     it('reuses a freed lane after a branch tip has been consumed', () => {
         const rows = assignLanes([
             commit('feature-a', ['base-a']),

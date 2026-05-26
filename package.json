@@ -794,13 +794,13 @@
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "npm run check-types && node esbuild.js",
-    "check-types": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json && tsc --noEmit -p tsconfig.vitest.json",
+    "check-types": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json && tsc --noEmit -p tsconfig.vitest.json && tsc --noEmit -p tsconfig.integration.json",
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "package": "npm run check-types && node esbuild.js --production",
     "lint": "npm run check-types",
-    "test": "vitest run",
+    "test": "npm run compile && vitest run",
     "test:integration:compile": "tsc -p tsconfig.integration.json",
     "test:integration": "npm run compile && npm run test:integration:compile && node ./out/test/tests/integration/runTest.js",
     "test:all": "npm run test && npm run test:integration"

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as vscode from 'vscode';
 import { buildFolderTree, CommitItem, FileChangeItem, FolderItem, LoadMoreItem } from '../src/commitItem';
 import type { GitCommitInfo, GitFileChange } from '../src/gitService';
 
@@ -93,11 +94,20 @@ describe('FileChangeItem', () => {
         expect(item.description).toBe('M');
     });
 
-    it('has vscode.diff as the command for all statuses', () => {
-        for (const status of ['A', 'D', 'M', 'R'] as const) {
+    it('has vscode.diff as the command for every supported file status', () => {
+        for (const status of ['A', 'D', 'M', 'R', 'C', 'T', 'U'] as const) {
             const change: GitFileChange = { status, filePath: 'file.ts' };
             const item = new FileChangeItem(change, 'abc1234', repoRoot);
             expect((item.command as any).command).toBe('vscode.diff');
+        }
+    });
+
+    it('keeps copied, type-changed, and unmerged statuses visible in descriptions and tooltips', () => {
+        for (const status of ['C', 'T', 'U'] as const) {
+            const change: GitFileChange = { status, filePath: `src/${status}.ts` };
+            const item = new FileChangeItem(change, 'abc1234', repoRoot);
+            expect(item.description).toBe(status);
+            expect(item.tooltip).toBe(`src/${status}.ts [${status}]`);
         }
     });
 
@@ -133,7 +143,7 @@ describe('FolderItem', () => {
     it('is expanded by default', () => {
         const node = { name: 'src', fullPath: 'src', children: new Map(), files: [] };
         const item = new FolderItem(node, 'abc1234', '/repo');
-        expect(item.collapsibleState).toBe(2); // TreeItemCollapsibleState.Expanded
+        expect(item.collapsibleState).toBe(vscode.TreeItemCollapsibleState.Expanded);
     });
 
     it('exposes the folder node and repo metadata', () => {

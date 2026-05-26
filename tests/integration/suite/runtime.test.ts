@@ -1,4 +1,6 @@
 import * as assert from 'assert';
+import { execFileSync } from 'child_process';
+import * as path from 'path';
 import * as vscode from 'vscode';
 
 // ---------------------------------------------------------------------------
@@ -12,46 +14,78 @@ async function activateExtension(): Promise<vscode.Extension<unknown>> {
     return ext!;
 }
 
+interface FixtureRepo {
+    cwd: string;
+}
+
+let fixtureRepo: FixtureRepo | undefined;
+
+async function sleep(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForBuiltInGitRepo(rootPath: string): Promise<unknown> {
+    const gitExtension = vscode.extensions.getExtension('vscode.git');
+    assert.ok(gitExtension, 'Built-in Git extension should be installed.');
+    const gitExports = await gitExtension!.activate() as { getAPI(version: number): { repositories: Array<{ rootUri: vscode.Uri }> } };
+    const api = gitExports.getAPI(1);
+    const expected = path.normalize(rootPath);
+
+    for (let attempt = 0; attempt < 50; attempt++) {
+        const repo = api.repositories.find((r) => path.normalize(r.rootUri.fsPath) === expected);
+        if (repo) {
+            return repo;
+        }
+        await sleep(100);
+    }
+
+    assert.fail(`Built-in Git API did not discover fixture repository: ${rootPath}`);
+}
+
 async function openEmpty(path: string): Promise<vscode.TextDocument> {
     return vscode.workspace.openTextDocument(vscode.Uri.parse(`lookgit-empty:${path}`));
 }
 
+function git(rootPath: string, args: string[]): string {
+    return execFileSync('git', args, {
+        cwd: rootPath,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+}
+
 // ---------------------------------------------------------------------------
-// All commands declared in package.json
+// Manifest helpers
 // ---------------------------------------------------------------------------
 
-const ALL_COMMANDS = [
-    'lookGit.refreshHistory',
-    'lookGit.loadMore',
-    'lookGit.cherryPick',
-    'lookGit.rebase',
-    'lookGit.reset',
-    'lookGit.revert',
-    'lookGit.drop',
-    'lookGit.renameCommit',
-    'lookGit.checkout',
-    'lookGit.squash',
-    'lookGit.fixup',
-    'lookGit.pushUpTo',
-    'lookGit.copyCommitHash',
-    'lookGit.viewCommitDetails',
-    'lookGit.openGraph',
-    'lookGit.refreshChanges',
-    'lookGit.fetchAll',
-    'lookGit.pull',
-    'lookGit.push',
-    'lookGit.viewAsTree',
-    'lookGit.viewAsList',
-    'lookGit.viewAsTreeActive',
-    'lookGit.viewAsListActive',
-    'lookGit.historyViewAsTree',
-    'lookGit.historyViewAsList',
-    'lookGit.historyViewAsTreeActive',
-    'lookGit.historyViewAsListActive',
-    'lookGit.stageAll',
-    'lookGit.unstageAll',
-    'lookGit.discardAll',
+function getContributedLookGitCommands(): string[] {
+    const extension = vscode.extensions.getExtension('mathias8dev.look-git')!;
+    const pkg = extension.packageJSON as {
+        contributes?: { commands?: Array<{ command?: string }> };
+    };
+    return (pkg.contributes?.commands ?? [])
+        .map((entry) => entry.command)
+        .filter((command): command is string => typeof command === 'string' && command.startsWith('lookGit.'));
+}
+
+const VIEW_IDS = [
+    'lookGit.commitHistory',
+    'lookGit.graphView',
+    'lookGit.changesView',
 ];
+
+const VIEW_COMMAND_SUFFIXES = [
+    'focus',
+    'resetViewLocation',
+    'toggleVisibility',
+    'removeView',
+];
+
+function isVsCodeGeneratedViewCommand(command: string): boolean {
+    return VIEW_IDS.some((viewId) =>
+        VIEW_COMMAND_SUFFIXES.some((suffix) => command === `${viewId}.${suffix}`)
+    );
+}
 
 // ---------------------------------------------------------------------------
 // Suite
@@ -60,6 +94,10 @@ const ALL_COMMANDS = [
 suite('Look Git extension runtime', () => {
 
     suiteSetup(async () => {
+        const fixturePath = process.env.LOOK_GIT_INTEGRATION_REPO;
+        assert.ok(fixturePath, 'Integration runner should provide LOOK_GIT_INTEGRATION_REPO.');
+        fixtureRepo = { cwd: fixturePath! };
+        await waitForBuiltInGitRepo(fixtureRepo.cwd);
         await activateExtension();
     });
 
@@ -104,6 +142,36 @@ suite('Look Git extension runtime', () => {
             assert.equal(pkg['name'], 'look-git');
             assert.equal(pkg['publisher'], 'mathias8dev');
         });
+
+        test('opens with a real Git repository discovered by VS Code Git API', async () => {
+            assert.ok(fixtureRepo, 'Fixture repository should exist.');
+            await waitForBuiltInGitRepo(fixtureRepo!.cwd);
+        });
+
+        test('fixture repository has multiple commits, contributors, and branches', () => {
+            assert.ok(fixtureRepo, 'Fixture repository should exist.');
+
+            const commitCount = Number(git(fixtureRepo!.cwd, ['rev-list', '--count', '--all']));
+            const contributors = new Set(
+                git(fixtureRepo!.cwd, ['log', '--all', '--format=%an <%ae>'])
+                    .split('\n')
+                    .filter(Boolean),
+            );
+            const branches = git(fixtureRepo!.cwd, ['for-each-ref', '--format=%(refname:short)', 'refs/heads'])
+                .split('\n')
+                .filter(Boolean);
+
+            assert.ok(commitCount >= 19, `Expected at least 19 commits, got ${commitCount}.`);
+            assert.ok(contributors.size >= 11, `Expected at least 11 contributors, got ${contributors.size}.`);
+            assert.deepStrictEqual(branches.sort(), [
+                'bugfix/status',
+                'docs/readme',
+                'experiment/graph',
+                'feature/api',
+                'feature/ui',
+                'main',
+            ]);
+        });
     });
 
     // -----------------------------------------------------------------------
@@ -117,20 +185,24 @@ suite('Look Git extension runtime', () => {
             registeredCommands = await vscode.commands.getCommands(true);
         });
 
-        for (const command of ALL_COMMANDS) {
-            // Mocha collects tests synchronously; the closure captures `command` by value
-            // because `const` in a for-of loop creates a new binding per iteration.
-            test(`registers ${command}`, () => {
+        test('registers every lookGit command declared in package.json', () => {
+            const contributed = getContributedLookGitCommands();
+            assert.ok(contributed.length > 0, 'package.json should declare lookGit commands.');
+
+            for (const command of contributed) {
                 assert.ok(
                     registeredCommands.includes(command),
                     `Command not registered: ${command}`,
                 );
-            });
-        }
+            }
+        });
 
         test('no unexpected lookGit commands are registered', () => {
+            const contributed = getContributedLookGitCommands();
             const extra = registeredCommands
-                .filter((c) => c.startsWith('lookGit.') && !ALL_COMMANDS.includes(c));
+                .filter((c) => c.startsWith('lookGit.'))
+                .filter((c) => !contributed.includes(c))
+                .filter((c) => !isVsCodeGeneratedViewCommand(c));
             assert.deepStrictEqual(extra, [], `Unexpected commands registered: ${extra.join(', ')}`);
         });
     });
@@ -179,10 +251,9 @@ suite('Look Git extension runtime', () => {
             assert.equal(b.getText(), '');
         });
 
-        test('document language id is plain text', async () => {
+        test('document keeps the file extension language association', async () => {
             const doc = await openEmpty('anything.ts');
-            // The provider registers no language; VSCode picks plaintext for unknown schemes
-            assert.ok(doc.languageId, 'Language id should be set');
+            assert.equal(doc.languageId, 'typescript');
         });
 
         test('document is not dirty after opening', async () => {

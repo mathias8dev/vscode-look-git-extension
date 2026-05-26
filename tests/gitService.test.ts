@@ -668,6 +668,51 @@ describe('GitService branch operations', () => {
 
         expect(await r.service.getRemotes()).toEqual([]);
     });
+
+    it('returns configured remotes in git order', async () => {
+        const r = repo();
+        r.write('file.txt', 'content');
+        r.commit('initial');
+        r.git(['remote', 'add', 'origin', '/tmp/origin.git']);
+        r.git(['remote', 'add', 'upstream', '/tmp/upstream.git']);
+
+        expect(await r.service.getRemotes()).toEqual(['origin', 'upstream']);
+    });
+
+    it('fetchBranch fetches a remote branch whose name contains slashes', async () => {
+        const remote = repo();
+        remote.write('file.txt', 'base');
+        remote.commit('initial');
+        remote.git(['checkout', '-q', '-b', 'feature/nested']);
+        remote.write('feature.txt', 'remote feature');
+        const remoteHead = remote.commit('feature commit');
+
+        const r = repo();
+        r.git(['remote', 'add', 'origin', remote.cwd]);
+
+        await r.service.fetchBranch('origin', 'feature/nested');
+
+        expect(r.gitTrim(['rev-parse', 'origin/feature/nested'])).toBe(remoteHead);
+    });
+
+    it('getTrackingBranch preserves branch names containing slashes', async () => {
+        const remote = repo();
+        remote.write('file.txt', 'base');
+        remote.commit('initial');
+        remote.git(['checkout', '-q', '-b', 'feature/nested']);
+        remote.write('feature.txt', 'remote feature');
+        remote.commit('feature commit');
+
+        const r = repo();
+        r.git(['remote', 'add', 'origin', remote.cwd]);
+        await r.service.fetchBranch('origin', 'feature/nested');
+        r.git(['checkout', '-q', '-b', 'feature/nested', 'origin/feature/nested']);
+
+        expect(await r.service.getTrackingBranch()).toEqual({
+            remote: 'origin',
+            branch: 'feature/nested',
+        });
+    });
 });
 
 describe('GitService commit operations', () => {

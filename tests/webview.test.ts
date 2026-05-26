@@ -3,6 +3,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GraphRow } from '../src/graphView/graphLaneAssigner';
 
+const CHANGES_WEBVIEW_MODULE = '../dist/webview/changes.js';
+const GRAPH_WEBVIEW_MODULE = '../dist/webview/graph.js';
+
 interface MockVsCodeApi {
     messages: unknown[];
     state: unknown;
@@ -66,7 +69,7 @@ describe('Changes webview runtime behavior', () => {
 
     describe('individual file actions', () => {
         async function bootWithFiles(): Promise<MockVsCodeApi> {
-            const api = await bootWebview('../src/webview/changes');
+            const api = await bootWebview(CHANGES_WEBVIEW_MODULE);
             sendWebviewMessage({
                 type: 'statusData',
                 data: {
@@ -133,7 +136,7 @@ describe('Changes webview runtime behavior', () => {
         let api: MockVsCodeApi;
 
         beforeEach(async () => {
-            api = await bootWebview('../src/webview/changes');
+            api = await bootWebview(CHANGES_WEBVIEW_MODULE);
             sendWebviewMessage({
                 type: 'statusData',
                 data: {
@@ -164,7 +167,7 @@ describe('Changes webview runtime behavior', () => {
 
     describe('merge and rebase controls', () => {
         async function bootWithConflict(conflictState: 'merge' | 'rebase'): Promise<MockVsCodeApi> {
-            const api = await bootWebview('../src/webview/changes');
+            const api = await bootWebview(CHANGES_WEBVIEW_MODULE);
             sendWebviewMessage({
                 type: 'statusData',
                 data: {
@@ -205,7 +208,7 @@ describe('Changes webview runtime behavior', () => {
 
     describe('stash operations', () => {
         async function bootWithStash(): Promise<MockVsCodeApi> {
-            const api = await bootWebview('../src/webview/changes');
+            const api = await bootWebview(CHANGES_WEBVIEW_MODULE);
             sendWebviewMessage({
                 type: 'statusData',
                 data: {
@@ -289,7 +292,7 @@ describe('Changes webview runtime behavior', () => {
 
     describe('commit mode and keyboard', () => {
         async function bootWithStagedFile(): Promise<MockVsCodeApi> {
-            const api = await bootWebview('../src/webview/changes');
+            const api = await bootWebview(CHANGES_WEBVIEW_MODULE);
             sendWebviewMessage({
                 type: 'statusData',
                 data: {
@@ -354,7 +357,7 @@ describe('Changes webview runtime behavior', () => {
         });
 
         it('commit-btn is disabled when no staged files', async () => {
-            await bootWebview('../src/webview/changes');
+            await bootWebview(CHANGES_WEBVIEW_MODULE);
             sendWebviewMessage({
                 type: 'statusData',
                 data: {
@@ -388,21 +391,21 @@ describe('Changes webview runtime behavior', () => {
         };
 
         it('renders tree-folder-row elements for nested file paths', async () => {
-            await bootWebview('../src/webview/changes');
+            await bootWebview(CHANGES_WEBVIEW_MODULE);
             sendWebviewMessage({ type: 'setViewMode', asTree: true });
             sendWebviewMessage(NESTED_STATUS_DATA);
             expect(document.querySelectorAll('.tree-folder-row').length).toBeGreaterThan(0);
         });
 
         it('tree folder is collapsed by default — no tree-file-row initially', async () => {
-            await bootWebview('../src/webview/changes');
+            await bootWebview(CHANGES_WEBVIEW_MODULE);
             sendWebviewMessage({ type: 'setViewMode', asTree: true });
             sendWebviewMessage(NESTED_STATUS_DATA);
             expect(document.querySelectorAll('.tree-file-row').length).toBe(0);
         });
 
         it('clicking tree-folder-row expands to show tree-file-row', async () => {
-            await bootWebview('../src/webview/changes');
+            await bootWebview(CHANGES_WEBVIEW_MODULE);
             sendWebviewMessage({ type: 'setViewMode', asTree: true });
             sendWebviewMessage(NESTED_STATUS_DATA);
             click('.tree-folder-row');
@@ -410,7 +413,7 @@ describe('Changes webview runtime behavior', () => {
         });
 
         it('clicking tree-folder-row twice collapses back', async () => {
-            await bootWebview('../src/webview/changes');
+            await bootWebview(CHANGES_WEBVIEW_MODULE);
             sendWebviewMessage({ type: 'setViewMode', asTree: true });
             sendWebviewMessage(NESTED_STATUS_DATA);
             click('.tree-folder-row');
@@ -419,7 +422,7 @@ describe('Changes webview runtime behavior', () => {
         });
 
         it('clicking tree-file-row posts openDiff', async () => {
-            const api = await bootWebview('../src/webview/changes');
+            const api = await bootWebview(CHANGES_WEBVIEW_MODULE);
             sendWebviewMessage({ type: 'setViewMode', asTree: true });
             sendWebviewMessage(NESTED_STATUS_DATA);
             click('.tree-folder-row');
@@ -435,7 +438,7 @@ describe('Changes webview runtime behavior', () => {
     });
 
     it('boots, announces readiness, and keeps commit text after a failed commit', async () => {
-        const api = await bootWebview('../src/webview/changes');
+        const api = await bootWebview(CHANGES_WEBVIEW_MODULE);
 
         expect(api.messages).toContainEqual({ type: 'ready' });
         expect(api.messages).toContainEqual({ type: 'viewModeChanged', asTree: false });
@@ -469,7 +472,7 @@ describe('Changes webview runtime behavior', () => {
     });
 
     it('posts predictable action messages for change and conflict controls', async () => {
-        const api = await bootWebview('../src/webview/changes');
+        const api = await bootWebview(CHANGES_WEBVIEW_MODULE);
         sendWebviewMessage({
             type: 'statusData',
             data: {
@@ -496,6 +499,29 @@ describe('Changes webview runtime behavior', () => {
         expect(api.messages).toContainEqual({ type: 'openMergeEditor', filePath: 'conflict.txt' });
         expect(api.messages).toContainEqual({ type: 'getStashFiles', index: 0 });
     });
+
+    it('renders untrusted file paths and stash messages as text instead of markup', async () => {
+        await bootWebview(CHANGES_WEBVIEW_MODULE);
+        const unsafePath = 'src/<img src=x onerror="alert(1)">.ts';
+        const unsafeStash = '<script>alert("xss")</script>';
+
+        sendWebviewMessage({
+            type: 'statusData',
+            data: {
+                staged: [],
+                unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: unsafePath }],
+                conflicts: [],
+                conflictState: 'none',
+                stashes: [{ index: 0, message: unsafeStash }],
+            },
+        });
+        click('[data-section="stashes"] .section-title-row');
+
+        expect(document.querySelector('img')).toBeNull();
+        expect(document.querySelector('script')).toBeNull();
+        expect(document.querySelector('#files-section')!.textContent).toContain('<img src=x onerror="alert(1)">.ts');
+        expect(document.querySelector('#files-section')!.textContent).toContain(unsafeStash);
+    });
 });
 
 function graphRow(hash: string, message: string): GraphRow {
@@ -520,7 +546,7 @@ function graphRow(hash: string, message: string): GraphRow {
 
 describe('Graph webview runtime behavior', () => {
     it('filters, selects commits, opens details, and forwards parent-aware diff messages', async () => {
-        const api = await bootWebview('../src/webview/graph');
+        const api = await bootWebview(GRAPH_WEBVIEW_MODULE);
         const rows = [
             graphRow('abc123456789', 'visible commit'),
             graphRow('def123456789', 'hidden commit'),
@@ -570,7 +596,7 @@ describe('Graph webview runtime behavior', () => {
     });
 
     it('sends selected branch and path filters back to the extension', async () => {
-        const api = await bootWebview('../src/webview/graph');
+        const api = await bootWebview(GRAPH_WEBVIEW_MODULE);
         sendWebviewMessage({
             type: 'graphData',
             data: {
@@ -600,6 +626,80 @@ describe('Graph webview runtime behavior', () => {
         });
     });
 
+    it('renders untrusted graph data and commit details as text instead of markup', async () => {
+        const api = await bootWebview(GRAPH_WEBVIEW_MODULE);
+        const unsafeBranch = 'feature/<img src=x onerror="alert(1)">';
+        const unsafeMessage = '<script>alert("commit")</script>';
+        const row = graphRow('abc123456789', unsafeMessage);
+        row.commit.authorName = '<img src=x onerror="author()">';
+
+        sendWebviewMessage({
+            type: 'graphData',
+            data: {
+                branches: [{ name: unsafeBranch, isRemote: false, isCurrent: false, hash: 'abc1234' }],
+                tags: [{ name: '<script>tag</script>', hash: 'abc1234' }],
+                rows: [row],
+                maxLane: 0,
+                currentBranch: 'main',
+                currentUser: row.commit.authorName,
+            },
+        });
+
+        click('.graph-row');
+        expect(api.messages).toContainEqual({ type: 'getCommitDetails', hash: 'abc123456789' });
+        sendWebviewMessage({
+            type: 'commitDetails',
+            hash: 'abc123456789',
+            fullMessage: '<img src=x onerror="details()">',
+            files: [{ status: 'M', filePath: 'src/<script>file</script>.ts' }],
+        });
+
+        expect(document.querySelector('img')).toBeNull();
+        expect(document.querySelector('script')).toBeNull();
+        expect(document.querySelector('#branch-pane')!.textContent).toContain('<img src=x onerror="alert(1)">');
+        expect(document.querySelector('#graph-pane')!.textContent).toContain(unsafeMessage);
+        expect(document.querySelector('#details-pane')!.textContent).toContain('<img src=x onerror="details()">');
+        expect(document.querySelector('#details-pane')!.textContent).toContain('src/<script>file</script>.ts');
+    });
+
+    it('clears commit details when refreshed graph data no longer contains the selected commit', async () => {
+        await bootWebview(GRAPH_WEBVIEW_MODULE);
+        sendWebviewMessage({
+            type: 'graphData',
+            data: {
+                branches: [],
+                tags: [],
+                rows: [graphRow('abc123456789', 'selected commit')],
+                maxLane: 0,
+                currentBranch: 'main',
+                currentUser: 'Test User',
+            },
+        });
+        click('.graph-row');
+        sendWebviewMessage({
+            type: 'commitDetails',
+            hash: 'abc123456789',
+            fullMessage: 'selected commit',
+            files: [{ status: 'M', filePath: 'src/file.ts' }],
+        });
+        expect(document.querySelector('#details-pane')!.textContent).toContain('Changed Files (1)');
+
+        sendWebviewMessage({
+            type: 'graphData',
+            data: {
+                branches: [],
+                tags: [],
+                rows: [],
+                maxLane: 0,
+                currentBranch: 'main',
+                currentUser: 'Test User',
+            },
+        });
+
+        expect(document.querySelector('#details-pane')!.classList.contains('empty')).toBe(true);
+        expect(document.querySelector('#details-pane')!.textContent).toContain('Click a commit to view details');
+    });
+
     describe('branch context menu commands', () => {
         function rightClick(selector: string): void {
             const element = document.querySelector<HTMLElement>(selector);
@@ -617,7 +717,7 @@ describe('Graph webview runtime behavior', () => {
         }
 
         async function bootWithLocalBranch(): Promise<MockVsCodeApi> {
-            const api = await bootWebview('../src/webview/graph');
+            const api = await bootWebview(GRAPH_WEBVIEW_MODULE);
             sendWebviewMessage({
                 type: 'graphData',
                 data: {
@@ -669,7 +769,7 @@ describe('Graph webview runtime behavior', () => {
         });
 
         it('executeBranchCommand for remote branch carries isRemote true', async () => {
-            const api = await bootWebview('../src/webview/graph');
+            const api = await bootWebview(GRAPH_WEBVIEW_MODULE);
             sendWebviewMessage({
                 type: 'graphData',
                 data: {

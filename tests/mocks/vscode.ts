@@ -77,12 +77,21 @@ export const Uri = {
 
 export const commands = {
     calls: [] as Array<{ command: string; args: unknown[] }>,
+    failures: new Map<string, Error>(),
     executeCommand(command: string, ...args: unknown[]) {
         this.calls.push({ command, args });
+        const failure = this.failures.get(command);
+        if (failure) {
+            return Promise.reject(failure);
+        }
         return Promise.resolve(undefined);
+    },
+    failCommand(command: string, error: Error) {
+        this.failures.set(command, error);
     },
     reset() {
         this.calls = [];
+        this.failures = new Map<string, Error>();
     },
 };
 
