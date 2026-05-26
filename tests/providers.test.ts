@@ -101,6 +101,99 @@ describe('ChangesViewProvider webview messages', () => {
         expect((vscode.window as any).errorMessages[0]).toContain('nothing to commit');
     });
 
+    describe('simple git delegation', () => {
+        function makeService(overrides: Record<string, unknown> = {}) {
+            return {
+                stageFile: vi.fn(async () => ''),
+                unstageFile: vi.fn(async () => ''),
+                stageAll: vi.fn(async () => ''),
+                unstageAll: vi.fn(async () => ''),
+                acceptOurs: vi.fn(async () => ''),
+                acceptTheirs: vi.fn(async () => ''),
+                getStatus: vi.fn(async () => ({
+                    staged: [], unstaged: [], conflicts: [], conflictState: 'none',
+                })),
+                stashList: vi.fn(async () => []),
+                ...overrides,
+            };
+        }
+
+        function makeProvider(service: ReturnType<typeof makeService>) {
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+            (provider as any).view = view;
+            return { provider, view };
+        }
+
+        it('stageFile calls service.stageFile', async () => {
+            const service = makeService();
+            const { provider } = makeProvider(service);
+            await (provider as any).handleMessage({ type: 'stageFile', filePath: 'file.ts' });
+            expect(service.stageFile).toHaveBeenCalledWith('file.ts');
+        });
+
+        it('unstageFile calls service.unstageFile', async () => {
+            const service = makeService();
+            const { provider } = makeProvider(service);
+            await (provider as any).handleMessage({ type: 'unstageFile', filePath: 'file.ts' });
+            expect(service.unstageFile).toHaveBeenCalledWith('file.ts');
+        });
+
+        it('stageAll calls service.stageAll', async () => {
+            const service = makeService();
+            const { provider } = makeProvider(service);
+            await (provider as any).handleMessage({ type: 'stageAll' });
+            expect(service.stageAll).toHaveBeenCalled();
+        });
+
+        it('unstageAll calls service.unstageAll', async () => {
+            const service = makeService();
+            const { provider } = makeProvider(service);
+            await (provider as any).handleMessage({ type: 'unstageAll' });
+            expect(service.unstageAll).toHaveBeenCalled();
+        });
+
+        it('markResolved calls service.stageFile with the conflict path', async () => {
+            const service = makeService();
+            const { provider } = makeProvider(service);
+            await (provider as any).handleMessage({ type: 'markResolved', filePath: 'conflict.ts' });
+            expect(service.stageFile).toHaveBeenCalledWith('conflict.ts');
+        });
+
+        it('acceptOurs calls acceptOurs then stageFile in order', async () => {
+            const calls: string[] = [];
+            const service = makeService({
+                acceptOurs: vi.fn(async () => { calls.push('acceptOurs'); return ''; }),
+                stageFile: vi.fn(async () => { calls.push('stageFile'); return ''; }),
+            });
+            const { provider } = makeProvider(service);
+            await (provider as any).handleMessage({ type: 'acceptOurs', filePath: 'f.ts' });
+            expect(calls).toEqual(['acceptOurs', 'stageFile']);
+            expect(service.stageFile).toHaveBeenCalledWith('f.ts');
+        });
+
+        it('acceptTheirs calls acceptTheirs then stageFile in order', async () => {
+            const calls: string[] = [];
+            const service = makeService({
+                acceptTheirs: vi.fn(async () => { calls.push('acceptTheirs'); return ''; }),
+                stageFile: vi.fn(async () => { calls.push('stageFile'); return ''; }),
+            });
+            const { provider } = makeProvider(service);
+            await (provider as any).handleMessage({ type: 'acceptTheirs', filePath: 'f.ts' });
+            expect(calls).toEqual(['acceptTheirs', 'stageFile']);
+            expect(service.stageFile).toHaveBeenCalledWith('f.ts');
+        });
+
+        it('ready message calls getStatus (triggers refresh)', async () => {
+            const service = makeService();
+            const { provider } = makeProvider(service);
+            await (provider as any).handleMessage({ type: 'ready' });
+            // refresh() is fire-and-forget; verify it was triggered by checking getStatus was called
+            await Promise.resolve();
+            expect(service.getStatus).toHaveBeenCalled();
+        });
+    });
+
     it('acceptAllTheirs resolves and stages conflicts sequentially', async () => {
         const calls: string[] = [];
         const service = {
