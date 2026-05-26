@@ -203,6 +203,90 @@ describe('Changes webview runtime behavior', () => {
         });
     });
 
+    describe('stash operations', () => {
+        async function bootWithStash(): Promise<MockVsCodeApi> {
+            const api = await bootWebview('../src/webview/changes');
+            sendWebviewMessage({
+                type: 'statusData',
+                data: {
+                    staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'staged.txt' }],
+                    unstaged: [],
+                    conflicts: [],
+                    conflictState: 'none',
+                    stashes: [{ index: 0, message: 'my stash' }],
+                },
+            });
+            return api;
+        }
+
+        it('stash-btn posts stash', async () => {
+            const api = await bootWithStash();
+            click('#stash-btn');
+            expect(api.messages).toContainEqual({ type: 'stash' });
+        });
+
+        it('stash-staged-btn posts stashStaged', async () => {
+            const api = await bootWithStash();
+            click('#stash-staged-btn');
+            expect(api.messages).toContainEqual({ type: 'stashStaged' });
+        });
+
+        it('stash-pop-btn posts stashPop with index', async () => {
+            const api = await bootWithStash();
+            click('[data-section="stashes"] .section-title-row');
+            click('.stash-pop-btn[data-index="0"]');
+            expect(api.messages).toContainEqual({ type: 'stashPop', index: 0 });
+        });
+
+        it('stash-apply-btn posts stashApply with index', async () => {
+            const api = await bootWithStash();
+            click('[data-section="stashes"] .section-title-row');
+            click('.stash-apply-btn[data-index="0"]');
+            expect(api.messages).toContainEqual({ type: 'stashApply', index: 0 });
+        });
+
+        it('stash-drop-btn posts stashDrop with index', async () => {
+            const api = await bootWithStash();
+            click('[data-section="stashes"] .section-title-row');
+            click('.stash-drop-btn[data-index="0"]');
+            expect(api.messages).toContainEqual({ type: 'stashDrop', index: 0 });
+        });
+
+        it('expanding stash row then receiving stashFiles renders file rows', async () => {
+            const api = await bootWithStash();
+            click('[data-section="stashes"] .section-title-row');
+            click('.stash-row[data-stash-index="0"]');
+            expect(api.messages).toContainEqual({ type: 'getStashFiles', index: 0 });
+
+            sendWebviewMessage({
+                type: 'stashFiles',
+                index: 0,
+                files: [{ status: 'M', filePath: 'stashed.ts' }],
+            });
+
+            expect(document.querySelectorAll('.stash-file-row').length).toBeGreaterThan(0);
+        });
+
+        it('clicking stash file row posts openStashDiff', async () => {
+            const api = await bootWithStash();
+            click('[data-section="stashes"] .section-title-row');
+            click('.stash-row[data-stash-index="0"]');
+            sendWebviewMessage({
+                type: 'stashFiles',
+                index: 0,
+                files: [{ status: 'M', filePath: 'stashed.ts' }],
+            });
+            click('.stash-file-row[data-file="stashed.ts"]');
+            expect(api.messages).toContainEqual({
+                type: 'openStashDiff',
+                filePath: 'stashed.ts',
+                origPath: undefined,
+                index: 0,
+                status: 'M',
+            });
+        });
+    });
+
     it('boots, announces readiness, and keeps commit text after a failed commit', async () => {
         const api = await bootWebview('../src/webview/changes');
 
