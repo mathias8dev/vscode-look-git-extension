@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildFolderTree, CommitItem, FileChangeItem, FolderItem, LoadMoreItem } from '../src/commitItem';
 import type { GitCommitInfo, GitFileChange } from '../src/gitService';
 
@@ -107,6 +107,26 @@ describe('FileChangeItem', () => {
         const leftUri = (item.command as any).arguments[0];
         expect(JSON.parse(leftUri.query).ref).toBe('parent123');
     });
+
+    it('uses origPath for the left-side URI of renamed files', () => {
+        const change: GitFileChange = {
+            status: 'R',
+            filePath: 'src/new name.ts',
+            origPath: 'src/old name.ts',
+            parentHash: 'parent123',
+        };
+        const item = new FileChangeItem(change, 'abc1234', repoRoot);
+        const args = (item.command as any).arguments;
+
+        expect(JSON.parse(args[0].query)).toEqual({
+            path: '/repo/src/old name.ts',
+            ref: 'parent123',
+        });
+        expect(JSON.parse(args[1].query)).toEqual({
+            path: '/repo/src/new name.ts',
+            ref: 'abc1234',
+        });
+    });
 });
 
 describe('FolderItem', () => {
@@ -144,6 +164,15 @@ describe('LoadMoreItem', () => {
 });
 
 describe('CommitItem relative date formatting', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2024-04-01T12:00:00Z'));
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
     function makeCommit(date: Date): GitCommitInfo {
         return {
             hash: 'abc1234567890',
@@ -157,37 +186,37 @@ describe('CommitItem relative date formatting', () => {
     }
 
     it('shows "just now" for a commit made moments ago', () => {
-        const item = new CommitItem(makeCommit(new Date()), false);
+        const item = new CommitItem(makeCommit(new Date('2024-04-01T12:00:00Z')), false);
         expect(item.description).toContain('just now');
     });
 
     it('shows minutes ago for a commit within the last hour', () => {
-        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const fiveMinutesAgo = new Date('2024-04-01T11:55:00Z');
         const item = new CommitItem(makeCommit(fiveMinutesAgo), false);
         expect(item.description).toContain('min ago');
     });
 
     it('shows hours ago for a commit within the last day', () => {
-        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+        const twoHoursAgo = new Date('2024-04-01T10:00:00Z');
         const item = new CommitItem(makeCommit(twoHoursAgo), false);
         expect(item.description).toContain('hours ago');
     });
 
     it('shows days ago for a commit within the last 30 days', () => {
-        const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+        const fiveDaysAgo = new Date('2024-03-27T12:00:00Z');
         const item = new CommitItem(makeCommit(fiveDaysAgo), false);
         expect(item.description).toContain('days ago');
     });
 
     it('shows a locale date string for commits older than 30 days', () => {
-        const twoMonthsAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+        const twoMonthsAgo = new Date('2024-02-01T12:00:00Z');
         const item = new CommitItem(makeCommit(twoMonthsAgo), false);
         expect(item.description).not.toContain('ago');
         expect(item.description).not.toContain('just now');
     });
 
     it('applies a colored icon only to the HEAD commit', () => {
-        const commit = makeCommit(new Date());
+        const commit = makeCommit(new Date('2024-04-01T12:00:00Z'));
         const headItem = new CommitItem(commit, true);
         const normalItem = new CommitItem(commit, false);
         expect((headItem.iconPath as any).color).toBeDefined();
@@ -195,7 +224,7 @@ describe('CommitItem relative date formatting', () => {
     });
 
     it('sets contextValue to "commit"', () => {
-        const item = new CommitItem(makeCommit(new Date()), false);
+        const item = new CommitItem(makeCommit(new Date('2024-04-01T12:00:00Z')), false);
         expect(item.contextValue).toBe('commit');
     });
 });

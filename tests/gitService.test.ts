@@ -13,6 +13,18 @@ function messages(r: TempGitRepo): string[] {
     return r.git(['log', '--format=%s']).split('\n').filter(Boolean);
 }
 
+function expectGitFailure(r: TempGitRepo, args: string[], expectedOutput: RegExp): void {
+    try {
+        r.git(args);
+    } catch (error) {
+        const err = error as { stdout?: string; stderr?: string; message?: string };
+        const output = `${err.stdout ?? ''}\n${err.stderr ?? ''}\n${err.message ?? ''}`;
+        expect(output).toMatch(expectedOutput);
+        return;
+    }
+    throw new Error(`Expected git ${args.join(' ')} to fail`);
+}
+
 afterEach(() => {
     while (repos.length > 0) {
         repos.pop()!.cleanup();
@@ -92,11 +104,7 @@ describe('GitService status parsing', () => {
         r.write('file.txt', 'main\n');
         r.commit('main');
 
-        try {
-            r.git(['rebase', 'side']);
-        } catch {
-            // Expected conflict.
-        }
+        expectGitFailure(r, ['rebase', 'side'], /CONFLICT|could not apply|Merge conflict/i);
 
         const status = await r.service.getStatus();
         expect(status.conflictState).toBe('rebase');
@@ -133,7 +141,7 @@ describe('GitService commit file parsing', () => {
         r.write('main.txt', 'main');
         const mainHash = r.commit('main');
         r.git(['merge', '-q', '--no-ff', 'side', '-m', 'merge']);
-        const mergeHash = r.git(['rev-parse', 'HEAD']);
+        const mergeHash = r.gitTrim(['rev-parse', 'HEAD']);
 
         const files = await r.service.getCommitFiles(mergeHash);
 
@@ -302,6 +310,12 @@ describe('GitService utility methods', () => {
         r.service.setWorkingDirectory('/tmp/other');
         expect(r.service.getWorkingDirectory()).toBe('/tmp/other');
     });
+
+    it('rejects temp repo helper writes outside the repository', () => {
+        const r = repo();
+        expect(() => r.write('../escape.txt', 'nope')).toThrow(/escapes temp repository/);
+        expect(() => r.mkdir('../escape-dir')).toThrow(/escapes temp repository/);
+    });
 });
 
 describe('GitService cherry-pick, revert, and reset', () => {
@@ -391,7 +405,7 @@ describe('GitService merge and rebase conflict handling', () => {
         r.write('file.txt', 'main\n');
         r.commit('main');
 
-        try { r.git(['merge', 'feature']); } catch { /* expected */ }
+        expectGitFailure(r, ['merge', 'feature'], /CONFLICT|Automatic merge failed/i);
 
         expect(await r.service.isMergeInProgress()).toBe(true);
     });
@@ -407,7 +421,7 @@ describe('GitService merge and rebase conflict handling', () => {
         r.write('file.txt', 'main\n');
         r.commit('main');
 
-        try { r.git(['merge', 'feature']); } catch { /* expected */ }
+        expectGitFailure(r, ['merge', 'feature'], /CONFLICT|Automatic merge failed/i);
 
         const status = await r.service.getStatus();
         expect(status.conflictState).toBe('merge');
@@ -425,7 +439,7 @@ describe('GitService merge and rebase conflict handling', () => {
         r.write('file.txt', 'main\n');
         r.commit('main');
 
-        try { r.git(['merge', 'feature']); } catch { /* expected */ }
+        expectGitFailure(r, ['merge', 'feature'], /CONFLICT|Automatic merge failed/i);
 
         await r.service.mergeAbort();
 
@@ -459,7 +473,7 @@ describe('GitService merge and rebase conflict handling', () => {
         r.write('file.txt', 'main\n');
         r.commit('main');
 
-        try { r.git(['rebase', 'side']); } catch { /* expected */ }
+        expectGitFailure(r, ['rebase', 'side'], /CONFLICT|could not apply|Merge conflict/i);
 
         await r.service.rebaseAbort();
 
@@ -477,7 +491,7 @@ describe('GitService merge and rebase conflict handling', () => {
         r.write('file.txt', 'main\n');
         r.commit('main');
 
-        try { r.git(['merge', 'feature']); } catch { /* expected */ }
+        expectGitFailure(r, ['merge', 'feature'], /CONFLICT|Automatic merge failed/i);
 
         await r.service.acceptOurs('file.txt');
         r.git(['add', 'file.txt']);
@@ -497,7 +511,7 @@ describe('GitService merge and rebase conflict handling', () => {
         r.write('file.txt', 'main\n');
         r.commit('main');
 
-        try { r.git(['merge', 'feature']); } catch { /* expected */ }
+        expectGitFailure(r, ['merge', 'feature'], /CONFLICT|Automatic merge failed/i);
 
         await r.service.acceptTheirs('file.txt');
         r.git(['add', 'file.txt']);
@@ -829,7 +843,7 @@ describe.sequential('GitService interactive history rewrites', () => {
         await r.service.fixupCommit(fixHash, parentHash);
 
         expect(messages(r)).toEqual(['parent', 'base']);
-        expect(r.git(['show', 'HEAD:fix.txt'])).toBe('fix');
+        expect(r.git(['show', 'HEAD:fix.txt'])).toBe('fix\n');
     });
 
     it('squashes consecutive commits into the oldest selected commit', async () => {

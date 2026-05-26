@@ -102,13 +102,13 @@ describe('graphLaneAssigner advanced cases', () => {
     });
 
     it('wraps colors gracefully when more branches than palette entries exist', () => {
-        const tips = Array.from({ length: 11 }, (_, i) => commit(`c${i}`, ['root']));
-        const rows = assignLanes([...tips, commit('root')]);
+        const tips = Array.from({ length: 11 }, (_, i) => commit(`c${i}`, [`root${i}`]));
+        const roots = Array.from({ length: 11 }, (_, i) => commit(`root${i}`));
+        const rows = assignLanes([...tips, ...roots]);
 
-        rows.forEach((row) => {
-            expect(row.laneData.lane).toBeGreaterThanOrEqual(0);
-            expect(row.laneData.color).toBeTruthy();
-        });
+        expect(rows.slice(0, 11).map((row) => row.laneData.lane)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        expect(new Set(rows.slice(0, 10).map((row) => row.laneData.color)).size).toBe(10);
+        expect(rows[10].laneData.color).toBe(rows[0].laneData.color);
     });
 
     it('bounds the maximum lane count for a simple two-branch merge', () => {
@@ -119,7 +119,7 @@ describe('graphLaneAssigner advanced cases', () => {
             commit('base'),
         ]);
 
-        expect(getMaxLane(rows)).toBeLessThanOrEqual(2);
+        expect(getMaxLane(rows)).toBe(1);
     });
 
     it('generates a fork-right line for the second parent of a merge commit', () => {
@@ -131,21 +131,22 @@ describe('graphLaneAssigner advanced cases', () => {
         ]);
 
         const mergeRow = rows[0];
-        const hasFork = mergeRow.laneData.lines.some(
-            (l) => l.type === 'fork-right' || l.type === 'fork-left' || l.type === 'merge-right' || l.type === 'merge-left',
-        );
-        expect(hasFork).toBe(true);
+        expect(mergeRow.laneData.lines).toContainEqual(expect.objectContaining({
+            fromLane: 0,
+            toLane: 1,
+            type: 'fork-right',
+        }));
     });
 
     it('reuses a freed lane after a branch tip has been consumed', () => {
-        // 'feature' is consumed first (tip), freeing lane 1; 'main' can then reuse lane 0 or 1
         const rows = assignLanes([
-            commit('feature', ['base']),
-            commit('main', ['base']),
-            commit('base'),
+            commit('feature-a', ['base-a']),
+            commit('base-a'),
+            commit('feature-b', ['base-b']),
+            commit('base-b'),
         ]);
 
-        // After 'base' both lanes should be free — lane count must not keep growing
-        expect(getMaxLane(rows)).toBeLessThanOrEqual(1);
+        expect(rows.map((row) => row.laneData.lane)).toEqual([0, 0, 0, 0]);
+        expect(getMaxLane(rows)).toBe(0);
     });
 });
