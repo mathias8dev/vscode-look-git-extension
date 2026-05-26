@@ -4,6 +4,7 @@ import * as path from 'path';
 import { CommitItem } from '../commitItem';
 import { GraphDataProvider } from './graphDataProvider';
 import type { GitService } from '../gitService';
+import { showModalWarningMessage } from '../utils/confirmation';
 
 const ALLOWED_COMMIT_COMMANDS = new Set([
     'lookGit.cherryPick',
@@ -184,9 +185,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
                     const confirmMsg = isRemote
                         ? `Delete remote branch "${branch}"? This cannot be undone.`
                         : `Delete local branch "${branch}"?`;
-                    const choice = await vscode.window.showWarningMessage(
-                        confirmMsg, { modal: true }, 'Delete',
-                    );
+                    const choice = await showModalWarningMessage(confirmMsg, 'Delete');
                     if (choice !== 'Delete') { return; }
 
                     if (isRemote) {

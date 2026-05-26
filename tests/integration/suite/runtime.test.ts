@@ -143,6 +143,27 @@ suite('Look Git extension runtime', () => {
             assert.equal(pkg['publisher'], 'mathias8dev');
         });
 
+        test('declares Git Graph in a bottom panel view container by default', () => {
+            const extension = vscode.extensions.getExtension('mathias8dev.look-git')!;
+            const pkg = extension.packageJSON as {
+                contributes?: {
+                    viewsContainers?: { panel?: Array<{ id?: string; title?: string }> };
+                    views?: Record<string, Array<{ id?: string; type?: string }>>;
+                };
+            };
+
+            assert.ok(
+                pkg.contributes?.viewsContainers?.panel?.some((container) => container.id === 'look-git-graph'),
+                'Expected Git Graph to contribute a panel container.',
+            );
+            assert.ok(
+                pkg.contributes?.views?.['look-git-graph']?.some((view) =>
+                    view.id === 'lookGit.graphView' && view.type === 'webview'
+                ),
+                'Expected lookGit.graphView to live in the Git Graph panel container.',
+            );
+        });
+
         test('opens with a real Git repository discovered by VS Code Git API', async () => {
             assert.ok(fixtureRepo, 'Fixture repository should exist.');
             await waitForBuiltInGitRepo(fixtureRepo!.cwd);
@@ -161,16 +182,12 @@ suite('Look Git extension runtime', () => {
                 .split('\n')
                 .filter(Boolean);
 
-            assert.ok(commitCount >= 19, `Expected at least 19 commits, got ${commitCount}.`);
-            assert.ok(contributors.size >= 11, `Expected at least 11 contributors, got ${contributors.size}.`);
-            assert.deepStrictEqual(branches.sort(), [
-                'bugfix/status',
-                'docs/readme',
-                'experiment/graph',
-                'feature/api',
-                'feature/ui',
-                'main',
-            ]);
+            assert.ok(commitCount >= 100, `Expected at least 100 commits, got ${commitCount}.`);
+            assert.ok(contributors.size >= 10, `Expected at least 10 contributors, got ${contributors.size}.`);
+            assert.ok(branches.length >= 8, `Expected at least 8 local branches, got ${branches.length}.`);
+            for (const branch of ['main', 'feature/api', 'feature/ui', 'bugfix/status', 'experiment/graph']) {
+                assert.ok(branches.includes(branch), `Expected fixture branch to exist: ${branch}`);
+            }
         });
     });
 

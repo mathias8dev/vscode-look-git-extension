@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { GitService } from '../gitService';
 import type { CommitHistoryProvider } from '../commitHistoryProvider';
 import type { CommitItem } from '../commitItem';
-import { selectCommitFromQuickPick } from '../utils/confirmation';
+import { selectCommitFromQuickPick, showModalInformationMessage } from '../utils/confirmation';
 
 export async function handleCherryPick(
     gitService: GitService,
@@ -18,9 +18,8 @@ export async function handleCherryPick(
         const commits = [...items].reverse().map((i) => i.commitInfo);
         const hashList = commits.map((c) => c.shortHash).join(', ');
 
-        const confirmed = await vscode.window.showInformationMessage(
+        const confirmed = await showModalInformationMessage(
             `Cherry-pick ${commits.length} commits (${hashList})?`,
-            { modal: true },
             'Cherry-pick'
         );
         if (confirmed !== 'Cherry-pick') {

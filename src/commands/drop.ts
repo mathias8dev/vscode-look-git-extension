@@ -2,14 +2,13 @@ import * as vscode from 'vscode';
 import type { GitService } from '../gitService';
 import type { CommitHistoryProvider } from '../commitHistoryProvider';
 import type { CommitItem } from '../commitItem';
-import { confirmDangerousOperation, selectCommitFromQuickPick } from '../utils/confirmation';
+import { confirmDangerousOperation, selectCommitFromQuickPick, showModalWarningMessage } from '../utils/confirmation';
 
 async function checkRebaseState(gitService: GitService): Promise<boolean> {
     const inProgress = await gitService.isRebaseInProgress();
     if (inProgress) {
-        const action = await vscode.window.showWarningMessage(
+        const action = await showModalWarningMessage(
             'A rebase is already in progress. Abort it first?',
-            { modal: true },
             'Abort Rebase',
             'Cancel'
         );
@@ -35,9 +34,8 @@ export async function handleDrop(
         const commits = items.map((i) => i.commitInfo);
         const hashList = commits.map((c) => c.shortHash).join(', ');
 
-        const confirmed = await vscode.window.showWarningMessage(
+        const confirmed = await showModalWarningMessage(
             `Drop ${commits.length} commits (${hashList})? This rewrites history.`,
-            { modal: true },
             'Drop',
             'Cancel'
         );

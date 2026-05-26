@@ -69,6 +69,13 @@
           "title": "Look Git",
           "icon": "resources/look-git-icon.svg"
         }
+      ],
+      "panel": [
+        {
+          "id": "look-git-graph",
+          "title": "Git Graph",
+          "icon": "resources/look-git-icon.svg"
+        }
       ]
     },
     "views": {
@@ -80,16 +87,18 @@
           "contextualTitle": "Look Git"
         },
         {
-          "id": "lookGit.graphView",
-          "name": "Git Graph",
-          "type": "webview",
-          "contextualTitle": "Look Git"
-        },
-        {
           "id": "lookGit.changesView",
           "name": "Changes",
           "type": "webview",
           "contextualTitle": "Look Git"
+        }
+      ],
+      "look-git-graph": [
+        {
+          "id": "lookGit.graphView",
+          "name": "Git Graph",
+          "type": "webview",
+          "contextualTitle": "Git Graph"
         }
       ]
     },
@@ -101,6 +110,11 @@
       },
       {
         "view": "lookGit.changesView",
+        "contents": "No Git repository found.\n[Open a folder with a Git repository](command:vscode.openFolder)",
+        "when": "!lookGit.hasRepository"
+      },
+      {
+        "view": "lookGit.graphView",
         "contents": "No Git repository found.\n[Open a folder with a Git repository](command:vscode.openFolder)",
         "when": "!lookGit.hasRepository"
       }
@@ -794,7 +808,7 @@
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "npm run check-types && node esbuild.js",
-    "check-types": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json && tsc --noEmit -p tsconfig.vitest.json && tsc --noEmit -p tsconfig.integration.json",
+    "check-types": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json && tsc --noEmit -p tsconfig.vitest.json && tsc --noEmit -p tsconfig.integration.json && tsc --noEmit -p tsconfig.e2e.json",
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
@@ -803,18 +817,28 @@
     "test": "npm run compile && vitest run",
     "test:integration:compile": "tsc -p tsconfig.integration.json",
     "test:integration": "npm run compile && npm run test:integration:compile && node ./out/test/tests/integration/runTest.js",
-    "test:all": "npm run test && npm run test:integration"
+    "test:e2e:compile": "tsc -p tsconfig.e2e.json",
+    "test:e2e": "npm run compile && npm run test:e2e:compile && node ./out/e2e/tests/e2e/runE2e.js",
+    "test:all": "npm run test && npm run test:integration",
+    "test:ci": "npm run lint && npm run test && npm run test:integration && npm run test:e2e"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^2.5.2",
+    "@wdio/cli": "^8.41.0",
+    "@wdio/globals": "^8.41.0",
+    "@wdio/local-runner": "^8.41.0",
+    "@wdio/mocha-framework": "^8.41.0",
+    "@wdio/spec-reporter": "^8.41.0",
     "esbuild": "^0.20.0",
     "jsdom": "^29.1.1",
     "mocha": "^11.7.6",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.3.0",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.7",
+    "wdio-vscode-service": "^6.1.4",
+    "webdriverio": "^8.41.0"
   }
 }

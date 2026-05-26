@@ -14,6 +14,7 @@ import { handleFixup } from './fixup';
 import { handlePushUpTo } from './pushUpTo';
 import type { GraphViewProvider } from '../graphView/graphPanel';
 import type { ChangesViewProvider } from '../changesView/changesProvider';
+import { showModalWarningMessage } from '../utils/confirmation';
 
 // Helper to filter CommitItems from a mixed selection
 function filterCommitItems(items?: readonly unknown[]): CommitItem[] | undefined {
@@ -255,9 +256,8 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.discardAll', async () => {
-            const choice = await vscode.window.showWarningMessage(
+            const choice = await showModalWarningMessage(
                 'Discard all changes? This cannot be undone.',
-                { modal: true },
                 'Discard All',
             );
             if (choice === 'Discard All') {

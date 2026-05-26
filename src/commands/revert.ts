@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { GitService } from '../gitService';
 import type { CommitHistoryProvider } from '../commitHistoryProvider';
 import type { CommitItem } from '../commitItem';
-import { selectCommitFromQuickPick } from '../utils/confirmation';
+import { selectCommitFromQuickPick, showModalInformationMessage } from '../utils/confirmation';
 
 export async function handleRevert(
     gitService: GitService,
@@ -17,9 +17,8 @@ export async function handleRevert(
         const commits = items.map((i) => i.commitInfo);
         const hashList = commits.map((c) => c.shortHash).join(', ');
 
-        const confirmed = await vscode.window.showInformationMessage(
+        const confirmed = await showModalInformationMessage(
             `Revert ${commits.length} commits (${hashList})?`,
-            { modal: true },
             'Revert'
         );
         if (confirmed !== 'Revert') {

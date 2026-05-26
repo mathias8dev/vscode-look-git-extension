@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { GitService } from '../gitService';
 import type { CommitHistoryProvider } from '../commitHistoryProvider';
 import type { CommitItem } from '../commitItem';
-import { selectCommitFromQuickPick } from '../utils/confirmation';
+import { selectCommitFromQuickPick, showModalInformationMessage } from '../utils/confirmation';
 
 export async function handlePushUpTo(
     gitService: GitService,
@@ -48,9 +48,8 @@ export async function handlePushUpTo(
         branchName = currentBranch;
     }
 
-    const confirmed = await vscode.window.showInformationMessage(
+    const confirmed = await showModalInformationMessage(
         `Push commits up to ${commit.shortHash} to ${remoteName}/${branchName}?`,
-        { modal: true },
         'Push'
     );
 

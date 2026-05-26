@@ -2,18 +2,21 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "out/test",
+    "outDir": "out/e2e",
     "module": "commonjs",
-    "types": ["node", "mocha", "vscode"],
+    "types": [
+      "node",
+      "@wdio/mocha-framework",
+      "expect-webdriverio",
+      "wdio-vscode-service"
+    ],
     "sourceMap": true
   },
   "include": [
-    "tests/integration/**/*.ts",
+    "tests/e2e/**/*.ts",
     "tests/helpers/**/*.ts"
   ],
   "exclude": [
-    "node_modules",
-    "tests/e2e/**/*.ts",
-    "tests/*.test.ts"
+    "node_modules"
   ]
 }

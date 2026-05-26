@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import * as path from 'path';
 import type { GitService } from '../gitService';
+import { showModalWarningMessage } from '../utils/confirmation';
 
 export class ChangesViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'lookGit.changesView';
@@ -107,9 +108,8 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
                 case 'discardFile': {
                     const filePath = msg.filePath as string;
-                    const choice = await vscode.window.showWarningMessage(
+                    const choice = await showModalWarningMessage(
                         `Discard changes to "${filePath}"? This cannot be undone.`,
-                        { modal: true },
                         'Discard',
                     );
                     if (choice === 'Discard') {
@@ -120,9 +120,8 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 }
 
                 case 'discardAll': {
-                    const choice = await vscode.window.showWarningMessage(
+                    const choice = await showModalWarningMessage(
                         'Discard all changes? This cannot be undone.',
-                        { modal: true },
                         'Discard All',
                     );
                     if (choice === 'Discard All') {
@@ -248,9 +247,8 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 case 'abortOp': {
                     const state = msg.conflictState as string;
                     const label = state === 'merge' ? 'merge' : 'rebase';
-                    const choice = await vscode.window.showWarningMessage(
+                    const choice = await showModalWarningMessage(
                         `Abort the current ${label}?`,
-                        { modal: true },
                         'Abort',
                     );
                     if (choice === 'Abort') {
@@ -299,9 +297,8 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
                 case 'stashDrop': {
                     const index = msg.index as number;
-                    const choice = await vscode.window.showWarningMessage(
+                    const choice = await showModalWarningMessage(
                         `Drop stash@{${index}}? This cannot be undone.`,
-                        { modal: true },
                         'Drop',
                     );
                     if (choice === 'Drop') {

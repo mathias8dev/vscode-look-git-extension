@@ -1,6 +1,39 @@
 import * as vscode from 'vscode';
 import type { GitService, GitCommitInfo } from '../gitService';
 
+function isModalDialogUnavailable(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.includes('DialogService') && message.includes('refused to show dialog in tests');
+}
+
+export async function showModalWarningMessage<T extends string>(
+    message: string,
+    ...items: T[]
+): Promise<T | undefined> {
+    try {
+        return await vscode.window.showWarningMessage(message, { modal: true }, ...items);
+    } catch (error) {
+        if (!isModalDialogUnavailable(error)) {
+            throw error;
+        }
+        return vscode.window.showWarningMessage(message, ...items);
+    }
+}
+
+export async function showModalInformationMessage<T extends string>(
+    message: string,
+    ...items: T[]
+): Promise<T | undefined> {
+    try {
+        return await vscode.window.showInformationMessage(message, { modal: true }, ...items);
+    } catch (error) {
+        if (!isModalDialogUnavailable(error)) {
+            throw error;
+        }
+        return vscode.window.showInformationMessage(message, ...items);
+    }
+}
+
 export async function confirmDangerousOperation(
     operationName: string,
     commit: GitCommitInfo
@@ -10,9 +43,8 @@ export async function confirmDangerousOperation(
         return true;
     }
 
-    const result = await vscode.window.showWarningMessage(
+    const result = await showModalWarningMessage(
         `Are you sure you want to ${operationName} commit ${commit.shortHash} "${commit.message}"? This operation rewrites history.`,
-        { modal: true },
         'Yes',
         'No'
     );
