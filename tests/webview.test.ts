@@ -129,6 +129,39 @@ describe('Changes webview runtime behavior', () => {
         });
     });
 
+    describe('per-file conflict actions', () => {
+        let api: MockVsCodeApi;
+
+        beforeEach(async () => {
+            api = await bootWebview('../src/webview/changes');
+            sendWebviewMessage({
+                type: 'statusData',
+                data: {
+                    staged: [],
+                    unstaged: [],
+                    conflicts: [{ indexStatus: 'U', workTreeStatus: 'U', filePath: 'conflict.txt' }],
+                    conflictState: 'merge',
+                    stashes: [],
+                },
+            });
+        });
+
+        it('accept-ours-btn posts acceptOurs with filePath', () => {
+            click('.accept-ours-btn[data-file="conflict.txt"]');
+            expect(api.messages).toContainEqual({ type: 'acceptOurs', filePath: 'conflict.txt' });
+        });
+
+        it('accept-theirs-btn posts acceptTheirs with filePath', () => {
+            click('.accept-theirs-btn[data-file="conflict.txt"]');
+            expect(api.messages).toContainEqual({ type: 'acceptTheirs', filePath: 'conflict.txt' });
+        });
+
+        it('mark-resolved-btn posts markResolved with filePath', () => {
+            click('.mark-resolved-btn[data-file="conflict.txt"]');
+            expect(api.messages).toContainEqual({ type: 'markResolved', filePath: 'conflict.txt' });
+        });
+    });
+
     it('boots, announces readiness, and keeps commit text after a failed commit', async () => {
         const api = await bootWebview('../src/webview/changes');
 
