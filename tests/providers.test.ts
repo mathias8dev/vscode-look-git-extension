@@ -225,6 +225,82 @@ describe('ChangesViewProvider webview messages', () => {
         });
     });
 
+    describe('stash operations', () => {
+        function makeStashService(overrides: Record<string, unknown> = {}) {
+            return {
+                stash: vi.fn(async () => ''),
+                stashStaged: vi.fn(async () => ''),
+                stashPop: vi.fn(async () => ''),
+                stashApply: vi.fn(async () => ''),
+                stashDrop: vi.fn(async () => ''),
+                getStashFiles: vi.fn(async () => [{ status: 'M', filePath: 'stashed.ts' }]),
+                getStatus: vi.fn(async () => ({
+                    staged: [], unstaged: [], conflicts: [], conflictState: 'none',
+                })),
+                stashList: vi.fn(async () => []),
+                ...overrides,
+            };
+        }
+
+        it('stash without message calls service.stash(undefined)', async () => {
+            const service = makeStashService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'stash' });
+            expect(service.stash).toHaveBeenCalledWith(undefined);
+            expect((vscode.window as any).infoMessages).toContainEqual('Changes stashed.');
+        });
+
+        it('stash with message calls service.stash with that message', async () => {
+            const service = makeStashService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'stash', message: 'my message' });
+            expect(service.stash).toHaveBeenCalledWith('my message');
+        });
+
+        it('stashStaged calls service.stashStaged(undefined) and shows info', async () => {
+            const service = makeStashService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'stashStaged' });
+            expect(service.stashStaged).toHaveBeenCalledWith(undefined);
+            expect((vscode.window as any).infoMessages).toContainEqual('Staged changes stashed.');
+        });
+
+        it('stashPop index 2 calls service.stashPop(2)', async () => {
+            const service = makeStashService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'stashPop', index: 2 });
+            expect(service.stashPop).toHaveBeenCalledWith(2);
+            expect((vscode.window as any).infoMessages).toContainEqual('Stash popped.');
+        });
+
+        it('stashApply index 1 calls service.stashApply(1)', async () => {
+            const service = makeStashService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'stashApply', index: 1 });
+            expect(service.stashApply).toHaveBeenCalledWith(1);
+            expect((vscode.window as any).infoMessages).toContainEqual('Stash applied.');
+        });
+
+        it('getStashFiles calls service.getStashFiles and posts stashFiles message', async () => {
+            const service = makeStashService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+            (provider as any).view = view;
+            await (provider as any).handleMessage({ type: 'getStashFiles', index: 0 });
+            expect(service.getStashFiles).toHaveBeenCalledWith(0);
+            expect(view.messages).toContainEqual({
+                type: 'stashFiles',
+                index: 0,
+                files: [{ status: 'M', filePath: 'stashed.ts' }],
+            });
+        });
+    });
+
     it('discardAll unstages before discarding every remaining unstaged file', async () => {
         const calls: string[] = [];
         const service = {
