@@ -220,6 +220,134 @@ describe('GitService stash parsing', () => {
     });
 });
 
+describe('GitService merge and rebase conflict handling', () => {
+    it('detects an in-progress merge via isMergeInProgress', async () => {
+        const r = repo();
+        r.write('file.txt', 'base\n');
+        r.commit('base');
+        r.git(['checkout', '-q', '-b', 'feature']);
+        r.write('file.txt', 'feature\n');
+        r.commit('feature');
+        r.git(['checkout', '-q', 'main']);
+        r.write('file.txt', 'main\n');
+        r.commit('main');
+
+        try { r.git(['merge', 'feature']); } catch { /* expected */ }
+
+        expect(await r.service.isMergeInProgress()).toBe(true);
+    });
+
+    it('detects merge conflict state in getStatus', async () => {
+        const r = repo();
+        r.write('file.txt', 'base\n');
+        r.commit('base');
+        r.git(['checkout', '-q', '-b', 'feature']);
+        r.write('file.txt', 'feature\n');
+        r.commit('feature');
+        r.git(['checkout', '-q', 'main']);
+        r.write('file.txt', 'main\n');
+        r.commit('main');
+
+        try { r.git(['merge', 'feature']); } catch { /* expected */ }
+
+        const status = await r.service.getStatus();
+        expect(status.conflictState).toBe('merge');
+        expect(status.conflicts.map((e) => e.filePath)).toContain('file.txt');
+    });
+
+    it('aborts a merge and clears isMergeInProgress', async () => {
+        const r = repo();
+        r.write('file.txt', 'base\n');
+        r.commit('base');
+        r.git(['checkout', '-q', '-b', 'feature']);
+        r.write('file.txt', 'feature\n');
+        r.commit('feature');
+        r.git(['checkout', '-q', 'main']);
+        r.write('file.txt', 'main\n');
+        r.commit('main');
+
+        try { r.git(['merge', 'feature']); } catch { /* expected */ }
+
+        await r.service.mergeAbort();
+
+        expect(await r.service.isMergeInProgress()).toBe(false);
+    });
+
+    it('returns false for isMergeInProgress on a clean repo', async () => {
+        const r = repo();
+        r.write('file.txt', 'content');
+        r.commit('initial');
+
+        expect(await r.service.isMergeInProgress()).toBe(false);
+    });
+
+    it('returns false for isRebaseInProgress on a clean repo', async () => {
+        const r = repo();
+        r.write('file.txt', 'content');
+        r.commit('initial');
+
+        expect(await r.service.isRebaseInProgress()).toBe(false);
+    });
+
+    it('aborts a rebase and clears isRebaseInProgress', async () => {
+        const r = repo();
+        r.write('file.txt', 'base\n');
+        r.commit('base');
+        r.git(['checkout', '-q', '-b', 'side']);
+        r.write('file.txt', 'side\n');
+        r.commit('side');
+        r.git(['checkout', '-q', 'main']);
+        r.write('file.txt', 'main\n');
+        r.commit('main');
+
+        try { r.git(['rebase', 'side']); } catch { /* expected */ }
+
+        await r.service.rebaseAbort();
+
+        expect(await r.service.isRebaseInProgress()).toBe(false);
+    });
+
+    it('accepts ours version of a conflicted file and resolves the conflict', async () => {
+        const r = repo();
+        r.write('file.txt', 'base\n');
+        r.commit('base');
+        r.git(['checkout', '-q', '-b', 'feature']);
+        r.write('file.txt', 'feature\n');
+        r.commit('feature');
+        r.git(['checkout', '-q', 'main']);
+        r.write('file.txt', 'main\n');
+        r.commit('main');
+
+        try { r.git(['merge', 'feature']); } catch { /* expected */ }
+
+        await r.service.acceptOurs('file.txt');
+        r.git(['add', 'file.txt']);
+
+        const status = await r.service.getStatus();
+        expect(status.conflicts).toEqual([]);
+    });
+
+    it('accepts theirs version of a conflicted file and resolves the conflict', async () => {
+        const r = repo();
+        r.write('file.txt', 'base\n');
+        r.commit('base');
+        r.git(['checkout', '-q', '-b', 'feature']);
+        r.write('file.txt', 'feature\n');
+        r.commit('feature');
+        r.git(['checkout', '-q', 'main']);
+        r.write('file.txt', 'main\n');
+        r.commit('main');
+
+        try { r.git(['merge', 'feature']); } catch { /* expected */ }
+
+        await r.service.acceptTheirs('file.txt');
+        r.git(['add', 'file.txt']);
+
+        const status = await r.service.getStatus();
+        expect(status.conflicts).toEqual([]);
+    });
+});
+
 describe('GitService stash lifecycle', () => {
     it('stashes working tree changes and restores them with pop', async () => {
         const r = repo();
