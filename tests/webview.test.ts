@@ -375,6 +375,65 @@ describe('Changes webview runtime behavior', () => {
         });
     });
 
+    describe('tree view mode', () => {
+        const NESTED_STATUS_DATA = {
+            type: 'statusData',
+            data: {
+                staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'src/commands/index.ts' }],
+                unstaged: [],
+                conflicts: [],
+                conflictState: 'none',
+                stashes: [],
+            },
+        };
+
+        it('renders tree-folder-row elements for nested file paths', async () => {
+            await bootWebview('../src/webview/changes');
+            sendWebviewMessage({ type: 'setViewMode', asTree: true });
+            sendWebviewMessage(NESTED_STATUS_DATA);
+            expect(document.querySelectorAll('.tree-folder-row').length).toBeGreaterThan(0);
+        });
+
+        it('tree folder is collapsed by default — no tree-file-row initially', async () => {
+            await bootWebview('../src/webview/changes');
+            sendWebviewMessage({ type: 'setViewMode', asTree: true });
+            sendWebviewMessage(NESTED_STATUS_DATA);
+            expect(document.querySelectorAll('.tree-file-row').length).toBe(0);
+        });
+
+        it('clicking tree-folder-row expands to show tree-file-row', async () => {
+            await bootWebview('../src/webview/changes');
+            sendWebviewMessage({ type: 'setViewMode', asTree: true });
+            sendWebviewMessage(NESTED_STATUS_DATA);
+            click('.tree-folder-row');
+            expect(document.querySelectorAll('.tree-file-row').length).toBe(1);
+        });
+
+        it('clicking tree-folder-row twice collapses back', async () => {
+            await bootWebview('../src/webview/changes');
+            sendWebviewMessage({ type: 'setViewMode', asTree: true });
+            sendWebviewMessage(NESTED_STATUS_DATA);
+            click('.tree-folder-row');
+            click('.tree-folder-row');
+            expect(document.querySelectorAll('.tree-file-row').length).toBe(0);
+        });
+
+        it('clicking tree-file-row posts openDiff', async () => {
+            const api = await bootWebview('../src/webview/changes');
+            sendWebviewMessage({ type: 'setViewMode', asTree: true });
+            sendWebviewMessage(NESTED_STATUS_DATA);
+            click('.tree-folder-row');
+            click('.tree-file-row[data-file="src/commands/index.ts"]');
+            expect(api.messages).toContainEqual({
+                type: 'openDiff',
+                filePath: 'src/commands/index.ts',
+                origPath: undefined,
+                isStaged: true,
+                status: 'M',
+            });
+        });
+    });
+
     it('boots, announces readiness, and keeps commit text after a failed commit', async () => {
         const api = await bootWebview('../src/webview/changes');
 
