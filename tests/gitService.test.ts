@@ -220,6 +220,90 @@ describe('GitService stash parsing', () => {
     });
 });
 
+describe('GitService utility methods', () => {
+    it('returns the configured git user name', async () => {
+        const r = repo();
+        r.git(['config', 'user.name', 'My Name']);
+        r.write('file.txt', 'content');
+        r.commit('initial');
+
+        expect(await r.service.getUserName()).toBe('My Name');
+    });
+
+    it('finds the oldest commit from an unordered set of hashes', async () => {
+        const r = repo();
+        r.write('a.txt', 'a');
+        const h1 = r.commit('first');
+        r.write('b.txt', 'b');
+        const h2 = r.commit('second');
+        r.write('c.txt', 'c');
+        const h3 = r.commit('third');
+
+        const oldest = await r.service.findOldestCommit([h3, h1, h2]);
+
+        expect(oldest).toBe(h1);
+    });
+
+    it('returns all tags with name and short hash', async () => {
+        const r = repo();
+        r.write('file.txt', 'content');
+        r.commit('initial');
+        r.git(['tag', 'v1.0.0']);
+
+        const tags = await r.service.getAllTags();
+
+        expect(tags).toHaveLength(1);
+        expect(tags[0].name).toBe('v1.0.0');
+        expect(tags[0].hash).toBeTruthy();
+    });
+
+    it('returns an empty array when there are no tags', async () => {
+        const r = repo();
+        r.write('file.txt', 'content');
+        r.commit('initial');
+
+        expect(await r.service.getAllTags()).toEqual([]);
+    });
+
+    it('retrieves a single commit by hash with getCommit', async () => {
+        const r = repo();
+        r.write('file.txt', 'content');
+        const hash = r.commit('my commit');
+
+        const commit = await r.service.getCommit(hash);
+
+        expect(commit?.message).toBe('my commit');
+        expect(commit?.hash).toBe(hash);
+    });
+
+    it('drops multiple commits in a single rebase', async () => {
+        const r = repo();
+        r.write('a.txt', 'a');
+        r.commit('base');
+        r.write('b.txt', 'b');
+        const h1 = r.commit('drop one');
+        r.write('c.txt', 'c');
+        const h2 = r.commit('drop two');
+        r.write('d.txt', 'd');
+        r.commit('keep');
+
+        await r.service.dropCommits([h1, h2]);
+
+        expect(messages(r)).toEqual(['keep', 'base']);
+    });
+
+    it('returns the working directory path', () => {
+        const r = repo();
+        expect(r.service.getWorkingDirectory()).toBe(r.cwd);
+    });
+
+    it('updates the working directory via setWorkingDirectory', () => {
+        const r = repo();
+        r.service.setWorkingDirectory('/tmp/other');
+        expect(r.service.getWorkingDirectory()).toBe('/tmp/other');
+    });
+});
+
 describe('GitService cherry-pick, revert, and reset', () => {
     it('cherry-picks a commit from another branch onto the current branch', async () => {
         const r = repo();
