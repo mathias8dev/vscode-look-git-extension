@@ -599,4 +599,96 @@ describe('Graph webview runtime behavior', () => {
             path: 'src/webview',
         });
     });
+
+    describe('branch context menu commands', () => {
+        function rightClick(selector: string): void {
+            const element = document.querySelector<HTMLElement>(selector);
+            if (!element) { throw new Error(`Missing element: ${selector}`); }
+            element.dispatchEvent(
+                new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }),
+            );
+        }
+
+        function clickContextItem(label: string): void {
+            const items = Array.from(document.querySelectorAll<HTMLElement>('.context-menu-item'));
+            const item = items.find((el) => el.textContent === label);
+            if (!item) { throw new Error(`Missing context menu item: "${label}"`); }
+            item.click();
+        }
+
+        async function bootWithLocalBranch(): Promise<MockVsCodeApi> {
+            const api = await bootWebview('../src/webview/graph');
+            sendWebviewMessage({
+                type: 'graphData',
+                data: {
+                    branches: [{ name: 'feature/ui', isRemote: false, isCurrent: false, hash: 'abc1234' }],
+                    tags: [],
+                    rows: [],
+                    maxLane: 0,
+                    currentBranch: 'main',
+                    currentUser: 'Test User',
+                },
+            });
+            return api;
+        }
+
+        it('checkout item posts executeBranchCommand checkout', async () => {
+            const api = await bootWithLocalBranch();
+            rightClick('.branch-item[data-branch="feature/ui"]');
+            clickContextItem('Checkout');
+            expect(api.messages).toContainEqual({
+                type: 'executeBranchCommand',
+                command: 'checkout',
+                branch: 'feature/ui',
+                isRemote: false,
+            });
+        });
+
+        it('delete item posts executeBranchCommand delete', async () => {
+            const api = await bootWithLocalBranch();
+            rightClick('.branch-item[data-branch="feature/ui"]');
+            clickContextItem('Delete');
+            expect(api.messages).toContainEqual({
+                type: 'executeBranchCommand',
+                command: 'delete',
+                branch: 'feature/ui',
+                isRemote: false,
+            });
+        });
+
+        it('rename item posts executeBranchCommand rename', async () => {
+            const api = await bootWithLocalBranch();
+            rightClick('.branch-item[data-branch="feature/ui"]');
+            clickContextItem('Rename...');
+            expect(api.messages).toContainEqual({
+                type: 'executeBranchCommand',
+                command: 'rename',
+                branch: 'feature/ui',
+                isRemote: false,
+            });
+        });
+
+        it('executeBranchCommand for remote branch carries isRemote true', async () => {
+            const api = await bootWebview('../src/webview/graph');
+            sendWebviewMessage({
+                type: 'graphData',
+                data: {
+                    branches: [{ name: 'origin/feature/ui', isRemote: true, isCurrent: false, hash: 'abc1234' }],
+                    tags: [],
+                    rows: [],
+                    maxLane: 0,
+                    currentBranch: 'main',
+                    currentUser: 'Test User',
+                },
+            });
+            rightClick('.branch-item[data-branch="origin/feature/ui"]');
+            clickContextItem('Checkout');
+            expect(api.messages).toContainEqual({
+                type: 'executeBranchCommand',
+                command: 'checkout',
+                branch: 'origin/feature/ui',
+                isRemote: true,
+            });
+        });
+    });
 });
