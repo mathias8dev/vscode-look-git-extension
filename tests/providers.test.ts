@@ -556,6 +556,77 @@ describe('ChangesViewProvider webview messages', () => {
 describe('GraphViewProvider webview messages', () => {
     beforeEach(resetVscodeMock);
 
+    describe('getCommitDetails and openDiff', () => {
+        function makeGraphService(overrides: Record<string, unknown> = {}) {
+            return {
+                getAllBranches: vi.fn(async () => []),
+                getAllTags: vi.fn(async () => []),
+                getGraphLog: vi.fn(async () => []),
+                getCurrentBranch: vi.fn(async () => 'main'),
+                getUserName: vi.fn(async () => 'Test User'),
+                getCommitFiles: vi.fn(async () => [{ status: 'M', filePath: 'src/file.ts' }]),
+                getCommitMessage: vi.fn(async () => 'commit message\n\nbody'),
+                getWorkingDirectory: vi.fn(() => '/workspace'),
+                ...overrides,
+            };
+        }
+
+        it('getCommitDetails posts commitDetails with files and fullMessage', async () => {
+            const service = makeGraphService();
+            const provider = new GraphViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+            (provider as any).view = view;
+            await (provider as any).handleMessage({ type: 'getCommitDetails', hash: 'abc1234' });
+            expect(view.messages).toContainEqual({
+                type: 'commitDetails',
+                hash: 'abc1234',
+                files: [{ status: 'M', filePath: 'src/file.ts' }],
+                fullMessage: 'commit message\n\nbody',
+            });
+        });
+
+        it('getCommitDetails posts error when git throws', async () => {
+            const service = makeGraphService({
+                getCommitFiles: vi.fn(async () => { throw new Error('commit not found'); }),
+            });
+            const provider = new GraphViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+            (provider as any).view = view;
+            await (provider as any).handleMessage({ type: 'getCommitDetails', hash: 'deadbeef' });
+            expect(view.messages).toContainEqual(expect.objectContaining({
+                type: 'error',
+                message: expect.stringContaining('commit not found'),
+            }));
+        });
+
+        it('openDiff executes vscode.diff with git-scheme URIs', async () => {
+            const service = makeGraphService();
+            const provider = new GraphViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({
+                type: 'openDiff',
+                filePath: 'src/file.ts',
+                commitHash: 'abc123456789',
+                status: 'M',
+            });
+            const call = (vscode.commands as any).calls.find((c: any) => c.command === 'vscode.diff');
+            expect(call).toBeDefined();
+            expect(call.args[0].scheme).toBe('git');
+            expect(call.args[1].scheme).toBe('git');
+            expect(call.args[2]).toContain('src/file.ts');
+        });
+
+        it('ready triggers refresh and posts graphData', async () => {
+            const service = makeGraphService();
+            const provider = new GraphViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+            (provider as any).view = view;
+            await (provider as any).handleMessage({ type: 'ready' });
+            await Promise.resolve(); // flush fire-and-forget refresh
+            expect(service.getGraphLog).toHaveBeenCalled();
+        });
+    });
+
     it('rejects unlisted commands from the graph webview', async () => {
         const service = {
             getCommit: vi.fn(),
