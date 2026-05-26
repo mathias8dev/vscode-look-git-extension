@@ -301,6 +301,79 @@ describe('ChangesViewProvider webview messages', () => {
         });
     });
 
+    describe('openFile, openMergeEditor, continueOp, viewModeChanged', () => {
+        function makeBaseService(overrides: Record<string, unknown> = {}) {
+            return {
+                getWorkingDirectory: vi.fn(() => '/workspace'),
+                mergeContinue: vi.fn(async () => ''),
+                rebaseContinue: vi.fn(async () => ''),
+                getStatus: vi.fn(async () => ({
+                    staged: [], unstaged: [], conflicts: [], conflictState: 'none',
+                })),
+                stashList: vi.fn(async () => []),
+                ...overrides,
+            };
+        }
+
+        it('openFile executes vscode.open with the resolved file URI', async () => {
+            const service = makeBaseService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'openFile', filePath: 'src/file.ts' });
+            const call = (vscode.commands as any).calls.find((c: any) => c.command === 'vscode.open');
+            expect(call).toBeDefined();
+            expect(call.args[0].path).toContain('src/file.ts');
+        });
+
+        it('openMergeEditor executes merge-conflict.accept.select', async () => {
+            const service = makeBaseService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'openMergeEditor', filePath: 'conflict.txt' });
+            expect((vscode.commands as any).calls[0].command).toBe('merge-conflict.accept.select');
+        });
+
+        it('continueOp merge calls service.mergeContinue and shows info', async () => {
+            const service = makeBaseService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'continueOp', conflictState: 'merge' });
+            expect(service.mergeContinue).toHaveBeenCalled();
+            expect((vscode.window as any).infoMessages).toContainEqual('Merge completed.');
+        });
+
+        it('continueOp rebase calls service.rebaseContinue and shows info', async () => {
+            const service = makeBaseService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'continueOp', conflictState: 'rebase' });
+            expect(service.rebaseContinue).toHaveBeenCalled();
+            expect((vscode.window as any).infoMessages).toContainEqual('Rebase step completed.');
+        });
+
+        it('viewModeChanged asTree:true sets lookGit.viewAsTree context key', async () => {
+            const service = makeBaseService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'viewModeChanged', asTree: true });
+            expect((vscode.commands as any).calls).toContainEqual({
+                command: 'setContext',
+                args: ['lookGit.viewAsTree', true],
+            });
+        });
+
+        it('git error shows generic error message', async () => {
+            const service = makeBaseService({
+                mergeContinue: vi.fn(async () => { throw new Error('merge failed'); }),
+            });
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'continueOp', conflictState: 'merge' });
+            expect((vscode.window as any).errorMessages[0]).toContain('Git operation failed:');
+            expect((vscode.window as any).errorMessages[0]).toContain('merge failed');
+        });
+    });
+
     it('discardAll unstages before discarding every remaining unstaged file', async () => {
         const calls: string[] = [];
         const service = {
