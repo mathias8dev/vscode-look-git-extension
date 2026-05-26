@@ -29,6 +29,7 @@ interface StatusData {
 interface StashFileEntry {
     status: string;
     filePath: string;
+    origPath?: string;
 }
 
 interface ViewState {
@@ -88,7 +89,7 @@ function escapeHtml(text: string): string {
         .replace(/"/g, '&quot;');
 }
 
-// ── SVG Icons (codicon-style) ──
+// ── SVG Icons ──
 
 const ICON_PLUS = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>`;
 const ICON_MINUS = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8h10" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>`;
@@ -104,6 +105,9 @@ const ICON_ACCEPT_THEIRS = `<svg width="16" height="16" viewBox="0 0 16 16"><pat
 const ICON_STASH_POP = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 12V4M5 7l3-3 3 3" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ICON_STASH_APPLY = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 11V5M5.5 8l2.5-3 2.5 3" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`;
 const ICON_TRASH = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4h10M5 4v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICON_FOLDER = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3H6l1.4 1.5h5.1A1.5 1.5 0 0 1 14 6v5.5A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5z" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/></svg>`;
+const ICON_FOLDER_OPEN = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 6V4.5A1.5 1.5 0 0 1 3.5 3H6l1.4 1.5H12A1.5 1.5 0 0 1 13.5 6H5.2A1.5 1.5 0 0 0 3.8 7l-1.6 4.2A1.2 1.2 0 0 0 3.3 13h8.9a1.5 1.5 0 0 0 1.4-1l1.2-4A1.2 1.2 0 0 0 13.7 6z" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/></svg>`;
+const ICON_FILE = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 2h5l3 3v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/><path d="M9 2v3h3" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>`;
 
 const COMMIT_MODES: { id: string; label: string }[] = [
     { id: 'commit', label: 'Commit' },
@@ -171,10 +175,7 @@ function wireStaticHandlers(): void {
     commitBtn.addEventListener('click', () => {
         if (!commitMessage.trim()) { return; }
         vscode.postMessage({ type: 'commit', message: commitMessage, mode: commitMode });
-        commitMessage = '';
-        textarea.value = '';
-        saveState();
-        updateCommitButton();
+        commitBtn.disabled = true;
     });
 
     textarea.addEventListener('keydown', (e) => {
@@ -307,11 +308,11 @@ function renderTreeNode(node: TreeNode, isStaged: boolean, depth: number): strin
     const chevron = isExpanded ? ICON_CHEVRON_DOWN : ICON_CHEVRON_RIGHT;
     const indent = depth * 16 + 22;
 
-    const folderClass = isExpanded ? 'codicon-folder-opened' : 'codicon-folder';
+    const folderIcon = isExpanded ? ICON_FOLDER_OPEN : ICON_FOLDER;
     let html = `
         <div class="tree-folder-row" data-folder-key="${escapeHtml(folderKey)}" style="padding-left:${indent}px">
             <span class="tree-folder-chevron">${chevron}</span>
-            <span class="codicon ${folderClass} tree-icon folder-icon"></span>
+            <span class="tree-icon folder-icon">${folderIcon}</span>
             <span class="tree-folder-name">${escapeHtml(node.name)}</span>
         </div>`;
 
@@ -343,9 +344,10 @@ function renderTreeFileRow(entry: StatusEntry, isStaged: boolean, depth: number)
         : `${openFileBtn}<button class="icon-btn discard-btn" data-file="${escapeHtml(entry.filePath)}" title="Discard Changes">${ICON_DISCARD}</button>
            <button class="icon-btn stage-btn" data-file="${escapeHtml(entry.filePath)}" title="Stage">${ICON_PLUS}</button>`;
 
+    const origAttr = entry.origPath ? ` data-orig="${escapeHtml(entry.origPath)}"` : '';
     return `
-        <div class="file-row tree-file-row" data-file="${escapeHtml(entry.filePath)}" data-staged="${isStaged}" data-status="${statusChar}" style="padding-left:${indent}px">
-            <span class="codicon codicon-file tree-icon file-icon"></span>
+        <div class="file-row tree-file-row" data-file="${escapeHtml(entry.filePath)}"${origAttr} data-staged="${isStaged}" data-status="${statusChar}" style="padding-left:${indent}px">
+            <span class="tree-icon file-icon">${ICON_FILE}</span>
             <span class="file-name" title="${escapeHtml(entry.filePath)}">${escapeHtml(fileName)}</span>
             <div class="file-actions">
                 ${actions}
@@ -502,8 +504,9 @@ function renderFileRow(entry: StatusEntry, isStaged: boolean): string {
         : `${openFileBtn}<button class="icon-btn discard-btn" data-file="${escapeHtml(entry.filePath)}" title="Discard Changes">${ICON_DISCARD}</button>
            <button class="icon-btn stage-btn" data-file="${escapeHtml(entry.filePath)}" title="Stage">${ICON_PLUS}</button>`;
 
+    const origAttr = entry.origPath ? ` data-orig="${escapeHtml(entry.origPath)}"` : '';
     return `
-        <div class="file-row" data-file="${escapeHtml(entry.filePath)}" data-staged="${isStaged}" data-status="${statusChar}">
+        <div class="file-row" data-file="${escapeHtml(entry.filePath)}"${origAttr} data-staged="${isStaged}" data-status="${statusChar}">
             <span class="file-name" title="${escapeHtml(entry.filePath)}">${escapeHtml(fileName)}</span>
             ${dirPath ? `<span class="file-dir">${escapeHtml(dirPath)}</span>` : ''}
             <div class="file-actions">
@@ -569,8 +572,9 @@ function renderStashFileRow(stashIndex: number, file: StashFileEntry): string {
         ? file.filePath.substring(0, file.filePath.lastIndexOf('/'))
         : '';
 
+    const origAttr = file.origPath ? ` data-orig="${escapeHtml(file.origPath)}"` : '';
     return `
-        <div class="file-row stash-file-row" data-stash-index="${stashIndex}" data-file="${escapeHtml(file.filePath)}" data-status="${file.status}">
+        <div class="file-row stash-file-row" data-stash-index="${stashIndex}" data-file="${escapeHtml(file.filePath)}"${origAttr} data-status="${file.status}">
             <span class="file-name" title="${escapeHtml(file.filePath)}">${escapeHtml(fileName)}</span>
             ${dirPath ? `<span class="file-dir">${escapeHtml(dirPath)}</span>` : ''}
             <span class="file-status-indicator ${statusClass}">${file.status}</span>
@@ -607,11 +611,7 @@ function wireFileHandlers(): void {
     // Accept All Incoming
     document.getElementById('accept-all-theirs-btn')?.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (statusData?.conflicts) {
-            for (const entry of statusData.conflicts) {
-                vscode.postMessage({ type: 'acceptTheirs', filePath: entry.filePath });
-            }
-        }
+        vscode.postMessage({ type: 'acceptAllTheirs' });
     });
 
     // Per-file conflict actions
@@ -702,14 +702,14 @@ function wireFileHandlers(): void {
     document.querySelectorAll('.file-row:not(.stash-row):not(.tree-file-row)').forEach((el) => {
         el.addEventListener('click', () => {
             const d = (el as HTMLElement).dataset;
-            vscode.postMessage({ type: 'openDiff', filePath: d.file, isStaged: d.staged === 'true', status: d.status });
+            vscode.postMessage({ type: 'openDiff', filePath: d.file, origPath: d.orig, isStaged: d.staged === 'true', status: d.status });
         });
     });
 
     document.querySelectorAll('.tree-file-row').forEach((el) => {
         el.addEventListener('click', () => {
             const d = (el as HTMLElement).dataset;
-            vscode.postMessage({ type: 'openDiff', filePath: d.file, isStaged: d.staged === 'true', status: d.status });
+            vscode.postMessage({ type: 'openDiff', filePath: d.file, origPath: d.orig, isStaged: d.staged === 'true', status: d.status });
         });
     });
 
@@ -779,6 +779,7 @@ function wireFileHandlers(): void {
             vscode.postMessage({
                 type: 'openStashDiff',
                 filePath: d.file,
+                origPath: d.orig,
                 index: parseInt(d.stashIndex!, 10),
                 status: d.status,
             });
@@ -815,6 +816,15 @@ window.addEventListener('message', (event) => {
             viewAsTree = msg.asTree as boolean;
             saveState();
             renderFilesList();
+            break;
+        case 'commitResult':
+            if (msg.success === true) {
+                commitMessage = '';
+                const textarea = document.getElementById('commit-message') as HTMLTextAreaElement | null;
+                if (textarea) { textarea.value = ''; }
+                saveState();
+            }
+            updateCommitButton();
             break;
         case 'error':
             console.error('Changes error:', msg.message);

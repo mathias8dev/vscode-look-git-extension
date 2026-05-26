@@ -14,11 +14,11 @@ export interface GraphData {
 export class GraphDataProvider {
     constructor(private gitService: GitService) {}
 
-    public async getGraphData(maxCount: number = 300, filterBranches?: string[]): Promise<GraphData> {
+    public async getGraphData(maxCount: number = 300, filterBranches?: string[], pathFilter?: string): Promise<GraphData> {
         const [branches, tags, commits, currentBranch, currentUser] = await Promise.all([
             this.gitService.getAllBranches(),
             this.gitService.getAllTags(),
-            this.gitService.getGraphLog(maxCount, filterBranches),
+            this.gitService.getGraphLog(maxCount, filterBranches, pathFilter),
             this.gitService.getCurrentBranch(),
             this.gitService.getUserName(),
         ]);

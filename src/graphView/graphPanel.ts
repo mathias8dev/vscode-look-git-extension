@@ -1,6 +1,21 @@
 import * as vscode from 'vscode';
+import * as crypto from 'crypto';
+import * as path from 'path';
+import { CommitItem } from '../commitItem';
 import { GraphDataProvider } from './graphDataProvider';
 import type { GitService } from '../gitService';
+
+const ALLOWED_COMMIT_COMMANDS = new Set([
+    'lookGit.cherryPick',
+    'lookGit.revert',
+    'lookGit.rebase',
+    'lookGit.reset',
+    'lookGit.checkout',
+    'lookGit.drop',
+    'lookGit.renameCommit',
+    'lookGit.fixup',
+    'lookGit.copyCommitHash',
+]);
 
 export class GraphViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'lookGit.graphView';
@@ -9,6 +24,8 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     private readonly dataProvider: GraphDataProvider;
     private readonly gitService: GitService;
     private readonly extensionUri: vscode.Uri;
+    private filterBranches?: string[];
+    private pathFilter?: string;
 
     constructor(extensionUri: vscode.Uri, gitService: GitService) {
         this.extensionUri = extensionUri;
@@ -45,10 +62,14 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         this.refresh();
     }
 
-    public async refresh(filterBranches?: string[]): Promise<void> {
+    public async refresh(filterBranches?: string[], pathFilter?: string): Promise<void> {
         if (!this.view) { return; }
+        if (arguments.length > 0) {
+            this.filterBranches = filterBranches;
+            this.pathFilter = pathFilter;
+        }
         try {
-            const data = await this.dataProvider.getGraphData(300, filterBranches);
+            const data = await this.dataProvider.getGraphData(300, this.filterBranches, this.pathFilter);
             this.view.webview.postMessage({ type: 'graphData', data });
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -70,7 +91,8 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
 
             case 'selectBranch': {
                 const branches = msg.branches as string[] | undefined;
-                this.refresh(branches);
+                const pathFilter = msg.path as string | undefined;
+                this.refresh(branches, pathFilter);
                 break;
             }
 
@@ -98,14 +120,25 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
                 const filePath = msg.filePath as string;
                 const commitHash = msg.commitHash as string;
                 const status = msg.status as string;
-                this.openDiff(filePath, commitHash, status);
+                const origPath = msg.origPath as string | undefined;
+                const parentHash = msg.parentHash as string | undefined;
+                this.openDiff(filePath, commitHash, status, origPath, parentHash);
                 break;
             }
 
             case 'executeCommand': {
                 const command = msg.command as string;
                 const commitHash = msg.commitHash as string;
-                vscode.commands.executeCommand(command, commitHash);
+                if (!ALLOWED_COMMIT_COMMANDS.has(command)) {
+                    vscode.window.showErrorMessage(`Command is not allowed from Look Git graph: ${command}`);
+                    return;
+                }
+                const commit = await this.gitService.getCommit(commitHash);
+                if (!commit) {
+                    vscode.window.showErrorMessage(`Commit not found: ${commitHash}`);
+                    return;
+                }
+                vscode.commands.executeCommand(command, new CommitItem(commit, false));
                 break;
             }
 
@@ -118,7 +151,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
             }
 
             case 'refresh':
-                this.refresh();
+                this.refresh(this.filterBranches, this.pathFilter);
                 break;
         }
     }
@@ -218,9 +251,10 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private openDiff(filePath: string, commitHash: string, status: string): void {
+    private openDiff(filePath: string, commitHash: string, status: string, origPath?: string, parentHash?: string): void {
         const cwd = this.gitService.getWorkingDirectory();
-        const fileUri = vscode.Uri.file(`${cwd}/${filePath}`);
+        const fileUri = vscode.Uri.file(path.join(cwd, filePath));
+        const originalFileUri = vscode.Uri.file(path.join(cwd, origPath ?? filePath));
         const emptyUri = vscode.Uri.parse(`lookgit-empty:${filePath}`);
 
         const toGitUri = (uri: vscode.Uri, ref: string): vscode.Uri => {
@@ -235,10 +269,10 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
             leftUri = emptyUri;
             rightUri = toGitUri(fileUri, commitHash);
         } else if (status === 'D') {
-            leftUri = toGitUri(fileUri, `${commitHash}~1`);
+            leftUri = toGitUri(originalFileUri, parentHash ?? `${commitHash}~1`);
             rightUri = emptyUri;
         } else {
-            leftUri = toGitUri(fileUri, `${commitHash}~1`);
+            leftUri = toGitUri(originalFileUri, parentHash ?? `${commitHash}~1`);
             rightUri = toGitUri(fileUri, commitHash);
         }
 
@@ -271,10 +305,5 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
 }
 
 function getNonce(): string {
-    let text = '';
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 32; i++) {
-        text += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return text;
+    return crypto.randomBytes(16).toString('base64');
 }

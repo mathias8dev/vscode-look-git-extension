@@ -262,6 +262,7 @@ export function registerCommands(
             );
             if (choice === 'Discard All') {
                 try {
+                    await gitService.unstageAll().catch(() => undefined);
                     const status = await gitService.getStatus();
                     for (const entry of status.unstaged) {
                         await gitService.discardFile(entry.filePath);

@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as crypto from 'crypto';
+import * as path from 'path';
 import type { GitService } from '../gitService';
 
 export class ChangesViewProvider implements vscode.WebviewViewProvider {
@@ -31,7 +33,6 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             enableScripts: true,
             localResourceRoots: [
                 vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview'),
-                vscode.Uri.file(vscode.env.appRoot),
             ],
         };
 
@@ -125,6 +126,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                         'Discard All',
                     );
                     if (choice === 'Discard All') {
+                        await this.gitService.unstageAll().catch(() => undefined);
                         const status = await this.gitService.getStatus();
                         for (const entry of status.unstaged) {
                             await this.gitService.discardFile(entry.filePath);
@@ -138,6 +140,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     const message = (msg.message as string || '').trim();
                     if (!message) {
                         vscode.window.showErrorMessage('Commit message cannot be empty.');
+                        this.view?.webview.postMessage({ type: 'commitResult', success: false });
                         return;
                     }
                     const mode = (msg.mode as string) || 'commit';
@@ -162,29 +165,31 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                             break;
                     }
                     this.refresh();
+                    this.view?.webview.postMessage({ type: 'commitResult', success: true });
                     break;
                 }
 
                 case 'openFile': {
                     const filePath = msg.filePath as string;
                     const cwd = this.gitService.getWorkingDirectory();
-                    const fileUri = vscode.Uri.file(`${cwd}/${filePath}`);
+                    const fileUri = vscode.Uri.file(path.join(cwd, filePath));
                     vscode.commands.executeCommand('vscode.open', fileUri);
                     break;
                 }
 
                 case 'openDiff': {
                     const filePath = msg.filePath as string;
+                    const origPath = msg.origPath as string | undefined;
                     const isStaged = msg.isStaged as boolean;
                     const status = msg.status as string;
-                    this.openWorkingDiff(filePath, isStaged, status);
+                    this.openWorkingDiff(filePath, isStaged, status, origPath);
                     break;
                 }
 
                 case 'openMergeEditor': {
                     const filePath = msg.filePath as string;
                     const cwd = this.gitService.getWorkingDirectory();
-                    const fileUri = vscode.Uri.file(`${cwd}/${filePath}`);
+                    const fileUri = vscode.Uri.file(path.join(cwd, filePath));
                     try {
                         await vscode.commands.executeCommand('merge-conflict.accept.select', fileUri);
                     } catch {
@@ -206,6 +211,16 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     const filePath = msg.filePath as string;
                     await this.gitService.acceptTheirs(filePath);
                     await this.gitService.stageFile(filePath);
+                    this.refresh();
+                    break;
+                }
+
+                case 'acceptAllTheirs': {
+                    const status = await this.gitService.getStatus();
+                    for (const entry of status.conflicts) {
+                        await this.gitService.acceptTheirs(entry.filePath);
+                        await this.gitService.stageFile(entry.filePath);
+                    }
                     this.refresh();
                     break;
                 }
@@ -310,9 +325,10 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
                 case 'openStashDiff': {
                     const filePath = msg.filePath as string;
+                    const origPath = msg.origPath as string | undefined;
                     const stashIndex = msg.index as number;
                     const status = msg.status as string;
-                    this.openStashDiff(filePath, stashIndex, status);
+                    this.openStashDiff(filePath, stashIndex, status, origPath);
                     break;
                 }
 
@@ -323,13 +339,17 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             vscode.window.showErrorMessage(`Git operation failed: ${message}`);
+            if (msg.type === 'commit') {
+                this.view?.webview.postMessage({ type: 'commitResult', success: false });
+            }
             this.refresh();
         }
     }
 
-    private openWorkingDiff(filePath: string, isStaged: boolean, status: string): void {
+    private openWorkingDiff(filePath: string, isStaged: boolean, status: string, origPath?: string): void {
         const cwd = this.gitService.getWorkingDirectory();
-        const fileUri = vscode.Uri.file(`${cwd}/${filePath}`);
+        const fileUri = vscode.Uri.file(path.join(cwd, filePath));
+        const originalFileUri = vscode.Uri.file(path.join(cwd, origPath ?? filePath));
         const emptyUri = vscode.Uri.parse(`lookgit-empty:${filePath}`);
 
         const toGitUri = (uri: vscode.Uri, ref: string): vscode.Uri => {
@@ -339,7 +359,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
         if (isStaged) {
             // Staged: HEAD vs index
-            const leftUri = status === 'A' ? emptyUri : toGitUri(fileUri, 'HEAD');
+            const leftUri = status === 'A' ? emptyUri : toGitUri(originalFileUri, 'HEAD');
             const rightUri = toGitUri(fileUri, '');
             vscode.commands.executeCommand(
                 'vscode.diff', leftUri, rightUri,
@@ -350,14 +370,14 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             vscode.commands.executeCommand('vscode.open', fileUri);
         } else if (status === 'D') {
             // Deleted: show what was in index
-            const leftUri = toGitUri(fileUri, '');
+            const leftUri = toGitUri(originalFileUri, '');
             vscode.commands.executeCommand(
                 'vscode.diff', leftUri, emptyUri,
                 `${filePath} (Deleted)`,
             );
         } else {
             // Modified unstaged: index vs working tree
-            const leftUri = toGitUri(fileUri, '');
+            const leftUri = toGitUri(originalFileUri, '');
             vscode.commands.executeCommand(
                 'vscode.diff', leftUri, fileUri,
                 `${filePath} (Working Tree)`,
@@ -365,9 +385,10 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private openStashDiff(filePath: string, stashIndex: number, status: string): void {
+    private openStashDiff(filePath: string, stashIndex: number, status: string, origPath?: string): void {
         const cwd = this.gitService.getWorkingDirectory();
-        const fileUri = vscode.Uri.file(`${cwd}/${filePath}`);
+        const fileUri = vscode.Uri.file(path.join(cwd, filePath));
+        const originalFileUri = vscode.Uri.file(path.join(cwd, origPath ?? filePath));
         const emptyUri = vscode.Uri.parse(`lookgit-empty:${filePath}`);
 
         const toGitUri = (uri: vscode.Uri, ref: string): vscode.Uri => {
@@ -385,13 +406,13 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 `${filePath} (Stash #${stashIndex})`,
             );
         } else if (status === 'D') {
-            const leftUri = toGitUri(fileUri, parentRef);
+            const leftUri = toGitUri(originalFileUri, parentRef);
             vscode.commands.executeCommand(
                 'vscode.diff', leftUri, emptyUri,
                 `${filePath} (Stash #${stashIndex} - Deleted)`,
             );
         } else {
-            const leftUri = toGitUri(fileUri, parentRef);
+            const leftUri = toGitUri(originalFileUri, parentRef);
             const rightUri = toGitUri(fileUri, stashRef);
             vscode.commands.executeCommand(
                 'vscode.diff', leftUri, rightUri,
@@ -405,12 +426,6 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         const scriptUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview', 'changes.js'),
         );
-        const codiconsUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(
-                vscode.Uri.file(vscode.env.appRoot),
-                'out', 'vs', 'base', 'browser', 'ui', 'codicons', 'codicon', 'codicon.css',
-            ),
-        );
         const nonce = getNonce();
 
         return /*html*/`<!DOCTYPE html>
@@ -419,8 +434,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy"
-          content="default-src 'none'; style-src 'unsafe-inline' ${webview.cspSource}; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
-    <link href="${codiconsUri}" rel="stylesheet" />
+          content="default-src 'none'; style-src 'unsafe-inline' ${webview.cspSource}; script-src 'nonce-${nonce}';">
     <title>Changes</title>
 </head>
 <body>
@@ -432,10 +446,5 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 }
 
 function getNonce(): string {
-    let text = '';
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 32; i++) {
-        text += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return text;
+    return crypto.randomBytes(16).toString('base64');
 }

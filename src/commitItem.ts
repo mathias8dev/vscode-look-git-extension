@@ -96,6 +96,7 @@ export class FileChangeItem extends vscode.TreeItem {
 
         // Click to open diff
         const fileUri = vscode.Uri.file(path.join(repoRoot, fileChange.filePath));
+        const originalFileUri = vscode.Uri.file(path.join(repoRoot, fileChange.origPath ?? fileChange.filePath));
         const emptyUri = vscode.Uri.parse(`lookgit-empty:${fileChange.filePath}`);
         const shortRef = commitHash.substring(0, 7);
 
@@ -116,7 +117,7 @@ export class FileChangeItem extends vscode.TreeItem {
                 command: 'vscode.diff',
                 title: 'Show Changes',
                 arguments: [
-                    toGitUri(fileUri, `${commitHash}~1`),
+                    toGitUri(originalFileUri, fileChange.parentHash ?? `${commitHash}~1`),
                     emptyUri,
                     `${fileName} (Deleted in ${shortRef})`,
                 ],
@@ -127,7 +128,7 @@ export class FileChangeItem extends vscode.TreeItem {
                 command: 'vscode.diff',
                 title: 'Show Changes',
                 arguments: [
-                    toGitUri(fileUri, `${commitHash}~1`),
+                    toGitUri(originalFileUri, fileChange.parentHash ?? `${commitHash}~1`),
                     toGitUri(fileUri, commitHash),
                     `${fileName} (${shortRef})`,
                 ],

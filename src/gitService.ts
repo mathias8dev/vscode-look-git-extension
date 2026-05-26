@@ -1,7 +1,37 @@
 import { execFile } from 'child_process';
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
+const LOG_FIELD_SEP = '\x1f';
+const LOG_RECORD_SEP = '\x1e';
+
+const SEQUENCE_EDITOR_SCRIPT = `
+const fs = require('fs');
+const file = process.argv[2];
+const actions = new Map(JSON.parse(process.env.LOOK_GIT_REBASE_ACTIONS || '[]'));
+const lines = fs.readFileSync(file, 'utf8').split(/\\r?\\n/);
+const next = lines.map((line) => {
+  const match = line.match(/^([a-z]+)(\\s+)([0-9a-f]+)(\\s.*)$/i);
+  if (!match) { return line; }
+  const [, , spacing, todoHash, rest] = match;
+  for (const [targetHash, action] of actions) {
+    if (targetHash.startsWith(todoHash) || todoHash.startsWith(targetHash)) {
+      return action + spacing + todoHash + rest;
+    }
+  }
+  return line;
+});
+fs.writeFileSync(file, next.join('\\n'));
+`;
+
+const MESSAGE_EDITOR_SCRIPT = `
+const fs = require('fs');
+const file = process.argv[2];
+fs.writeFileSync(file, (process.env.LOOK_GIT_COMMIT_MESSAGE || '') + '\\n');
+`;
 
 export interface GitCommitInfo {
     hash: string;
@@ -20,6 +50,8 @@ export type GitFileStatus = 'A' | 'M' | 'D' | 'R' | 'C' | 'T' | 'U';
 export interface GitFileChange {
     status: GitFileStatus;
     filePath: string;
+    origPath?: string;
+    parentHash?: string;
 }
 
 export interface GitStatusEntry {
@@ -71,8 +103,81 @@ export class GitService {
         return stdout.trim();
     }
 
+    private async execRaw(args: string[], env?: Record<string, string>): Promise<string> {
+        const { stdout } = await execFileAsync('git', args, {
+            cwd: this.cwd,
+            maxBuffer: 10 * 1024 * 1024,
+            env: { ...process.env, ...env },
+        });
+        return stdout;
+    }
+
+    private async runInteractiveRebase(
+        baseCommitHash: string,
+        actions: [string, string][],
+        env: Record<string, string> = {},
+        messageEditorScript?: string
+    ): Promise<string> {
+        const sequenceEditor = await this.writeTempEditor(SEQUENCE_EDITOR_SCRIPT);
+        const messageEditorPath = messageEditorScript
+            ? await this.writeTempEditor(messageEditorScript)
+            : undefined;
+
+        try {
+            const args = await this.getInteractiveRebaseArgs(baseCommitHash);
+            const editorEnv: Record<string, string> = {
+                ...env,
+                LOOK_GIT_REBASE_ACTIONS: JSON.stringify(actions),
+                GIT_SEQUENCE_EDITOR: sequenceEditor.command,
+            };
+            if (messageEditorPath) {
+                editorEnv.GIT_EDITOR = messageEditorPath.command;
+            } else {
+                editorEnv.GIT_EDITOR = 'true';
+            }
+            return await this.exec(args, editorEnv);
+        } finally {
+            await sequenceEditor.dispose();
+            if (messageEditorPath) {
+                await messageEditorPath.dispose();
+            }
+        }
+    }
+
+    private async getInteractiveRebaseArgs(baseCommitHash: string): Promise<string[]> {
+        const output = await this.exec(['rev-list', '--parents', '-n', '1', baseCommitHash]);
+        const [, ...parents] = output.split(/\s+/);
+        return parents.length > 0
+            ? ['rebase', '-i', `${baseCommitHash}~1`]
+            : ['rebase', '-i', '--root'];
+    }
+
+    private async writeTempEditor(contents: string): Promise<{ command: string; dispose: () => Promise<void> }> {
+        const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'look-git-'));
+        const scriptPath = path.join(dir, 'editor.js');
+        await fs.writeFile(scriptPath, contents, 'utf8');
+        const isWindows = process.platform === 'win32';
+        const wrapperPath = path.join(dir, isWindows ? 'editor.cmd' : 'editor.sh');
+        const wrapper = isWindows
+            ? `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`
+            : `#!/bin/sh\n'${process.execPath.replace(/'/g, "'\\''")}' '${scriptPath.replace(/'/g, "'\\''")}' "$@"\n`;
+        await fs.writeFile(wrapperPath, wrapper, 'utf8');
+        if (!isWindows) {
+            await fs.chmod(wrapperPath, 0o700);
+        }
+        return {
+            command: this.quoteCommandArg(wrapperPath),
+            dispose: async () => {
+                await fs.rm(dir, { recursive: true, force: true });
+            },
+        };
+    }
+
+    private quoteCommandArg(arg: string): string {
+        return `"${arg.replace(/"/g, '\\"')}"`;
+    }
+
     public async getLog(maxCount: number = 50, skip: number = 0): Promise<GitCommitInfo[]> {
-        const SEP = '<<SEP>>';
         const FORMAT = [
             '%H',   // full hash
             '%h',   // short hash
@@ -81,9 +186,9 @@ export class GitService {
             '%ae',  // author email
             '%aI',  // author date ISO 8601
             '%P',   // parent hashes
-        ].join(SEP);
+        ].join('%x1f') + '%x1e';
 
-        const output = await this.exec([
+        const output = await this.execRaw([
             'log',
             `--format=${FORMAT}`,
             `--max-count=${maxCount}`,
@@ -94,18 +199,56 @@ export class GitService {
             return [];
         }
 
-        return output.split('\n').map((line) => {
-            const parts = line.split(SEP);
-            return {
-                hash: parts[0],
-                shortHash: parts[1],
-                message: parts[2],
-                authorName: parts[3],
-                authorEmail: parts[4],
-                authorDate: new Date(parts[5]),
-                parentHashes: parts[6] ? parts[6].split(' ') : [],
-            };
-        });
+        return this.parseCommitLog(output);
+    }
+
+    public async getCommit(commitHash: string): Promise<GitCommitInfo | undefined> {
+        const commits = await this.getLogForRefs(1, 0, [commitHash]);
+        return commits[0];
+    }
+
+    private async getLogForRefs(maxCount: number, skip: number, refs: string[]): Promise<GitCommitInfo[]> {
+        const FORMAT = [
+            '%H',
+            '%h',
+            '%s',
+            '%an',
+            '%ae',
+            '%aI',
+            '%P',
+        ].join('%x1f') + '%x1e';
+
+        const output = await this.execRaw([
+            'log',
+            `--format=${FORMAT}`,
+            `--max-count=${maxCount}`,
+            `--skip=${skip}`,
+            ...refs,
+        ]);
+
+        if (!output) {
+            return [];
+        }
+
+        return this.parseCommitLog(output);
+    }
+
+    private parseCommitLog(output: string): GitCommitInfo[] {
+        return output.split(LOG_RECORD_SEP)
+            .map((record) => record.replace(/^\n/, '').replace(/\n$/, ''))
+            .filter(Boolean)
+            .map((record) => {
+                const parts = record.split(LOG_FIELD_SEP);
+                return {
+                    hash: parts[0],
+                    shortHash: parts[1],
+                    message: parts[2],
+                    authorName: parts[3],
+                    authorEmail: parts[4],
+                    authorDate: new Date(parts[5]),
+                    parentHashes: parts[6] ? parts[6].split(' ') : [],
+                };
+            });
     }
 
     public async cherryPick(commitHash: string): Promise<string> {
@@ -156,31 +299,18 @@ export class GitService {
         // Find the oldest commit by asking git for the topological order
         const oldestHash = await this.findOldestCommit(commitHashes);
 
-        const sedCommands = commitHashes
-            .map((h) => `s/^pick ${h.substring(0, 7)}/drop ${h.substring(0, 7)}/`)
-            .join(';');
-        const sedCommand = `sed -i '${sedCommands}'`;
-
-        return this.exec(
-            ['rebase', '-i', `${oldestHash}~1`],
-            { GIT_SEQUENCE_EDITOR: sedCommand }
+        return this.runInteractiveRebase(
+            oldestHash,
+            commitHashes.map((h) => [h, 'drop'])
         );
     }
 
     public async renameCommit(commitHash: string, newMessage: string): Promise<string> {
-        const shortHash = commitHash.substring(0, 7);
-        const sedCommand = `sed -i 's/^pick ${shortHash}/reword ${shortHash}/'`;
-
-        // Escape single quotes in the message for shell safety
-        const escapedMessage = newMessage.replace(/'/g, "'\\''");
-        const editorScript = `printf '%s\\n' '${escapedMessage}' >`;
-
-        return this.exec(
-            ['rebase', '-i', `${commitHash}~1`],
-            {
-                GIT_SEQUENCE_EDITOR: sedCommand,
-                GIT_EDITOR: editorScript,
-            }
+        return this.runInteractiveRebase(
+            commitHash,
+            [[commitHash, 'reword']],
+            { LOOK_GIT_COMMIT_MESSAGE: newMessage },
+            MESSAGE_EDITOR_SCRIPT
         );
     }
 
@@ -216,12 +346,7 @@ export class GitService {
 
     public async findOldestCommit(commitHashes: string[]): Promise<string> {
         // Use git log to find which commit comes last (is oldest) in history
-        // rev-list outputs in reverse chronological order, so the last match is oldest
-        const hashArgs = commitHashes.map((h) => h.substring(0, 7));
-        const output = await this.exec([
-            'log', '--format=%H', '--reverse',
-            `${commitHashes[0]}~1...HEAD`,
-        ]);
+        const output = await this.exec(['rev-list', '--topo-order', '--reverse', 'HEAD']);
 
         if (!output) {
             return commitHashes[commitHashes.length - 1];
@@ -263,26 +388,15 @@ export class GitService {
 
     public async squashCommits(oldestCommitHash: string, commitHashes: string[]): Promise<string> {
         // Change "pick" to "squash" for all commits except the oldest one
-        const sedCommands = commitHashes
-            .map((h) => `s/^pick ${h.substring(0, 7)}/squash ${h.substring(0, 7)}/`)
-            .join(';');
-        const sedCommand = `sed -i '${sedCommands}'`;
-
-        return this.exec(
-            ['rebase', '-i', `${oldestCommitHash}~1`],
-            { GIT_SEQUENCE_EDITOR: sedCommand }
+        return this.runInteractiveRebase(
+            oldestCommitHash,
+            commitHashes.map((h) => [h, 'squash'])
         );
     }
 
     public async fixupCommit(commitHash: string, targetCommitHash: string): Promise<string> {
         // Change "pick" to "fixup" for the commit to fold into its predecessor
-        const shortHash = commitHash.substring(0, 7);
-        const sedCommand = `sed -i 's/^pick ${shortHash}/fixup ${shortHash}/'`;
-
-        return this.exec(
-            ['rebase', '-i', `${targetCommitHash}~1`],
-            { GIT_SEQUENCE_EDITOR: sedCommand }
-        );
+        return this.runInteractiveRebase(targetCommitHash, [[commitHash, 'fixup']]);
     }
 
     public async pushUpTo(commitHash: string, remoteName: string, branchName: string): Promise<string> {
@@ -298,29 +412,62 @@ export class GitService {
     }
 
     public async getCommitFiles(commitHash: string): Promise<GitFileChange[]> {
-        // Use --root so the initial commit (no parent) also shows its files
-        // Use -m so merge commits show changes against each parent
-        const output = await this.exec([
-            'diff-tree', '--root', '--no-commit-id', '-r', '-m', '--name-status', commitHash,
-        ]);
+        const parents = await this.getParentHashes(commitHash);
 
-        if (!output) {
-            return [];
+        if (parents.length === 0) {
+            const output = await this.execRaw([
+                'diff-tree', '--root', '--no-commit-id', '-r', '-M', '--name-status', '-z', commitHash,
+            ]);
+            return output ? this.parseNameStatusZ(output) : [];
         }
 
+        const result: GitFileChange[] = [];
+        const seen = new Set<string>();
+        for (const parentHash of parents) {
+            const output = await this.execRaw([
+                'diff-tree', '--no-commit-id', '-r', '-M', '--name-status', '-z', parentHash, commitHash,
+            ]);
+            for (const change of this.parseNameStatusZ(output, parentHash)) {
+                const key = `${parentHash}:${change.filePath}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    result.push(change);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private async getParentHashes(commitHash: string): Promise<string[]> {
+        const output = await this.exec(['rev-list', '--parents', '-n', '1', commitHash]);
+        const [, ...parents] = output.split(/\s+/);
+        return parents;
+    }
+
+    private parseNameStatusZ(output: string, parentHash?: string): GitFileChange[] {
         const seen = new Set<string>();
         const result: GitFileChange[] = [];
+        const tokens = output.split('\0');
 
-        for (const line of output.split('\n')) {
-            if (!line || !line.includes('\t')) {
+        for (let i = 0; i < tokens.length;) {
+            const statusToken = tokens[i++];
+            if (!statusToken) {
                 continue;
             }
-            const [status, ...fileParts] = line.split('\t');
-            const filePath = fileParts.join('\t');
+            const status = statusToken.charAt(0) as GitFileStatus;
+            let origPath: string | undefined;
+            let filePath = tokens[i++];
+
+            if ((status === 'R' || status === 'C') && filePath) {
+                origPath = filePath;
+                filePath = tokens[i++];
+            }
+
             // Deduplicate (merge commits can list files multiple times)
             if (filePath && !seen.has(filePath)) {
                 seen.add(filePath);
-                result.push({ status: status.charAt(0) as GitFileStatus, filePath });
+                result.push({ status, filePath, origPath, parentHash });
             }
         }
 
@@ -332,39 +479,46 @@ export class GitService {
     }
 
     public async getAllBranches(): Promise<BranchInfo[]> {
-        const SEP = '<<SEP>>';
         const FORMAT = [
-            '%(refname:short)',
-            '%(HEAD)',
+            '%(refname)',
             '%(objectname:short)',
             '%(upstream:short)',
-        ].join(SEP);
+        ].join('%00');
 
-        const output = await this.exec([
-            'branch', '-a', `--format=${FORMAT}`,
+        const [output, currentBranch] = await Promise.all([
+            this.execRaw(['for-each-ref', `--format=${FORMAT}`, 'refs/heads', 'refs/remotes']),
+            this.getCurrentBranch().catch(() => 'HEAD'),
         ]);
 
         if (!output) {
             return [];
         }
 
-        return output.split('\n').map((line) => {
-            const parts = line.split(SEP);
+        return output.split('\n').filter(Boolean).flatMap((line) => {
+            const parts = line.split('\0');
+            const refName = parts[0];
+            const isRemote = refName.startsWith('refs/remotes/');
+            if (isRemote && refName.endsWith('/HEAD')) {
+                return [];
+            }
+            const name = isRemote
+                ? refName.replace(/^refs\/remotes\//, '')
+                : refName.replace(/^refs\/heads\//, '');
+
             return {
-                name: parts[0],
-                isCurrent: parts[1] === '*',
-                hash: parts[2],
-                upstream: parts[3] || undefined,
-                isRemote: parts[0].startsWith('origin/') || parts[0].includes('/'),
+                name,
+                isCurrent: !isRemote && name === currentBranch,
+                hash: parts[1],
+                upstream: parts[2] || undefined,
+                isRemote,
             };
         });
     }
 
     public async getAllTags(): Promise<TagInfo[]> {
-        const SEP = '<<SEP>>';
-        const FORMAT = `%(refname:short)${SEP}%(objectname:short)`;
+        const FORMAT = `%(refname:short)%00%(objectname:short)`;
 
-        const output = await this.exec([
+        const output = await this.execRaw([
             'tag', `--format=${FORMAT}`,
         ]);
 
@@ -372,8 +526,8 @@ export class GitService {
             return [];
         }
 
-        return output.split('\n').map((line) => {
-            const parts = line.split(SEP);
+        return output.split('\n').filter(Boolean).map((line) => {
+            const parts = line.split('\0');
             return {
                 name: parts[0],
                 hash: parts[1],
@@ -381,8 +535,7 @@ export class GitService {
         });
     }
 
-    public async getGraphLog(maxCount: number = 300, branches?: string[]): Promise<GraphCommitInfo[]> {
-        const SEP = '<<SEP>>';
+    public async getGraphLog(maxCount: number = 300, branches?: string[], pathFilter?: string): Promise<GraphCommitInfo[]> {
         const FORMAT = [
             '%H',   // full hash
             '%h',   // short hash
@@ -392,7 +545,7 @@ export class GitService {
             '%aI',  // author date ISO 8601
             '%P',   // parent hashes
             '%D',   // ref names
-        ].join(SEP);
+        ].join('%x1f') + '%x1e';
 
         const args = [
             'log',
@@ -406,15 +559,21 @@ export class GitService {
         } else {
             args.push('--all');
         }
+        if (pathFilter) {
+            args.push('--', pathFilter);
+        }
 
-        const output = await this.exec(args);
+        const output = await this.execRaw(args);
 
         if (!output) {
             return [];
         }
 
-        return output.split('\n').map((line) => {
-            const parts = line.split(SEP);
+        return output.split(LOG_RECORD_SEP)
+            .map((record) => record.replace(/^\n/, '').replace(/\n$/, ''))
+            .filter(Boolean)
+            .map((record) => {
+            const parts = record.split(LOG_FIELD_SEP);
             const refs = parts[7]
                 ? parts[7].split(',').map((r) => r.trim()).filter(Boolean)
                 : [];
@@ -469,7 +628,7 @@ export class GitService {
         conflicts: GitStatusEntry[];
         conflictState: 'none' | 'merge' | 'rebase';
     }> {
-        const output = await this.exec(['status', '--porcelain', '-u']);
+        const output = await this.execRaw(['status', '--porcelain=v1', '-z', '-u']);
         const staged: GitStatusEntry[] = [];
         const unstaged: GitStatusEntry[] = [];
         const conflicts: GitStatusEntry[] = [];
@@ -481,19 +640,18 @@ export class GitService {
 
         const conflictCodes = new Set(['U', 'A', 'D']);
 
-        for (const line of output.split('\n')) {
+        const tokens = output.split('\0');
+        for (let i = 0; i < tokens.length;) {
+            const line = tokens[i++];
             if (!line || line.length < 3) { continue; }
 
             const indexStatus = line[0];
             const workTreeStatus = line[1];
-            const rawPath = line.substring(3);
-            let filePath = rawPath;
+            let filePath = line.substring(3);
             let origPath: string | undefined;
 
-            const arrowIdx = rawPath.indexOf(' -> ');
-            if (arrowIdx !== -1) {
-                origPath = rawPath.substring(0, arrowIdx);
-                filePath = rawPath.substring(arrowIdx + 4);
+            if (indexStatus === 'R' || indexStatus === 'C' || workTreeStatus === 'R' || workTreeStatus === 'C') {
+                origPath = tokens[i++] || undefined;
             }
 
             const entry: GitStatusEntry = { indexStatus, workTreeStatus, filePath, origPath };
@@ -627,11 +785,8 @@ export class GitService {
     }
 
     public async getStashFiles(index: number): Promise<GitFileChange[]> {
-        const output = await this.exec(['stash', 'show', '--name-status', `stash@{${index}}`]);
+        const output = await this.execRaw(['stash', 'show', '--name-status', '-M', '-z', `stash@{${index}}`]);
         if (!output) { return []; }
-        return output.split('\n').filter(Boolean).map((line) => {
-            const [status, ...fileParts] = line.split('\t');
-            return { status: status.charAt(0) as GitFileStatus, filePath: fileParts.join('\t') };
-        });
+        return this.parseNameStatusZ(output);
     }
 }

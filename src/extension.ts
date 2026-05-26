@@ -5,6 +5,7 @@ import { getBuiltInGitApi } from './utils/gitExtension';
 import { registerCommands } from './commands';
 import { GraphViewProvider } from './graphView/graphPanel';
 import { ChangesViewProvider } from './changesView/changesProvider';
+import type { Repository } from './types/git';
 
 // Content provider that always returns empty content — used as the
 // "empty" side when diffing added or deleted files.
@@ -29,7 +30,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
     }
 
-    const repository = gitApi.repositories[0];
+    const getActiveRepository = (): Repository | undefined =>
+        gitApi.repositories.find((repo) => repo.ui.selected) ?? gitApi.repositories[0];
+
+    const repository = getActiveRepository();
 
     const gitService = new GitService(repository?.rootUri.fsPath ?? '');
     const commitHistoryProvider = new CommitHistoryProvider(gitService);
@@ -73,29 +77,47 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }, 150);
     };
 
-    const watchRepository = (repo: { state: { onDidChange: (cb: () => void) => void } }) => {
-        repo.state.onDidChange(debouncedRefreshAll);
+    const repoWatchers = new Map<string, vscode.Disposable[]>();
+    const useActiveRepository = () => {
+        const active = getActiveRepository();
+        gitService.setWorkingDirectory(active?.rootUri.fsPath ?? '');
+        vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', !!active);
+        debouncedRefreshAll();
     };
 
-    if (repository) {
-        watchRepository(repository);
-    }
-
-    gitApi.onDidOpenRepository((repo) => {
-        gitService.setWorkingDirectory(repo.rootUri.fsPath);
-        watchRepository(repo);
-        debouncedRefreshAll();
-        vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', true);
-    });
-
-    gitApi.onDidCloseRepository(() => {
-        if (gitApi.repositories.length === 0) {
-            vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', false);
+    const watchRepository = (repo: Repository) => {
+        const key = repo.rootUri.toString();
+        if (repoWatchers.has(key)) {
+            return;
         }
-    });
+        const disposables = [
+            repo.state.onDidChange(debouncedRefreshAll),
+            repo.ui.onDidChange(() => {
+                if (repo.ui.selected) {
+                    useActiveRepository();
+                }
+            }),
+        ];
+        repoWatchers.set(key, disposables);
+        context.subscriptions.push(...disposables);
+    };
 
-    // Also watch for file saves to catch changes the git extension may lag on
-    const fileWatcher = vscode.workspace.createFileSystemWatcher('**/*');
+    gitApi.repositories.forEach(watchRepository);
+
+    context.subscriptions.push(gitApi.onDidOpenRepository((repo) => {
+        watchRepository(repo);
+        useActiveRepository();
+    }));
+
+    context.subscriptions.push(gitApi.onDidCloseRepository((repo) => {
+        const key = repo.rootUri.toString();
+        repoWatchers.get(key)?.forEach((disposable) => disposable.dispose());
+        repoWatchers.delete(key);
+        useActiveRepository();
+    }));
+
+    // Watch Git metadata as a fallback for cases where the built-in Git extension lags.
+    const fileWatcher = vscode.workspace.createFileSystemWatcher('**/.git/**');
     fileWatcher.onDidChange(debouncedRefreshAll);
     fileWatcher.onDidCreate(debouncedRefreshAll);
     fileWatcher.onDidDelete(debouncedRefreshAll);

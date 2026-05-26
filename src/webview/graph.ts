@@ -33,6 +33,8 @@ interface TagInfo {
 interface FileChange {
     status: string;
     filePath: string;
+    origPath?: string;
+    parentHash?: string;
 }
 
 interface GraphData {
@@ -88,6 +90,14 @@ function savePaneState(s: PaneState): void {
 
 let paneState = loadPaneState();
 
+function requestGraphData(): void {
+    vscode.postMessage({
+        type: 'selectBranch',
+        branches: selectedBranch ? [selectedBranch] : undefined,
+        path: filterPath || undefined,
+    });
+}
+
 function init(): void {
     const app = document.getElementById('app')!;
     app.innerHTML = getShellHtml();
@@ -104,7 +114,7 @@ function init(): void {
 
     const refreshBtn = document.getElementById('refresh-btn')!;
     refreshBtn.addEventListener('click', () => {
-        vscode.postMessage({ type: 'refresh' });
+        requestGraphData();
     });
 
     const toggleGraphBtn = document.getElementById('toggle-graph-btn')!;
@@ -420,7 +430,7 @@ function showPathInput(anchorEl: HTMLElement): void {
             filterPath = input.value || null;
             closeDropdown();
             renderFilterBar();
-            renderGraphTable();
+            requestGraphData();
         }
     });
 
@@ -429,7 +439,7 @@ function showPathInput(anchorEl: HTMLElement): void {
         filterPath = input.value || null;
         closeDropdown();
         renderFilterBar();
-        renderGraphTable();
+        requestGraphData();
     });
 
     dropdown.querySelector('#path-clear-btn')!.addEventListener('click', (e) => {
@@ -437,7 +447,7 @@ function showPathInput(anchorEl: HTMLElement): void {
         filterPath = null;
         closeDropdown();
         renderFilterBar();
-        renderGraphTable();
+        requestGraphData();
     });
 
     dropdown.addEventListener('click', (e) => e.stopPropagation());
@@ -543,7 +553,7 @@ function wireFilterBarHandlers(bar: HTMLElement): void {
             switch (clear) {
                 case 'branch':
                     selectedBranch = null;
-                    vscode.postMessage({ type: 'selectBranch', branches: undefined });
+                    requestGraphData();
                     renderBranchPane();
                     break;
                 case 'user':
@@ -555,6 +565,7 @@ function wireFilterBarHandlers(bar: HTMLElement): void {
                     break;
                 case 'paths':
                     filterPath = null;
+                    requestGraphData();
                     break;
             }
             renderFilterBar();
@@ -759,7 +770,7 @@ function buildLocalBranchMenu(branch: string, currentBranch: string): MenuItem[]
         { label: 'Push', command: 'push' },
         { label: 'Update (Fetch)', command: 'update' },
         { label: '', command: '', separator: true },
-        { label: `Rebase ${branch} onto ${currentBranch}`, command: 'rebaseOnto', disabled: isCurrent },
+        { label: `Rebase ${currentBranch} onto ${branch}`, command: 'rebaseOnto', disabled: isCurrent },
         { label: `Merge ${branch} into ${currentBranch}`, command: 'mergeInto', disabled: isCurrent },
     ];
 }
@@ -793,11 +804,10 @@ function wireBranchPaneHandlers(pane: HTMLElement): void {
             const branch = (el as HTMLElement).dataset.branch!;
             if (branch === '__all__') {
                 selectedBranch = null;
-                vscode.postMessage({ type: 'selectBranch', branches: undefined });
             } else {
                 selectedBranch = branch;
-                vscode.postMessage({ type: 'selectBranch', branches: [branch] });
             }
+            requestGraphData();
             renderFilterBar();
             renderBranchPane();
         });
@@ -866,19 +876,6 @@ function renderGraphTable(): void {
         const to = new Date(filterDateTo).getTime() + 86400000; // include the full day
         rows = rows.filter((r) => new Date(r.commit.authorDate).getTime() < to);
     }
-    if (filterPath) {
-        const pathLower = filterPath.toLowerCase();
-        // Path filtering requires commit file data which we don't have client-side for all commits.
-        // Filter by checking if the path string appears in the commit message as a fallback,
-        // or filter by refs that contain the path. For a proper implementation we'd need
-        // server-side filtering. Here we filter messages/hashes that mention the path.
-        rows = rows.filter((r) => {
-            const c = r.commit;
-            return c.message.toLowerCase().includes(pathLower)
-                || c.refs.some((ref) => ref.toLowerCase().includes(pathLower));
-        });
-    }
-
     const hasFilter = !!(searchFilter || filterAuthors.length > 0 || filterDateFrom || filterDateTo || filterPath);
     const useBullet = hasFilter || !paneState.showGraph;
     const graphColWidth = useBullet ? 24 : (graphData.maxLane + 2) * 16 + 16;
@@ -1118,7 +1115,9 @@ function renderFileTreeNodes(node: FileTreeNode, hash: string, depth: number): s
         if (isFolder && child.file) {
             const f = child.file;
             const statusClass = getStatusClass(f.status);
-            html += `<div class="file-item file-tree-item" data-file="${escapeHtml(f.filePath)}" data-status="${f.status}" data-hash="${hash}" style="padding-left: ${(depth + 1) * 16}px;">
+            const origAttr = f.origPath ? ` data-orig="${escapeHtml(f.origPath)}"` : '';
+            const parentAttr = f.parentHash ? ` data-parent="${escapeHtml(f.parentHash)}"` : '';
+            html += `<div class="file-item file-tree-item" data-file="${escapeHtml(f.filePath)}"${origAttr}${parentAttr} data-status="${f.status}" data-hash="${hash}" style="padding-left: ${(depth + 1) * 16}px;">
                 ${renderFileIconSvg(f.filePath)}
                 <span class="file-path">${escapeHtml(child.name)}</span>
                 <span class="file-status-badge ${statusClass}">${f.status}</span>
@@ -1190,8 +1189,10 @@ function renderCommitDetails(
     if (filesMode === 'list') {
         for (const f of files) {
             const statusClass = getStatusClass(f.status);
+            const origAttr = f.origPath ? ` data-orig="${escapeHtml(f.origPath)}"` : '';
+            const parentAttr = f.parentHash ? ` data-parent="${escapeHtml(f.parentHash)}"` : '';
             html += `
-                <div class="file-item" data-file="${escapeHtml(f.filePath)}" data-status="${f.status}" data-hash="${hash}">
+                <div class="file-item" data-file="${escapeHtml(f.filePath)}"${origAttr}${parentAttr} data-status="${f.status}" data-hash="${hash}">
                     ${renderFileIconSvg(f.filePath)}
                     <span class="file-status ${statusClass}">${f.status}</span>
                     <span class="file-path">${escapeHtml(f.filePath)}</span>
@@ -1244,6 +1245,8 @@ function wireDetailsPaneHandlers(
             vscode.postMessage({
                 type: 'openDiff',
                 filePath: d.file,
+                origPath: d.orig,
+                parentHash: d.parent,
                 commitHash: d.hash,
                 status: d.status,
             });

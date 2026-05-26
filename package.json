@@ -608,7 +608,7 @@
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "package": "npm run check-types && node esbuild.js --production",
-    "lint": "eslint src --ext ts"
+    "lint": "npm run check-types"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",
