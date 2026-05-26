@@ -136,6 +136,95 @@ describe('ChangesViewProvider webview messages', () => {
         });
     });
 
+    describe('commit modes', () => {
+        function makeCommitService(overrides: Record<string, unknown> = {}) {
+            return {
+                commit: vi.fn(async () => ''),
+                commitAmend: vi.fn(async () => ''),
+                push: vi.fn(async () => ''),
+                pullAndPush: vi.fn(async () => ''),
+                getStatus: vi.fn(async () => ({
+                    staged: [], unstaged: [], conflicts: [], conflictState: 'none',
+                })),
+                stashList: vi.fn(async () => []),
+                ...overrides,
+            };
+        }
+
+        it('commit mode calls service.commit and posts commitResult success', async () => {
+            const service = makeCommitService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+            (provider as any).view = view;
+            await (provider as any).handleMessage({ type: 'commit', mode: 'commit', message: 'my commit' });
+            expect(service.commit).toHaveBeenCalledWith('my commit');
+            expect((vscode.window as any).infoMessages).toContainEqual('Changes committed successfully.');
+            expect(view.messages).toContainEqual({ type: 'commitResult', success: true });
+        });
+
+        it('amend mode calls service.commitAmend', async () => {
+            const service = makeCommitService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+            (provider as any).view = view;
+            await (provider as any).handleMessage({ type: 'commit', mode: 'amend', message: 'amended' });
+            expect(service.commitAmend).toHaveBeenCalledWith('amended');
+            expect((vscode.window as any).infoMessages).toContainEqual('Commit amended successfully.');
+            expect(view.messages).toContainEqual({ type: 'commitResult', success: true });
+        });
+
+        it('commitPush mode calls service.commit then service.push in order', async () => {
+            const calls: string[] = [];
+            const service = makeCommitService({
+                commit: vi.fn(async () => { calls.push('commit'); return ''; }),
+                push: vi.fn(async () => { calls.push('push'); return ''; }),
+            });
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+            (provider as any).view = view;
+            await (provider as any).handleMessage({ type: 'commit', mode: 'commitPush', message: 'push it' });
+            expect(calls).toEqual(['commit', 'push']);
+            expect((vscode.window as any).infoMessages).toContainEqual('Changes committed and pushed.');
+        });
+
+        it('commitSync mode calls service.commit then service.pullAndPush in order', async () => {
+            const calls: string[] = [];
+            const service = makeCommitService({
+                commit: vi.fn(async () => { calls.push('commit'); return ''; }),
+                pullAndPush: vi.fn(async () => { calls.push('pullAndPush'); return ''; }),
+            });
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+            (provider as any).view = view;
+            await (provider as any).handleMessage({ type: 'commit', mode: 'commitSync', message: 'sync it' });
+            expect(calls).toEqual(['commit', 'pullAndPush']);
+            expect((vscode.window as any).infoMessages).toContainEqual('Changes committed and synced.');
+        });
+
+        it('empty message shows error and posts commitResult false without calling git', async () => {
+            const service = makeCommitService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+            (provider as any).view = view;
+            await (provider as any).handleMessage({ type: 'commit', mode: 'commit', message: '' });
+            expect(service.commit).not.toHaveBeenCalled();
+            expect((vscode.window as any).errorMessages).toContainEqual('Commit message cannot be empty.');
+            expect(view.messages).toContainEqual({ type: 'commitResult', success: false });
+        });
+
+        it('git error during commit posts commitResult false and shows error', async () => {
+            const service = makeCommitService({
+                commit: vi.fn(async () => { throw new Error('nothing to commit'); }),
+            });
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+            (provider as any).view = view;
+            await (provider as any).handleMessage({ type: 'commit', mode: 'commit', message: 'try' });
+            expect(view.messages).toContainEqual({ type: 'commitResult', success: false });
+            expect((vscode.window as any).errorMessages[0]).toContain('nothing to commit');
+        });
+    });
+
     it('discardAll unstages before discarding every remaining unstaged file', async () => {
         const calls: string[] = [];
         const service = {
