@@ -719,6 +719,35 @@ describe('Graph webview runtime behavior', () => {
         });
     });
 
+    it('shows a visual indicator for the current branch in list and tree branch views', async () => {
+        await bootWebview(GRAPH_WEBVIEW_MODULE);
+        sendWebviewMessage({
+            type: 'graphData',
+            data: {
+                branches: [
+                    { name: 'main', isRemote: false, isCurrent: true, hash: 'abc1234' },
+                    { name: 'feature/ui', isRemote: false, isCurrent: false, hash: 'def1234' },
+                    { name: 'origin/main', isRemote: true, isCurrent: false, hash: 'abc1234' },
+                ],
+                tags: [],
+                rows: [graphRow('abc123456789', 'commit')],
+                maxLane: 0,
+                currentBranch: 'main',
+                currentUser: 'Test User',
+            },
+        });
+
+        const listCurrent = document.querySelector<HTMLElement>('.branch-item.current[data-branch="main"]');
+        expect(listCurrent).not.toBeNull();
+        expect(listCurrent?.querySelector('.current-branch-indicator')?.getAttribute('aria-label')).toBe('Current branch');
+        expect(document.querySelector('.branch-item[data-branch="feature/ui"] .current-branch-indicator')).toBeNull();
+
+        click('.view-switch-btn[data-mode="tree"]');
+        const treeCurrent = document.querySelector<HTMLElement>('.branch-item.tree-leaf.current[data-branch="main"]');
+        expect(treeCurrent).not.toBeNull();
+        expect(treeCurrent?.querySelector('.current-branch-indicator')).not.toBeNull();
+    });
+
     it('renders untrusted graph data and commit details as text instead of markup', async () => {
         const api = await bootWebview(GRAPH_WEBVIEW_MODULE);
         const unsafeBranch = 'feature/<img src=x onerror="alert(1)">';

@@ -653,6 +653,12 @@ const BRANCH_ICON_SVG = `<svg class="tree-branch-icon" width="14" height="14" vi
     <path d="M5 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0 9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm9-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM3.5 5v4.5a2 2 0 0 0 2 2H9v-2l3.5 2.5L9 14.5v-2H5.5a4 4 0 0 1-4-4V5h2z" fill="currentColor"/>
 </svg>`;
 
+function renderCurrentBranchIndicator(branch: BranchInfo): string {
+    return branch.isCurrent
+        ? '<span class="current-branch-indicator" title="Current branch" aria-label="Current branch"></span>'
+        : '';
+}
+
 function renderTreeNodes(node: BranchTreeNode, depth: number): string {
     let html = '';
 
@@ -687,6 +693,7 @@ function renderTreeNodes(node: BranchTreeNode, depth: number): string {
             const remoteAttr = b.isRemote ? ' data-remote="true"' : '';
             html += `<div class="branch-item tree-leaf${isCurrent}${isActive}" data-branch="${escapeHtml(b.name)}"${remoteAttr} style="padding-left: ${indent + 4}px;">
                 ${BRANCH_ICON_SVG}
+                ${renderCurrentBranchIndicator(b)}
                 <span class="branch-name">${escapeHtml(child.name)}</span>
             </div>`;
         }
@@ -700,6 +707,7 @@ function renderTreeNodes(node: BranchTreeNode, depth: number): string {
             const remoteAttr = b.isRemote ? ' data-remote="true"' : '';
             html += `<div class="branch-item tree-leaf${isCurrent}${isActive}" data-branch="${escapeHtml(b.name)}"${remoteAttr} style="padding-left: ${(depth + 1) * 16 + 4}px;">
                 ${BRANCH_ICON_SVG}
+                ${renderCurrentBranchIndicator(b)}
                 <span class="branch-name">${escapeHtml(child.name)}</span>
             </div>`;
         }
@@ -748,6 +756,7 @@ function renderBranchList(local: BranchInfo[], remote: BranchInfo[]): string {
         const isCurrent = b.isCurrent ? ' current' : '';
         const isActive = selectedBranch === b.name ? ' active' : '';
         html += `<div class="branch-item${isCurrent}${isActive}" data-branch="${escapeHtml(b.name)}">
+            ${renderCurrentBranchIndicator(b)}
             <span class="branch-name">${escapeHtml(b.name)}</span>
         </div>`;
     }
@@ -1429,8 +1438,11 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .branch-item { display: flex; align-items: center; gap: 6px; padding: 3px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .branch-item:hover { background: var(--vscode-list-hoverBackground); }
 .branch-item.active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
-.branch-item.current::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--vscode-gitDecoration-addedResourceForeground, #85e89d); flex-shrink: 0; }
+.branch-item.current .branch-name { font-weight: 600; color: var(--vscode-foreground); }
 .branch-item .branch-name { overflow: hidden; text-overflow: ellipsis; }
+.current-branch-indicator { width: 14px; height: 14px; border-radius: 50%; background: var(--vscode-gitDecoration-addedResourceForeground, #3fb950); color: var(--vscode-editor-background); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.current-branch-indicator::before { content: ''; width: 6px; height: 3px; border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg) translate(1px, -1px); }
+.branch-item.active .current-branch-indicator { outline: 1px solid currentColor; outline-offset: 1px; }
 
 .branch-pane-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 4px 0; border-bottom: 1px solid var(--vscode-panel-border); margin-bottom: 4px; }
 .branch-pane-toolbar .branch-item { flex: 1; }
