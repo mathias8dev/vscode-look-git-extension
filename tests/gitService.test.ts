@@ -220,6 +220,57 @@ describe('GitService stash parsing', () => {
     });
 });
 
+describe('GitService commit operations', () => {
+    it('creates a new commit with the given message', async () => {
+        const r = repo();
+        r.write('file.txt', 'one');
+        r.commit('initial');
+        r.write('file.txt', 'two');
+        r.git(['add', 'file.txt']);
+
+        await r.service.commit('second commit');
+
+        expect(messages(r)[0]).toBe('second commit');
+    });
+
+    it('amends the last commit message', async () => {
+        const r = repo();
+        r.write('file.txt', 'one');
+        r.commit('wrong message');
+
+        await r.service.commitAmend('correct message');
+
+        expect(messages(r)[0]).toBe('correct message');
+    });
+
+    it('reports uncommitted changes when the working tree is dirty', async () => {
+        const r = repo();
+        r.write('file.txt', 'one');
+        r.commit('initial');
+        r.write('file.txt', 'two');
+
+        expect(await r.service.hasUncommittedChanges()).toBe(true);
+    });
+
+    it('reports no uncommitted changes on a clean repo', async () => {
+        const r = repo();
+        r.write('file.txt', 'one');
+        r.commit('initial');
+
+        expect(await r.service.hasUncommittedChanges()).toBe(false);
+    });
+
+    it('returns the full commit message via getCommitMessage', async () => {
+        const r = repo();
+        r.write('file.txt', 'content');
+        const hash = r.commit('specific message');
+
+        const msg = await r.service.getCommitMessage(hash);
+
+        expect(msg.trim()).toBe('specific message');
+    });
+});
+
 describe('GitService staging and working tree operations', () => {
     it('stages a specific file', async () => {
         const r = repo();
