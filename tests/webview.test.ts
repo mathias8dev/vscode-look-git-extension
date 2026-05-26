@@ -287,6 +287,94 @@ describe('Changes webview runtime behavior', () => {
         });
     });
 
+    describe('commit mode and keyboard', () => {
+        async function bootWithStagedFile(): Promise<MockVsCodeApi> {
+            const api = await bootWebview('../src/webview/changes');
+            sendWebviewMessage({
+                type: 'statusData',
+                data: {
+                    staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'staged.txt' }],
+                    unstaged: [],
+                    conflicts: [],
+                    conflictState: 'none',
+                    stashes: [],
+                },
+            });
+            return api;
+        }
+
+        it('clicking dropdown button reveals commit mode items', async () => {
+            await bootWithStagedFile();
+            click('#commit-dropdown-btn');
+            const dropdown = document.querySelector<HTMLElement>('#commit-dropdown')!;
+            expect(dropdown.style.display).not.toBe('none');
+            expect(document.querySelectorAll('.dropdown-item').length).toBeGreaterThan(0);
+        });
+
+        it('selecting amend mode updates the commit label', async () => {
+            await bootWithStagedFile();
+            click('#commit-dropdown-btn');
+            click('.dropdown-item[data-mode="amend"]');
+            expect(document.querySelector('#commit-label')!.textContent).toBe('Commit (Amend)');
+        });
+
+        it('commit in amend mode posts mode amend', async () => {
+            const api = await bootWithStagedFile();
+            click('#commit-dropdown-btn');
+            click('.dropdown-item[data-mode="amend"]');
+            input('#commit-message', 'amend this');
+            click('#commit-btn');
+            expect(api.messages).toContainEqual({ type: 'commit', message: 'amend this', mode: 'amend' });
+        });
+
+        it('commit in commitPush mode posts mode commitPush', async () => {
+            const api = await bootWithStagedFile();
+            click('#commit-dropdown-btn');
+            click('.dropdown-item[data-mode="commitPush"]');
+            input('#commit-message', 'push it');
+            click('#commit-btn');
+            expect(api.messages).toContainEqual({ type: 'commit', message: 'push it', mode: 'commitPush' });
+        });
+
+        it('commit in commitSync mode posts mode commitSync', async () => {
+            const api = await bootWithStagedFile();
+            click('#commit-dropdown-btn');
+            click('.dropdown-item[data-mode="commitSync"]');
+            input('#commit-message', 'sync it');
+            click('#commit-btn');
+            expect(api.messages).toContainEqual({ type: 'commit', message: 'sync it', mode: 'commitSync' });
+        });
+
+        it('Ctrl+Enter on commit textarea submits the commit', async () => {
+            const api = await bootWithStagedFile();
+            input('#commit-message', 'shortcut commit');
+            const textarea = document.querySelector<HTMLTextAreaElement>('#commit-message')!;
+            textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }));
+            expect(api.messages).toContainEqual({ type: 'commit', message: 'shortcut commit', mode: 'commit' });
+        });
+
+        it('commit-btn is disabled when no staged files', async () => {
+            await bootWebview('../src/webview/changes');
+            sendWebviewMessage({
+                type: 'statusData',
+                data: {
+                    staged: [],
+                    unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'file.txt' }],
+                    conflicts: [],
+                    conflictState: 'none',
+                    stashes: [],
+                },
+            });
+            input('#commit-message', 'something');
+            expect(document.querySelector<HTMLButtonElement>('#commit-btn')!.disabled).toBe(true);
+        });
+
+        it('commit-btn is disabled when message is empty even with staged files', async () => {
+            await bootWithStagedFile();
+            expect(document.querySelector<HTMLButtonElement>('#commit-btn')!.disabled).toBe(true);
+        });
+    });
+
     it('boots, announces readiness, and keeps commit text after a failed commit', async () => {
         const api = await bootWebview('../src/webview/changes');
 
