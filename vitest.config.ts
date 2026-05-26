@@ -7,6 +7,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
     test: {
         environment: 'node',
+        exclude: ['node_modules/**', 'dist/**', 'out/**', 'tests/integration/**'],
         testTimeout: 30000,
         hookTimeout: 30000,
     },

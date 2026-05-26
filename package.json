@@ -570,11 +570,11 @@
           "group": "2_amend@2"
         },
         {
-          "command": "git.commitStagedSignedOff",
+          "command": "git.commitStagedSigned",
           "group": "3_signoff@1"
         },
         {
-          "command": "git.commitAllSignedOff",
+          "command": "git.commitAllSigned",
           "group": "3_signoff@2"
         }
       ],
@@ -794,18 +794,25 @@
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "npm run check-types && node esbuild.js",
-    "check-types": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json",
+    "check-types": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json && tsc --noEmit -p tsconfig.vitest.json",
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "package": "npm run check-types && node esbuild.js --production",
     "lint": "npm run check-types",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration:compile": "tsc -p tsconfig.integration.json",
+    "test:integration": "npm run compile && npm run test:integration:compile && node ./out/test/tests/integration/runTest.js",
+    "test:all": "npm run test && npm run test:integration"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.10",
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.5.2",
     "esbuild": "^0.20.0",
+    "jsdom": "^29.1.1",
+    "mocha": "^11.7.6",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.3.0",
     "vitest": "^4.1.7"
