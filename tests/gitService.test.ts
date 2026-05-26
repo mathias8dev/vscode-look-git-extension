@@ -220,6 +220,77 @@ describe('GitService stash parsing', () => {
     });
 });
 
+describe('GitService stash lifecycle', () => {
+    it('stashes working tree changes and restores them with pop', async () => {
+        const r = repo();
+        r.write('file.txt', 'original');
+        r.commit('initial');
+        r.write('file.txt', 'modified');
+
+        await r.service.stash('my stash');
+
+        expect(await r.service.hasUncommittedChanges()).toBe(false);
+
+        await r.service.stashPop();
+
+        const status = await r.service.getStatus();
+        expect(status.unstaged).toContainEqual(expect.objectContaining({ filePath: 'file.txt' }));
+    });
+
+    it('applies a stash without removing it from the stash list', async () => {
+        const r = repo();
+        r.write('file.txt', 'original');
+        r.commit('initial');
+        r.write('file.txt', 'modified');
+        await r.service.stash();
+
+        await r.service.stashApply();
+
+        const stashesAfter = await r.service.stashList();
+        expect(stashesAfter).toHaveLength(1);
+        const status = await r.service.getStatus();
+        expect(status.unstaged).toContainEqual(expect.objectContaining({ filePath: 'file.txt' }));
+    });
+
+    it('drops a stash entry without applying it', async () => {
+        const r = repo();
+        r.write('file.txt', 'original');
+        r.commit('initial');
+        r.write('file.txt', 'modified');
+        await r.service.stash('to drop');
+
+        await r.service.stashDrop();
+
+        expect(await r.service.stashList()).toHaveLength(0);
+        expect(await r.service.hasUncommittedChanges()).toBe(false);
+    });
+
+    it('stashes only staged changes with stashStaged', async () => {
+        const r = repo();
+        r.write('file.txt', 'original');
+        r.commit('initial');
+        r.write('staged.txt', 'staged content');
+        r.write('unstaged.txt', 'unstaged content');
+        r.git(['add', 'staged.txt']);
+
+        await r.service.stashStaged('staged only');
+
+        const stashes = await r.service.stashList();
+        expect(stashes).toHaveLength(1);
+        const status = await r.service.getStatus();
+        expect(status.unstaged).toContainEqual(expect.objectContaining({ filePath: 'unstaged.txt' }));
+        expect(status.staged.map((e) => e.filePath)).not.toContain('staged.txt');
+    });
+
+    it('returns an empty stash list when there are no stashes', async () => {
+        const r = repo();
+        r.write('file.txt', 'content');
+        r.commit('initial');
+
+        expect(await r.service.stashList()).toEqual([]);
+    });
+});
+
 describe('GitService branch operations', () => {
     it('returns the current branch name', async () => {
         const r = repo();
