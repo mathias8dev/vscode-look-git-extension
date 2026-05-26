@@ -220,6 +220,81 @@ describe('GitService stash parsing', () => {
     });
 });
 
+describe('GitService cherry-pick, revert, and reset', () => {
+    it('cherry-picks a commit from another branch onto the current branch', async () => {
+        const r = repo();
+        r.write('base.txt', 'base');
+        r.commit('base');
+        r.git(['checkout', '-q', '-b', 'feature']);
+        r.write('feature.txt', 'feature');
+        const featureHash = r.commit('add feature');
+        r.git(['checkout', '-q', 'main']);
+
+        await r.service.cherryPick(featureHash);
+
+        expect(messages(r)[0]).toBe('add feature');
+        expect(r.git(['show', 'HEAD:feature.txt'])).toBe('feature');
+    });
+
+    it('reverts a commit by creating an inverse commit', async () => {
+        const r = repo();
+        r.write('file.txt', 'one');
+        r.commit('initial');
+        r.write('file.txt', 'two');
+        const toRevert = r.commit('change');
+
+        await r.service.revert(toRevert);
+
+        expect(messages(r)[0]).toMatch(/[Rr]evert/);
+        expect(r.git(['show', 'HEAD:file.txt'])).toBe('one');
+    });
+
+    it('resets soft: keeps changes staged', async () => {
+        const r = repo();
+        r.write('file.txt', 'one');
+        const firstHash = r.commit('first');
+        r.write('file.txt', 'two');
+        r.commit('second');
+
+        await r.service.reset(firstHash, 'soft');
+
+        const status = await r.service.getStatus();
+        expect(status.staged).toContainEqual(expect.objectContaining({ filePath: 'file.txt' }));
+        expect(messages(r)).toEqual(['first']);
+    });
+
+    it('resets mixed: keeps changes unstaged', async () => {
+        const r = repo();
+        r.write('file.txt', 'one');
+        const firstHash = r.commit('first');
+        r.write('file.txt', 'two');
+        r.commit('second');
+
+        await r.service.reset(firstHash, 'mixed');
+
+        const status = await r.service.getStatus();
+        expect(status.staged).toEqual([]);
+        expect(status.unstaged).toContainEqual(expect.objectContaining({ filePath: 'file.txt' }));
+        expect(messages(r)).toEqual(['first']);
+    });
+
+    it('resets hard: discards all changes', async () => {
+        const r = repo();
+        r.write('file.txt', 'one');
+        const firstHash = r.commit('first');
+        r.write('file.txt', 'two');
+        r.commit('second');
+
+        await r.service.reset(firstHash, 'hard');
+
+        const status = await r.service.getStatus();
+        expect(status.staged).toEqual([]);
+        expect(status.unstaged).toEqual([]);
+        expect(messages(r)).toEqual(['first']);
+        expect(r.git(['show', 'HEAD:file.txt'])).toBe('one');
+    });
+});
+
 describe('GitService merge and rebase conflict handling', () => {
     it('detects an in-progress merge via isMergeInProgress', async () => {
         const r = repo();
