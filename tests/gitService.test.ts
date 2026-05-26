@@ -220,6 +220,84 @@ describe('GitService stash parsing', () => {
     });
 });
 
+describe('GitService branch operations', () => {
+    it('returns the current branch name', async () => {
+        const r = repo();
+        r.write('file.txt', 'content');
+        r.commit('initial');
+
+        expect(await r.service.getCurrentBranch()).toBe('main');
+    });
+
+    it('checks out an existing branch', async () => {
+        const r = repo();
+        r.write('file.txt', 'content');
+        r.commit('initial');
+        r.git(['branch', 'other']);
+
+        await r.service.checkout('other');
+
+        expect(await r.service.getCurrentBranch()).toBe('other');
+    });
+
+    it('creates and checks out a new branch from a commit', async () => {
+        const r = repo();
+        r.write('file.txt', 'content');
+        const hash = r.commit('initial');
+
+        await r.service.checkoutNewBranch('feature/new', hash);
+
+        expect(await r.service.getCurrentBranch()).toBe('feature/new');
+    });
+
+    it('force-deletes a local branch', async () => {
+        const r = repo();
+        r.write('file.txt', 'content');
+        r.commit('initial');
+        r.git(['branch', 'to-delete']);
+
+        await r.service.deleteBranch('to-delete', true);
+
+        const branches = await r.service.getAllBranches();
+        expect(branches.every((b) => b.name !== 'to-delete')).toBe(true);
+    });
+
+    it('renames a local branch', async () => {
+        const r = repo();
+        r.write('file.txt', 'content');
+        r.commit('initial');
+        r.git(['branch', 'old-name']);
+
+        await r.service.renameBranch('old-name', 'new-name');
+
+        const branches = await r.service.getAllBranches();
+        expect(branches.some((b) => b.name === 'new-name')).toBe(true);
+        expect(branches.every((b) => b.name !== 'old-name')).toBe(true);
+    });
+
+    it('marks only the current branch as isCurrent', async () => {
+        const r = repo();
+        r.write('file.txt', 'content');
+        r.commit('initial');
+        r.git(['branch', 'other']);
+
+        const branches = await r.service.getAllBranches();
+        const main = branches.find((b) => b.name === 'main');
+        const other = branches.find((b) => b.name === 'other');
+
+        expect(main?.isCurrent).toBe(true);
+        expect(other?.isCurrent).toBe(false);
+    });
+
+    it('returns an empty array for getRemotes when no remotes exist', async () => {
+        const r = repo();
+        r.write('file.txt', 'content');
+        r.commit('initial');
+
+        expect(await r.service.getRemotes()).toEqual([]);
+    });
+});
+
 describe('GitService commit operations', () => {
     it('creates a new commit with the given message', async () => {
         const r = repo();
