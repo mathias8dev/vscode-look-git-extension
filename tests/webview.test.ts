@@ -162,6 +162,47 @@ describe('Changes webview runtime behavior', () => {
         });
     });
 
+    describe('merge and rebase controls', () => {
+        async function bootWithConflict(conflictState: 'merge' | 'rebase'): Promise<MockVsCodeApi> {
+            const api = await bootWebview('../src/webview/changes');
+            sendWebviewMessage({
+                type: 'statusData',
+                data: {
+                    staged: [],
+                    unstaged: [],
+                    conflicts: [{ indexStatus: 'U', workTreeStatus: 'U', filePath: 'conflict.txt' }],
+                    conflictState,
+                    stashes: [],
+                },
+            });
+            return api;
+        }
+
+        it('continue button posts continueOp with conflictState merge', async () => {
+            const api = await bootWithConflict('merge');
+            click('#continue-op-btn');
+            expect(api.messages).toContainEqual({ type: 'continueOp', conflictState: 'merge' });
+        });
+
+        it('abort button posts abortOp with conflictState merge', async () => {
+            const api = await bootWithConflict('merge');
+            click('#abort-op-btn');
+            expect(api.messages).toContainEqual({ type: 'abortOp', conflictState: 'merge' });
+        });
+
+        it('continue button posts continueOp with conflictState rebase', async () => {
+            const api = await bootWithConflict('rebase');
+            click('#continue-op-btn');
+            expect(api.messages).toContainEqual({ type: 'continueOp', conflictState: 'rebase' });
+        });
+
+        it('abort button posts abortOp with conflictState rebase', async () => {
+            const api = await bootWithConflict('rebase');
+            click('#abort-op-btn');
+            expect(api.messages).toContainEqual({ type: 'abortOp', conflictState: 'rebase' });
+        });
+    });
+
     it('boots, announces readiness, and keeps commit text after a failed commit', async () => {
         const api = await bootWebview('../src/webview/changes');
 
