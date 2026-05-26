@@ -45,6 +45,97 @@ function statusEntry(filePath: string): GitStatusEntry {
 describe('ChangesViewProvider webview messages', () => {
     beforeEach(resetVscodeMock);
 
+    describe('discardFile and abortOp with confirmation', () => {
+        function baseService(overrides: Record<string, unknown> = {}) {
+            return {
+                discardFile: vi.fn(async () => ''),
+                unstageAll: vi.fn(async () => ''),
+                mergeAbort: vi.fn(async () => ''),
+                rebaseAbort: vi.fn(async () => ''),
+                stashDrop: vi.fn(async () => ''),
+                getStatus: vi.fn(async () => ({
+                    staged: [], unstaged: [], conflicts: [], conflictState: 'none',
+                })),
+                stashList: vi.fn(async () => []),
+                ...overrides,
+            };
+        }
+
+        it('discardFile confirmed calls service.discardFile', async () => {
+            (vscode.window as any).warningChoice = 'Discard';
+            const service = baseService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'discardFile', filePath: 'unstaged.ts' });
+            expect(service.discardFile).toHaveBeenCalledWith('unstaged.ts');
+        });
+
+        it('discardFile cancelled does not call service.discardFile', async () => {
+            (vscode.window as any).warningChoice = undefined;
+            const service = baseService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'discardFile', filePath: 'unstaged.ts' });
+            expect(service.discardFile).not.toHaveBeenCalled();
+        });
+
+        it('discardAll cancelled does not call unstageAll', async () => {
+            (vscode.window as any).warningChoice = undefined;
+            const service = baseService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'discardAll' });
+            expect(service.unstageAll).not.toHaveBeenCalled();
+        });
+
+        it('abortOp merge confirmed calls mergeAbort and shows info', async () => {
+            (vscode.window as any).warningChoice = 'Abort';
+            const service = baseService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'abortOp', conflictState: 'merge' });
+            expect(service.mergeAbort).toHaveBeenCalled();
+            expect((vscode.window as any).infoMessages).toContainEqual('Merge aborted.');
+        });
+
+        it('abortOp merge cancelled does not call mergeAbort', async () => {
+            (vscode.window as any).warningChoice = undefined;
+            const service = baseService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'abortOp', conflictState: 'merge' });
+            expect(service.mergeAbort).not.toHaveBeenCalled();
+        });
+
+        it('abortOp rebase confirmed calls rebaseAbort and shows info', async () => {
+            (vscode.window as any).warningChoice = 'Abort';
+            const service = baseService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'abortOp', conflictState: 'rebase' });
+            expect(service.rebaseAbort).toHaveBeenCalled();
+            expect((vscode.window as any).infoMessages).toContainEqual('Rebase aborted.');
+        });
+
+        it('stashDrop confirmed calls service.stashDrop', async () => {
+            (vscode.window as any).warningChoice = 'Drop';
+            const service = baseService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'stashDrop', index: 0 });
+            expect(service.stashDrop).toHaveBeenCalledWith(0);
+        });
+
+        it('stashDrop cancelled does not call service.stashDrop', async () => {
+            (vscode.window as any).warningChoice = undefined;
+            const service = baseService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'stashDrop', index: 0 });
+            expect(service.stashDrop).not.toHaveBeenCalled();
+        });
+    });
+
     it('discardAll unstages before discarding every remaining unstaged file', async () => {
         const calls: string[] = [];
         const service = {
