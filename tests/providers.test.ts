@@ -627,6 +627,135 @@ describe('GraphViewProvider webview messages', () => {
         });
     });
 
+    describe('executeBranchCommand all cases', () => {
+        function makeGraphService(overrides: Record<string, unknown> = {}) {
+            return {
+                getAllBranches: vi.fn(async () => []),
+                getAllTags: vi.fn(async () => []),
+                getGraphLog: vi.fn(async () => []),
+                getCurrentBranch: vi.fn(async () => 'main'),
+                getUserName: vi.fn(async () => 'Test User'),
+                checkout: vi.fn(async () => ''),
+                checkoutNewBranch: vi.fn(async () => ''),
+                deleteBranch: vi.fn(async () => ''),
+                deleteRemoteBranch: vi.fn(async () => ''),
+                renameBranch: vi.fn(async () => ''),
+                pushBranch: vi.fn(async () => ''),
+                fetchBranch: vi.fn(async () => ''),
+                rebase: vi.fn(async () => ''),
+                merge: vi.fn(async () => ''),
+                getRemotes: vi.fn(async () => ['origin']),
+                ...overrides,
+            };
+        }
+
+        async function handle(service: ReturnType<typeof makeGraphService>, payload: object): Promise<void> {
+            const provider = new GraphViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+            (provider as any).view = view;
+            await (provider as any).handleMessage({ type: 'executeBranchCommand', ...payload });
+        }
+
+        it('checkout calls service.checkout', async () => {
+            const service = makeGraphService();
+            await handle(service, { command: 'checkout', branch: 'feature', isRemote: false });
+            expect(service.checkout).toHaveBeenCalledWith('feature');
+        });
+
+        it('newBranchFrom confirmed calls checkoutNewBranch', async () => {
+            (vscode.window as any).inputBoxValue = 'new-feat';
+            const service = makeGraphService();
+            await handle(service, { command: 'newBranchFrom', branch: 'feature', isRemote: false });
+            expect(service.checkoutNewBranch).toHaveBeenCalledWith('new-feat', 'feature');
+        });
+
+        it('newBranchFrom cancelled does not call checkoutNewBranch', async () => {
+            (vscode.window as any).inputBoxValue = undefined;
+            const service = makeGraphService();
+            await handle(service, { command: 'newBranchFrom', branch: 'feature', isRemote: false });
+            expect(service.checkoutNewBranch).not.toHaveBeenCalled();
+        });
+
+        it('checkoutRebaseOnto calls getCurrentBranch then checkout then rebase', async () => {
+            const calls: string[] = [];
+            const service = makeGraphService({
+                getCurrentBranch: vi.fn(async () => { calls.push('getCurrentBranch'); return 'main'; }),
+                checkout: vi.fn(async () => { calls.push('checkout'); return ''; }),
+                rebase: vi.fn(async () => { calls.push('rebase'); return ''; }),
+            });
+            await handle(service, { command: 'checkoutRebaseOnto', branch: 'feature', isRemote: true });
+            expect(calls.slice(0, 3)).toEqual(['getCurrentBranch', 'checkout', 'rebase']);
+            expect(service.rebase).toHaveBeenCalledWith('main');
+        });
+
+        it('delete local branch confirmed calls deleteBranch', async () => {
+            (vscode.window as any).warningChoice = 'Delete';
+            const service = makeGraphService();
+            await handle(service, { command: 'delete', branch: 'feature', isRemote: false });
+            expect(service.deleteBranch).toHaveBeenCalledWith('feature');
+        });
+
+        it('delete local branch cancelled does not call deleteBranch', async () => {
+            (vscode.window as any).warningChoice = undefined;
+            const service = makeGraphService();
+            await handle(service, { command: 'delete', branch: 'feature', isRemote: false });
+            expect(service.deleteBranch).not.toHaveBeenCalled();
+        });
+
+        it('delete remote branch confirmed calls deleteRemoteBranch', async () => {
+            (vscode.window as any).warningChoice = 'Delete';
+            const service = makeGraphService();
+            await handle(service, { command: 'delete', branch: 'origin/feature', isRemote: true });
+            expect(service.deleteRemoteBranch).toHaveBeenCalledWith('origin', 'feature');
+        });
+
+        it('rename confirmed calls renameBranch', async () => {
+            (vscode.window as any).inputBoxValue = 'new-name';
+            const service = makeGraphService();
+            await handle(service, { command: 'rename', branch: 'old-name', isRemote: false });
+            expect(service.renameBranch).toHaveBeenCalledWith('old-name', 'new-name');
+        });
+
+        it('rename cancelled does not call renameBranch', async () => {
+            (vscode.window as any).inputBoxValue = undefined;
+            const service = makeGraphService();
+            await handle(service, { command: 'rename', branch: 'old-name', isRemote: false });
+            expect(service.renameBranch).not.toHaveBeenCalled();
+        });
+
+        it('push with single remote calls pushBranch', async () => {
+            const service = makeGraphService();
+            await handle(service, { command: 'push', branch: 'feature', isRemote: false });
+            expect(service.pushBranch).toHaveBeenCalledWith('origin', 'feature');
+        });
+
+        it('update calls fetchBranch', async () => {
+            const service = makeGraphService();
+            await handle(service, { command: 'update', branch: 'feature', isRemote: false });
+            expect(service.fetchBranch).toHaveBeenCalledWith('origin', 'feature');
+        });
+
+        it('rebaseOnto calls service.rebase', async () => {
+            const service = makeGraphService();
+            await handle(service, { command: 'rebaseOnto', branch: 'feature', isRemote: false });
+            expect(service.rebase).toHaveBeenCalledWith('feature');
+        });
+
+        it('mergeInto calls service.merge', async () => {
+            const service = makeGraphService();
+            await handle(service, { command: 'mergeInto', branch: 'feature', isRemote: false });
+            expect(service.merge).toHaveBeenCalledWith('feature');
+        });
+
+        it('branch operation error shows error message', async () => {
+            const service = makeGraphService({
+                checkout: vi.fn(async () => { throw new Error('branch not found'); }),
+            });
+            await handle(service, { command: 'checkout', branch: 'missing', isRemote: false });
+            expect((vscode.window as any).errorMessages).toContainEqual('Branch operation failed: branch not found');
+        });
+    });
+
     it('rejects unlisted commands from the graph webview', async () => {
         const service = {
             getCommit: vi.fn(),
