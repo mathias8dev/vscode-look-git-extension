@@ -11,6 +11,8 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     private readonly gitService: GitService;
     private readonly extensionUri: vscode.Uri;
     private viewAsTree = false;
+    private pendingRefresh = false;
+    private refreshPromise?: Promise<void>;
 
     constructor(extensionUri: vscode.Uri, gitService: GitService) {
         this.extensionUri = extensionUri;
@@ -44,7 +46,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         );
 
         webviewView.onDidChangeVisibility(() => {
-            if (webviewView.visible) {
+            if (webviewView.visible && this.pendingRefresh) {
                 this.refresh();
             }
         });
@@ -53,6 +55,34 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     }
 
     public async refresh(): Promise<void> {
+        if (!this.view) { return; }
+        this.pendingRefresh = true;
+
+        if (!this.view.visible) {
+            return;
+        }
+
+        if (this.refreshPromise) {
+            await this.refreshPromise;
+            return;
+        }
+
+        this.refreshPromise = this.drainRefreshQueue();
+        try {
+            await this.refreshPromise;
+        } finally {
+            this.refreshPromise = undefined;
+        }
+    }
+
+    private async drainRefreshQueue(): Promise<void> {
+        while (this.view?.visible && this.pendingRefresh) {
+            this.pendingRefresh = false;
+            await this.postStatusData();
+        }
+    }
+
+    private async postStatusData(): Promise<void> {
         if (!this.view) { return; }
         try {
             const [status, stashes] = await Promise.all([

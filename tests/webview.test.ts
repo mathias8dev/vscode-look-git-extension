@@ -573,7 +573,10 @@ describe('Graph webview runtime behavior', () => {
         input('#search-input', 'visible');
         expect([...document.querySelectorAll('.graph-row')]).toHaveLength(1);
 
+        const renderedRow = document.querySelector('.graph-row');
         click('.graph-row');
+        expect(document.querySelector('.graph-row')).toBe(renderedRow);
+        expect(renderedRow?.classList.contains('selected')).toBe(true);
         expect(api.messages).toContainEqual({ type: 'getCommitDetails', hash: 'abc123456789' });
 
         sendWebviewMessage({

@@ -32,6 +32,8 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     private graphHasMore = true;
     private graphLoading = false;
     private graphRequestSequence = 0;
+    private pendingRefresh = false;
+    private refreshPromise?: Promise<void>;
 
     constructor(extensionUri: vscode.Uri, gitService: GitService) {
         this.extensionUri = extensionUri;
@@ -60,7 +62,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         );
 
         webviewView.onDidChangeVisibility(() => {
-            if (webviewView.visible) {
+            if (webviewView.visible && this.pendingRefresh) {
                 this.refresh();
             }
         });
@@ -69,13 +71,36 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     }
 
     public async refresh(filterBranches?: string[], pathFilter?: string): Promise<void> {
-        if (!this.view) { return; }
         if (arguments.length > 0) {
             this.filterBranches = filterBranches;
             this.pathFilter = pathFilter;
             this.resetGraphPaging();
         }
-        await this.postGraphData();
+        if (!this.view) { return; }
+        this.pendingRefresh = true;
+
+        if (!this.view.visible) {
+            return;
+        }
+
+        if (this.refreshPromise) {
+            await this.refreshPromise;
+            return;
+        }
+
+        this.refreshPromise = this.drainRefreshQueue();
+        try {
+            await this.refreshPromise;
+        } finally {
+            this.refreshPromise = undefined;
+        }
+    }
+
+    private async drainRefreshQueue(): Promise<void> {
+        while (this.view?.visible && this.pendingRefresh) {
+            this.pendingRefresh = false;
+            await this.postGraphData();
+        }
     }
 
     private async postGraphData(): Promise<boolean> {
@@ -195,10 +220,16 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         const previousLimit = this.loadedGraphLimit;
         this.graphLoading = true;
         this.loadedGraphLimit += this.graphPageSize;
+        this.graphRequestSequence++;
 
         try {
+            if (this.refreshPromise) {
+                this.pendingRefresh = true;
+                await this.refreshPromise;
+                return;
+            }
             const posted = await this.postGraphData();
-            if (!posted) {
+            if (!posted && this.loadedGraphLimit === previousLimit + this.graphPageSize) {
                 this.loadedGraphLimit = previousLimit;
             }
         } finally {
@@ -209,6 +240,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     private resetGraphPaging(): void {
         this.loadedGraphLimit = this.graphPageSize;
         this.graphHasMore = true;
+        this.graphRequestSequence++;
     }
 
     private async handleBranchCommand(command: string, branch: string, isRemote: boolean): Promise<void> {

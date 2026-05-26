@@ -95,7 +95,7 @@ describe('ChangesViewProvider webview messages', () => {
             expect(view.badge).toEqual({ value: 2, tooltip: '2 changes' });
         });
 
-        it('visible webviews refresh through the registered visibility handler', async () => {
+        it('defers expensive status refresh work while the changes webview is hidden', async () => {
             const service = {
                 getStatus: vi.fn(async () => ({
                     staged: [],
@@ -107,11 +107,19 @@ describe('ChangesViewProvider webview messages', () => {
             };
             const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
             const view = makeWebviewView();
+            view.visible = false;
 
             provider.resolveWebviewView(view as any, {} as any, {} as any);
-            await vi.waitFor(() => expect(service.getStatus).toHaveBeenCalledTimes(1));
+            await Promise.resolve();
+
+            expect(service.getStatus).not.toHaveBeenCalled();
+            expect(service.stashList).not.toHaveBeenCalled();
+
+            view.visible = true;
             view.visibilityHandler?.();
-            await vi.waitFor(() => expect(service.getStatus).toHaveBeenCalledTimes(2));
+
+            await vi.waitFor(() => expect(service.getStatus).toHaveBeenCalledTimes(1));
+            expect(service.stashList).toHaveBeenCalledTimes(1);
         });
     });
 
@@ -743,6 +751,52 @@ describe('GraphViewProvider webview messages', () => {
                     }),
                 }));
             });
+        });
+
+        it('defers graph Git log refreshes while the graph webview is hidden', async () => {
+            const service = {
+                getAllBranches: vi.fn(async () => [{ name: 'main', isRemote: false, isCurrent: true, hash: 'abc1234' }]),
+                getAllTags: vi.fn(async () => []),
+                getGraphLog: vi.fn(async () => []),
+                getCurrentBranch: vi.fn(async () => 'main'),
+                getUserName: vi.fn(async () => 'Author'),
+            };
+            const provider = new GraphViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+            view.visible = false;
+
+            provider.resolveWebviewView(view as any, {} as any, {} as any);
+            await Promise.resolve();
+
+            expect(service.getGraphLog).not.toHaveBeenCalled();
+            expect(service.getAllBranches).not.toHaveBeenCalled();
+
+            view.visible = true;
+            view.visibilityHandler?.();
+
+            await vi.waitFor(() => expect(service.getGraphLog).toHaveBeenCalledTimes(1));
+            expect(service.getAllBranches).toHaveBeenCalledTimes(1);
+        });
+
+        it('derives current branch from branch metadata without an extra git lookup', async () => {
+            const service = {
+                getAllBranches: vi.fn(async () => [{ name: 'main', isRemote: false, isCurrent: true, hash: 'abc1234' }]),
+                getAllTags: vi.fn(async () => []),
+                getGraphLog: vi.fn(async () => []),
+                getCurrentBranch: vi.fn(async () => 'main'),
+                getUserName: vi.fn(async () => 'Author'),
+            };
+            const provider = new GraphViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+            (provider as any).view = view;
+
+            await provider.refresh();
+
+            expect(service.getCurrentBranch).not.toHaveBeenCalled();
+            expect(view.messages.at(-1)).toEqual(expect.objectContaining({
+                type: 'graphData',
+                data: expect.objectContaining({ currentBranch: 'main' }),
+            }));
         });
     });
 

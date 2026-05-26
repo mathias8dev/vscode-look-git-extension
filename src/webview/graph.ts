@@ -952,7 +952,7 @@ function renderGraphTable(): void {
 
         el.addEventListener('click', () => {
             selectedCommitHash = hash;
-            renderGraphTable(); // re-highlight
+            markSelectedGraphRow(hash);
             vscode.postMessage({ type: 'getCommitDetails', hash });
         });
 
@@ -960,12 +960,25 @@ function renderGraphTable(): void {
             e.preventDefault();
             const me = e as MouseEvent;
             selectedCommitHash = hash;
-            renderGraphTable();
+            markSelectedGraphRow(hash);
             showCommitContextMenu(me.clientX, me.clientY, hash, (command, commitHash) => {
                 vscode.postMessage({ type: 'executeCommand', command, commitHash });
             });
         });
     });
+}
+
+function markSelectedGraphRow(hash: string): void {
+    const pane = document.getElementById('graph-pane');
+    if (!pane) { return; }
+
+    pane.querySelector('.graph-row.selected')?.classList.remove('selected');
+    for (const row of Array.from(pane.querySelectorAll<HTMLElement>('.graph-row'))) {
+        if (row.dataset.hash === hash) {
+            row.classList.add('selected');
+            break;
+        }
+    }
 }
 
 function observeGraphSentinel(root: HTMLElement): void {

@@ -18,14 +18,14 @@ export class GraphDataProvider {
 
     public async getGraphData(maxCount: number = 300, filterBranches?: string[], pathFilter?: string): Promise<GraphData> {
         const requestedCount = Math.max(1, maxCount);
-        const [branches, tags, rawCommits, currentBranch, currentUser] = await Promise.all([
+        const [branches, tags, rawCommits, currentUser] = await Promise.all([
             this.gitService.getAllBranches(),
             this.gitService.getAllTags(),
             this.gitService.getGraphLog(requestedCount + 1, filterBranches, pathFilter),
-            this.gitService.getCurrentBranch(),
             this.gitService.getUserName(),
         ]);
 
+        const currentBranch = branches.find((branch) => branch.isCurrent)?.name ?? 'HEAD';
         const hasMore = rawCommits.length > requestedCount;
         const commits = rawCommits.slice(0, requestedCount);
         const rows = assignLanes(commits);

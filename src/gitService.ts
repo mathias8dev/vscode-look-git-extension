@@ -1,4 +1,5 @@
 import { execFile } from 'child_process';
+import * as fsSync from 'fs';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
@@ -320,13 +321,9 @@ export class GitService {
 
     public async isRebaseInProgress(): Promise<boolean> {
         try {
-            // Check for rebase-merge or rebase-apply directories
-            const output = await this.exec(['rev-parse', '--git-dir']);
-            const fs = await import('fs');
-            const path = await import('path');
-            const gitDir = path.resolve(this.cwd, output);
-            return fs.existsSync(path.join(gitDir, 'rebase-merge'))
-                || fs.existsSync(path.join(gitDir, 'rebase-apply'));
+            const gitDir = await this.getGitDir();
+            return fsSync.existsSync(path.join(gitDir, 'rebase-merge'))
+                || fsSync.existsSync(path.join(gitDir, 'rebase-apply'));
         } catch {
             return false;
         }
@@ -334,14 +331,16 @@ export class GitService {
 
     public async isMergeInProgress(): Promise<boolean> {
         try {
-            const output = await this.exec(['rev-parse', '--git-dir']);
-            const fs = await import('fs');
-            const path = await import('path');
-            const gitDir = path.resolve(this.cwd, output);
-            return fs.existsSync(path.join(gitDir, 'MERGE_HEAD'));
+            const gitDir = await this.getGitDir();
+            return fsSync.existsSync(path.join(gitDir, 'MERGE_HEAD'));
         } catch {
             return false;
         }
+    }
+
+    private async getGitDir(): Promise<string> {
+        const output = await this.exec(['rev-parse', '--git-dir']);
+        return path.resolve(this.cwd, output);
     }
 
     public async findOldestCommit(commitHashes: string[]): Promise<string> {
@@ -677,12 +676,20 @@ export class GitService {
     }
 
     private async detectConflictState(): Promise<'none' | 'merge' | 'rebase'> {
-        const [isMerge, isRebase] = await Promise.all([
-            this.isMergeInProgress(),
-            this.isRebaseInProgress(),
-        ]);
-        if (isMerge) { return 'merge'; }
-        if (isRebase) { return 'rebase'; }
+        try {
+            const gitDir = await this.getGitDir();
+            if (fsSync.existsSync(path.join(gitDir, 'MERGE_HEAD'))) {
+                return 'merge';
+            }
+            if (
+                fsSync.existsSync(path.join(gitDir, 'rebase-merge'))
+                || fsSync.existsSync(path.join(gitDir, 'rebase-apply'))
+            ) {
+                return 'rebase';
+            }
+        } catch {
+            return 'none';
+        }
         return 'none';
     }
 
