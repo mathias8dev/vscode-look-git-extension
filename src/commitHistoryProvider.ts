@@ -12,6 +12,8 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
     private commits: GitCommitInfo[] = [];
     private pageSize: number;
     private hasMore: boolean = true;
+    private loadMorePromise?: Promise<void>;
+    private loadMoreScheduled = false;
     private viewAsTree = true;
 
     constructor(private gitService: GitService) {
@@ -32,6 +34,19 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
     }
 
     public async loadMore(): Promise<void> {
+        if (this.loadMorePromise) {
+            return this.loadMorePromise;
+        }
+
+        this.loadMorePromise = this.loadMorePage();
+        try {
+            await this.loadMorePromise;
+        } finally {
+            this.loadMorePromise = undefined;
+        }
+    }
+
+    private async loadMorePage(): Promise<void> {
         const skip = this.commits.length;
         const newCommits = await this.gitService.getLog(this.pageSize, skip);
         this.commits.push(...newCommits);
@@ -41,6 +56,13 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
 
     getTreeItem(element: TreeItem): vscode.TreeItem {
         return element;
+    }
+
+    resolveTreeItem(item: vscode.TreeItem, element: TreeItem, _token: vscode.CancellationToken): vscode.ProviderResult<vscode.TreeItem> {
+        if (element instanceof LoadMoreItem) {
+            this.scheduleLoadMore();
+        }
+        return item;
     }
 
     async getChildren(element?: TreeItem): Promise<TreeItem[]> {
@@ -101,6 +123,21 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
         }
 
         return items;
+    }
+
+    private scheduleLoadMore(): void {
+        if (!this.hasMore || this.loadMorePromise || this.loadMoreScheduled) {
+            return;
+        }
+
+        this.loadMoreScheduled = true;
+        setTimeout(() => {
+            this.loadMoreScheduled = false;
+            void this.loadMore().catch((error) => {
+                const msg = error instanceof Error ? error.message : String(error);
+                console.error(`Look Git: failed to load more commits: ${msg}`);
+            });
+        }, 0);
     }
 
     private folderNodeToItems(

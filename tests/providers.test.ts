@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { ChangesViewProvider } from '../src/changesView/changesProvider';
+import { CommitHistoryProvider } from '../src/commitHistoryProvider';
+import { LoadMoreItem } from '../src/commitItem';
 import { GraphViewProvider } from '../src/graphView/graphPanel';
 import type { GitCommitInfo, GitStatusEntry } from '../src/gitService';
 
 function resetVscodeMock(): void {
     (vscode.commands as any).reset();
     (vscode.window as any).reset();
+    (vscode.workspace as any).reset?.();
 }
 
 function makeWebviewView() {
@@ -637,8 +640,66 @@ describe('ChangesViewProvider webview messages', () => {
     });
 });
 
+describe('CommitHistoryProvider pagination', () => {
+    beforeEach(resetVscodeMock);
+
+    function commit(index: number): GitCommitInfo {
+        const hash = index.toString(16).padStart(40, '0');
+        return {
+            hash,
+            shortHash: hash.substring(0, 7),
+            message: `commit ${index}`,
+            authorName: 'Author',
+            authorEmail: 'author@example.com',
+            authorDate: new Date('2024-01-01T00:00:00Z'),
+            parentHashes: [],
+        };
+    }
+
+    it('loads the next page when VS Code resolves the load-more tree item', async () => {
+        const commits = Array.from({ length: 75 }, (_, index) => commit(index));
+        const service = {
+            getLog: vi.fn(async (limit: number, skip: number) => commits.slice(skip, skip + limit)),
+            getCommitFiles: vi.fn(async () => []),
+            getWorkingDirectory: vi.fn(() => '/workspace'),
+        };
+        const provider = new CommitHistoryProvider(service as any);
+
+        const initialItems = await provider.getChildren();
+        const loadMoreItem = initialItems.at(-1);
+
+        expect(service.getLog).toHaveBeenCalledWith(50, 0);
+        expect(initialItems).toHaveLength(51);
+        expect(loadMoreItem).toBeInstanceOf(LoadMoreItem);
+
+        provider.resolveTreeItem(loadMoreItem as any, loadMoreItem as any, {} as any);
+        provider.resolveTreeItem(loadMoreItem as any, loadMoreItem as any, {} as any);
+
+        await vi.waitFor(() => expect(service.getLog).toHaveBeenCalledTimes(2));
+        expect(service.getLog).toHaveBeenNthCalledWith(2, 50, 50);
+
+        const allItems = await provider.getChildren();
+        expect(allItems).toHaveLength(75);
+        expect(allItems.some((item) => item instanceof LoadMoreItem)).toBe(false);
+    });
+});
+
 describe('GraphViewProvider webview messages', () => {
     beforeEach(resetVscodeMock);
+
+    function graphCommit(index: number): GitCommitInfo & { refs: string[] } {
+        const hash = index.toString(16).padStart(40, '0');
+        return {
+            hash,
+            shortHash: hash.substring(0, 7),
+            message: `graph commit ${index}`,
+            authorName: 'Author',
+            authorEmail: 'author@example.com',
+            authorDate: new Date('2024-01-01T00:00:00Z'),
+            parentHashes: [],
+            refs: [],
+        };
+    }
 
     describe('webview lifecycle', () => {
         it('resolveWebviewView wires graph html, message handling, and initial graph data', async () => {
@@ -965,7 +1026,33 @@ describe('GraphViewProvider webview messages', () => {
         await provider.refresh(['main'], 'src/index.ts');
         await provider.refresh();
 
-        expect(service.getGraphLog).toHaveBeenNthCalledWith(1, 300, ['main'], 'src/index.ts');
-        expect(service.getGraphLog).toHaveBeenNthCalledWith(2, 300, ['main'], 'src/index.ts');
+        expect(service.getGraphLog).toHaveBeenNthCalledWith(1, 301, ['main'], 'src/index.ts');
+        expect(service.getGraphLog).toHaveBeenNthCalledWith(2, 301, ['main'], 'src/index.ts');
+    });
+
+    it('loads more graph data by increasing the commit window and keeping filters', async () => {
+        const service = {
+            getGraphLog: vi.fn(async (limit: number) => Array.from({ length: limit }, (_, index) => graphCommit(index))),
+            getAllBranches: vi.fn(async () => []),
+            getAllTags: vi.fn(async () => []),
+            getCurrentBranch: vi.fn(async () => 'main'),
+            getUserName: vi.fn(async () => 'Test User'),
+        };
+        const provider = new GraphViewProvider(vscode.Uri.file('/ext') as any, service as any);
+        const view = makeWebviewView();
+        (provider as any).view = view;
+
+        await provider.refresh(['main'], 'src/index.ts');
+        await (provider as any).handleMessage({ type: 'loadMoreGraph' });
+
+        expect(service.getGraphLog).toHaveBeenNthCalledWith(1, 301, ['main'], 'src/index.ts');
+        expect(service.getGraphLog).toHaveBeenNthCalledWith(2, 601, ['main'], 'src/index.ts');
+        expect(view.messages.at(-1)).toEqual(expect.objectContaining({
+            type: 'graphData',
+            data: expect.objectContaining({
+                loadedCount: 600,
+                hasMore: true,
+            }),
+        }));
     });
 });

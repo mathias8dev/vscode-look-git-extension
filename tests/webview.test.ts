@@ -545,6 +545,10 @@ function graphRow(hash: string, message: string): GraphRow {
 }
 
 describe('Graph webview runtime behavior', () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+    });
+
     it('filters, selects commits, opens details, and forwards parent-aware diff messages', async () => {
         const api = await bootWebview(GRAPH_WEBVIEW_MODULE);
         const rows = [
@@ -593,6 +597,92 @@ describe('Graph webview runtime behavior', () => {
             commitHash: 'abc123456789',
             status: 'R',
         });
+    });
+
+    it('requests the next graph page when the scroll sentinel enters the viewport', async () => {
+        const originalIntersectionObserver = (globalThis as any).IntersectionObserver;
+        const observers: Array<{
+            trigger(isIntersecting?: boolean): void;
+        }> = [];
+
+        class MockIntersectionObserver {
+            private observed: Element | null = null;
+
+            constructor(private callback: IntersectionObserverCallback) {
+                observers.push(this);
+            }
+
+            observe(element: Element): void {
+                this.observed = element;
+            }
+
+            disconnect(): void {
+                this.observed = null;
+            }
+
+            unobserve(): void {
+                this.observed = null;
+            }
+
+            trigger(isIntersecting = true): void {
+                this.callback([{
+                    isIntersecting,
+                    target: this.observed,
+                } as IntersectionObserverEntry], this as unknown as IntersectionObserver);
+            }
+        }
+
+        (globalThis as any).IntersectionObserver = MockIntersectionObserver;
+        try {
+            const api = await bootWebview(GRAPH_WEBVIEW_MODULE);
+            sendWebviewMessage({
+                type: 'graphData',
+                data: {
+                    branches: [],
+                    tags: [],
+                    rows: [graphRow('abc123456789', 'first page')],
+                    maxLane: 0,
+                    currentBranch: 'main',
+                    currentUser: 'Test User',
+                    hasMore: true,
+                    loadedCount: 1,
+                },
+            });
+
+            expect(document.querySelector('#graph-scroll-sentinel')).not.toBeNull();
+            expect(observers.length).toBeGreaterThan(0);
+
+            const currentObserver = observers.at(-1)!;
+            currentObserver.trigger();
+            currentObserver.trigger();
+
+            expect(api.messages.filter((message) => (
+                typeof message === 'object'
+                && message !== null
+                && (message as { type?: string }).type === 'loadMoreGraph'
+            ))).toHaveLength(1);
+
+            sendWebviewMessage({
+                type: 'graphData',
+                data: {
+                    branches: [],
+                    tags: [],
+                    rows: [
+                        graphRow('abc123456789', 'first page'),
+                        graphRow('def123456789', 'second page'),
+                    ],
+                    maxLane: 0,
+                    currentBranch: 'main',
+                    currentUser: 'Test User',
+                    hasMore: false,
+                    loadedCount: 2,
+                },
+            });
+
+            expect(document.querySelector('#graph-scroll-sentinel')).toBeNull();
+        } finally {
+            (globalThis as any).IntersectionObserver = originalIntersectionObserver;
+        }
     });
 
     it('sends selected branch and path filters back to the extension', async () => {

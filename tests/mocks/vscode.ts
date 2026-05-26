@@ -15,6 +15,29 @@ export class TreeItem {
     constructor(public label: unknown, public collapsibleState?: unknown) {}
 }
 
+export class EventEmitter<T = unknown> {
+    private listeners: Array<(event: T) => unknown> = [];
+
+    public event = (listener: (event: T) => unknown) => {
+        this.listeners.push(listener);
+        return {
+            dispose: () => {
+                this.listeners = this.listeners.filter((current) => current !== listener);
+            },
+        };
+    };
+
+    public fire(event?: T): void {
+        for (const listener of this.listeners) {
+            listener(event as T);
+        }
+    }
+
+    public dispose(): void {
+        this.listeners = [];
+    }
+}
+
 export class ThemeIcon {
     public static File = new ThemeIcon('file');
     public static Folder = new ThemeIcon('folder');
@@ -127,5 +150,25 @@ export const window = {
         this.inputBoxValue = undefined;
         this.quickPickValue = undefined;
         this.warningChoice = undefined;
+    },
+};
+
+export const workspace = {
+    values: new Map<string, unknown>(),
+    getConfiguration(section?: string) {
+        return {
+            get: (key: string, defaultValue?: unknown) => {
+                const scopedKey = section ? `${section}.${key}` : key;
+                return this.values.has(scopedKey) ? this.values.get(scopedKey) : defaultValue;
+            },
+            update: (key: string, value: unknown) => {
+                const scopedKey = section ? `${section}.${key}` : key;
+                this.values.set(scopedKey, value);
+                return Promise.resolve();
+            },
+        };
+    },
+    reset() {
+        this.values = new Map<string, unknown>();
     },
 };

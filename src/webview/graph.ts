@@ -44,9 +44,13 @@ interface GraphData {
     maxLane: number;
     currentBranch: string;
     currentUser: string;
+    hasMore: boolean;
+    loadedCount: number;
 }
 
 let graphData: GraphData | null = null;
+let graphSentinelObserver: IntersectionObserver | null = null;
+let isLoadingMoreGraph = false;
 let selectedCommitHash: string | null = null;
 let selectedBranch: string | null = null; // null = all branches
 let searchFilter = '';
@@ -91,11 +95,21 @@ function savePaneState(s: PaneState): void {
 let paneState = loadPaneState();
 
 function requestGraphData(): void {
+    isLoadingMoreGraph = false;
     vscode.postMessage({
         type: 'selectBranch',
         branches: selectedBranch ? [selectedBranch] : undefined,
         path: filterPath || undefined,
     });
+}
+
+function requestMoreGraphData(): void {
+    if (isLoadingMoreGraph || graphData?.hasMore !== true) {
+        return;
+    }
+
+    isLoadingMoreGraph = true;
+    vscode.postMessage({ type: 'loadMoreGraph' });
 }
 
 function init(): void {
@@ -104,6 +118,7 @@ function init(): void {
 
     injectStyles();
     initResizeHandles();
+    initGraphScroll();
 
     // Wire up toolbar
     const searchInput = document.getElementById('search-input') as HTMLInputElement;
@@ -130,6 +145,15 @@ function init(): void {
 
     // Tell extension we're ready
     vscode.postMessage({ type: 'ready' });
+}
+
+function initGraphScroll(): void {
+    const graphPane = document.getElementById('graph-pane')!;
+    graphPane.addEventListener('scroll', () => {
+        if (graphPane.scrollTop + graphPane.clientHeight >= graphPane.scrollHeight - 320) {
+            requestMoreGraphData();
+        }
+    });
 }
 
 function getShellHtml(): string {
@@ -915,7 +939,12 @@ function renderGraphTable(): void {
     }
 
     html += '</tbody></table>';
+    if (graphData.hasMore) {
+        html += '<div id="graph-scroll-sentinel" class="graph-scroll-sentinel" aria-label="Load more commits"></div>';
+    }
+
     pane.innerHTML = html;
+    observeGraphSentinel(pane);
 
     // Wire click and context menu handlers
     pane.querySelectorAll('.graph-row').forEach((el) => {
@@ -937,6 +966,33 @@ function renderGraphTable(): void {
             });
         });
     });
+}
+
+function observeGraphSentinel(root: HTMLElement): void {
+    if (graphSentinelObserver) {
+        graphSentinelObserver.disconnect();
+        graphSentinelObserver = null;
+    }
+
+    if (!graphData?.hasMore || typeof IntersectionObserver === 'undefined') {
+        return;
+    }
+
+    const sentinel = document.getElementById('graph-scroll-sentinel');
+    if (!sentinel) {
+        return;
+    }
+
+    graphSentinelObserver = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+            requestMoreGraphData();
+        }
+    }, {
+        root,
+        rootMargin: '320px 0px',
+        threshold: 0,
+    });
+    graphSentinelObserver.observe(sentinel);
 }
 
 // ── Details Pane ──
@@ -1271,6 +1327,7 @@ window.addEventListener('message', (event) => {
 
     switch (msg.type) {
         case 'graphData':
+            isLoadingMoreGraph = false;
             graphData = msg.data;
             renderFilterBar();
             renderBranchPane();
@@ -1292,6 +1349,7 @@ window.addEventListener('message', (event) => {
             break;
 
         case 'error':
+            isLoadingMoreGraph = false;
             console.error('Graph error:', msg.message);
             break;
     }
@@ -1389,6 +1447,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .commit-dot { stroke-width: 2; }
 .filter-bullet { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 auto; vertical-align: middle; }
 .graph-cell { text-align: center; }
+.graph-scroll-sentinel { height: 28px; width: 100%; }
 
 .ref-badge { display: inline-block; padding: 0 6px; margin-right: 4px; border-radius: 3px; font-size: 11px; line-height: 18px; font-weight: 500; vertical-align: middle; }
 .ref-badge.branch-local { background: var(--vscode-gitDecoration-addedResourceForeground, #28a745); color: #fff; }

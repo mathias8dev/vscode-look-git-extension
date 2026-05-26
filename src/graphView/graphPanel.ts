@@ -25,8 +25,13 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     private readonly dataProvider: GraphDataProvider;
     private readonly gitService: GitService;
     private readonly extensionUri: vscode.Uri;
+    private readonly graphPageSize = 300;
     private filterBranches?: string[];
     private pathFilter?: string;
+    private loadedGraphLimit = this.graphPageSize;
+    private graphHasMore = true;
+    private graphLoading = false;
+    private graphRequestSequence = 0;
 
     constructor(extensionUri: vscode.Uri, gitService: GitService) {
         this.extensionUri = extensionUri;
@@ -68,13 +73,32 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         if (arguments.length > 0) {
             this.filterBranches = filterBranches;
             this.pathFilter = pathFilter;
+            this.resetGraphPaging();
         }
+        await this.postGraphData();
+    }
+
+    private async postGraphData(): Promise<boolean> {
+        if (!this.view) { return false; }
+        const requestSequence = ++this.graphRequestSequence;
+        const loadedGraphLimit = this.loadedGraphLimit;
+        const filterBranches = this.filterBranches;
+        const pathFilter = this.pathFilter;
         try {
-            const data = await this.dataProvider.getGraphData(300, this.filterBranches, this.pathFilter);
+            const data = await this.dataProvider.getGraphData(loadedGraphLimit, filterBranches, pathFilter);
+            if (requestSequence !== this.graphRequestSequence) {
+                return false;
+            }
+            this.graphHasMore = data.hasMore;
             this.view.webview.postMessage({ type: 'graphData', data });
+            return true;
         } catch (error) {
+            if (requestSequence !== this.graphRequestSequence) {
+                return false;
+            }
             const message = error instanceof Error ? error.message : String(error);
             this.view.webview.postMessage({ type: 'error', message });
+            return false;
         }
     }
 
@@ -87,6 +111,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     private async handleMessage(msg: { type: string; [key: string]: unknown }): Promise<void> {
         switch (msg.type) {
             case 'ready':
+                this.resetGraphPaging();
                 this.refresh();
                 break;
 
@@ -96,6 +121,10 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
                 this.refresh(branches, pathFilter);
                 break;
             }
+
+            case 'loadMoreGraph':
+                await this.loadMoreGraph();
+                break;
 
             case 'getCommitDetails': {
                 const hash = msg.hash as string;
@@ -152,9 +181,34 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
             }
 
             case 'refresh':
+                this.resetGraphPaging();
                 this.refresh(this.filterBranches, this.pathFilter);
                 break;
         }
+    }
+
+    private async loadMoreGraph(): Promise<void> {
+        if (!this.view || this.graphLoading || !this.graphHasMore) {
+            return;
+        }
+
+        const previousLimit = this.loadedGraphLimit;
+        this.graphLoading = true;
+        this.loadedGraphLimit += this.graphPageSize;
+
+        try {
+            const posted = await this.postGraphData();
+            if (!posted) {
+                this.loadedGraphLimit = previousLimit;
+            }
+        } finally {
+            this.graphLoading = false;
+        }
+    }
+
+    private resetGraphPaging(): void {
+        this.loadedGraphLimit = this.graphPageSize;
+        this.graphHasMore = true;
     }
 
     private async handleBranchCommand(command: string, branch: string, isRemote: boolean): Promise<void> {
@@ -251,10 +305,12 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
                     return;
             }
 
+            this.resetGraphPaging();
             this.refresh();
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             vscode.window.showErrorMessage(`Branch operation failed: ${message}`);
+            this.resetGraphPaging();
             this.refresh();
         }
     }

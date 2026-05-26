@@ -9,24 +9,29 @@ export interface GraphData {
     maxLane: number;
     currentBranch: string;
     currentUser: string;
+    hasMore: boolean;
+    loadedCount: number;
 }
 
 export class GraphDataProvider {
     constructor(private gitService: GitService) {}
 
     public async getGraphData(maxCount: number = 300, filterBranches?: string[], pathFilter?: string): Promise<GraphData> {
-        const [branches, tags, commits, currentBranch, currentUser] = await Promise.all([
+        const requestedCount = Math.max(1, maxCount);
+        const [branches, tags, rawCommits, currentBranch, currentUser] = await Promise.all([
             this.gitService.getAllBranches(),
             this.gitService.getAllTags(),
-            this.gitService.getGraphLog(maxCount, filterBranches, pathFilter),
+            this.gitService.getGraphLog(requestedCount + 1, filterBranches, pathFilter),
             this.gitService.getCurrentBranch(),
             this.gitService.getUserName(),
         ]);
 
+        const hasMore = rawCommits.length > requestedCount;
+        const commits = rawCommits.slice(0, requestedCount);
         const rows = assignLanes(commits);
         const maxLane = getMaxLane(rows);
 
-        return { branches, tags, rows, maxLane, currentBranch, currentUser };
+        return { branches, tags, rows, maxLane, currentBranch, currentUser, hasMore, loadedCount: commits.length };
     }
 
     public async getCommitFiles(commitHash: string): Promise<GitFileChange[]> {

@@ -23,8 +23,14 @@ function writeFixtureFile(relativePath: string, content: string): void {
 
 async function openLookGitWorkbench(): Promise<any> {
     const workbench = await browser.getWorkbench();
-    const lookGit = await workbench.getActivityBar().getViewControl('Look Git');
-    assert.ok(lookGit, 'Look Git activity bar entry should be visible.');
+    let lookGit: any;
+    await browser.waitUntil(async () => {
+        lookGit = await workbench.getActivityBar().getViewControl('Look Git');
+        return Boolean(lookGit);
+    }, {
+        timeout: 20_000,
+        timeoutMsg: 'Look Git activity bar entry should be visible.',
+    });
     await lookGit.openView();
     return workbench;
 }
