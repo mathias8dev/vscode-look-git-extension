@@ -25,15 +25,42 @@
   "activationEvents": [],
   "contributes": {
     "submenus": [
-      { "id": "lookGit.changesView.commit", "label": "Commit" },
-      { "id": "lookGit.changesView.changes", "label": "Changes" },
-      { "id": "lookGit.changesView.pullPush", "label": "Pull, Push" },
-      { "id": "lookGit.changesView.branch", "label": "Branch" },
-      { "id": "lookGit.changesView.remote", "label": "Remote" },
-      { "id": "lookGit.changesView.stash", "label": "Stash" },
-      { "id": "lookGit.changesView.tags", "label": "Tags" },
-      { "id": "lookGit.changesView.viewAs", "label": "View as" },
-      { "id": "lookGit.historyView.viewAs", "label": "View as" }
+      {
+        "id": "lookGit.changesView.commit",
+        "label": "Commit"
+      },
+      {
+        "id": "lookGit.changesView.changes",
+        "label": "Changes"
+      },
+      {
+        "id": "lookGit.changesView.pullPush",
+        "label": "Pull, Push"
+      },
+      {
+        "id": "lookGit.changesView.branch",
+        "label": "Branch"
+      },
+      {
+        "id": "lookGit.changesView.remote",
+        "label": "Remote"
+      },
+      {
+        "id": "lookGit.changesView.stash",
+        "label": "Stash"
+      },
+      {
+        "id": "lookGit.changesView.tags",
+        "label": "Tags"
+      },
+      {
+        "id": "lookGit.changesView.viewAs",
+        "label": "View as"
+      },
+      {
+        "id": "lookGit.historyView.viewAs",
+        "label": "View as"
+      }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -514,74 +541,238 @@
         }
       ],
       "lookGit.changesView.commit": [
-        { "command": "git.commit",                "group": "1_commit@1" },
-        { "command": "git.commitStaged",          "group": "1_commit@2" },
-        { "command": "git.commitAll",             "group": "1_commit@3" },
-        { "command": "git.undoCommit",            "group": "1_commit@4" },
-        { "command": "git.rebaseAbort",           "group": "1_commit@5" },
-        { "command": "git.commitStagedAmend",     "group": "2_amend@1" },
-        { "command": "git.commitAllAmend",        "group": "2_amend@2" },
-        { "command": "git.commitStagedSignedOff", "group": "3_signoff@1" },
-        { "command": "git.commitAllSignedOff",    "group": "3_signoff@2" }
+        {
+          "command": "git.commit",
+          "group": "1_commit@1"
+        },
+        {
+          "command": "git.commitStaged",
+          "group": "1_commit@2"
+        },
+        {
+          "command": "git.commitAll",
+          "group": "1_commit@3"
+        },
+        {
+          "command": "git.undoCommit",
+          "group": "1_commit@4"
+        },
+        {
+          "command": "git.rebaseAbort",
+          "group": "1_commit@5"
+        },
+        {
+          "command": "git.commitStagedAmend",
+          "group": "2_amend@1"
+        },
+        {
+          "command": "git.commitAllAmend",
+          "group": "2_amend@2"
+        },
+        {
+          "command": "git.commitStagedSignedOff",
+          "group": "3_signoff@1"
+        },
+        {
+          "command": "git.commitAllSignedOff",
+          "group": "3_signoff@2"
+        }
       ],
       "lookGit.changesView.changes": [
-        { "command": "lookGit.stageAll",   "group": "1_changes@1" },
-        { "command": "lookGit.unstageAll", "group": "1_changes@2" },
-        { "command": "lookGit.discardAll", "group": "1_changes@3" }
+        {
+          "command": "lookGit.stageAll",
+          "group": "1_changes@1"
+        },
+        {
+          "command": "lookGit.unstageAll",
+          "group": "1_changes@2"
+        },
+        {
+          "command": "lookGit.discardAll",
+          "group": "1_changes@3"
+        }
       ],
       "lookGit.changesView.pullPush": [
-        { "command": "git.sync",        "group": "1_sync@1" },
-        { "command": "git.pull",        "group": "2_pull@1" },
-        { "command": "git.pullRebase",  "group": "2_pull@2" },
-        { "command": "git.pullFrom",    "group": "2_pull@3" },
-        { "command": "git.push",        "group": "3_push@1" },
-        { "command": "git.pushForce",   "group": "3_push@2" },
-        { "command": "git.pushTo",      "group": "3_push@3" },
-        { "command": "git.pushToForce", "group": "3_push@4" },
-        { "command": "git.fetch",       "group": "4_fetch@1" },
-        { "command": "git.fetchPrune",  "group": "4_fetch@2" },
-        { "command": "git.fetchAll",    "group": "4_fetch@3" }
+        {
+          "command": "git.sync",
+          "group": "1_sync@1"
+        },
+        {
+          "command": "git.pull",
+          "group": "2_pull@1"
+        },
+        {
+          "command": "git.pullRebase",
+          "group": "2_pull@2"
+        },
+        {
+          "command": "git.pullFrom",
+          "group": "2_pull@3"
+        },
+        {
+          "command": "git.push",
+          "group": "3_push@1"
+        },
+        {
+          "command": "git.pushForce",
+          "group": "3_push@2"
+        },
+        {
+          "command": "git.pushTo",
+          "group": "3_push@3"
+        },
+        {
+          "command": "git.pushToForce",
+          "group": "3_push@4"
+        },
+        {
+          "command": "git.fetch",
+          "group": "4_fetch@1"
+        },
+        {
+          "command": "git.fetchPrune",
+          "group": "4_fetch@2"
+        },
+        {
+          "command": "git.fetchAll",
+          "group": "4_fetch@3"
+        }
       ],
       "lookGit.changesView.branch": [
-        { "command": "git.merge",        "group": "1_merge@1" },
-        { "command": "git.rebase",       "group": "1_merge@2" },
-        { "command": "git.branch",       "group": "2_create@1" },
-        { "command": "git.branchFrom",   "group": "2_create@2" },
-        { "command": "git.renameBranch", "group": "3_manage@1" },
-        { "command": "git.deleteBranch", "group": "3_manage@2" },
-        { "command": "git.publish",      "group": "3_manage@3" }
+        {
+          "command": "git.merge",
+          "group": "1_merge@1"
+        },
+        {
+          "command": "git.rebase",
+          "group": "1_merge@2"
+        },
+        {
+          "command": "git.branch",
+          "group": "2_create@1"
+        },
+        {
+          "command": "git.branchFrom",
+          "group": "2_create@2"
+        },
+        {
+          "command": "git.renameBranch",
+          "group": "3_manage@1"
+        },
+        {
+          "command": "git.deleteBranch",
+          "group": "3_manage@2"
+        },
+        {
+          "command": "git.publish",
+          "group": "3_manage@3"
+        }
       ],
       "lookGit.changesView.remote": [
-        { "command": "git.addRemote",    "group": "1_remote@1" },
-        { "command": "git.removeRemote", "group": "1_remote@2" }
+        {
+          "command": "git.addRemote",
+          "group": "1_remote@1"
+        },
+        {
+          "command": "git.removeRemote",
+          "group": "1_remote@2"
+        }
       ],
       "lookGit.changesView.stash": [
-        { "command": "git.stash",                 "group": "1_stash@1" },
-        { "command": "git.stashIncludeUntracked", "group": "1_stash@2" },
-        { "command": "git.stashStaged",           "group": "1_stash@3" },
-        { "command": "git.stashApplyLatest",      "group": "2_apply@1" },
-        { "command": "git.stashApply",            "group": "2_apply@2" },
-        { "command": "git.stashPopLatest",        "group": "3_pop@1" },
-        { "command": "git.stashPop",              "group": "3_pop@2" },
-        { "command": "git.stashDrop",             "group": "4_drop@1" },
-        { "command": "git.stashDropAll",          "group": "4_drop@2" }
+        {
+          "command": "git.stash",
+          "group": "1_stash@1"
+        },
+        {
+          "command": "git.stashIncludeUntracked",
+          "group": "1_stash@2"
+        },
+        {
+          "command": "git.stashStaged",
+          "group": "1_stash@3"
+        },
+        {
+          "command": "git.stashApplyLatest",
+          "group": "2_apply@1"
+        },
+        {
+          "command": "git.stashApply",
+          "group": "2_apply@2"
+        },
+        {
+          "command": "git.stashPopLatest",
+          "group": "3_pop@1"
+        },
+        {
+          "command": "git.stashPop",
+          "group": "3_pop@2"
+        },
+        {
+          "command": "git.stashDrop",
+          "group": "4_drop@1"
+        },
+        {
+          "command": "git.stashDropAll",
+          "group": "4_drop@2"
+        }
       ],
       "lookGit.changesView.tags": [
-        { "command": "git.createTag",  "group": "1_tags@1" },
-        { "command": "git.deleteTag",  "group": "1_tags@2" },
-        { "command": "git.pushTags",   "group": "1_tags@3" }
+        {
+          "command": "git.createTag",
+          "group": "1_tags@1"
+        },
+        {
+          "command": "git.deleteTag",
+          "group": "1_tags@2"
+        },
+        {
+          "command": "git.pushTags",
+          "group": "1_tags@3"
+        }
       ],
       "lookGit.changesView.viewAs": [
-        { "command": "lookGit.viewAsListActive", "when": "!lookGit.viewAsTree", "group": "1_view@1" },
-        { "command": "lookGit.viewAsList",       "when": "lookGit.viewAsTree",  "group": "1_view@1" },
-        { "command": "lookGit.viewAsTreeActive", "when": "lookGit.viewAsTree",  "group": "1_view@2" },
-        { "command": "lookGit.viewAsTree",       "when": "!lookGit.viewAsTree", "group": "1_view@2" }
+        {
+          "command": "lookGit.viewAsListActive",
+          "when": "!lookGit.viewAsTree",
+          "group": "1_view@1"
+        },
+        {
+          "command": "lookGit.viewAsList",
+          "when": "lookGit.viewAsTree",
+          "group": "1_view@1"
+        },
+        {
+          "command": "lookGit.viewAsTreeActive",
+          "when": "lookGit.viewAsTree",
+          "group": "1_view@2"
+        },
+        {
+          "command": "lookGit.viewAsTree",
+          "when": "!lookGit.viewAsTree",
+          "group": "1_view@2"
+        }
       ],
       "lookGit.historyView.viewAs": [
-        { "command": "lookGit.historyViewAsListActive", "when": "!lookGit.historyViewAsTree", "group": "1_view@1" },
-        { "command": "lookGit.historyViewAsList",       "when": "lookGit.historyViewAsTree",  "group": "1_view@1" },
-        { "command": "lookGit.historyViewAsTreeActive", "when": "lookGit.historyViewAsTree",  "group": "1_view@2" },
-        { "command": "lookGit.historyViewAsTree",       "when": "!lookGit.historyViewAsTree", "group": "1_view@2" }
+        {
+          "command": "lookGit.historyViewAsListActive",
+          "when": "!lookGit.historyViewAsTree",
+          "group": "1_view@1"
+        },
+        {
+          "command": "lookGit.historyViewAsList",
+          "when": "lookGit.historyViewAsTree",
+          "group": "1_view@1"
+        },
+        {
+          "command": "lookGit.historyViewAsTreeActive",
+          "when": "lookGit.historyViewAsTree",
+          "group": "1_view@2"
+        },
+        {
+          "command": "lookGit.historyViewAsTree",
+          "when": "!lookGit.historyViewAsTree",
+          "group": "1_view@2"
+        }
       ]
     },
     "configuration": {
@@ -608,13 +799,15 @@
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "package": "npm run check-types && node esbuild.js --production",
-    "lint": "npm run check-types"
+    "lint": "npm run check-types",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
     "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
     "esbuild": "^0.20.0",
     "npm-run-all": "^4.1.5",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vitest": "^4.1.7"
   }
 }
