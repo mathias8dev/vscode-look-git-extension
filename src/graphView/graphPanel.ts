@@ -59,16 +59,18 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         webviewView.webview.html = this.getHtml();
 
         webviewView.webview.onDidReceiveMessage(
-            (msg) => this.handleMessage(msg),
+            (msg) => {
+                void this.handleMessage(msg);
+            },
         );
 
         webviewView.onDidChangeVisibility(() => {
             if (webviewView.visible && this.pendingRefresh) {
-                this.refresh();
+                void this.refresh();
             }
         });
 
-        this.refresh();
+        void this.refresh();
     }
 
     public async refresh(filterBranches?: string[], pathFilter?: string, logFilters?: GraphLogFilters): Promise<void> {
@@ -137,87 +139,92 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async handleMessage(msg: { type: string; [key: string]: unknown }): Promise<void> {
-        switch (msg.type) {
-            case 'ready':
-                this.resetGraphPaging();
-                await this.refresh();
-                break;
+        try {
+            switch (msg.type) {
+                case 'ready':
+                    this.resetGraphPaging();
+                    await this.refresh();
+                    break;
 
-            case 'selectBranch': {
-                const branches = msg.branches as string[] | undefined;
-                const pathFilter = msg.path as string | undefined;
-                const logFilters: GraphLogFilters = {
-                    search: msg.search as string | undefined,
-                    authors: msg.authors as string[] | undefined,
-                    dateFrom: msg.dateFrom as string | undefined,
-                    dateTo: msg.dateTo as string | undefined,
-                };
-                await this.refresh(branches, pathFilter, logFilters);
-                break;
-            }
-
-            case 'loadMoreGraph':
-                await this.loadMoreGraph();
-                break;
-
-            case 'getCommitDetails': {
-                const hash = msg.hash as string;
-                try {
-                    const [files, fullMessage] = await Promise.all([
-                        this.dataProvider.getCommitFiles(hash),
-                        this.dataProvider.getCommitMessage(hash),
-                    ]);
-                    this.view?.webview.postMessage({
-                        type: 'commitDetails',
-                        hash,
-                        files,
-                        fullMessage,
-                    });
-                } catch (error) {
-                    const message = error instanceof Error ? error.message : String(error);
-                    this.view?.webview.postMessage({ type: 'error', message });
+                case 'selectBranch': {
+                    const branches = msg.branches as string[] | undefined;
+                    const pathFilter = msg.path as string | undefined;
+                    const logFilters: GraphLogFilters = {
+                        search: msg.search as string | undefined,
+                        authors: msg.authors as string[] | undefined,
+                        dateFrom: msg.dateFrom as string | undefined,
+                        dateTo: msg.dateTo as string | undefined,
+                    };
+                    await this.refresh(branches, pathFilter, logFilters);
+                    break;
                 }
-                break;
-            }
 
-            case 'openDiff': {
-                const filePath = msg.filePath as string;
-                const commitHash = msg.commitHash as string;
-                const status = msg.status as string;
-                const origPath = msg.origPath as string | undefined;
-                const parentHash = msg.parentHash as string | undefined;
-                this.openDiff(filePath, commitHash, status, origPath, parentHash);
-                break;
-            }
+                case 'loadMoreGraph':
+                    await this.loadMoreGraph();
+                    break;
 
-            case 'executeCommand': {
-                const command = msg.command as string;
-                const commitHash = msg.commitHash as string;
-                if (!ALLOWED_COMMIT_COMMANDS.has(command)) {
-                    vscode.window.showErrorMessage(`Command is not allowed from Look Git graph: ${command}`);
-                    return;
+                case 'getCommitDetails': {
+                    const hash = msg.hash as string;
+                    try {
+                        const [files, fullMessage] = await Promise.all([
+                            this.dataProvider.getCommitFiles(hash),
+                            this.dataProvider.getCommitMessage(hash),
+                        ]);
+                        this.view?.webview.postMessage({
+                            type: 'commitDetails',
+                            hash,
+                            files,
+                            fullMessage,
+                        });
+                    } catch (error) {
+                        const message = error instanceof Error ? error.message : String(error);
+                        this.view?.webview.postMessage({ type: 'error', message });
+                    }
+                    break;
                 }
-                const commit = await this.gitService.getCommit(commitHash);
-                if (!commit) {
-                    vscode.window.showErrorMessage(`Commit not found: ${commitHash}`);
-                    return;
+
+                case 'openDiff': {
+                    const filePath = msg.filePath as string;
+                    const commitHash = msg.commitHash as string;
+                    const status = msg.status as string;
+                    const origPath = msg.origPath as string | undefined;
+                    const parentHash = msg.parentHash as string | undefined;
+                    await this.openDiff(filePath, commitHash, status, origPath, parentHash);
+                    break;
                 }
-                vscode.commands.executeCommand(command, new CommitItem(commit, false));
-                break;
-            }
 
-            case 'executeBranchCommand': {
-                const command = msg.command as string;
-                const branch = msg.branch as string;
-                const isRemote = msg.isRemote as boolean;
-                await this.handleBranchCommand(command, branch, isRemote);
-                break;
-            }
+                case 'executeCommand': {
+                    const command = msg.command as string;
+                    const commitHash = msg.commitHash as string;
+                    if (!ALLOWED_COMMIT_COMMANDS.has(command)) {
+                        await vscode.window.showErrorMessage(`Command is not allowed from Look Git graph: ${command}`);
+                        return;
+                    }
+                    const commit = await this.gitService.getCommit(commitHash);
+                    if (!commit) {
+                        await vscode.window.showErrorMessage(`Commit not found: ${commitHash}`);
+                        return;
+                    }
+                    await vscode.commands.executeCommand(command, new CommitItem(commit, false));
+                    break;
+                }
 
-            case 'refresh':
-                this.resetGraphPaging();
-                await this.refresh(this.filterBranches, this.pathFilter, this.logFilters);
-                break;
+                case 'executeBranchCommand': {
+                    const command = msg.command as string;
+                    const branch = msg.branch as string;
+                    const isRemote = msg.isRemote as boolean;
+                    await this.handleBranchCommand(command, branch, isRemote);
+                    break;
+                }
+
+                case 'refresh':
+                    this.resetGraphPaging();
+                    await this.refresh(this.filterBranches, this.pathFilter, this.logFilters);
+                    break;
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            await vscode.window.showErrorMessage(`Graph operation failed: ${message}`);
         }
     }
 
@@ -347,16 +354,16 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
             }
 
             this.resetGraphPaging();
-            this.refresh();
+            await this.refresh();
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            vscode.window.showErrorMessage(`Branch operation failed: ${message}`);
+            await vscode.window.showErrorMessage(`Branch operation failed: ${message}`);
             this.resetGraphPaging();
-            this.refresh();
+            await this.refresh();
         }
     }
 
-    private openDiff(filePath: string, commitHash: string, status: string, origPath?: string, parentHash?: string): void {
+    private async openDiff(filePath: string, commitHash: string, status: string, origPath?: string, parentHash?: string): Promise<void> {
         const cwd = this.gitService.getWorkingDirectory();
         const fileUri = vscode.Uri.file(path.join(cwd, filePath));
         const originalFileUri = vscode.Uri.file(path.join(cwd, origPath ?? filePath));
@@ -382,7 +389,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         }
 
         const title = `${filePath} (${commitHash.substring(0, 7)})`;
-        vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title);
+        await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title);
     }
 
     private getHtml(): string {

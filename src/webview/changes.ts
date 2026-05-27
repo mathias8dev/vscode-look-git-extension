@@ -699,7 +699,7 @@ function wireFileHandlers(): void {
         });
     });
 
-    document.querySelectorAll('.file-row:not(.stash-row):not(.tree-file-row)').forEach((el) => {
+    document.querySelectorAll('.file-row:not(.stash-row):not(.tree-file-row):not(.conflict-file-row)').forEach((el) => {
         el.addEventListener('click', () => {
             const d = (el as HTMLElement).dataset;
             vscode.postMessage({ type: 'openDiff', filePath: d.file, origPath: d.orig, isStaged: d.staged === 'true', status: d.status });

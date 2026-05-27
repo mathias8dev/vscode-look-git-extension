@@ -612,8 +612,6 @@ describe('ChangesViewProvider webview messages', () => {
             const service = makeService();
             const { provider } = makeProvider(service);
             await (provider as any).handleMessage({ type: 'ready' });
-            // refresh() is fire-and-forget; verify it was triggered by checking getStatus was called
-            await Promise.resolve();
             expect(service.getStatus).toHaveBeenCalled();
         });
     });
@@ -866,7 +864,6 @@ describe('GraphViewProvider webview messages', () => {
             const view = makeWebviewView();
             (provider as any).view = view;
             await (provider as any).handleMessage({ type: 'ready' });
-            await Promise.resolve(); // flush fire-and-forget refresh
             expect(service.getGraphLog).toHaveBeenCalled();
         });
     });

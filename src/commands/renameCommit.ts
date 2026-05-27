@@ -59,12 +59,12 @@ export async function handleRenameCommit(
             }
         );
 
-        vscode.window.showInformationMessage(
+        await vscode.window.showInformationMessage(
             `Commit ${commit.shortHash} message updated.`
         );
         historyProvider.refresh();
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        vscode.window.showErrorMessage(`Rename failed: ${message}`);
+        await vscode.window.showErrorMessage(`Rename failed: ${message}`);
     }
 }

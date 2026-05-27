@@ -39,7 +39,7 @@ export async function handleRevert(
                 }
             );
 
-            vscode.window.showInformationMessage(
+            await vscode.window.showInformationMessage(
                 `Reverted ${commits.length} commits successfully.`
             );
             historyProvider.refresh();
@@ -53,12 +53,12 @@ export async function handleRevert(
                 );
                 if (action === 'Abort Revert') {
                     try { await gitService.exec(['revert', '--abort']); } catch { /* already aborted */ }
-                    vscode.window.showInformationMessage('Revert aborted.');
+                    await vscode.window.showInformationMessage('Revert aborted.');
                 } else if (action === 'Open Source Control') {
-                    vscode.commands.executeCommand('workbench.view.scm');
+                    await vscode.commands.executeCommand('workbench.view.scm');
                 }
             } else {
-                vscode.window.showErrorMessage(`Revert failed: ${message}`);
+                await vscode.window.showErrorMessage(`Revert failed: ${message}`);
             }
         }
         return;
@@ -74,7 +74,7 @@ export async function handleRevert(
 
     try {
         await gitService.revert(commit.hash);
-        vscode.window.showInformationMessage(
+        await vscode.window.showInformationMessage(
             `Reverted commit ${commit.shortHash}: "${commit.message}"`
         );
         historyProvider.refresh();
@@ -90,12 +90,12 @@ export async function handleRevert(
 
             if (action === 'Abort Revert') {
                 try { await gitService.exec(['revert', '--abort']); } catch { /* already aborted */ }
-                vscode.window.showInformationMessage('Revert aborted.');
+                await vscode.window.showInformationMessage('Revert aborted.');
             } else if (action === 'Open Source Control') {
-                vscode.commands.executeCommand('workbench.view.scm');
+                await vscode.commands.executeCommand('workbench.view.scm');
             }
         } else {
-            vscode.window.showErrorMessage(`Revert failed: ${message}`);
+            await vscode.window.showErrorMessage(`Revert failed: ${message}`);
         }
     }
 }

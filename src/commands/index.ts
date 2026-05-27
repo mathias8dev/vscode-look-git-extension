@@ -35,7 +35,7 @@ export function registerCommands(
     // Focus Git Graph view (user can drag it anywhere in the UI)
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.openGraph', () => {
-            vscode.commands.executeCommand('lookGit.graphView.focus');
+            return vscode.commands.executeCommand('lookGit.graphView.focus');
         })
     );
 
@@ -47,7 +47,7 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.refreshChanges', () => {
-            changesViewProvider.refresh();
+            return changesViewProvider.refresh();
         })
     );
 
@@ -55,12 +55,12 @@ export function registerCommands(
         vscode.commands.registerCommand('lookGit.fetchAll', async () => {
             try {
                 await gitService.fetchAll();
-                vscode.window.showInformationMessage('Fetched from all remotes.');
+                await vscode.window.showInformationMessage('Fetched from all remotes.');
                 historyProvider.refresh();
-                changesViewProvider.refresh();
+                await changesViewProvider.refresh();
             } catch (error) {
                 const msg = error instanceof Error ? error.message : String(error);
-                vscode.window.showErrorMessage(`Fetch failed: ${msg}`);
+                await vscode.window.showErrorMessage(`Fetch failed: ${msg}`);
             }
         })
     );
@@ -69,12 +69,12 @@ export function registerCommands(
         vscode.commands.registerCommand('lookGit.pull', async () => {
             try {
                 await gitService.pull();
-                vscode.window.showInformationMessage('Pull completed.');
+                await vscode.window.showInformationMessage('Pull completed.');
                 historyProvider.refresh();
-                changesViewProvider.refresh();
+                await changesViewProvider.refresh();
             } catch (error) {
                 const msg = error instanceof Error ? error.message : String(error);
-                vscode.window.showErrorMessage(`Pull failed: ${msg}`);
+                await vscode.window.showErrorMessage(`Pull failed: ${msg}`);
             }
         })
     );
@@ -83,18 +83,18 @@ export function registerCommands(
         vscode.commands.registerCommand('lookGit.push', async () => {
             try {
                 await gitService.push();
-                vscode.window.showInformationMessage('Push completed.');
+                await vscode.window.showInformationMessage('Push completed.');
                 historyProvider.refresh();
             } catch (error) {
                 const msg = error instanceof Error ? error.message : String(error);
-                vscode.window.showErrorMessage(`Push failed: ${msg}`);
+                await vscode.window.showErrorMessage(`Push failed: ${msg}`);
             }
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.loadMore', () => {
-            historyProvider.loadMore();
+            return historyProvider.loadMore();
         })
     );
 
@@ -165,22 +165,22 @@ export function registerCommands(
 
     // Copy commit hash — supports multi-select
     context.subscriptions.push(
-        vscode.commands.registerCommand('lookGit.copyCommitHash', (item: CommitItem, selected?: unknown[]) => {
+        vscode.commands.registerCommand('lookGit.copyCommitHash', async (item: CommitItem, selected?: unknown[]) => {
             const commits = filterCommitItems(selected);
             if (commits && commits.length > 1) {
                 const hashes = commits.map((c) => c.commitInfo.hash).join('\n');
-                vscode.env.clipboard.writeText(hashes);
-                vscode.window.showInformationMessage(`Copied ${commits.length} commit hashes.`);
+                await vscode.env.clipboard.writeText(hashes);
+                await vscode.window.showInformationMessage(`Copied ${commits.length} commit hashes.`);
             } else {
-                vscode.env.clipboard.writeText(item.commitInfo.hash);
-                vscode.window.showInformationMessage(`Copied: ${item.commitInfo.shortHash}`);
+                await vscode.env.clipboard.writeText(item.commitInfo.hash);
+                await vscode.window.showInformationMessage(`Copied: ${item.commitInfo.shortHash}`);
             }
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.viewCommitDetails', (item: CommitItem) => {
-            vscode.commands.executeCommand('git.viewCommit', item.commitInfo.hash);
+            return vscode.commands.executeCommand('git.viewCommit', item.commitInfo.hash);
         })
     );
 
@@ -234,10 +234,10 @@ export function registerCommands(
         vscode.commands.registerCommand('lookGit.stageAll', async () => {
             try {
                 await gitService.stageAll();
-                changesViewProvider.refresh();
+                await changesViewProvider.refresh();
             } catch (error) {
                 const msg = error instanceof Error ? error.message : String(error);
-                vscode.window.showErrorMessage(`Stage all failed: ${msg}`);
+                await vscode.window.showErrorMessage(`Stage all failed: ${msg}`);
             }
         })
     );
@@ -246,10 +246,10 @@ export function registerCommands(
         vscode.commands.registerCommand('lookGit.unstageAll', async () => {
             try {
                 await gitService.unstageAll();
-                changesViewProvider.refresh();
+                await changesViewProvider.refresh();
             } catch (error) {
                 const msg = error instanceof Error ? error.message : String(error);
-                vscode.window.showErrorMessage(`Unstage all failed: ${msg}`);
+                await vscode.window.showErrorMessage(`Unstage all failed: ${msg}`);
             }
         })
     );
@@ -267,10 +267,10 @@ export function registerCommands(
                     for (const entry of status.unstaged) {
                         await gitService.discardFile(entry.filePath);
                     }
-                    changesViewProvider.refresh();
+                    await changesViewProvider.refresh();
                 } catch (error) {
                     const msg = error instanceof Error ? error.message : String(error);
-                    vscode.window.showErrorMessage(`Discard all failed: ${msg}`);
+                    await vscode.window.showErrorMessage(`Discard all failed: ${msg}`);
                 }
             }
         })

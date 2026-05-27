@@ -21,7 +21,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     public setViewMode(asTree: boolean): void {
         this.viewAsTree = asTree;
-        vscode.commands.executeCommand('setContext', 'lookGit.viewAsTree', asTree);
+        void vscode.commands.executeCommand('setContext', 'lookGit.viewAsTree', asTree);
         this.view?.webview.postMessage({ type: 'setViewMode', asTree });
     }
 
@@ -42,16 +42,18 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         webviewView.webview.html = this.getHtml();
 
         webviewView.webview.onDidReceiveMessage(
-            (msg) => this.handleMessage(msg),
+            (msg) => {
+                void this.handleMessage(msg);
+            },
         );
 
         webviewView.onDidChangeVisibility(() => {
             if (webviewView.visible && this.pendingRefresh) {
-                this.refresh();
+                void this.refresh();
             }
         });
 
-        this.refresh();
+        void this.refresh();
     }
 
     public async refresh(): Promise<void> {
@@ -106,34 +108,34 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         try {
             switch (msg.type) {
                 case 'ready':
-                    this.refresh();
+                    await this.refresh();
                     break;
 
                 case 'viewModeChanged': {
                     const asTree = msg.asTree as boolean;
                     this.viewAsTree = asTree;
-                    vscode.commands.executeCommand('setContext', 'lookGit.viewAsTree', asTree);
+                    await vscode.commands.executeCommand('setContext', 'lookGit.viewAsTree', asTree);
                     break;
                 }
 
                 case 'stageFile':
                     await this.gitService.stageFile(msg.filePath as string);
-                    this.refresh();
+                    await this.refresh();
                     break;
 
                 case 'unstageFile':
                     await this.gitService.unstageFile(msg.filePath as string);
-                    this.refresh();
+                    await this.refresh();
                     break;
 
                 case 'stageAll':
                     await this.gitService.stageAll();
-                    this.refresh();
+                    await this.refresh();
                     break;
 
                 case 'unstageAll':
                     await this.gitService.unstageAll();
-                    this.refresh();
+                    await this.refresh();
                     break;
 
                 case 'discardFile': {
@@ -144,7 +146,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     );
                     if (choice === 'Discard') {
                         await this.gitService.discardFile(filePath);
-                        this.refresh();
+                        await this.refresh();
                     }
                     break;
                 }
@@ -160,7 +162,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                         for (const entry of status.unstaged) {
                             await this.gitService.discardFile(entry.filePath);
                         }
-                        this.refresh();
+                        await this.refresh();
                     }
                     break;
                 }
@@ -168,7 +170,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 case 'commit': {
                     const message = (msg.message as string || '').trim();
                     if (!message) {
-                        vscode.window.showErrorMessage('Commit message cannot be empty.');
+                        await vscode.window.showErrorMessage('Commit message cannot be empty.');
                         this.view?.webview.postMessage({ type: 'commitResult', success: false });
                         return;
                     }
@@ -176,24 +178,24 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     switch (mode) {
                         case 'amend':
                             await this.gitService.commitAmend(message);
-                            vscode.window.showInformationMessage('Commit amended successfully.');
+                            await vscode.window.showInformationMessage('Commit amended successfully.');
                             break;
                         case 'commitPush':
                             await this.gitService.commit(message);
                             await this.gitService.push();
-                            vscode.window.showInformationMessage('Changes committed and pushed.');
+                            await vscode.window.showInformationMessage('Changes committed and pushed.');
                             break;
                         case 'commitSync':
                             await this.gitService.commit(message);
                             await this.gitService.pullAndPush();
-                            vscode.window.showInformationMessage('Changes committed and synced.');
+                            await vscode.window.showInformationMessage('Changes committed and synced.');
                             break;
                         default:
                             await this.gitService.commit(message);
-                            vscode.window.showInformationMessage('Changes committed successfully.');
+                            await vscode.window.showInformationMessage('Changes committed successfully.');
                             break;
                     }
-                    this.refresh();
+                    await this.refresh();
                     this.view?.webview.postMessage({ type: 'commitResult', success: true });
                     break;
                 }
@@ -202,7 +204,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     const filePath = msg.filePath as string;
                     const cwd = this.gitService.getWorkingDirectory();
                     const fileUri = vscode.Uri.file(path.join(cwd, filePath));
-                    vscode.commands.executeCommand('vscode.open', fileUri);
+                    await vscode.commands.executeCommand('vscode.open', fileUri);
                     break;
                 }
 
@@ -211,7 +213,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     const origPath = msg.origPath as string | undefined;
                     const isStaged = msg.isStaged as boolean;
                     const status = msg.status as string;
-                    this.openWorkingDiff(filePath, isStaged, status, origPath);
+                    await this.openWorkingDiff(filePath, isStaged, status, origPath);
                     break;
                 }
 
@@ -223,7 +225,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                         await vscode.commands.executeCommand('merge-conflict.accept.select', fileUri);
                     } catch {
                         // Fallback: open the file so VS Code shows inline conflict decorations
-                        vscode.commands.executeCommand('vscode.open', fileUri);
+                        await vscode.commands.executeCommand('vscode.open', fileUri);
                     }
                     break;
                 }
@@ -232,7 +234,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     const filePath = msg.filePath as string;
                     await this.gitService.acceptOurs(filePath);
                     await this.gitService.stageFile(filePath);
-                    this.refresh();
+                    await this.refresh();
                     break;
                 }
 
@@ -240,7 +242,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     const filePath = msg.filePath as string;
                     await this.gitService.acceptTheirs(filePath);
                     await this.gitService.stageFile(filePath);
-                    this.refresh();
+                    await this.refresh();
                     break;
                 }
 
@@ -250,14 +252,14 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                         await this.gitService.acceptTheirs(entry.filePath);
                         await this.gitService.stageFile(entry.filePath);
                     }
-                    this.refresh();
+                    await this.refresh();
                     break;
                 }
 
                 case 'markResolved': {
                     const filePath = msg.filePath as string;
                     await this.gitService.stageFile(filePath);
-                    this.refresh();
+                    await this.refresh();
                     break;
                 }
 
@@ -265,12 +267,12 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     const state = msg.conflictState as string;
                     if (state === 'merge') {
                         await this.gitService.mergeContinue();
-                        vscode.window.showInformationMessage('Merge completed.');
+                        await vscode.window.showInformationMessage('Merge completed.');
                     } else if (state === 'rebase') {
                         await this.gitService.rebaseContinue();
-                        vscode.window.showInformationMessage('Rebase step completed.');
+                        await vscode.window.showInformationMessage('Rebase step completed.');
                     }
-                    this.refresh();
+                    await this.refresh();
                     break;
                 }
 
@@ -287,8 +289,8 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                         } else if (state === 'rebase') {
                             await this.gitService.rebaseAbort();
                         }
-                        vscode.window.showInformationMessage(`${label.charAt(0).toUpperCase() + label.slice(1)} aborted.`);
-                        this.refresh();
+                        await vscode.window.showInformationMessage(`${label.charAt(0).toUpperCase() + label.slice(1)} aborted.`);
+                        await this.refresh();
                     }
                     break;
                 }
@@ -296,32 +298,32 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 case 'stashStaged': {
                     const stashMsg = (msg.message as string || '').trim() || undefined;
                     await this.gitService.stashStaged(stashMsg);
-                    vscode.window.showInformationMessage('Staged changes stashed.');
-                    this.refresh();
+                    await vscode.window.showInformationMessage('Staged changes stashed.');
+                    await this.refresh();
                     break;
                 }
 
                 case 'stash': {
                     const stashMsg = (msg.message as string || '').trim() || undefined;
                     await this.gitService.stash(stashMsg);
-                    vscode.window.showInformationMessage('Changes stashed.');
-                    this.refresh();
+                    await vscode.window.showInformationMessage('Changes stashed.');
+                    await this.refresh();
                     break;
                 }
 
                 case 'stashPop': {
                     const index = msg.index as number;
                     await this.gitService.stashPop(index);
-                    vscode.window.showInformationMessage('Stash popped.');
-                    this.refresh();
+                    await vscode.window.showInformationMessage('Stash popped.');
+                    await this.refresh();
                     break;
                 }
 
                 case 'stashApply': {
                     const index = msg.index as number;
                     await this.gitService.stashApply(index);
-                    vscode.window.showInformationMessage('Stash applied.');
-                    this.refresh();
+                    await vscode.window.showInformationMessage('Stash applied.');
+                    await this.refresh();
                     break;
                 }
 
@@ -333,8 +335,8 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     );
                     if (choice === 'Drop') {
                         await this.gitService.stashDrop(index);
-                        vscode.window.showInformationMessage('Stash dropped.');
-                        this.refresh();
+                        await vscode.window.showInformationMessage('Stash dropped.');
+                        await this.refresh();
                     }
                     break;
                 }
@@ -355,25 +357,25 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     const origPath = msg.origPath as string | undefined;
                     const stashIndex = msg.index as number;
                     const status = msg.status as string;
-                    this.openStashDiff(filePath, stashIndex, status, origPath);
+                    await this.openStashDiff(filePath, stashIndex, status, origPath);
                     break;
                 }
 
                 case 'refresh':
-                    this.refresh();
+                    await this.refresh();
                     break;
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            vscode.window.showErrorMessage(`Git operation failed: ${message}`);
+            await vscode.window.showErrorMessage(`Git operation failed: ${message}`);
             if (msg.type === 'commit') {
                 this.view?.webview.postMessage({ type: 'commitResult', success: false });
             }
-            this.refresh();
+            await this.refresh();
         }
     }
 
-    private openWorkingDiff(filePath: string, isStaged: boolean, status: string, origPath?: string): void {
+    private async openWorkingDiff(filePath: string, isStaged: boolean, status: string, origPath?: string): Promise<void> {
         const cwd = this.gitService.getWorkingDirectory();
         const fileUri = vscode.Uri.file(path.join(cwd, filePath));
         const originalFileUri = vscode.Uri.file(path.join(cwd, origPath ?? filePath));
@@ -388,31 +390,31 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             // Staged: HEAD vs index
             const leftUri = status === 'A' ? emptyUri : toGitUri(originalFileUri, 'HEAD');
             const rightUri = toGitUri(fileUri, '');
-            vscode.commands.executeCommand(
+            await vscode.commands.executeCommand(
                 'vscode.diff', leftUri, rightUri,
                 `${filePath} (Staged)`,
             );
         } else if (status === 'U') {
             // Untracked: just open the file
-            vscode.commands.executeCommand('vscode.open', fileUri);
+            await vscode.commands.executeCommand('vscode.open', fileUri);
         } else if (status === 'D') {
             // Deleted: show what was in index
             const leftUri = toGitUri(originalFileUri, '');
-            vscode.commands.executeCommand(
+            await vscode.commands.executeCommand(
                 'vscode.diff', leftUri, emptyUri,
                 `${filePath} (Deleted)`,
             );
         } else {
             // Modified unstaged: index vs working tree
             const leftUri = toGitUri(originalFileUri, '');
-            vscode.commands.executeCommand(
+            await vscode.commands.executeCommand(
                 'vscode.diff', leftUri, fileUri,
                 `${filePath} (Working Tree)`,
             );
         }
     }
 
-    private openStashDiff(filePath: string, stashIndex: number, status: string, origPath?: string): void {
+    private async openStashDiff(filePath: string, stashIndex: number, status: string, origPath?: string): Promise<void> {
         const cwd = this.gitService.getWorkingDirectory();
         const fileUri = vscode.Uri.file(path.join(cwd, filePath));
         const originalFileUri = vscode.Uri.file(path.join(cwd, origPath ?? filePath));
@@ -428,20 +430,20 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
         if (status === 'A') {
             const rightUri = toGitUri(fileUri, stashRef);
-            vscode.commands.executeCommand(
+            await vscode.commands.executeCommand(
                 'vscode.diff', emptyUri, rightUri,
                 `${filePath} (Stash #${stashIndex})`,
             );
         } else if (status === 'D') {
             const leftUri = toGitUri(originalFileUri, parentRef);
-            vscode.commands.executeCommand(
+            await vscode.commands.executeCommand(
                 'vscode.diff', leftUri, emptyUri,
                 `${filePath} (Stash #${stashIndex} - Deleted)`,
             );
         } else {
             const leftUri = toGitUri(originalFileUri, parentRef);
             const rightUri = toGitUri(fileUri, stashRef);
-            vscode.commands.executeCommand(
+            await vscode.commands.executeCommand(
                 'vscode.diff', leftUri, rightUri,
                 `${filePath} (Stash #${stashIndex})`,
             );

@@ -18,12 +18,12 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
 
     constructor(private gitService: GitService) {
         this.pageSize = vscode.workspace.getConfiguration('lookGit').get('maxCommits', 50);
-        vscode.commands.executeCommand('setContext', 'lookGit.historyViewAsTree', true);
+        void vscode.commands.executeCommand('setContext', 'lookGit.historyViewAsTree', true);
     }
 
     public setViewMode(asTree: boolean): void {
         this.viewAsTree = asTree;
-        vscode.commands.executeCommand('setContext', 'lookGit.historyViewAsTree', asTree);
+        void vscode.commands.executeCommand('setContext', 'lookGit.historyViewAsTree', asTree);
         this._onDidChangeTreeData.fire();
     }
 

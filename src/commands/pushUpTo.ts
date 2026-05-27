@@ -28,7 +28,7 @@ export async function handlePushUpTo(
         // Ask user to pick remote
         const remotes = await gitService.getRemotes();
         if (remotes.length === 0) {
-            vscode.window.showErrorMessage('No remotes configured.');
+            await vscode.window.showErrorMessage('No remotes configured.');
             return;
         }
 
@@ -69,12 +69,12 @@ export async function handlePushUpTo(
             }
         );
 
-        vscode.window.showInformationMessage(
+        await vscode.window.showInformationMessage(
             `Pushed commits up to ${commit.shortHash} to ${remoteName}/${branchName}.`
         );
         historyProvider.refresh();
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        vscode.window.showErrorMessage(`Push failed: ${message}`);
+        await vscode.window.showErrorMessage(`Push failed: ${message}`);
     }
 }

@@ -163,6 +163,14 @@ describe('Changes webview runtime behavior', () => {
             click('.mark-resolved-btn[data-file="conflict.txt"]');
             expect(api.messages).toContainEqual({ type: 'markResolved', filePath: 'conflict.txt' });
         });
+
+        it('clicking a conflict row opens only the merge editor action', () => {
+            api.messages.length = 0;
+
+            click('.conflict-file-row[data-file="conflict.txt"]');
+
+            expect(api.messages).toEqual([{ type: 'openMergeEditor', filePath: 'conflict.txt' }]);
+        });
     });
 
     describe('merge and rebase controls', () => {

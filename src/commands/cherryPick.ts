@@ -40,7 +40,7 @@ export async function handleCherryPick(
                 }
             );
 
-            vscode.window.showInformationMessage(
+            await vscode.window.showInformationMessage(
                 `Cherry-picked ${commits.length} commits successfully.`
             );
             historyProvider.refresh();
@@ -54,12 +54,12 @@ export async function handleCherryPick(
                 );
                 if (action === 'Abort Cherry-pick') {
                     await gitService.exec(['cherry-pick', '--abort']);
-                    vscode.window.showInformationMessage('Cherry-pick aborted.');
+                    await vscode.window.showInformationMessage('Cherry-pick aborted.');
                 } else if (action === 'Open Source Control') {
-                    vscode.commands.executeCommand('workbench.view.scm');
+                    await vscode.commands.executeCommand('workbench.view.scm');
                 }
             } else {
-                vscode.window.showErrorMessage(`Cherry-pick failed: ${message}`);
+                await vscode.window.showErrorMessage(`Cherry-pick failed: ${message}`);
             }
         }
         return;
@@ -75,7 +75,7 @@ export async function handleCherryPick(
 
     try {
         await gitService.cherryPick(commit.hash);
-        vscode.window.showInformationMessage(
+        await vscode.window.showInformationMessage(
             `Cherry-picked commit ${commit.shortHash}: "${commit.message}"`
         );
         historyProvider.refresh();
@@ -91,12 +91,12 @@ export async function handleCherryPick(
 
             if (action === 'Abort Cherry-pick') {
                 await gitService.exec(['cherry-pick', '--abort']);
-                vscode.window.showInformationMessage('Cherry-pick aborted.');
+                await vscode.window.showInformationMessage('Cherry-pick aborted.');
             } else if (action === 'Open Source Control') {
-                vscode.commands.executeCommand('workbench.view.scm');
+                await vscode.commands.executeCommand('workbench.view.scm');
             }
         } else {
-            vscode.window.showErrorMessage(`Cherry-pick failed: ${message}`);
+            await vscode.window.showErrorMessage(`Cherry-pick failed: ${message}`);
         }
     }
 }

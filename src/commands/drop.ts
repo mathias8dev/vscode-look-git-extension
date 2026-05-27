@@ -45,7 +45,7 @@ export async function handleDrop(
 
         const hasChanges = await gitService.hasUncommittedChanges();
         if (hasChanges) {
-            vscode.window.showWarningMessage(
+            await vscode.window.showWarningMessage(
                 'You have uncommitted changes. Please commit or stash them before dropping commits.'
             );
             return;
@@ -68,7 +68,7 @@ export async function handleDrop(
                 }
             );
 
-            vscode.window.showInformationMessage(
+            await vscode.window.showInformationMessage(
                 `Dropped ${commits.length} commits.`
             );
             historyProvider.refresh();
@@ -82,13 +82,13 @@ export async function handleDrop(
                 );
                 if (action === 'Abort Rebase') {
                     await gitService.rebaseAbort();
-                    vscode.window.showInformationMessage('Drop aborted, history restored.');
+                    await vscode.window.showInformationMessage('Drop aborted, history restored.');
                     historyProvider.refresh();
                 } else if (action === 'Open Source Control') {
-                    vscode.commands.executeCommand('workbench.view.scm');
+                    await vscode.commands.executeCommand('workbench.view.scm');
                 }
             } else {
-                vscode.window.showErrorMessage(`Drop failed: ${message}`);
+                await vscode.window.showErrorMessage(`Drop failed: ${message}`);
             }
         }
         return;
@@ -109,7 +109,7 @@ export async function handleDrop(
 
     const hasChanges = await gitService.hasUncommittedChanges();
     if (hasChanges) {
-        vscode.window.showWarningMessage(
+        await vscode.window.showWarningMessage(
             'You have uncommitted changes. Please commit or stash them before dropping a commit.'
         );
         return;
@@ -132,7 +132,7 @@ export async function handleDrop(
             }
         );
 
-        vscode.window.showInformationMessage(
+        await vscode.window.showInformationMessage(
             `Dropped commit ${commit.shortHash}: "${commit.message}"`
         );
         historyProvider.refresh();
@@ -148,13 +148,13 @@ export async function handleDrop(
 
             if (action === 'Abort Rebase') {
                 await gitService.rebaseAbort();
-                vscode.window.showInformationMessage('Drop aborted, history restored.');
+                await vscode.window.showInformationMessage('Drop aborted, history restored.');
                 historyProvider.refresh();
             } else if (action === 'Open Source Control') {
-                vscode.commands.executeCommand('workbench.view.scm');
+                await vscode.commands.executeCommand('workbench.view.scm');
             }
         } else {
-            vscode.window.showErrorMessage(`Drop failed: ${message}`);
+            await vscode.window.showErrorMessage(`Drop failed: ${message}`);
         }
     }
 }

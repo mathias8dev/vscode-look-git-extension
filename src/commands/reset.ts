@@ -61,12 +61,12 @@ export async function handleReset(
 
     try {
         await gitService.reset(commit.hash, selected.mode);
-        vscode.window.showInformationMessage(
+        await vscode.window.showInformationMessage(
             `Reset (${selected.mode}) to ${commit.shortHash} successful.`
         );
         historyProvider.refresh();
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        vscode.window.showErrorMessage(`Reset failed: ${message}`);
+        await vscode.window.showErrorMessage(`Reset failed: ${message}`);
     }
 }

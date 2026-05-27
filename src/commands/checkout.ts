@@ -57,12 +57,12 @@ export async function handleCheckout(
             }
 
             await gitService.checkoutNewBranch(branchName.trim(), commit.hash);
-            vscode.window.showInformationMessage(
+            await vscode.window.showInformationMessage(
                 `Created and switched to branch "${branchName}" at ${commit.shortHash}.`
             );
         } else {
             await gitService.checkout(commit.hash);
-            vscode.window.showWarningMessage(
+            await vscode.window.showWarningMessage(
                 `Checked out ${commit.shortHash} in detached HEAD state.`
             );
         }
@@ -70,6 +70,6 @@ export async function handleCheckout(
         historyProvider.refresh();
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        vscode.window.showErrorMessage(`Checkout failed: ${message}`);
+        await vscode.window.showErrorMessage(`Checkout failed: ${message}`);
     }
 }

@@ -18,7 +18,7 @@ export async function handleRebase(
 
     const hasChanges = await gitService.hasUncommittedChanges();
     if (hasChanges) {
-        vscode.window.showWarningMessage(
+        await vscode.window.showWarningMessage(
             'You have uncommitted changes. Please commit or stash them before rebasing.'
         );
         return;
@@ -31,7 +31,7 @@ export async function handleRebase(
 
     try {
         await gitService.rebase(commit.hash);
-        vscode.window.showInformationMessage(
+        await vscode.window.showInformationMessage(
             `Rebased onto ${commit.shortHash} successfully.`
         );
         historyProvider.refresh();
@@ -47,13 +47,13 @@ export async function handleRebase(
 
             if (action === 'Abort Rebase') {
                 await gitService.rebaseAbort();
-                vscode.window.showInformationMessage('Rebase aborted.');
+                await vscode.window.showInformationMessage('Rebase aborted.');
                 historyProvider.refresh();
             } else if (action === 'Open Source Control') {
-                vscode.commands.executeCommand('workbench.view.scm');
+                await vscode.commands.executeCommand('workbench.view.scm');
             }
         } else {
-            vscode.window.showErrorMessage(`Rebase failed: ${message}`);
+            await vscode.window.showErrorMessage(`Rebase failed: ${message}`);
         }
     }
 }

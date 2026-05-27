@@ -20,7 +20,7 @@ export async function handleSquash(
     // Otherwise show QuickPick for manual selection
     const commits = await gitService.getLog(100, 0);
     if (commits.length < 2) {
-        vscode.window.showWarningMessage('Need at least 2 commits to squash.');
+        await vscode.window.showWarningMessage('Need at least 2 commits to squash.');
         return;
     }
 
@@ -44,7 +44,7 @@ export async function handleSquash(
     });
 
     if (!selected || selected.length < 2) {
-        vscode.window.showWarningMessage('Select at least 2 commits to squash.');
+        await vscode.window.showWarningMessage('Select at least 2 commits to squash.');
         return;
     }
 
@@ -66,7 +66,7 @@ async function squashCommits(
 
     for (let i = 1; i < indices.length; i++) {
         if (indices[i] - indices[i - 1] !== 1) {
-            vscode.window.showWarningMessage(
+            await vscode.window.showWarningMessage(
                 'Selected commits must be consecutive in the history.'
             );
             return;
@@ -85,7 +85,7 @@ async function squashCommits(
 
     const hasChanges = await gitService.hasUncommittedChanges();
     if (hasChanges) {
-        vscode.window.showWarningMessage(
+        await vscode.window.showWarningMessage(
             'You have uncommitted changes. Please commit or stash them before squashing.'
         );
         return;
@@ -106,7 +106,7 @@ async function squashCommits(
             }
         );
 
-        vscode.window.showInformationMessage(
+        await vscode.window.showInformationMessage(
             `Squashed ${selectedCommits.length} commits into ${oldestCommit.shortHash}.`
         );
         historyProvider.refresh();
@@ -122,13 +122,13 @@ async function squashCommits(
 
             if (action === 'Abort Rebase') {
                 await gitService.rebaseAbort();
-                vscode.window.showInformationMessage('Squash aborted, history restored.');
+                await vscode.window.showInformationMessage('Squash aborted, history restored.');
                 historyProvider.refresh();
             } else if (action === 'Open Source Control') {
-                vscode.commands.executeCommand('workbench.view.scm');
+                await vscode.commands.executeCommand('workbench.view.scm');
             }
         } else {
-            vscode.window.showErrorMessage(`Squash failed: ${message}`);
+            await vscode.window.showErrorMessage(`Squash failed: ${message}`);
         }
     }
 }

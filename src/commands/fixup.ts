@@ -21,7 +21,7 @@ export async function handleFixup(
     const idx = commits.findIndex((c) => c.hash === commit.hash);
 
     if (idx === -1 || idx === commits.length - 1) {
-        vscode.window.showWarningMessage(
+        await vscode.window.showWarningMessage(
             'Cannot fixup: no parent commit found to fold into.'
         );
         return;
@@ -36,7 +36,7 @@ export async function handleFixup(
 
     const hasChanges = await gitService.hasUncommittedChanges();
     if (hasChanges) {
-        vscode.window.showWarningMessage(
+        await vscode.window.showWarningMessage(
             'You have uncommitted changes. Please commit or stash them before fixup.'
         );
         return;
@@ -54,7 +54,7 @@ export async function handleFixup(
             }
         );
 
-        vscode.window.showInformationMessage(
+        await vscode.window.showInformationMessage(
             `Fixed up ${commit.shortHash} into ${parentCommit.shortHash}.`
         );
         historyProvider.refresh();
@@ -70,13 +70,13 @@ export async function handleFixup(
 
             if (action === 'Abort Rebase') {
                 await gitService.rebaseAbort();
-                vscode.window.showInformationMessage('Fixup aborted, history restored.');
+                await vscode.window.showInformationMessage('Fixup aborted, history restored.');
                 historyProvider.refresh();
             } else if (action === 'Open Source Control') {
-                vscode.commands.executeCommand('workbench.view.scm');
+                await vscode.commands.executeCommand('workbench.view.scm');
             }
         } else {
-            vscode.window.showErrorMessage(`Fixup failed: ${message}`);
+            await vscode.window.showErrorMessage(`Fixup failed: ${message}`);
         }
     }
 }

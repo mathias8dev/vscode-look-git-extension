@@ -26,7 +26,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const gitApi = await getBuiltInGitApi();
     if (!gitApi) {
-        vscode.window.showErrorMessage('Look Git: Built-in Git extension is not available.');
+        await vscode.window.showErrorMessage('Look Git: Built-in Git extension is not available.');
         return;
     }
 
@@ -62,7 +62,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         )
     );
 
-    vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', !!repository);
+    await vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', !!repository);
 
     registerCommands(context, gitService, commitHistoryProvider, graphViewProvider, changesViewProvider);
 
@@ -72,8 +72,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (refreshTimer) { clearTimeout(refreshTimer); }
         refreshTimer = setTimeout(() => {
             commitHistoryProvider.refresh();
-            graphViewProvider.refresh();
-            changesViewProvider.refresh();
+            void graphViewProvider.refresh();
+            void changesViewProvider.refresh();
         }, 150);
     };
 
@@ -81,7 +81,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const useActiveRepository = () => {
         const active = getActiveRepository();
         gitService.setWorkingDirectory(active?.rootUri.fsPath ?? '');
-        vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', !!active);
+        void vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', !!active);
         debouncedRefreshAll();
     };
 
