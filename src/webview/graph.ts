@@ -744,7 +744,7 @@ function renderIncomingChangesIndicator(branch: BranchInfo): string {
     const upstream = branch.upstream ?? 'upstream';
     const label = `${behind} commit${behind === 1 ? '' : 's'} behind ${upstream}`;
     const escapedLabel = escapeHtml(label);
-    return `<span class="branch-remote-pending-indicator" title="${escapedLabel}" aria-label="${escapedLabel}">${INCOMING_CHANGES_SVG}<span class="branch-behind-count">${behind}</span></span>`;
+    return `<span class="branch-remote-pending-indicator" title="${escapedLabel}" aria-label="${escapedLabel}"><span class="branch-behind-badge">${INCOMING_CHANGES_SVG}</span><span class="branch-behind-count">${behind}</span></span>`;
 }
 
 function renderTreeNodes(node: BranchTreeNode, depth: number): string {
@@ -1592,8 +1592,9 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .current-branch-indicator { width: 14px; height: 14px; border-radius: 50%; background: var(--vscode-gitDecoration-addedResourceForeground, #3fb950); color: var(--vscode-editor-background); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .current-branch-indicator::before { content: ''; width: 6px; height: 3px; border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg) translate(1px, -1px); }
 .branch-item.active .current-branch-indicator { outline: 1px solid currentColor; outline-offset: 1px; }
-.branch-remote-pending-indicator { display: inline-flex; align-items: center; gap: 1px; flex-shrink: 0; color: var(--vscode-gitDecoration-modifiedResourceForeground, var(--vscode-textLink-foreground)); margin-left: auto; }
-.branch-incoming-icon { display: block; flex-shrink: 0; }
+.branch-remote-pending-indicator { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; color: var(--vscode-gitDecoration-modifiedResourceForeground, var(--vscode-textLink-foreground)); }
+.branch-behind-badge { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid currentColor; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.branch-incoming-icon { width: 10px; height: 10px; display: block; }
 .branch-behind-count { font-size: 11px; line-height: 1; }
 
 .branch-pane-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 4px 0; border-bottom: 1px solid var(--vscode-panel-border); margin-bottom: 4px; }
