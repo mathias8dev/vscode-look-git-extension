@@ -1,384 +1,39 @@
-import { execFileSync } from 'child_process';
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { $, $$, browser } from '@wdio/globals';
-
-const repoPath = process.env.LOOK_GIT_E2E_REPO;
-assert.ok(repoPath, 'LOOK_GIT_E2E_REPO must point to the fixture repository.');
-
-function git(args: string[]): string {
-    return gitAt(repoPath!, args);
-}
-
-function gitAt(cwd: string, args: string[]): string {
-    return execFileSync('git', args, {
-        cwd,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim();
-}
-
-function gitTry(args: string[]): boolean {
-    try {
-        git(args);
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-function writeFixtureFile(relativePath: string, content: string): void {
-    const fullPath = path.join(repoPath!, relativePath);
-    fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-    fs.writeFileSync(fullPath, content);
-}
-
-function splitLines(output: string): string[] {
-    return output.split('\n').filter(Boolean);
-}
-
-function statusPorcelain(): string[] {
-    return splitLines(git(['status', '--porcelain', '-uall']));
-}
-
-function cachedNames(): string[] {
-    return splitLines(git(['diff', '--cached', '--name-only']));
-}
-
-function stashLines(): string[] {
-    try {
-        return splitLines(git(['stash', 'list']));
-    } catch {
-        return [];
-    }
-}
-
-function cleanupWorkingTree(): void {
-    gitTry(['merge', '--abort']);
-    gitTry(['rebase', '--abort']);
-    git(['reset', '--hard', 'HEAD']);
-    git(['clean', '-fd']);
-}
-
-function configureRepo(cwd: string): void {
-    gitAt(cwd, ['config', 'user.email', 'test@example.com']);
-    gitAt(cwd, ['config', 'user.name', 'Test User']);
-}
-
-function initGitRepo(cwd: string): void {
-    gitAt(cwd, ['init', '-q']);
-    gitAt(cwd, ['checkout', '-q', '-b', 'main']);
-    configureRepo(cwd);
-}
-
-function commitFileAt(cwd: string, relativePath: string, content: string, message: string): string {
-    const fullPath = path.join(cwd, relativePath);
-    fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-    fs.writeFileSync(fullPath, content);
-    gitAt(cwd, ['add', '-A']);
-    gitAt(cwd, ['commit', '-q', '-m', message]);
-    return gitAt(cwd, ['rev-parse', 'HEAD']);
-}
-
-interface ConflictFixtureFile {
-    filePath: string;
-    base: string;
-    incoming: string;
-    current: string;
-}
-
-function createMergeConflict(branchName: string, files: ConflictFixtureFile[]): void {
-    cleanupWorkingTree();
-    git(['checkout', '-q', 'main']);
-    gitTry(['branch', '-D', branchName]);
-
-    for (const file of files) {
-        writeFixtureFile(file.filePath, file.base);
-    }
-    git(['add', '-A']);
-    git(['commit', '-q', '-m', `base ${branchName}`]);
-
-    git(['checkout', '-q', '-b', branchName]);
-    for (const file of files) {
-        writeFixtureFile(file.filePath, file.incoming);
-    }
-    git(['add', '-A']);
-    git(['commit', '-q', '-m', `incoming ${branchName}`]);
-
-    git(['checkout', '-q', 'main']);
-    for (const file of files) {
-        writeFixtureFile(file.filePath, file.current);
-    }
-    git(['add', '-A']);
-    git(['commit', '-q', '-m', `current ${branchName}`]);
-
-    assert.throws(() => git(['merge', branchName]), 'Fixture merge should create conflicts.');
-}
-
-async function openLookGitWorkbench(): Promise<any> {
-    await leaveWebviewContext();
-    const workbench = await browser.getWorkbench();
-    let lookGit: any;
-    await browser.waitUntil(async () => {
-        lookGit = await workbench.getActivityBar().getViewControl('Look Git');
-        return Boolean(lookGit);
-    }, {
-        timeout: 20_000,
-        timeoutMsg: 'Look Git activity bar entry should be visible.',
-    });
-    await lookGit.openView();
-    return workbench;
-}
-
-async function openWebview(title: string | RegExp): Promise<any> {
-    await leaveWebviewContext();
-    const workbench = await browser.getWorkbench();
-    const webview = await workbench.getWebviewByTitle(title);
-    await webview.open();
-    return webview;
-}
-
-async function refreshChanges(): Promise<void> {
-    await browser.executeWorkbench((vscode: any) => vscode.commands.executeCommand('lookGit.refreshChanges'));
-}
-
-function fileSelector(filePath: string): string {
-    return `[data-file="${filePath.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`;
-}
-
-async function leaveWebviewContext(): Promise<void> {
-    await browser.switchToFrame(null);
-    await browser.switchToFrame(null);
-}
-
-async function clickFileAction(filePath: string, actionClass: string): Promise<void> {
-    const rowSelector = `.file-row${fileSelector(filePath)}`;
-    const actionSelector = `.${actionClass}${fileSelector(filePath)}`;
-
-    await browser.waitUntil(async () => {
-        try {
-            const row = await $(rowSelector);
-            return await row.isDisplayed();
-        } catch {
-            return false;
-        }
-    }, {
-        timeout: 5_000,
-        timeoutMsg: `Expected ${filePath} row to be visible.`,
-    });
-
-    await browser.execute((selector) => {
-        document.querySelector<HTMLElement>(selector)?.scrollIntoView({ block: 'center' });
-    }, rowSelector);
-
-    const row = await $(rowSelector);
-    await row.moveTo();
-
-    await browser.waitUntil(async () => {
-        try {
-            const action = await $(actionSelector);
-            return await action.isDisplayed() && await action.isClickable();
-        } catch {
-            return false;
-        }
-    }, {
-        timeout: 5_000,
-        timeoutMsg: `Expected ${actionClass} for ${filePath} to be visible and clickable after hovering its row.`,
-    });
-
-    const clicked = await (async () => {
-        try {
-            const action = await $(actionSelector);
-            await action.click();
-            return true;
-        } catch {
-            return false;
-        }
-    })();
-
-    if (!clicked) {
-        await browser.execute((selector) => {
-            document.querySelector<HTMLElement>(selector)?.click();
-        }, actionSelector);
-    }
-}
-
-async function clickVisible(selector: string): Promise<void> {
-    const element = await $(selector);
-    await element.waitForClickable();
-    await element.click();
-}
-
-async function clickSectionAction(section: string, selector: string, options: { domClick?: boolean } = {}): Promise<void> {
-    const header = await $(`.section-header[data-section="${section}"]`);
-    await header.waitForDisplayed();
-    await header.scrollIntoView();
-    await header.moveTo();
-
-    const action = await $(selector);
-    await browser.waitUntil(async () => await action.isDisplayed() && await action.isClickable(), {
-        timeout: 5_000,
-        timeoutMsg: `Expected ${selector} in ${section} section to be visible and clickable after hovering the header.`,
-    });
-    if (options.domClick) {
-        await browser.execute((targetSelector) => {
-            document.querySelector<HTMLElement>(targetSelector)?.click();
-        }, selector);
-    } else {
-        await action.click();
-    }
-}
-
-async function clickStashAction(actionClass: string, index = 0): Promise<void> {
-    const row = await $(`.stash-row[data-stash-index="${index}"]`);
-    await row.waitForDisplayed();
-    await row.scrollIntoView();
-    await row.moveTo();
-
-    const action = await $(`.${actionClass}[data-index="${index}"]`);
-    await browser.waitUntil(async () => await action.isDisplayed() && await action.isClickable(), {
-        timeout: 5_000,
-        timeoutMsg: `Expected ${actionClass} for stash@{${index}} to be visible and clickable after hovering its row.`,
-    });
-    await action.click();
-}
-
-async function expandStashesSection(): Promise<void> {
-    if (await $('.stash-row[data-stash-index="0"]').isExisting()) {
-        return;
-    }
-    await clickVisible('[data-section="stashes"] .section-title-row');
-    await $('.stash-row[data-stash-index="0"]').waitForExist();
-}
-
-async function waitForActiveEditorLabel(labelPart: string): Promise<void> {
-    await leaveWebviewContext();
-    await browser.waitUntil(async () => {
-        const label = await browser.executeWorkbench((vscode: any) =>
-            vscode.window.tabGroups.activeTabGroup.activeTab?.label ?? ''
-        );
-        return String(label).includes(labelPart);
-    }, {
-        timeout: 10_000,
-        timeoutMsg: `Expected active editor label to include "${labelPart}".`,
-    });
-}
-
-async function closeAllEditors(): Promise<void> {
-    await leaveWebviewContext();
-    await browser.executeWorkbench((vscode: any) => vscode.commands.executeCommand('workbench.action.closeAllEditors'));
-}
-
-async function clickGraphToggle(expectActive: boolean): Promise<void> {
-    const toggle = await $('#toggle-graph-btn');
-    await toggle.waitForClickable();
-    await toggle.click();
-
-    const toggledByWebDriver = await browser.waitUntil(async () => {
-        return browser.execute((active) => {
-            const button = document.querySelector('#toggle-graph-btn');
-            return Boolean(button?.classList.contains('active')) === active;
-        }, expectActive);
-    }, {
-        timeout: 1_000,
-        interval: 100,
-    }).catch(() => false);
-
-    if (toggledByWebDriver) {
-        return;
-    }
-
-    await browser.execute(() => {
-        document.querySelector<HTMLElement>('#toggle-graph-btn')?.click();
-    });
-    await browser.waitUntil(async () => {
-        return browser.execute((active) => {
-            const button = document.querySelector('#toggle-graph-btn');
-            return Boolean(button?.classList.contains('active')) === active;
-        }, expectActive);
-    }, {
-        timeout: 5_000,
-        timeoutMsg: `Expected Graph toggle active=${expectActive}.`,
-    });
-}
-
-async function clickFirstGraphCommit(): Promise<void> {
-    const matchedButtons = await $$('.graph-row.filter-matched .commit-row-button');
-    const firstCommitButton = matchedButtons[0] ?? await $('.graph-row .commit-row-button');
-    await firstCommitButton.waitForClickable();
-    await firstCommitButton.click();
-
-    const selectedByWebDriver = await browser.waitUntil(async () => {
-        return browser.execute(() => Boolean(document.querySelector('.graph-row.selected')));
-    }, {
-        timeout: 1_000,
-        interval: 100,
-    }).catch(() => false);
-
-    if (selectedByWebDriver) {
-        return;
-    }
-
-    await browser.execute(() => {
-        const button = document.querySelector<HTMLElement>('.graph-row.filter-matched .commit-row-button')
-            ?? document.querySelector<HTMLElement>('.graph-row .commit-row-button');
-        button?.click();
-    });
-}
-
-async function openPathFilterDropdown(): Promise<void> {
-    const pathFilter = await $('[data-filter="paths"]');
-    await pathFilter.waitForClickable();
-    await pathFilter.click();
-
-    const openedByWebDriver = await browser.waitUntil(async () => {
-        return browser.execute(() => Boolean(document.querySelector('#filter-path-input')));
-    }, {
-        timeout: 1_000,
-        interval: 100,
-    }).catch(() => false);
-
-    if (!openedByWebDriver) {
-        await browser.execute(() => {
-            document.querySelector<HTMLElement>('[data-filter="paths"]')?.click();
-        });
-    }
-
-    await $('#filter-path-input').waitForExist();
-}
-
-async function takeNotificationAction(messagePart: string, actionTitle: string): Promise<void> {
-    const workbench = await browser.getWorkbench();
-    await browser.waitUntil(async () => {
-        const notifications = await workbench.getNotifications();
-        for (const notification of notifications) {
-            const message = await notification.getMessage();
-            if (message.includes(messagePart)) {
-                await notification.takeAction(actionTitle);
-                return true;
-            }
-        }
-        return false;
-    }, {
-        timeout: 10_000,
-        timeoutMsg: `Expected notification "${messagePart}" with action "${actionTitle}".`,
-    });
-}
-
-async function waitForGit(predicate: () => boolean, message: string): Promise<void> {
-    await browser.waitUntil(() => {
-        try {
-            return predicate();
-        } catch {
-            return false;
-        }
-    }, {
-        timeout: 20_000,
-        timeoutMsg: message,
-    });
-}
+import {
+    cachedNames,
+    cleanupWorkingTree,
+    clickVisible,
+    clickFileAction,
+    clickFirstGraphCommit,
+    clickGraphToggle,
+    clickSectionAction,
+    clickStashAction,
+    closeAllEditors,
+    commitFileAt,
+    configureRepo,
+    createMergeConflict,
+    expandStashesSection,
+    git,
+    gitTry,
+    initGitRepo,
+    leaveWebviewContext,
+    openLookGitWorkbench,
+    openPathFilterDropdown,
+    openWebview,
+    refreshChanges,
+    repoPath,
+    splitLines,
+    stashLines,
+    statusPorcelain,
+    takeNotificationAction,
+    waitForActiveEditorLabel,
+    waitForGit,
+    writeFixtureFile,
+} from '../helpers/lookGitE2e';
 
 describe('Look Git VS Code E2E', () => {
     afterEach(async () => {
@@ -467,7 +122,7 @@ describe('Look Git VS Code E2E', () => {
             'Expected Stage All to stage every visible unstaged file.',
         );
 
-        await clickSectionAction('staged', '#unstage-all-btn', { domClick: true });
+        await clickSectionAction('staged', '#unstage-all-btn');
         await waitForGit(
             () => {
                 const line = statusPorcelain().find((entry) => entry.includes('bulk/a.txt'));

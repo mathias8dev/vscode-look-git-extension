@@ -4,95 +4,35 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import { promisify } from 'util';
+import { MESSAGE_EDITOR_SCRIPT, SEQUENCE_EDITOR_SCRIPT } from './gitEditorScripts';
+import { parseCommitLog, parseNameStatusZ } from './gitParsers';
+import {
+    getAllBranches as queryAllBranches,
+    getAllTags as queryAllTags,
+    getGraphLog as queryGraphLog,
+    getUserName as queryUserName,
+} from './gitGraphQueries';
+import {
+    getStatus as queryStatus,
+    getStashFiles as queryStashFiles,
+    getTrackingBranch as queryTrackingBranch,
+    stashList as queryStashList,
+} from './gitWorkingTree';
+import type {
+    BranchInfo,
+    GitCommitInfo,
+    GitFileChange,
+    GitStatus,
+    GraphCommitInfo,
+    GraphLogFilters,
+    ResetMode,
+    StashEntry,
+    TagInfo,
+} from './gitTypes';
+
+export type { BranchInfo, GitCommitInfo, GitFileChange, GitFileStatus, GitStatus, GitStatusEntry, GraphCommitInfo, GraphLogFilters, ResetMode, StashEntry, TagInfo } from './gitTypes';
 
 const execFileAsync = promisify(execFile);
-const LOG_FIELD_SEP = '\x1f';
-const LOG_RECORD_SEP = '\x1e';
-
-const SEQUENCE_EDITOR_SCRIPT = `
-const fs = require('fs');
-const file = process.argv[2];
-const actions = new Map(JSON.parse(process.env.LOOK_GIT_REBASE_ACTIONS || '[]'));
-const lines = fs.readFileSync(file, 'utf8').split(/\\r?\\n/);
-const next = lines.map((line) => {
-  const match = line.match(/^([a-z]+)(\\s+)([0-9a-f]+)(\\s.*)$/i);
-  if (!match) { return line; }
-  const [, , spacing, todoHash, rest] = match;
-  for (const [targetHash, action] of actions) {
-    if (targetHash.startsWith(todoHash) || todoHash.startsWith(targetHash)) {
-      return action + spacing + todoHash + rest;
-    }
-  }
-  return line;
-});
-fs.writeFileSync(file, next.join('\\n'));
-`;
-
-const MESSAGE_EDITOR_SCRIPT = `
-const fs = require('fs');
-const file = process.argv[2];
-fs.writeFileSync(file, (process.env.LOOK_GIT_COMMIT_MESSAGE || '') + '\\n');
-`;
-
-export interface GitCommitInfo {
-    hash: string;
-    shortHash: string;
-    message: string;
-    authorName: string;
-    authorEmail: string;
-    authorDate: Date;
-    parentHashes: string[];
-}
-
-export type ResetMode = 'soft' | 'mixed' | 'hard';
-
-export type GitFileStatus = 'A' | 'M' | 'D' | 'R' | 'C' | 'T' | 'U';
-
-export interface GitFileChange {
-    status: GitFileStatus;
-    filePath: string;
-    origPath?: string;
-    parentHash?: string;
-}
-
-export interface GitStatusEntry {
-    indexStatus: string;
-    workTreeStatus: string;
-    filePath: string;
-    origPath?: string;
-}
-
-export interface StashEntry {
-    index: number;
-    message: string;
-}
-
-export interface BranchInfo {
-    name: string;
-    isRemote: boolean;
-    isCurrent: boolean;
-    hash: string;
-    upstream?: string;
-    ahead: number;
-    behind: number;
-}
-
-export interface TagInfo {
-    name: string;
-    hash: string;
-}
-
-export interface GraphCommitInfo extends GitCommitInfo {
-    refs: string[];
-    matchesFilter?: boolean;
-}
-
-export interface GraphLogFilters {
-    search?: string;
-    authors?: string[];
-    dateFrom?: string;
-    dateTo?: string;
-}
 
 export class GitService {
     private cwd: string;
@@ -245,7 +185,7 @@ export class GitService {
             return [];
         }
 
-        return this.parseCommitLog(output);
+        return parseCommitLog(output);
     }
 
     public async getCommit(commitHash: string): Promise<GitCommitInfo | undefined> {
@@ -276,25 +216,7 @@ export class GitService {
             return [];
         }
 
-        return this.parseCommitLog(output);
-    }
-
-    private parseCommitLog(output: string): GitCommitInfo[] {
-        return output.split(LOG_RECORD_SEP)
-            .map((record) => record.replace(/^\n/, '').replace(/\n$/, ''))
-            .filter(Boolean)
-            .map((record) => {
-                const parts = record.split(LOG_FIELD_SEP);
-                return {
-                    hash: parts[0],
-                    shortHash: parts[1],
-                    message: parts[2],
-                    authorName: parts[3],
-                    authorEmail: parts[4],
-                    authorDate: new Date(parts[5]),
-                    parentHashes: parts[6] ? parts[6].split(' ') : [],
-                };
-            });
+        return parseCommitLog(output);
     }
 
     public async cherryPick(commitHash: string): Promise<string> {
@@ -493,7 +415,7 @@ export class GitService {
             const output = await this.execRawReadonly([
                 'diff-tree', '--root', '--no-commit-id', '-r', '-M', '--name-status', '-z', commitHash,
             ]);
-            return output ? this.parseNameStatusZ(output) : [];
+            return output ? parseNameStatusZ(output) : [];
         }
 
         const result: GitFileChange[] = [];
@@ -502,7 +424,7 @@ export class GitService {
             const output = await this.execRawReadonly([
                 'diff-tree', '--no-commit-id', '-r', '-M', '--name-status', '-z', parentHash, commitHash,
             ]);
-            for (const change of this.parseNameStatusZ(output, parentHash)) {
+            for (const change of parseNameStatusZ(output, parentHash)) {
                 const key = `${parentHash}:${change.filePath}`;
                 if (!seen.has(key)) {
                     seen.add(key);
@@ -520,98 +442,19 @@ export class GitService {
         return parents;
     }
 
-    private parseNameStatusZ(output: string, parentHash?: string): GitFileChange[] {
-        const seen = new Set<string>();
-        const result: GitFileChange[] = [];
-        const tokens = output.split('\0');
-
-        for (let i = 0; i < tokens.length;) {
-            const statusToken = tokens[i++];
-            if (!statusToken) {
-                continue;
-            }
-            const status = statusToken.charAt(0) as GitFileStatus;
-            let origPath: string | undefined;
-            let filePath = tokens[i++];
-
-            if ((status === 'R' || status === 'C') && filePath) {
-                origPath = filePath;
-                filePath = tokens[i++];
-            }
-
-            // Deduplicate (merge commits can list files multiple times)
-            if (filePath && !seen.has(filePath)) {
-                seen.add(filePath);
-                result.push({ status, filePath, origPath, parentHash });
-            }
-        }
-
-        return result;
-    }
-
     public getWorkingDirectory(): string {
         return this.cwd;
     }
 
     public async getAllBranches(): Promise<BranchInfo[]> {
-        const FORMAT = [
-            '%(refname)',
-            '%(objectname:short)',
-            '%(upstream:short)',
-            '%(upstream:track)',
-        ].join('%00');
-
-        const [output, currentBranch] = await Promise.all([
-            this.execRawReadonly(['for-each-ref', `--format=${FORMAT}`, 'refs/heads', 'refs/remotes']),
-            this.getCurrentBranch().catch(() => 'HEAD'),
-        ]);
-
-        if (!output) {
-            return [];
-        }
-
-        return output.split('\n').filter(Boolean).flatMap((line) => {
-            const parts = line.split('\0');
-            const refName = parts[0];
-            const isRemote = refName.startsWith('refs/remotes/');
-            if (isRemote && refName.endsWith('/HEAD')) {
-                return [];
-            }
-            const name = isRemote
-                ? refName.replace(/^refs\/remotes\//, '')
-                : refName.replace(/^refs\/heads\//, '');
-            const tracking = parseTrackingStatus(parts[3] ?? '');
-
-            return {
-                name,
-                isCurrent: !isRemote && name === currentBranch,
-                hash: parts[1],
-                upstream: parts[2] || undefined,
-                ahead: tracking.ahead,
-                behind: tracking.behind,
-                isRemote,
-            };
-        });
+        return queryAllBranches(
+            this.execRawReadonly.bind(this),
+            this.getCurrentBranch.bind(this),
+        );
     }
 
     public async getAllTags(): Promise<TagInfo[]> {
-        const FORMAT = `%(refname:short)%00%(objectname:short)`;
-
-        const output = await this.execRawReadonly([
-            'tag', `--format=${FORMAT}`,
-        ]);
-
-        if (!output) {
-            return [];
-        }
-
-        return output.split('\n').filter(Boolean).map((line) => {
-            const parts = line.split('\0');
-            return {
-                name: parts[0],
-                hash: parts[1],
-            };
-        });
+        return queryAllTags(this.execRawReadonly.bind(this));
     }
 
     public async getGraphLog(
@@ -620,142 +463,11 @@ export class GitService {
         pathFilter?: string,
         filters: GraphLogFilters = {},
     ): Promise<GraphCommitInfo[]> {
-        const FORMAT = [
-            '%H',   // full hash
-            '%h',   // short hash
-            '%s',   // subject
-            '%an',  // author name
-            '%ae',  // author email
-            '%aI',  // author date ISO 8601
-            '%P',   // parent hashes
-            '%D',   // ref names
-        ].join('%x1f') + '%x1e';
-
-        const search = filters.search?.trim();
-        const searchScanLimit = search
-            ? Math.max(maxCount, Math.min(maxCount * 20, 5000))
-            : maxCount;
-        const args = [
-            'log',
-            `--format=${FORMAT}`,
-            `--max-count=${searchScanLimit}`,
-            '--topo-order',
-        ];
-
-        const authors = filters.authors?.map((author) => author.trim()).filter(Boolean) ?? [];
-        const dateFrom = filters.dateFrom?.trim();
-        const dateTo = filters.dateTo?.trim();
-
-        if (dateFrom) {
-            args.push(`--since=${dateFrom}T00:00:00`);
-        }
-        if (dateTo) {
-            args.push(`--until=${dateTo}T23:59:59`);
-        }
-        for (const author of authors) {
-            args.push(`--author=${author}`);
-        }
-
-        if (branches && branches.length > 0) {
-            args.push(...branches);
-        } else {
-            args.push('--all');
-        }
-        if (pathFilter) {
-            args.push('--', pathFilter);
-        }
-
-        const output = await this.execRawReadonly(args);
-
-        if (!output) {
-            return [];
-        }
-
-        let commits: GraphCommitInfo[] = output.split(LOG_RECORD_SEP)
-            .map((record) => record.replace(/^\n/, '').replace(/\n$/, ''))
-            .filter(Boolean)
-            .map((record) => {
-            const parts = record.split(LOG_FIELD_SEP);
-            const refs = parts[7]
-                ? parts[7].split(',').map((r) => r.trim()).filter(Boolean)
-                : [];
-            return {
-                hash: parts[0],
-                shortHash: parts[1],
-                message: parts[2],
-                authorName: parts[3],
-                authorEmail: parts[4],
-                authorDate: new Date(parts[5]),
-                parentHashes: parts[6] ? parts[6].split(' ') : [],
-                refs,
-            };
-        });
-
-        if (search) {
-            const normalizedSearch = search.toLowerCase();
-            for (const commit of commits) {
-                commit.matchesFilter = this.commitMatchesGraphSearch(commit, normalizedSearch);
-            }
-            commits = this.includeGraphSearchContext(commits, maxCount);
-        }
-
-        return commits.slice(0, maxCount);
-    }
-
-    private includeGraphSearchContext(commits: GraphCommitInfo[], maxCount: number): GraphCommitInfo[] {
-        const byHash = new Map(commits.map((commit) => [commit.hash, commit]));
-        const included = new Set<string>();
-        const contextDepth = 12;
-
-        for (const commit of commits) {
-            if (!commit.matchesFilter) {
-                continue;
-            }
-
-            included.add(commit.hash);
-            const pending = commit.parentHashes.map((hash) => ({ hash, depth: 1 }));
-            while (pending.length > 0) {
-                const next = pending.shift()!;
-                if (next.depth > contextDepth || included.has(next.hash)) {
-                    continue;
-                }
-
-                const parent = byHash.get(next.hash);
-                if (!parent) {
-                    continue;
-                }
-
-                included.add(parent.hash);
-                for (const parentHash of parent.parentHashes) {
-                    pending.push({ hash: parentHash, depth: next.depth + 1 });
-                }
-            }
-
-            if (included.size >= maxCount * 2) {
-                break;
-            }
-        }
-
-        const contextualCommits = commits.filter((commit) => included.has(commit.hash));
-        return contextualCommits.length > 0
-            ? contextualCommits
-            : commits.filter((commit) => commit.matchesFilter);
-    }
-
-    private commitMatchesGraphSearch(commit: GraphCommitInfo, normalizedSearch: string): boolean {
-        return commit.message.toLowerCase().includes(normalizedSearch)
-            || commit.hash.toLowerCase().includes(normalizedSearch)
-            || commit.shortHash.toLowerCase().includes(normalizedSearch)
-            || commit.authorName.toLowerCase().includes(normalizedSearch)
-            || commit.authorEmail.toLowerCase().includes(normalizedSearch);
+        return queryGraphLog(this.execRawReadonly.bind(this), maxCount, branches, pathFilter, filters);
     }
 
     public async getUserName(): Promise<string> {
-        try {
-            return (await this.execReadonly(['config', 'user.name'])).trim();
-        } catch {
-            return '';
-        }
+        return queryUserName(this.execReadonly.bind(this));
     }
 
     public async deleteBranch(branchName: string, force?: boolean): Promise<string> {
@@ -782,76 +494,11 @@ export class GitService {
         return this.exec(['fetch', remote, branchName]);
     }
 
-    public async getStatus(): Promise<{
-        staged: GitStatusEntry[];
-        unstaged: GitStatusEntry[];
-        conflicts: GitStatusEntry[];
-        conflictState: 'none' | 'merge' | 'rebase';
-    }> {
-        const output = await this.execRawReadonly(['status', '--porcelain=v1', '-z', '-u']);
-        const staged: GitStatusEntry[] = [];
-        const unstaged: GitStatusEntry[] = [];
-        const conflicts: GitStatusEntry[] = [];
-
-        if (!output) {
-            const conflictState = await this.detectConflictState();
-            return { staged, unstaged, conflicts, conflictState };
-        }
-
-        const conflictCodes = new Set(['U', 'A', 'D']);
-
-        const tokens = output.split('\0');
-        for (let i = 0; i < tokens.length;) {
-            const line = tokens[i++];
-            if (!line || line.length < 3) { continue; }
-
-            const indexStatus = line[0];
-            const workTreeStatus = line[1];
-            let filePath = line.substring(3);
-            let origPath: string | undefined;
-
-            if (indexStatus === 'R' || indexStatus === 'C' || workTreeStatus === 'R' || workTreeStatus === 'C') {
-                origPath = tokens[i++] || undefined;
-            }
-
-            const entry: GitStatusEntry = { indexStatus, workTreeStatus, filePath, origPath };
-
-            // Unmerged: both sides have a conflict code (UU, AA, DD, AU, UA, DU, UD)
-            const isConflict = indexStatus === 'U' || workTreeStatus === 'U'
-                || (conflictCodes.has(indexStatus) && conflictCodes.has(workTreeStatus));
-
-            if (isConflict) {
-                conflicts.push(entry);
-            } else {
-                if (indexStatus !== ' ' && indexStatus !== '?') {
-                    staged.push(entry);
-                }
-                if (workTreeStatus !== ' ' || indexStatus === '?') {
-                    unstaged.push(entry);
-                }
-            }
-        }
-
-        const conflictState = await this.detectConflictState();
-        return { staged, unstaged, conflicts, conflictState };
-    }
-
-    private async detectConflictState(): Promise<'none' | 'merge' | 'rebase'> {
-        try {
-            const gitDir = await this.getGitDir();
-            if (fsSync.existsSync(path.join(gitDir, 'MERGE_HEAD'))) {
-                return 'merge';
-            }
-            if (
-                fsSync.existsSync(path.join(gitDir, 'rebase-merge'))
-                || fsSync.existsSync(path.join(gitDir, 'rebase-apply'))
-            ) {
-                return 'rebase';
-            }
-        } catch {
-            return 'none';
-        }
-        return 'none';
+    public async getStatus(): Promise<GitStatus> {
+        return queryStatus(
+            this.execRawReadonly.bind(this),
+            this.getGitDir.bind(this),
+        );
     }
 
     public async stageFile(filePath: string): Promise<string> {
@@ -912,28 +559,11 @@ export class GitService {
     }
 
     public async getTrackingBranch(): Promise<{ remote: string; branch: string } | undefined> {
-        try {
-            const upstream = await this.execReadonly(['rev-parse', '--abbrev-ref', '@{upstream}']);
-            const [remote, ...branchParts] = upstream.split('/');
-            return { remote, branch: branchParts.join('/') };
-        } catch {
-            return undefined;
-        }
+        return queryTrackingBranch(this.execReadonly.bind(this));
     }
 
     public async stashList(): Promise<StashEntry[]> {
-        try {
-            const output = await this.execReadonly(['stash', 'list', '--format=%gd %s']);
-            if (!output) { return []; }
-            return output.split('\n').map((line) => {
-                // Format: "stash@{0} WIP on main: abc1234 message"
-                const match = line.match(/^stash@\{(\d+)\}\s+(.*)/);
-                if (!match) { return { index: 0, message: line }; }
-                return { index: parseInt(match[1], 10), message: match[2] };
-            });
-        } catch {
-            return [];
-        }
+        return queryStashList(this.execReadonly.bind(this));
     }
 
     public async stash(message?: string): Promise<string> {
@@ -961,14 +591,6 @@ export class GitService {
     }
 
     public async getStashFiles(index: number): Promise<GitFileChange[]> {
-        const output = await this.execRawReadonly(['stash', 'show', '--name-status', '-M', '-z', `stash@{${index}}`]);
-        if (!output) { return []; }
-        return this.parseNameStatusZ(output);
+        return queryStashFiles(this.execRawReadonly.bind(this), index);
     }
-}
-
-function parseTrackingStatus(track: string): { ahead: number; behind: number } {
-    const ahead = Number(track.match(/\bahead (\d+)\b/)?.[1] ?? 0);
-    const behind = Number(track.match(/\bbehind (\d+)\b/)?.[1] ?? 0);
-    return { ahead, behind };
 }
