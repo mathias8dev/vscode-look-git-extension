@@ -886,7 +886,7 @@ describe('Graph webview runtime behavior', () => {
             data: {
                 branches: [
                     { name: 'main', isRemote: false, isCurrent: true, hash: 'abc1234', upstream: 'origin/main', ahead: 0, behind: 2 },
-                    { name: 'feature/ui', isRemote: false, isCurrent: false, hash: 'def1234', upstream: 'origin/feature/ui', ahead: 1, behind: 0 },
+                    { name: 'feature/ui', isRemote: false, isCurrent: false, hash: 'def1234', upstream: 'origin/feature/ui', ahead: 1, behind: 1 },
                     { name: 'origin/main', isRemote: true, isCurrent: false, hash: 'abc1234' },
                 ],
                 tags: [],
@@ -901,8 +901,11 @@ describe('Graph webview runtime behavior', () => {
         expect(listCurrent).not.toBeNull();
         expect(listCurrent?.querySelector('.current-branch-indicator')?.getAttribute('aria-label')).toBe('Current branch');
         expect(listCurrent?.querySelector('.branch-remote-pending-indicator')?.getAttribute('aria-label')).toBe('2 commits behind origin/main');
+        expect(listCurrent?.querySelector('.branch-remote-pending-indicator')?.textContent?.trim()).toBe('');
+        expect(listCurrent?.querySelector('.branch-remote-pending-indicator path')?.getAttribute('d')).toBe('M18 6L6 18M6 18L6 9M6 18L15 18');
+        expect(document.head.textContent).toContain('.branch-remote-pending-indicator { width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; margin-left: 10px; }');
         expect(document.querySelector('.branch-item[data-branch="feature/ui"] .current-branch-indicator')).toBeNull();
-        expect(document.querySelector('.branch-item[data-branch="feature/ui"] .branch-remote-pending-indicator')).toBeNull();
+        expect(document.querySelector('.branch-item[data-branch="feature/ui"] .branch-remote-pending-indicator')?.getAttribute('aria-label')).toBe('1 commit behind origin/feature/ui');
         expect(document.querySelector('.branch-item[data-branch="origin/main"] .branch-remote-pending-indicator')).toBeNull();
 
         click('.view-switch-btn[data-mode="tree"]');
@@ -910,6 +913,7 @@ describe('Graph webview runtime behavior', () => {
         expect(treeCurrent).not.toBeNull();
         expect(treeCurrent?.querySelector('.current-branch-indicator')).not.toBeNull();
         expect(treeCurrent?.querySelector('.branch-remote-pending-indicator')).not.toBeNull();
+        expect(document.querySelector('.branch-item.tree-leaf[data-branch="feature/ui"] .branch-remote-pending-indicator')).not.toBeNull();
         expect(document.querySelector('.branch-tree-folder .tree-folder-icon')).not.toBeNull();
         expect(document.querySelector('.branch-tree-folder .tree-chevron-icon')).not.toBeNull();
     });
