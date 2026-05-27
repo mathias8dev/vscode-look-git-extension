@@ -1,5 +1,13 @@
 import { escapeHtml } from './graphRenderer';
 import type { FileChange, FilesViewMode, GraphData } from './graphTypes';
+import {
+    ICON_FOLDER,
+    ICON_LIST_VIEW,
+    ICON_TREE_CHEVRON_DOWN,
+    ICON_TREE_CHEVRON_RIGHT,
+    ICON_TREE_VIEW,
+    renderFileTypeIcon,
+} from '../icons/webviewIcons';
 
 interface CommitDetailsDeps {
     getData(): GraphData | null;
@@ -16,65 +24,6 @@ interface FileTreeNode {
 }
 
 const collapsedDetailsFolders = new Set<string>();
-
-const CHEVRON_RIGHT_SVG = `<svg class="tree-chevron-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-    <path d="M6 4.25 9.75 8 6 11.75" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
-
-const CHEVRON_DOWN_SVG = `<svg class="tree-chevron-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-    <path d="M4.25 6 8 9.75 11.75 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
-
-const FOLDER_ICON_SVG = `<svg class="folder-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-    <path d="M1.75 4.25A1.75 1.75 0 0 1 3.5 2.5h2.35c.46 0 .9.18 1.24.5l.84.75h4.57a1.75 1.75 0 0 1 1.75 1.75v6A1.75 1.75 0 0 1 12.5 13.25h-9a1.75 1.75 0 0 1-1.75-1.75V4.25zm1.5.25v7c0 .14.11.25.25.25h9a.25.25 0 0 0 .25-.25v-6a.25.25 0 0 0-.25-.25H7.35L6.08 4.1a.35.35 0 0 0-.23-.1H3.5a.25.25 0 0 0-.25.25z" fill="currentColor"/>
-</svg>`;
-
-const FILE_ICON_MAP: Record<string, { color: string; letter: string }> = {
-    ts: { color: '#3178c6', letter: 'TS' },
-    tsx: { color: '#3178c6', letter: 'TX' },
-    js: { color: '#f1e05a', letter: 'JS' },
-    jsx: { color: '#f1e05a', letter: 'JX' },
-    json: { color: '#a8b34b', letter: '{}' },
-    css: { color: '#563d7c', letter: '#' },
-    scss: { color: '#c6538c', letter: '#' },
-    less: { color: '#1d365d', letter: '#' },
-    html: { color: '#e34c26', letter: '<>' },
-    md: { color: '#519aba', letter: 'M' },
-    py: { color: '#3572a5', letter: 'Py' },
-    rb: { color: '#cc342d', letter: 'Rb' },
-    go: { color: '#00add8', letter: 'Go' },
-    rs: { color: '#dea584', letter: 'Rs' },
-    java: { color: '#b07219', letter: 'J' },
-    kt: { color: '#a97bff', letter: 'Kt' },
-    swift: { color: '#f05138', letter: 'Sw' },
-    c: { color: '#555555', letter: 'C' },
-    cpp: { color: '#f34b7d', letter: 'C+' },
-    h: { color: '#555555', letter: 'H' },
-    cs: { color: '#178600', letter: 'C#' },
-    php: { color: '#4f5d95', letter: 'P' },
-    sh: { color: '#89e051', letter: '$' },
-    bash: { color: '#89e051', letter: '$' },
-    yml: { color: '#cb171e', letter: 'Y' },
-    yaml: { color: '#cb171e', letter: 'Y' },
-    toml: { color: '#9c4221', letter: 'T' },
-    xml: { color: '#e34c26', letter: '<>' },
-    svg: { color: '#ffb13b', letter: 'Sv' },
-    png: { color: '#a074c4', letter: 'Im' },
-    jpg: { color: '#a074c4', letter: 'Im' },
-    jpeg: { color: '#a074c4', letter: 'Im' },
-    gif: { color: '#a074c4', letter: 'Im' },
-    sql: { color: '#e38c00', letter: 'Sq' },
-    graphql: { color: '#e10098', letter: 'Gq' },
-    vue: { color: '#41b883', letter: 'V' },
-    svelte: { color: '#ff3e00', letter: 'Sv' },
-    lock: { color: '#6a737d', letter: 'Lk' },
-    env: { color: '#6a737d', letter: 'Ev' },
-    gitignore: { color: '#6a737d', letter: 'Gi' },
-    dockerfile: { color: '#384d54', letter: 'Dk' },
-    makefile: { color: '#427819', letter: 'Mk' },
-};
-
-const DEFAULT_FILE_ICON = { color: '#6a737d', letter: 'F' };
 
 export function createCommitDetailsController(deps: CommitDetailsDeps): {
     render(hash: string, fullMessage: string, files: FileChange[]): void;
@@ -127,8 +76,8 @@ export function createCommitDetailsController(deps: CommitDetailsDeps): {
         html += `<div class="details-files-toolbar">
             <span class="details-files-header">Changed Files (${files.length})</span>
             <div class="view-switcher">
-                <button class="view-switch-btn${listActive}" data-files-mode="list" title="List view">&#9776;</button>
-                <button class="view-switch-btn${treeActive}" data-files-mode="tree" title="Tree view">&#128466;</button>
+                <button class="view-switch-btn${listActive}" data-files-mode="list" title="List view">${ICON_LIST_VIEW}</button>
+                <button class="view-switch-btn${treeActive}" data-files-mode="tree" title="Tree view">${ICON_TREE_VIEW}</button>
             </div>
         </div>`;
 
@@ -151,33 +100,12 @@ function renderFileList(hash: string, files: FileChange[]): string {
         const parentAttr = file.parentHash ? ` data-parent="${escapeHtml(file.parentHash)}"` : '';
         html += `
             <div class="file-item" data-file="${escapeHtml(file.filePath)}"${origAttr}${parentAttr} data-status="${file.status}" data-hash="${hash}">
-                ${renderFileIconSvg(file.filePath)}
+                ${renderFileTypeIcon(file.filePath)}
                 <span class="file-status ${statusClass}">${file.status}</span>
                 <span class="file-path">${escapeHtml(file.filePath)}</span>
             </div>`;
     }
     return html;
-}
-
-function getFileIconInfo(filePath: string): { color: string; letter: string } {
-    const name = filePath.split('/').pop() || '';
-    const nameLower = name.toLowerCase();
-
-    if (nameLower === 'dockerfile') { return FILE_ICON_MAP['dockerfile']; }
-    if (nameLower === 'makefile') { return FILE_ICON_MAP['makefile']; }
-    if (nameLower.startsWith('.env')) { return FILE_ICON_MAP['env']; }
-    if (nameLower === '.gitignore') { return FILE_ICON_MAP['gitignore']; }
-
-    const ext = name.includes('.') ? name.split('.').pop()!.toLowerCase() : '';
-    return FILE_ICON_MAP[ext] || DEFAULT_FILE_ICON;
-}
-
-function renderFileIconSvg(filePath: string): string {
-    const info = getFileIconInfo(filePath);
-    return `<svg class="file-icon" width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-        <rect x="2" y="1" width="12" height="14" rx="1.5" fill="${info.color}" opacity="0.15" stroke="${info.color}" stroke-width="0.5"/>
-        <text x="8" y="10.5" text-anchor="middle" font-size="6" font-weight="600" fill="${info.color}">${info.letter}</text>
-    </svg>`;
 }
 
 function buildFileTree(files: FileChange[]): FileTreeNode {
@@ -241,10 +169,10 @@ function renderFileTreeNodes(node: FileTreeNode, hash: string, depth: number): s
 
         if (isFolder) {
             const collapsed = collapsedDetailsFolders.has(child.fullPath);
-            const arrow = collapsed ? CHEVRON_RIGHT_SVG : CHEVRON_DOWN_SVG;
+            const arrow = collapsed ? ICON_TREE_CHEVRON_RIGHT : ICON_TREE_CHEVRON_DOWN;
             html += `<div class="file-tree-folder" data-folder="${escapeHtml(child.fullPath)}" style="padding-left: ${indent}px;">
                 <span class="tree-arrow">${arrow}</span>
-                ${FOLDER_ICON_SVG}
+                ${ICON_FOLDER}
                 <span class="file-tree-folder-name">${escapeHtml(child.name)}</span>
             </div>`;
 
@@ -268,7 +196,7 @@ function renderFileTreeItem(file: FileChange, label: string, hash: string, inden
     const origAttr = file.origPath ? ` data-orig="${escapeHtml(file.origPath)}"` : '';
     const parentAttr = file.parentHash ? ` data-parent="${escapeHtml(file.parentHash)}"` : '';
     return `<div class="file-item file-tree-item" data-file="${escapeHtml(file.filePath)}"${origAttr}${parentAttr} data-status="${escapeHtml(file.status)}" data-hash="${escapeHtml(hash)}" style="padding-left: ${indent}px;">
-        ${renderFileIconSvg(file.filePath)}
+        ${renderFileTypeIcon(file.filePath)}
         <span class="file-path">${escapeHtml(label)}</span>
         <span class="file-status-badge ${statusClass}">${escapeHtml(file.status)}</span>
     </div>`;

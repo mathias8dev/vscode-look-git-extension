@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import type { GitCommitInfo, GitFileChange } from './gitService';
+import { commitThemeIcon, fileThemeIcon, folderThemeIcon, loadMoreThemeIcon } from './icons/vscodeIcons';
 
 export class CommitItem extends vscode.TreeItem {
     public readonly commitInfo: GitCommitInfo;
@@ -21,11 +22,7 @@ export class CommitItem extends vscode.TreeItem {
 
         this.contextValue = 'commit';
 
-        if (isHead) {
-            this.iconPath = new vscode.ThemeIcon('git-commit', new vscode.ThemeColor('charts.green'));
-        } else {
-            this.iconPath = new vscode.ThemeIcon('git-commit');
-        }
+        this.iconPath = commitThemeIcon(isHead);
     }
 
     private formatRelativeDate(date: Date): string {
@@ -88,7 +85,7 @@ export class FileChangeItem extends vscode.TreeItem {
         // Apply decorations color to the label
         const color = STATUS_COLORS[fileChange.status];
         if (color) {
-            this.iconPath = vscode.ThemeIcon.File;
+            this.iconPath = fileThemeIcon();
         }
 
         this.tooltip = `${fileChange.filePath} [${statusLabel}]`;
@@ -159,7 +156,7 @@ export class FolderItem extends vscode.TreeItem {
 
         // Use resourceUri so VS Code resolves the folder icon from the user's icon theme
         this.resourceUri = vscode.Uri.file(path.join(repoRoot, folderNode.fullPath));
-        this.iconPath = vscode.ThemeIcon.Folder;
+        this.iconPath = folderThemeIcon();
 
         this.tooltip = folderNode.fullPath;
     }
@@ -230,6 +227,6 @@ export class LoadMoreItem extends vscode.TreeItem {
             };
         }
         this.contextValue = 'loadMore';
-        this.iconPath = new vscode.ThemeIcon(isLoading ? 'sync~spin' : 'ellipsis');
+        this.iconPath = loadMoreThemeIcon(isLoading);
     }
 }

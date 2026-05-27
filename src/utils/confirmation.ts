@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { GitService, GitCommitInfo } from '../gitService';
+import { commitQuickPickLabel } from '../icons/vscodeIcons';
 
 function isModalDialogUnavailable(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error);
@@ -59,7 +60,7 @@ export async function selectCommitFromQuickPick(
     const commits = await gitService.getLog(100, 0);
 
     const items = commits.map((c) => ({
-        label: `$(git-commit) ${c.shortHash}`,
+        label: commitQuickPickLabel(c.shortHash),
         description: c.message,
         detail: `${c.authorName} - ${c.authorDate.toLocaleDateString()}`,
         commit: c,

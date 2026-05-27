@@ -24,7 +24,7 @@ import {
     ICON_STASH_POP,
     ICON_STASH_SAVE,
     ICON_TRASH,
-} from './changesIcons';
+} from '../icons/webviewIcons';
 import type {
     StatusData,
     StatusEntry,

@@ -1,6 +1,15 @@
 import { showContextMenu, type MenuItem } from './contextMenu';
 import { escapeHtml } from './graphRenderer';
 import type { BranchInfo, BranchViewMode, GraphData } from './graphTypes';
+import {
+    ICON_BRANCH,
+    ICON_BRANCH_FOLDER,
+    ICON_INCOMING_CHANGES,
+    ICON_LIST_VIEW,
+    ICON_TREE_CHEVRON_DOWN,
+    ICON_TREE_CHEVRON_RIGHT,
+    ICON_TREE_VIEW,
+} from '../icons/webviewIcons';
 
 interface BranchTreeNode {
     name: string;
@@ -23,22 +32,6 @@ interface BranchPaneDeps {
 const collapsedFolders = new Set<string>();
 const wiredBranchPanes = new WeakSet<HTMLElement>();
 
-const BRANCH_ICON_SVG = `<svg class="tree-branch-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M4 3v5a3 3 0 0 0 3 3h5M4 3a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm8 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-</svg>`;
-const BRANCH_FOLDER_ICON_SVG = `<svg class="tree-folder-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-    <path d="M1.75 4.25A1.75 1.75 0 0 1 3.5 2.5h2.35c.46 0 .9.18 1.24.5l.84.75h4.57a1.75 1.75 0 0 1 1.75 1.75v6A1.75 1.75 0 0 1 12.5 13.25h-9a1.75 1.75 0 0 1-1.75-1.75V4.25zm1.5.25v7c0 .14.11.25.25.25h9a.25.25 0 0 0 .25-.25v-6a.25.25 0 0 0-.25-.25H7.35L6.08 4.1a.35.35 0 0 0-.23-.1H3.5a.25.25 0 0 0-.25.25z" fill="currentColor"/>
-</svg>`;
-const CHEVRON_RIGHT_SVG = `<svg class="tree-chevron-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-    <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
-const CHEVRON_DOWN_SVG = `<svg class="tree-chevron-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-    <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
-const INCOMING_CHANGES_SVG = `<svg class="branch-incoming-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-    <path d="M18 6L6 18M6 18L6 9M6 18L15 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
-
 export function createBranchPaneController(deps: BranchPaneDeps): { render(): void } {
     function render(): void {
         const graphData = deps.getData();
@@ -57,8 +50,8 @@ export function createBranchPaneController(deps: BranchPaneDeps): { render(): vo
                 <span class="branch-name">All Branches</span>
             </div>
             <div class="view-switcher">
-                <button class="view-switch-btn${listActiveClass}" data-mode="list" title="List view">&#9776;</button>
-                <button class="view-switch-btn${treeActiveClass}" data-mode="tree" title="Tree view">&#128466;</button>
+                <button class="view-switch-btn${listActiveClass}" data-mode="list" title="List view">${ICON_LIST_VIEW}</button>
+                <button class="view-switch-btn${treeActiveClass}" data-mode="tree" title="Tree view">${ICON_TREE_VIEW}</button>
             </div>
         </div>`;
 
@@ -115,7 +108,7 @@ function renderIncomingChangesIndicator(branch: BranchInfo): string {
     const upstream = branch.upstream ?? 'upstream';
     const label = `${behind} commit${behind === 1 ? '' : 's'} behind ${upstream}`;
     const displayCount = behind >= 100 ? '99+' : String(behind);
-    return `<span class="branch-remote-pending-indicator" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${INCOMING_CHANGES_SVG}<span class="branch-behind-count" aria-hidden="true">${displayCount}</span></span>`;
+    return `<span class="branch-remote-pending-indicator" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${ICON_INCOMING_CHANGES}<span class="branch-behind-count" aria-hidden="true">${displayCount}</span></span>`;
 }
 
 function renderTreeNodes(node: BranchTreeNode, depth: number, selectedBranch: string | null): string {
@@ -133,10 +126,10 @@ function renderTreeNodes(node: BranchTreeNode, depth: number, selectedBranch: st
 
         if (hasChildren) {
             const collapsed = collapsedFolders.has(child.fullPath);
-            const chevron = collapsed ? CHEVRON_RIGHT_SVG : CHEVRON_DOWN_SVG;
+            const chevron = collapsed ? ICON_TREE_CHEVRON_RIGHT : ICON_TREE_CHEVRON_DOWN;
             html += `<div class="branch-tree-folder" data-folder="${escapeHtml(child.fullPath)}" data-collapsed="${collapsed}" style="--tree-indent: ${indent}px; padding-left: ${indent}px;">
                 <span class="tree-arrow">${chevron}</span>
-                ${BRANCH_FOLDER_ICON_SVG}
+                ${ICON_BRANCH_FOLDER}
                 <span class="tree-folder-name">${escapeHtml(child.name)}</span>
             </div>`;
 
@@ -165,7 +158,7 @@ function renderTreeLeaf(
     const isActive = selectedBranch === branch.name ? ' active' : '';
     const remoteAttr = branch.isRemote ? ' data-remote="true"' : '';
     return `<div class="branch-item tree-leaf${isCurrent}${isActive}" data-branch="${escapeHtml(branch.name)}"${remoteAttr} style="--tree-indent: ${indent}px; padding-left: ${indent + 4}px;">
-        ${BRANCH_ICON_SVG}
+        ${ICON_BRANCH}
         ${renderCurrentBranchIndicator(branch)}
         <span class="branch-name">${escapeHtml(label)}</span>
         ${renderIncomingChangesIndicator(branch)}
