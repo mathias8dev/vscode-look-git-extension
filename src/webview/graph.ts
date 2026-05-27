@@ -52,6 +52,7 @@ let graphData: GraphData | null = null;
 let graphSentinelObserver: IntersectionObserver | null = null;
 let isLoadingMoreGraph = false;
 let selectedCommitHash: string | null = null;
+let lastGraphActivation: { hash: string; time: number } | null = null;
 let selectedBranch: string | null = null; // null = all branches
 let searchFilter = '';
 
@@ -119,6 +120,7 @@ function init(): void {
     injectStyles();
     initResizeHandles();
     initGraphScroll();
+    initGraphRowActivation();
 
     // Wire up toolbar
     const searchInput = document.getElementById('search-input') as HTMLInputElement;
@@ -154,6 +156,29 @@ function initGraphScroll(): void {
             requestMoreGraphData();
         }
     });
+}
+
+function initGraphRowActivation(): void {
+    document.addEventListener('pointerup', (e) => {
+        const me = e as PointerEvent;
+        if (me.button !== 0) { return; }
+        const row = findGraphRow(e.target);
+        if (!row) { return; }
+        activateGraphRow(row.dataset.hash!);
+    }, true);
+
+    document.addEventListener('click', (e) => {
+        const row = findGraphRow(e.target);
+        if (!row) { return; }
+        activateGraphRow(row.dataset.hash!);
+    }, true);
+}
+
+function findGraphRow(target: EventTarget | null): HTMLElement | null {
+    if (!(target instanceof Element)) {
+        return null;
+    }
+    return target.closest('.graph-row') as HTMLElement | null;
 }
 
 function getShellHtml(): string {
@@ -497,12 +522,12 @@ function renderFilterBar(): void {
 
     // Branch chip
     if (selectedBranch) {
-        html += `<span class="filter-chip active" data-filter="branch">
+        html += `<button type="button" class="filter-chip active" data-filter="branch">
             Branch: <strong>${escapeHtml(truncate(selectedBranch, 20))}</strong>
             <span class="filter-chip-clear" data-clear="branch">&times;</span>
-        </span>`;
+        </button>`;
     } else {
-        html += `<span class="filter-chip" data-filter="branch">Branch</span>`;
+        html += `<button type="button" class="filter-chip" data-filter="branch">Branch</button>`;
     }
 
     // User chip
@@ -510,33 +535,33 @@ function renderFilterBar(): void {
         const label = filterAuthors.length === 1
             ? truncate(filterAuthors[0], 15)
             : `${filterAuthors.length} users`;
-        html += `<span class="filter-chip active" data-filter="user">
+        html += `<button type="button" class="filter-chip active" data-filter="user">
             User: <strong>${escapeHtml(label)}</strong>
             <span class="filter-chip-clear" data-clear="user">&times;</span>
-        </span>`;
+        </button>`;
     } else {
-        html += `<span class="filter-chip" data-filter="user">User &#9662;</span>`;
+        html += `<button type="button" class="filter-chip" data-filter="user">User &#9662;</button>`;
     }
 
     // Date chip
     if (filterDateFrom || filterDateTo) {
         const label = formatDateRange(filterDateFrom, filterDateTo);
-        html += `<span class="filter-chip active" data-filter="date">
+        html += `<button type="button" class="filter-chip active" data-filter="date">
             Date: <strong>${escapeHtml(label)}</strong>
             <span class="filter-chip-clear" data-clear="date">&times;</span>
-        </span>`;
+        </button>`;
     } else {
-        html += `<span class="filter-chip" data-filter="date">Date &#9662;</span>`;
+        html += `<button type="button" class="filter-chip" data-filter="date">Date &#9662;</button>`;
     }
 
     // Paths chip
     if (filterPath) {
-        html += `<span class="filter-chip active" data-filter="paths">
+        html += `<button type="button" class="filter-chip active" data-filter="paths">
             Paths: <strong>${escapeHtml(truncate(filterPath, 18))}</strong>
             <span class="filter-chip-clear" data-clear="paths">&times;</span>
-        </span>`;
+        </button>`;
     } else {
-        html += `<span class="filter-chip" data-filter="paths">Paths &#9662;</span>`;
+        html += `<button type="button" class="filter-chip" data-filter="paths">Paths &#9662;</button>`;
     }
 
     bar.innerHTML = html;
@@ -653,6 +678,18 @@ const BRANCH_ICON_SVG = `<svg class="tree-branch-icon" width="14" height="14" vi
     <path d="M5 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0 9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm9-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM3.5 5v4.5a2 2 0 0 0 2 2H9v-2l3.5 2.5L9 14.5v-2H5.5a4 4 0 0 1-4-4V5h2z" fill="currentColor"/>
 </svg>`;
 
+const BRANCH_FOLDER_ICON_SVG = `<svg class="tree-folder-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <path d="M1.75 4.25A1.75 1.75 0 0 1 3.5 2.5h2.35c.46 0 .9.18 1.24.5l.84.75h4.57a1.75 1.75 0 0 1 1.75 1.75v6A1.75 1.75 0 0 1 12.5 13.25h-9a1.75 1.75 0 0 1-1.75-1.75V4.25zm1.5.25v7c0 .14.11.25.25.25h9a.25.25 0 0 0 .25-.25v-6a.25.25 0 0 0-.25-.25H7.35L6.08 4.1a.35.35 0 0 0-.23-.1H3.5a.25.25 0 0 0-.25.25z" fill="currentColor"/>
+</svg>`;
+
+const CHEVRON_RIGHT_SVG = `<svg class="tree-chevron-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <path d="M6 4.25 9.75 8 6 11.75" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+const CHEVRON_DOWN_SVG = `<svg class="tree-chevron-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <path d="M4.25 6 8 9.75 11.75 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
 function renderCurrentBranchIndicator(branch: BranchInfo): string {
     return branch.isCurrent
         ? '<span class="current-branch-indicator" title="Current branch" aria-label="Current branch"></span>'
@@ -676,10 +713,10 @@ function renderTreeNodes(node: BranchTreeNode, depth: number): string {
 
         if (isFolder) {
             const collapsed = collapsedFolders.has(child.fullPath);
-            const arrow = collapsed ? '&#9654;' : '&#9660;';
-            html += `<div class="branch-tree-folder" data-folder="${escapeHtml(child.fullPath)}" style="padding-left: ${indent}px;">
-                <span class="tree-arrow">${arrow}</span>
-                <span class="tree-folder-icon">&#128193;</span>
+            const chevron = collapsed ? CHEVRON_RIGHT_SVG : CHEVRON_DOWN_SVG;
+            html += `<div class="branch-tree-folder" data-folder="${escapeHtml(child.fullPath)}" data-collapsed="${collapsed}" style="--tree-indent: ${indent}px; padding-left: ${indent}px;">
+                <span class="tree-arrow">${chevron}</span>
+                ${BRANCH_FOLDER_ICON_SVG}
                 <span class="tree-folder-name">${escapeHtml(child.name)}</span>
             </div>`;
 
@@ -691,7 +728,7 @@ function renderTreeNodes(node: BranchTreeNode, depth: number): string {
             const isCurrent = b.isCurrent ? ' current' : '';
             const isActive = selectedBranch === b.name ? ' active' : '';
             const remoteAttr = b.isRemote ? ' data-remote="true"' : '';
-            html += `<div class="branch-item tree-leaf${isCurrent}${isActive}" data-branch="${escapeHtml(b.name)}"${remoteAttr} style="padding-left: ${indent + 4}px;">
+            html += `<div class="branch-item tree-leaf${isCurrent}${isActive}" data-branch="${escapeHtml(b.name)}"${remoteAttr} style="--tree-indent: ${indent}px; padding-left: ${indent + 4}px;">
                 ${BRANCH_ICON_SVG}
                 ${renderCurrentBranchIndicator(b)}
                 <span class="branch-name">${escapeHtml(child.name)}</span>
@@ -705,7 +742,8 @@ function renderTreeNodes(node: BranchTreeNode, depth: number): string {
             const isCurrent = b.isCurrent ? ' current' : '';
             const isActive = selectedBranch === b.name ? ' active' : '';
             const remoteAttr = b.isRemote ? ' data-remote="true"' : '';
-            html += `<div class="branch-item tree-leaf${isCurrent}${isActive}" data-branch="${escapeHtml(b.name)}"${remoteAttr} style="padding-left: ${(depth + 1) * 16 + 4}px;">
+            const leafIndent = (depth + 1) * 16;
+            html += `<div class="branch-item tree-leaf${isCurrent}${isActive}" data-branch="${escapeHtml(b.name)}"${remoteAttr} style="--tree-indent: ${leafIndent}px; padding-left: ${leafIndent + 4}px;">
                 ${BRANCH_ICON_SVG}
                 ${renderCurrentBranchIndicator(b)}
                 <span class="branch-name">${escapeHtml(child.name)}</span>
@@ -941,7 +979,11 @@ function renderGraphTable(): void {
         html += `<tr class="graph-row${isSelected}" data-hash="${c.hash}">
             <td class="graph-cell">${graphCell}</td>
             <td class="hash-col">${escapeHtml(c.shortHash)}</td>
-            <td class="message-col">${badges}${escapeHtml(c.message)}</td>
+            <td class="message-col">
+                <button class="commit-row-button" type="button" data-hash="${c.hash}">
+                    ${badges}<span class="commit-row-message">${escapeHtml(c.message)}</span>
+                </button>
+            </td>
             <td class="author-col">${escapeHtml(c.authorName)}</td>
             <td class="date-col">${date}</td>
         </tr>`;
@@ -953,17 +995,24 @@ function renderGraphTable(): void {
     }
 
     pane.innerHTML = html;
-    observeGraphSentinel(pane);
 
     // Wire click and context menu handlers
     pane.querySelectorAll('.graph-row').forEach((el) => {
-        const hash = (el as HTMLElement).dataset.hash!;
+        const rowElement = el as HTMLElement;
+        const hash = rowElement.dataset.hash!;
+        const activationTargets = [rowElement, ...Array.from(rowElement.querySelectorAll<HTMLElement>('td'))];
 
-        el.addEventListener('click', () => {
-            selectedCommitHash = hash;
-            markSelectedGraphRow(hash);
-            vscode.postMessage({ type: 'getCommitDetails', hash });
-        });
+        for (const target of activationTargets) {
+            target.addEventListener('pointerup', (e) => {
+                const me = e as PointerEvent;
+                if (me.button !== 0) { return; }
+                activateGraphRow(hash);
+            });
+
+            target.addEventListener('click', () => {
+                activateGraphRow(hash);
+            });
+        }
 
         el.addEventListener('contextmenu', (e) => {
             e.preventDefault();
@@ -975,6 +1024,20 @@ function renderGraphTable(): void {
             });
         });
     });
+
+    observeGraphSentinel(pane);
+}
+
+function activateGraphRow(hash: string): void {
+    const now = Date.now();
+    if (lastGraphActivation?.hash === hash && now - lastGraphActivation.time < 80) {
+        return;
+    }
+    lastGraphActivation = { hash, time: now };
+
+    selectedCommitHash = hash;
+    markSelectedGraphRow(hash);
+    vscode.postMessage({ type: 'getCommitDetails', hash });
 }
 
 function markSelectedGraphRow(hash: string): void {
@@ -1005,16 +1068,20 @@ function observeGraphSentinel(root: HTMLElement): void {
         return;
     }
 
-    graphSentinelObserver = new IntersectionObserver((entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-            requestMoreGraphData();
-        }
-    }, {
-        root,
-        rootMargin: '320px 0px',
-        threshold: 0,
-    });
-    graphSentinelObserver.observe(sentinel);
+    try {
+        graphSentinelObserver = new IntersectionObserver((entries) => {
+            if (entries.some((entry) => entry.isIntersecting)) {
+                requestMoreGraphData();
+            }
+        }, {
+            root,
+            rootMargin: '320px 0px',
+            threshold: 0,
+        });
+        graphSentinelObserver.observe(sentinel);
+    } catch {
+        graphSentinelObserver = null;
+    }
 }
 
 // ── Details Pane ──
@@ -1400,8 +1467,9 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .toggle-graph-btn.active { opacity: 1; background: var(--vscode-badge-background) !important; color: var(--vscode-badge-foreground) !important; border-color: var(--vscode-badge-background) !important; }
 
 .filter-bar { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.filter-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border: 1px solid var(--vscode-input-border); border-radius: 12px; font-size: 11px; cursor: pointer; white-space: nowrap; color: var(--vscode-descriptionForeground); background: transparent; }
+.filter-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border: 1px solid var(--vscode-input-border); border-radius: 12px; font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap; color: var(--vscode-descriptionForeground); background: transparent; }
 .filter-chip:hover { background: var(--vscode-list-hoverBackground); color: var(--vscode-foreground); }
+.filter-chip:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
 .filter-chip.active { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); border-color: var(--vscode-badge-background); }
 .filter-chip-clear { margin-left: 2px; font-size: 13px; line-height: 1; cursor: pointer; opacity: 0.7; }
 .filter-chip-clear:hover { opacity: 1; }
@@ -1435,7 +1503,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 
 .branch-pane { overflow-y: auto; border-right: 1px solid var(--vscode-panel-border); padding: 8px 0; }
 .branch-section-header { padding: 4px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vscode-descriptionForeground); letter-spacing: 0.5px; }
-.branch-item { display: flex; align-items: center; gap: 6px; padding: 3px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.branch-item { display: flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 3px; margin: 0 4px; }
 .branch-item:hover { background: var(--vscode-list-hoverBackground); }
 .branch-item.active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
 .branch-item.current .branch-name { font-weight: 600; color: var(--vscode-foreground); }
@@ -1452,24 +1520,33 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .view-switch-btn:hover { background: var(--vscode-toolbar-hoverBackground, rgba(90, 93, 94, 0.31)); }
 .view-switch-btn.active { color: var(--vscode-foreground); background: var(--vscode-toolbar-activeBackground, rgba(99, 102, 103, 0.31)); border-color: var(--vscode-focusBorder); }
 
-.branch-tree-folder { display: flex; align-items: center; gap: 4px; padding: 3px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+.branch-tree-folder { display: flex; align-items: center; gap: 4px; min-height: 24px; padding: 2px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; border-radius: 3px; margin: 0 4px; position: relative; }
 .branch-tree-folder:hover { background: var(--vscode-list-hoverBackground); }
-.tree-arrow { font-size: 9px; width: 12px; text-align: center; flex-shrink: 0; color: var(--vscode-descriptionForeground); }
-.tree-folder-icon { font-size: 13px; flex-shrink: 0; }
+.branch-tree-folder::before, .branch-item.tree-leaf::before { content: ''; position: absolute; left: calc(var(--tree-indent, 0px) + 10px); top: 0; bottom: 0; width: 1px; background: var(--vscode-tree-indentGuidesStroke, var(--vscode-panel-border)); opacity: 0.45; pointer-events: none; }
+.branch-item.tree-leaf { gap: 4px; position: relative; }
+.tree-arrow { width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--vscode-descriptionForeground); }
+.tree-chevron-icon { display: block; }
+.tree-folder-icon { flex-shrink: 0; color: var(--vscode-symbolIcon-folderForeground, var(--vscode-descriptionForeground)); }
 .tree-folder-name { overflow: hidden; text-overflow: ellipsis; }
 .tree-branch-icon { flex-shrink: 0; color: var(--vscode-descriptionForeground); vertical-align: middle; }
-.branch-item.tree-leaf { gap: 4px; }
 
 .graph-pane { overflow: auto; position: relative; }
 .graph-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .graph-table th { position: sticky; top: 0; background: var(--vscode-editor-background); border-bottom: 1px solid var(--vscode-panel-border); padding: 4px 8px; text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; color: var(--vscode-descriptionForeground); z-index: 1; }
 .graph-row { cursor: pointer; }
 .graph-row:hover { background: var(--vscode-list-hoverBackground); }
-.graph-row.selected { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
-.graph-row td { padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; line-height: 28px; }
+.graph-row.selected { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); box-shadow: inset 2px 0 0 var(--vscode-focusBorder); }
+.graph-row td { padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; line-height: 28px; border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 42%, transparent); }
+.commit-row-button { width: 100%; max-width: 100%; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; display: inline-flex; align-items: center; vertical-align: middle; }
+.commit-row-button:focus { outline: none; }
+.commit-row-button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; border-radius: 2px; }
+.commit-row-message { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .graph-cell { padding: 0 !important; overflow: visible !important; }
 .graph-cell svg { display: block; }
-.commit-dot { stroke-width: 2; }
+.commit-graph-svg { overflow: visible; shape-rendering: geometricPrecision; }
+.graph-line { stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.82; }
+.commit-dot-halo { opacity: 0.22; }
+.commit-dot { filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.45)); }
 .filter-bullet { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 auto; vertical-align: middle; }
 .graph-cell { text-align: center; }
 .graph-scroll-sentinel { height: 28px; width: 100%; }

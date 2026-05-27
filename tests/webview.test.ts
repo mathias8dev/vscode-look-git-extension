@@ -574,6 +574,7 @@ describe('Graph webview runtime behavior', () => {
         expect([...document.querySelectorAll('.graph-row')]).toHaveLength(1);
 
         const renderedRow = document.querySelector('.graph-row');
+        expect(renderedRow?.querySelector('.commit-row-button')).not.toBeNull();
         click('.graph-row');
         expect(document.querySelector('.graph-row')).toBe(renderedRow);
         expect(renderedRow?.classList.contains('selected')).toBe(true);
@@ -710,6 +711,7 @@ describe('Graph webview runtime behavior', () => {
         });
 
         click('[data-filter="paths"]');
+        expect(document.querySelector('[data-filter="paths"]')?.tagName).toBe('BUTTON');
         input('#filter-path-input', 'src/webview');
         click('#path-apply-btn');
         expect(api.messages).toContainEqual({
@@ -746,6 +748,8 @@ describe('Graph webview runtime behavior', () => {
         const treeCurrent = document.querySelector<HTMLElement>('.branch-item.tree-leaf.current[data-branch="main"]');
         expect(treeCurrent).not.toBeNull();
         expect(treeCurrent?.querySelector('.current-branch-indicator')).not.toBeNull();
+        expect(document.querySelector('.branch-tree-folder .tree-folder-icon')).not.toBeNull();
+        expect(document.querySelector('.branch-tree-folder .tree-chevron-icon')).not.toBeNull();
     });
 
     it('renders untrusted graph data and commit details as text instead of markup', async () => {

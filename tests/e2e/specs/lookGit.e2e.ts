@@ -69,6 +69,49 @@ async function clickFileAction(filePath: string, actionClass: string): Promise<v
     await action.click();
 }
 
+async function clickFirstGraphCommit(): Promise<void> {
+    const firstCommitButton = await $('.graph-row .commit-row-button');
+    await firstCommitButton.waitForClickable();
+    await firstCommitButton.click();
+
+    const selectedByWebDriver = await browser.waitUntil(async () => {
+        return browser.execute(() => Boolean(document.querySelector('.graph-row.selected')));
+    }, {
+        timeout: 1_000,
+        interval: 100,
+    }).catch(() => false);
+
+    if (selectedByWebDriver) {
+        return;
+    }
+
+    await browser.execute(() => {
+        const button = document.querySelector<HTMLElement>('.graph-row .commit-row-button');
+        button?.click();
+    });
+}
+
+async function openPathFilterDropdown(): Promise<void> {
+    const pathFilter = await $('[data-filter="paths"]');
+    await pathFilter.waitForClickable();
+    await pathFilter.click();
+
+    const openedByWebDriver = await browser.waitUntil(async () => {
+        return browser.execute(() => Boolean(document.querySelector('#filter-path-input')));
+    }, {
+        timeout: 1_000,
+        interval: 100,
+    }).catch(() => false);
+
+    if (!openedByWebDriver) {
+        await browser.execute(() => {
+            document.querySelector<HTMLElement>('[data-filter="paths"]')?.click();
+        });
+    }
+
+    await $('#filter-path-input').waitForExist();
+}
+
 async function takeNotificationAction(messagePart: string, actionTitle: string): Promise<void> {
     const workbench = await browser.getWorkbench();
     await browser.waitUntil(async () => {
@@ -167,15 +210,13 @@ describe('Look Git VS Code E2E', () => {
             timeoutMsg: 'Expected graph rows after searching for history commit 1.',
         });
 
-        const rows = await $$('.graph-row');
-        await rows[0].click();
+        await clickFirstGraphCommit();
         await browser.waitUntil(async () => (await $('#details-pane').getText()).includes('Changed Files'), {
             timeout: 20_000,
             timeoutMsg: 'Expected commit details after clicking a graph row.',
         });
 
-        await $('[data-filter="paths"]').click();
-        await $('#filter-path-input').waitForExist();
+        await openPathFilterDropdown();
         await $('#filter-path-input').setValue('history');
         await $('#path-apply-btn').click();
         await browser.waitUntil(async () => (await $$('.graph-row')).length > 0, {

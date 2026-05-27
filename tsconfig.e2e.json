@@ -4,6 +4,10 @@
     "rootDir": ".",
     "outDir": "out/e2e",
     "module": "commonjs",
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "types": [
       "node",
       "@wdio/mocha-framework",

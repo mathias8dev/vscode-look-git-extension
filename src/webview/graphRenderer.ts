@@ -2,7 +2,8 @@ import type { GraphRow, LineDef } from '../graphView/graphLaneAssigner';
 
 const ROW_HEIGHT = 28;
 const LANE_WIDTH = 16;
-const DOT_RADIUS = 4;
+const DOT_RADIUS = 4.5;
+const DOT_HALO_RADIUS = 7;
 const GRAPH_PADDING = 8;
 
 export interface RenderedRef {
@@ -40,7 +41,7 @@ export function renderGraphSvg(
     const cy = height / 2;
 
     const parts: string[] = [];
-    parts.push(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`);
+    parts.push(`<svg class="commit-graph-svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">`);
 
     // Draw lines
     for (const line of row.laneData.lines) {
@@ -50,8 +51,9 @@ export function renderGraphSvg(
     // Draw commit dot
     const cx = GRAPH_PADDING + row.laneData.lane * LANE_WIDTH + LANE_WIDTH / 2;
     parts.push(
+        `<circle class="commit-dot-halo" cx="${cx}" cy="${cy}" r="${DOT_HALO_RADIUS}" fill="${row.laneData.color}" />` +
         `<circle class="commit-dot" cx="${cx}" cy="${cy}" r="${DOT_RADIUS}" ` +
-        `fill="${row.laneData.color}" stroke="var(--vscode-editor-background)" />`
+        `fill="${row.laneData.color}" stroke="var(--vscode-editor-background)" stroke-width="2" />`
     );
 
     parts.push('</svg>');
@@ -63,21 +65,22 @@ function renderLine(line: LineDef, cy: number, height: number): string {
     const x2 = GRAPH_PADDING + line.toLane * LANE_WIDTH + LANE_WIDTH / 2;
 
     if (line.type === 'straight') {
-        return `<line x1="${x1}" y1="0" x2="${x2}" y2="${height}" stroke="${line.color}" stroke-width="2" />`;
+        return `<line class="graph-line" x1="${x1}" y1="-1" x2="${x2}" y2="${height + 1}" stroke="${line.color}" />`;
     }
 
     // Curved lines for merges and forks
     const midY = cy;
+    const bendY = cy + height * 0.22;
     if (line.type === 'merge-left' || line.type === 'merge-right') {
         // From this commit's lane, curve down to the parent's lane
-        return `<path d="M ${x1} ${midY} C ${x1} ${height}, ${x2} ${midY}, ${x2} ${height}" ` +
-               `stroke="${line.color}" stroke-width="2" fill="none" />`;
+        return `<path class="graph-line" d="M ${x1} ${midY} C ${x1} ${bendY}, ${x2} ${bendY}, ${x2} ${height + 1}" ` +
+               `stroke="${line.color}" fill="none" />`;
     }
 
     if (line.type === 'fork-left' || line.type === 'fork-right') {
         // From this commit's lane, curve down to the new lane
-        return `<path d="M ${x1} ${midY} C ${x1} ${height}, ${x2} ${midY}, ${x2} ${height}" ` +
-               `stroke="${line.color}" stroke-width="2" fill="none" />`;
+        return `<path class="graph-line" d="M ${x1} ${midY} C ${x1} ${bendY}, ${x2} ${bendY}, ${x2} ${height + 1}" ` +
+               `stroke="${line.color}" fill="none" />`;
     }
 
     return '';
