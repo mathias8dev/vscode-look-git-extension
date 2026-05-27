@@ -154,17 +154,55 @@ async function leaveWebviewContext(): Promise<void> {
 }
 
 async function clickFileAction(filePath: string, actionClass: string): Promise<void> {
-    const row = await $(`.file-row${fileSelector(filePath)}`);
-    await row.waitForDisplayed();
-    await row.scrollIntoView();
+    const rowSelector = `.file-row${fileSelector(filePath)}`;
+    const actionSelector = `.${actionClass}${fileSelector(filePath)}`;
+
+    await browser.waitUntil(async () => {
+        try {
+            const row = await $(rowSelector);
+            return await row.isDisplayed();
+        } catch {
+            return false;
+        }
+    }, {
+        timeout: 5_000,
+        timeoutMsg: `Expected ${filePath} row to be visible.`,
+    });
+
+    await browser.execute((selector) => {
+        document.querySelector<HTMLElement>(selector)?.scrollIntoView({ block: 'center' });
+    }, rowSelector);
+
+    const row = await $(rowSelector);
     await row.moveTo();
 
-    const action = await $(`.${actionClass}${fileSelector(filePath)}`);
-    await browser.waitUntil(async () => await action.isDisplayed() && await action.isClickable(), {
+    await browser.waitUntil(async () => {
+        try {
+            const action = await $(actionSelector);
+            return await action.isDisplayed() && await action.isClickable();
+        } catch {
+            return false;
+        }
+    }, {
         timeout: 5_000,
         timeoutMsg: `Expected ${actionClass} for ${filePath} to be visible and clickable after hovering its row.`,
     });
-    await action.click();
+
+    const clicked = await (async () => {
+        try {
+            const action = await $(actionSelector);
+            await action.click();
+            return true;
+        } catch {
+            return false;
+        }
+    })();
+
+    if (!clicked) {
+        await browser.execute((selector) => {
+            document.querySelector<HTMLElement>(selector)?.click();
+        }, actionSelector);
+    }
 }
 
 async function clickVisible(selector: string): Promise<void> {
@@ -328,7 +366,13 @@ async function takeNotificationAction(messagePart: string, actionTitle: string):
 }
 
 async function waitForGit(predicate: () => boolean, message: string): Promise<void> {
-    await browser.waitUntil(predicate, {
+    await browser.waitUntil(() => {
+        try {
+            return predicate();
+        } catch {
+            return false;
+        }
+    }, {
         timeout: 20_000,
         timeoutMsg: message,
     });
@@ -457,12 +501,31 @@ describe('Look Git VS Code E2E', () => {
         gitTry(['stash', 'clear']);
         await openLookGitWorkbench();
 
+        writeFixtureFile('src/e2e-stash-untracked.txt', 'stash untracked from ui\n');
+        await refreshChanges();
+        let changes = await openWebview(/Changes/);
+        await $('.file-row[data-file="src/e2e-stash-untracked.txt"]').waitForExist();
+        await clickSectionAction('unstaged', '#stash-btn');
+        await waitForGit(
+            () => {
+                try {
+                    return splitLines(git(['stash', 'show', '--include-untracked', '--name-only', 'stash@{0}']))
+                        .includes('src/e2e-stash-untracked.txt')
+                        && !statusPorcelain().some((line) => line.includes('src/e2e-stash-untracked.txt'));
+                } catch {
+                    return false;
+                }
+            },
+            'Expected Stash Changes to include untracked files that are visible in Changes.',
+        );
+        git(['stash', 'drop', 'stash@{0}']);
+
         writeFixtureFile('src/e2e-stash-apply.txt', 'stash apply base\n');
         git(['add', 'src/e2e-stash-apply.txt']);
         git(['commit', '-q', '-m', 'e2e stash apply base']);
         writeFixtureFile('src/e2e-stash-apply.txt', 'stash apply from ui\n');
         await refreshChanges();
-        let changes = await openWebview(/Changes/);
+        changes = await openWebview(/Changes/);
         await $('.file-row[data-file="src/e2e-stash-apply.txt"]').waitForExist();
         await clickSectionAction('unstaged', '#stash-btn');
         await waitForGit(

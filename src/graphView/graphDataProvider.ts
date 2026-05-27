@@ -1,4 +1,4 @@
-import type { GitService, BranchInfo, TagInfo, GraphCommitInfo, GitFileChange } from '../gitService';
+import type { GitService, BranchInfo, TagInfo, GraphCommitInfo, GitFileChange, GraphLogFilters } from '../gitService';
 import { assignLanes, getMaxLane } from './graphLaneAssigner';
 import type { GraphRow } from './graphLaneAssigner';
 
@@ -16,12 +16,20 @@ export interface GraphData {
 export class GraphDataProvider {
     constructor(private gitService: GitService) {}
 
-    public async getGraphData(maxCount: number = 300, filterBranches?: string[], pathFilter?: string): Promise<GraphData> {
+    public async getGraphData(
+        maxCount: number = 300,
+        filterBranches?: string[],
+        pathFilter?: string,
+        filters: GraphLogFilters = {},
+    ): Promise<GraphData> {
         const requestedCount = Math.max(1, maxCount);
+        const logFilters = hasGraphLogFilters(filters) ? filters : undefined;
         const [branches, tags, rawCommits, currentUser] = await Promise.all([
             this.gitService.getAllBranches(),
             this.gitService.getAllTags(),
-            this.gitService.getGraphLog(requestedCount + 1, filterBranches, pathFilter),
+            logFilters
+                ? this.gitService.getGraphLog(requestedCount + 1, filterBranches, pathFilter, logFilters)
+                : this.gitService.getGraphLog(requestedCount + 1, filterBranches, pathFilter),
             this.gitService.getUserName(),
         ]);
 
@@ -41,4 +49,13 @@ export class GraphDataProvider {
     public async getCommitMessage(commitHash: string): Promise<string> {
         return this.gitService.getCommitMessage(commitHash);
     }
+}
+
+function hasGraphLogFilters(filters: GraphLogFilters): boolean {
+    return Boolean(
+        filters.search?.trim()
+        || filters.dateFrom?.trim()
+        || filters.dateTo?.trim()
+        || filters.authors?.some((author) => author.trim())
+    );
 }

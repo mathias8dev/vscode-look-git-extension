@@ -602,6 +602,19 @@ describe('Graph webview runtime behavior', () => {
             commitHash: 'abc123456789',
             status: 'R',
         });
+
+        api.messages.length = 0;
+        click('[data-files-mode="tree"]');
+        click('.file-tree-item[data-file="src/new.ts"]');
+
+        expect(api.messages).toContainEqual({
+            type: 'openDiff',
+            filePath: 'src/new.ts',
+            origPath: 'src/old.ts',
+            parentHash: 'parent123',
+            commitHash: 'abc123456789',
+            status: 'R',
+        });
     });
 
     it('requests the next graph page when the scroll sentinel enters the viewport', async () => {
@@ -720,6 +733,90 @@ describe('Graph webview runtime behavior', () => {
             branches: ['feature/ui'],
             path: 'src/webview',
         });
+    });
+
+    it('sends search, user, and date filters back to the extension', async () => {
+        vi.useFakeTimers();
+        try {
+            const api = await bootWebview(GRAPH_WEBVIEW_MODULE);
+            const alice = graphRow('abc123456789', 'target commit');
+            alice.commit.authorName = 'Alice Search';
+            const bob = graphRow('def123456789', 'other commit');
+            bob.commit.authorName = 'Bob Search';
+            sendWebviewMessage({
+                type: 'graphData',
+                data: {
+                    branches: [],
+                    tags: [],
+                    rows: [alice, bob],
+                    maxLane: 0,
+                    currentBranch: 'main',
+                    currentUser: 'Alice Search',
+                },
+            });
+
+            input('#search-input', 'target');
+            vi.advanceTimersByTime(250);
+            expect(api.messages).toContainEqual({
+                type: 'selectBranch',
+                branches: undefined,
+                path: undefined,
+                search: 'target',
+            });
+
+            click('[data-filter="date"]');
+            document.querySelector<HTMLInputElement>('#filter-date-from')!.value = '2024-02-01';
+            document.querySelector<HTMLInputElement>('#filter-date-to')!.value = '2024-02-02';
+            click('#date-apply-btn');
+            expect(api.messages).toContainEqual({
+                type: 'selectBranch',
+                branches: undefined,
+                path: undefined,
+                search: 'target',
+                dateFrom: '2024-02-01',
+                dateTo: '2024-02-02',
+            });
+
+            click('[data-filter="user"]');
+            const bobCheckbox = document.querySelector<HTMLInputElement>('input[value="Bob Search"]')!;
+            bobCheckbox.checked = true;
+            bobCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+            expect(api.messages).toContainEqual({
+                type: 'selectBranch',
+                branches: undefined,
+                path: undefined,
+                search: 'target',
+                authors: ['Bob Search'],
+                dateFrom: '2024-02-01',
+                dateTo: '2024-02-02',
+            });
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('escapes path filter values when reopening the path dropdown', async () => {
+        await bootWebview(GRAPH_WEBVIEW_MODULE);
+        sendWebviewMessage({
+            type: 'graphData',
+            data: {
+                branches: [],
+                tags: [],
+                rows: [graphRow('abc123456789', 'commit')],
+                maxLane: 0,
+                currentBranch: 'main',
+                currentUser: 'Test User',
+            },
+        });
+        const unsafePath = 'src/" /><img src=x onerror="bad">';
+
+        click('[data-filter="paths"]');
+        input('#filter-path-input', unsafePath);
+        click('#path-apply-btn');
+        click('[data-filter="paths"]');
+
+        expect(document.querySelector<HTMLInputElement>('#filter-path-input')?.value).toBe(unsafePath);
+        expect(document.querySelector('img')).toBeNull();
     });
 
     it('shows a visual indicator for the current branch in list and tree branch views', async () => {

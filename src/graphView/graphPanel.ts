@@ -3,7 +3,7 @@ import * as crypto from 'crypto';
 import * as path from 'path';
 import { CommitItem } from '../commitItem';
 import { GraphDataProvider } from './graphDataProvider';
-import type { GitService } from '../gitService';
+import type { GitService, GraphLogFilters } from '../gitService';
 import { showModalWarningMessage } from '../utils/confirmation';
 
 const ALLOWED_COMMIT_COMMANDS = new Set([
@@ -28,6 +28,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     private readonly graphPageSize = 300;
     private filterBranches?: string[];
     private pathFilter?: string;
+    private logFilters: GraphLogFilters = {};
     private loadedGraphLimit = this.graphPageSize;
     private graphHasMore = true;
     private graphLoading = false;
@@ -70,10 +71,11 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         this.refresh();
     }
 
-    public async refresh(filterBranches?: string[], pathFilter?: string): Promise<void> {
+    public async refresh(filterBranches?: string[], pathFilter?: string, logFilters?: GraphLogFilters): Promise<void> {
         if (arguments.length > 0) {
             this.filterBranches = filterBranches;
             this.pathFilter = pathFilter;
+            this.logFilters = logFilters ?? {};
             this.resetGraphPaging();
         }
         if (!this.view) { return; }
@@ -109,8 +111,9 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         const loadedGraphLimit = this.loadedGraphLimit;
         const filterBranches = this.filterBranches;
         const pathFilter = this.pathFilter;
+        const logFilters = this.logFilters;
         try {
-            const data = await this.dataProvider.getGraphData(loadedGraphLimit, filterBranches, pathFilter);
+            const data = await this.dataProvider.getGraphData(loadedGraphLimit, filterBranches, pathFilter, logFilters);
             if (requestSequence !== this.graphRequestSequence) {
                 return false;
             }
@@ -137,13 +140,19 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         switch (msg.type) {
             case 'ready':
                 this.resetGraphPaging();
-                this.refresh();
+                await this.refresh();
                 break;
 
             case 'selectBranch': {
                 const branches = msg.branches as string[] | undefined;
                 const pathFilter = msg.path as string | undefined;
-                this.refresh(branches, pathFilter);
+                const logFilters: GraphLogFilters = {
+                    search: msg.search as string | undefined,
+                    authors: msg.authors as string[] | undefined,
+                    dateFrom: msg.dateFrom as string | undefined,
+                    dateTo: msg.dateTo as string | undefined,
+                };
+                await this.refresh(branches, pathFilter, logFilters);
                 break;
             }
 
@@ -207,7 +216,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
 
             case 'refresh':
                 this.resetGraphPaging();
-                this.refresh(this.filterBranches, this.pathFilter);
+                await this.refresh(this.filterBranches, this.pathFilter, this.logFilters);
                 break;
         }
     }

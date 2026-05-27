@@ -103,25 +103,25 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.cherryPick', (item?: CommitItem, selected?: unknown[]) => {
-            handleCherryPick(gitService, historyProvider, item, filterCommitItems(selected));
+            return handleCherryPick(gitService, historyProvider, item, filterCommitItems(selected));
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.revert', (item?: CommitItem, selected?: unknown[]) => {
-            handleRevert(gitService, historyProvider, item, filterCommitItems(selected));
+            return handleRevert(gitService, historyProvider, item, filterCommitItems(selected));
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.drop', (item?: CommitItem, selected?: unknown[]) => {
-            handleDrop(gitService, historyProvider, item, filterCommitItems(selected));
+            return handleDrop(gitService, historyProvider, item, filterCommitItems(selected));
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.squash', (item?: CommitItem, selected?: unknown[]) => {
-            handleSquash(gitService, historyProvider, item, filterCommitItems(selected));
+            return handleSquash(gitService, historyProvider, item, filterCommitItems(selected));
         })
     );
 
@@ -129,37 +129,37 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.rebase', (item?: CommitItem) => {
-            handleRebase(gitService, historyProvider, item);
+            return handleRebase(gitService, historyProvider, item);
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.reset', (item?: CommitItem) => {
-            handleReset(gitService, historyProvider, item);
+            return handleReset(gitService, historyProvider, item);
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.renameCommit', (item?: CommitItem) => {
-            handleRenameCommit(gitService, historyProvider, item);
+            return handleRenameCommit(gitService, historyProvider, item);
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.checkout', (item?: CommitItem) => {
-            handleCheckout(gitService, historyProvider, item);
+            return handleCheckout(gitService, historyProvider, item);
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.fixup', (item?: CommitItem) => {
-            handleFixup(gitService, historyProvider, item);
+            return handleFixup(gitService, historyProvider, item);
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.pushUpTo', (item?: CommitItem) => {
-            handlePushUpTo(gitService, historyProvider, item);
+            return handlePushUpTo(gitService, historyProvider, item);
         })
     );
 

@@ -55,6 +55,7 @@ let selectedCommitHash: string | null = null;
 let lastGraphActivation: { hash: string; time: number } | null = null;
 let selectedBranch: string | null = null; // null = all branches
 let searchFilter = '';
+let filterRequestTimer: number | undefined;
 
 // Filters
 let filterAuthors: string[] = [];
@@ -97,11 +98,35 @@ let paneState = loadPaneState();
 
 function requestGraphData(): void {
     isLoadingMoreGraph = false;
-    vscode.postMessage({
+    const payload: {
+        type: 'selectBranch';
+        branches?: string[];
+        path?: string;
+        search?: string;
+        authors?: string[];
+        dateFrom?: string;
+        dateTo?: string;
+    } = {
         type: 'selectBranch',
         branches: selectedBranch ? [selectedBranch] : undefined,
         path: filterPath || undefined,
-    });
+    };
+    const search = searchFilter.trim();
+    if (search) { payload.search = search; }
+    if (filterAuthors.length > 0) { payload.authors = [...filterAuthors]; }
+    if (filterDateFrom) { payload.dateFrom = filterDateFrom; }
+    if (filterDateTo) { payload.dateTo = filterDateTo; }
+    vscode.postMessage(payload);
+}
+
+function scheduleGraphDataRequest(): void {
+    if (filterRequestTimer !== undefined) {
+        clearTimeout(filterRequestTimer);
+    }
+    filterRequestTimer = window.setTimeout(() => {
+        filterRequestTimer = undefined;
+        requestGraphData();
+    }, 250);
 }
 
 function requestMoreGraphData(): void {
@@ -127,6 +152,7 @@ function init(): void {
     searchInput.addEventListener('input', () => {
         searchFilter = searchInput.value.toLowerCase();
         renderGraphTable();
+        scheduleGraphDataRequest();
     });
 
     const refreshBtn = document.getElementById('refresh-btn')!;
@@ -387,6 +413,7 @@ function showUserDropdown(anchorEl: HTMLElement, authors: string[]): void {
             });
             renderFilterBar();
             renderGraphTable();
+            requestGraphData();
         });
     });
 
@@ -429,6 +456,7 @@ function showDateDropdown(anchorEl: HTMLElement): void {
         closeDropdown();
         renderFilterBar();
         renderGraphTable();
+        requestGraphData();
     });
 
     dropdown.querySelector('#date-clear-btn')!.addEventListener('click', (e) => {
@@ -438,6 +466,7 @@ function showDateDropdown(anchorEl: HTMLElement): void {
         closeDropdown();
         renderFilterBar();
         renderGraphTable();
+        requestGraphData();
     });
 
     // Prevent closing when clicking inside the dropdown
@@ -460,7 +489,7 @@ function showPathInput(anchorEl: HTMLElement): void {
 
     dropdown.innerHTML = `
         <div class="path-field">
-            <input type="text" id="filter-path-input" placeholder="e.g. src/commands" value="${filterPath || ''}" />
+            <input type="text" id="filter-path-input" placeholder="e.g. src/commands" value="${escapeHtml(filterPath || '')}" />
         </div>
         <div class="date-actions">
             <button id="path-apply-btn">Apply</button>
@@ -607,10 +636,12 @@ function wireFilterBarHandlers(bar: HTMLElement): void {
                     break;
                 case 'user':
                     filterAuthors = [];
+                    requestGraphData();
                     break;
                 case 'date':
                     filterDateFrom = null;
                     filterDateTo = null;
+                    requestGraphData();
                     break;
                 case 'paths':
                     filterPath = null;
@@ -708,10 +739,11 @@ function renderTreeNodes(node: BranchTreeNode, depth: number): string {
     });
 
     for (const child of entries) {
-        const isFolder = child.children.size > 0 && !child.branch;
+        const hasChildren = child.children.size > 0;
+        const isFolder = hasChildren && !child.branch;
         const indent = depth * 16;
 
-        if (isFolder) {
+        if (hasChildren) {
             const collapsed = collapsedFolders.has(child.fullPath);
             const chevron = collapsed ? CHEVRON_RIGHT_SVG : CHEVRON_DOWN_SVG;
             html += `<div class="branch-tree-folder" data-folder="${escapeHtml(child.fullPath)}" data-collapsed="${collapsed}" style="--tree-indent: ${indent}px; padding-left: ${indent}px;">
@@ -737,7 +769,7 @@ function renderTreeNodes(node: BranchTreeNode, depth: number): string {
 
         // If the node is both a folder and a leaf (branch named same as a prefix),
         // render the leaf too
-        if (isFolder && child.branch) {
+        if (hasChildren && child.branch) {
             const b = child.branch;
             const isCurrent = b.isCurrent ? ' current' : '';
             const isActive = selectedBranch === b.name ? ' active' : '';
@@ -1249,7 +1281,9 @@ function renderFileTreeNodes(node: FileTreeNode, hash: string, depth: number): s
         } else if (child.file) {
             const f = child.file;
             const statusClass = getStatusClass(f.status);
-            html += `<div class="file-item file-tree-item" data-file="${escapeHtml(f.filePath)}" data-status="${f.status}" data-hash="${hash}" style="padding-left: ${indent}px;">
+            const origAttr = f.origPath ? ` data-orig="${escapeHtml(f.origPath)}"` : '';
+            const parentAttr = f.parentHash ? ` data-parent="${escapeHtml(f.parentHash)}"` : '';
+            html += `<div class="file-item file-tree-item" data-file="${escapeHtml(f.filePath)}"${origAttr}${parentAttr} data-status="${escapeHtml(f.status)}" data-hash="${escapeHtml(hash)}" style="padding-left: ${indent}px;">
                 ${renderFileIconSvg(f.filePath)}
                 <span class="file-path">${escapeHtml(child.name)}</span>
                 <span class="file-status-badge ${statusClass}">${f.status}</span>

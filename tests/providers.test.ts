@@ -1067,7 +1067,7 @@ describe('GraphViewProvider webview messages', () => {
 
     it('keeps branch and path filters across refreshes', async () => {
         const service = {
-            getGraphLog: vi.fn(async () => []),
+            getGraphLog: vi.fn(async (limit: number) => Array.from({ length: limit }, (_, index) => graphCommit(index))),
             getAllBranches: vi.fn(async () => []),
             getAllTags: vi.fn(async () => []),
             getCurrentBranch: vi.fn(async () => 'main'),
@@ -1082,6 +1082,39 @@ describe('GraphViewProvider webview messages', () => {
 
         expect(service.getGraphLog).toHaveBeenNthCalledWith(1, 301, ['main'], 'src/index.ts');
         expect(service.getGraphLog).toHaveBeenNthCalledWith(2, 301, ['main'], 'src/index.ts');
+    });
+
+    it('passes graph search, author, and date filters to GitService and keeps them while loading more', async () => {
+        const service = {
+            getGraphLog: vi.fn(async (limit: number) => Array.from({ length: limit }, (_, index) => graphCommit(index))),
+            getAllBranches: vi.fn(async () => []),
+            getAllTags: vi.fn(async () => []),
+            getCurrentBranch: vi.fn(async () => 'main'),
+            getUserName: vi.fn(async () => 'Test User'),
+        };
+        const provider = new GraphViewProvider(vscode.Uri.file('/ext') as any, service as any);
+        const view = makeWebviewView();
+        (provider as any).view = view;
+
+        await (provider as any).handleMessage({
+            type: 'selectBranch',
+            branches: ['main'],
+            path: 'src/index.ts',
+            search: 'needle',
+            authors: ['Alice'],
+            dateFrom: '2024-02-01',
+            dateTo: '2024-02-02',
+        });
+        await (provider as any).handleMessage({ type: 'loadMoreGraph' });
+
+        const filters = {
+            search: 'needle',
+            authors: ['Alice'],
+            dateFrom: '2024-02-01',
+            dateTo: '2024-02-02',
+        };
+        expect(service.getGraphLog).toHaveBeenNthCalledWith(1, 301, ['main'], 'src/index.ts', filters);
+        expect(service.getGraphLog).toHaveBeenNthCalledWith(2, 601, ['main'], 'src/index.ts', filters);
     });
 
     it('loads more graph data by increasing the commit window and keeping filters', async () => {

@@ -207,6 +207,45 @@ describe('GitService refs and graph data', () => {
 
         expect(graph.map((entry) => entry.message)).toEqual(['touch a again', 'touch a']);
     });
+
+    it('applies graph search, author, and date filters before slicing the commit window', async () => {
+        const r = repo();
+        r.commitFile('target.txt', 'needle\n', 'needle target', {
+            name: 'Alice Search',
+            email: 'alice@example.com',
+        }, '2024-02-01T00:00:00Z');
+        r.commitFile('other.txt', 'other\n', 'unrelated newest', {
+            name: 'Bob Search',
+            email: 'bob@example.com',
+        }, '2024-03-01T00:00:00Z');
+
+        const graph = await r.service.getGraphLog(1, undefined, undefined, {
+            search: 'needle target',
+            authors: ['Alice Search'],
+            dateFrom: '2024-02-01',
+            dateTo: '2024-02-01',
+        });
+
+        expect(graph.map((entry) => entry.message)).toEqual(['needle target']);
+    });
+
+    it('keeps graph search semantics for author names and hashes before slicing the commit window', async () => {
+        const r = repo();
+        const aliceHash = r.commitFile('alice.txt', 'alice\n', 'quiet subject', {
+            name: 'Alice Search',
+            email: 'alice@example.com',
+        }, '2024-02-01T00:00:00Z');
+        r.commitFile('bob.txt', 'bob\n', 'newest unrelated', {
+            name: 'Bob Search',
+            email: 'bob@example.com',
+        }, '2024-03-01T00:00:00Z');
+
+        const byAuthor = await r.service.getGraphLog(1, undefined, undefined, { search: 'Alice Search' });
+        const byHash = await r.service.getGraphLog(1, undefined, undefined, { search: aliceHash.slice(0, 8) });
+
+        expect(byAuthor.map((entry) => entry.message)).toEqual(['quiet subject']);
+        expect(byHash.map((entry) => entry.hash)).toEqual([aliceHash]);
+    });
 });
 
 describe('GitService stash parsing', () => {
@@ -557,6 +596,18 @@ describe('GitService stash lifecycle', () => {
 
         const status = await r.service.getStatus();
         expect(status.unstaged).toContainEqual(expect.objectContaining({ filePath: 'file.txt' }));
+    });
+
+    it('stashes untracked files from the visible Changes set by default', async () => {
+        const r = repo();
+        r.write('tracked.txt', 'base');
+        r.commit('initial');
+        r.write('untracked.txt', 'new file');
+
+        await r.service.stash();
+
+        expect(r.git(['status', '--porcelain'])).not.toContain('untracked.txt');
+        expect(r.git(['stash', 'show', '--include-untracked', '--name-only', 'stash@{0}'])).toContain('untracked.txt');
     });
 
     it('applies a stash without removing it from the stash list', async () => {

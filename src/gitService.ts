@@ -84,6 +84,13 @@ export interface GraphCommitInfo extends GitCommitInfo {
     refs: string[];
 }
 
+export interface GraphLogFilters {
+    search?: string;
+    authors?: string[];
+    dateFrom?: string;
+    dateTo?: string;
+}
+
 export class GitService {
     private cwd: string;
 
@@ -96,21 +103,56 @@ export class GitService {
     }
 
     public async exec(args: string[], env?: Record<string, string>): Promise<string> {
-        const { stdout } = await execFileAsync('git', args, {
-            cwd: this.cwd,
-            maxBuffer: 10 * 1024 * 1024,
-            env: { ...process.env, ...env },
-        });
+        const stdout = await this.execGitWithRetry(args, env);
         return stdout.trim();
     }
 
     private async execRaw(args: string[], env?: Record<string, string>): Promise<string> {
-        const { stdout } = await execFileAsync('git', args, {
-            cwd: this.cwd,
-            maxBuffer: 10 * 1024 * 1024,
-            env: { ...process.env, ...env },
-        });
-        return stdout;
+        return this.execGitWithRetry(args, env);
+    }
+
+    private async execReadonly(args: string[], env?: Record<string, string>): Promise<string> {
+        return this.exec(args, { GIT_OPTIONAL_LOCKS: '0', ...env });
+    }
+
+    private async execRawReadonly(args: string[], env?: Record<string, string>): Promise<string> {
+        return this.execRaw(args, { GIT_OPTIONAL_LOCKS: '0', ...env });
+    }
+
+    private async execGitWithRetry(args: string[], env?: Record<string, string>): Promise<string> {
+        let delayMs = 80;
+        for (let attempt = 0; ; attempt++) {
+            try {
+                const { stdout } = await execFileAsync('git', args, {
+                    cwd: this.cwd,
+                    maxBuffer: 10 * 1024 * 1024,
+                    env: { ...process.env, ...env },
+                });
+                return stdout;
+            } catch (error) {
+                if (attempt >= 5 || !this.isIndexLockError(error)) {
+                    throw error;
+                }
+                await this.sleep(delayMs);
+                delayMs *= 2;
+            }
+        }
+    }
+
+    private isIndexLockError(error: unknown): boolean {
+        const message = error instanceof Error ? error.message : String(error);
+        const stderr = typeof error === 'object'
+            && error !== null
+            && typeof (error as { stderr?: unknown }).stderr === 'string'
+            ? (error as { stderr: string }).stderr
+            : '';
+        const combined = `${message}\n${stderr}`;
+        return combined.includes('index.lock')
+            || (combined.includes('Unable to create') && combined.includes('File exists'));
+    }
+
+    private async sleep(ms: number): Promise<void> {
+        await new Promise((resolve) => setTimeout(resolve, ms));
     }
 
     private async runInteractiveRebase(
@@ -146,7 +188,7 @@ export class GitService {
     }
 
     private async getInteractiveRebaseArgs(baseCommitHash: string): Promise<string[]> {
-        const output = await this.exec(['rev-list', '--parents', '-n', '1', baseCommitHash]);
+        const output = await this.execReadonly(['rev-list', '--parents', '-n', '1', baseCommitHash]);
         const [, ...parents] = output.split(/\s+/);
         return parents.length > 0
             ? ['rebase', '-i', `${baseCommitHash}~1`]
@@ -189,7 +231,7 @@ export class GitService {
             '%P',   // parent hashes
         ].join('%x1f') + '%x1e';
 
-        const output = await this.execRaw([
+        const output = await this.execRawReadonly([
             'log',
             `--format=${FORMAT}`,
             `--max-count=${maxCount}`,
@@ -219,7 +261,7 @@ export class GitService {
             '%P',
         ].join('%x1f') + '%x1e';
 
-        const output = await this.execRaw([
+        const output = await this.execRawReadonly([
             'log',
             `--format=${FORMAT}`,
             `--max-count=${maxCount}`,
@@ -343,13 +385,13 @@ export class GitService {
     }
 
     private async getGitDir(): Promise<string> {
-        const output = await this.exec(['rev-parse', '--git-dir']);
+        const output = await this.execReadonly(['rev-parse', '--git-dir']);
         return path.resolve(this.cwd, output);
     }
 
     public async findOldestCommit(commitHashes: string[]): Promise<string> {
         // Use git log to find which commit comes last (is oldest) in history
-        const output = await this.exec(['rev-list', '--topo-order', '--reverse', 'HEAD']);
+        const output = await this.execReadonly(['rev-list', '--topo-order', '--reverse', 'HEAD']);
 
         if (!output) {
             return commitHashes[commitHashes.length - 1];
@@ -369,16 +411,16 @@ export class GitService {
     }
 
     public async hasUncommittedChanges(): Promise<boolean> {
-        const output = await this.exec(['status', '--porcelain']);
+        const output = await this.execReadonly(['status', '--porcelain']);
         return output.length > 0;
     }
 
     public async getCurrentBranch(): Promise<string> {
-        return this.exec(['rev-parse', '--abbrev-ref', 'HEAD']);
+        return this.execReadonly(['rev-parse', '--abbrev-ref', 'HEAD']);
     }
 
     public async getCommitMessage(commitHash: string): Promise<string> {
-        return this.exec(['log', '-1', '--format=%B', commitHash]);
+        return this.execReadonly(['log', '-1', '--format=%B', commitHash]);
     }
 
     public async checkout(ref: string): Promise<string> {
@@ -407,7 +449,7 @@ export class GitService {
     }
 
     public async getRemotes(): Promise<string[]> {
-        const output = await this.exec(['remote']);
+        const output = await this.execReadonly(['remote']);
         if (!output) {
             return [];
         }
@@ -418,7 +460,7 @@ export class GitService {
         const parents = await this.getParentHashes(commitHash);
 
         if (parents.length === 0) {
-            const output = await this.execRaw([
+            const output = await this.execRawReadonly([
                 'diff-tree', '--root', '--no-commit-id', '-r', '-M', '--name-status', '-z', commitHash,
             ]);
             return output ? this.parseNameStatusZ(output) : [];
@@ -427,7 +469,7 @@ export class GitService {
         const result: GitFileChange[] = [];
         const seen = new Set<string>();
         for (const parentHash of parents) {
-            const output = await this.execRaw([
+            const output = await this.execRawReadonly([
                 'diff-tree', '--no-commit-id', '-r', '-M', '--name-status', '-z', parentHash, commitHash,
             ]);
             for (const change of this.parseNameStatusZ(output, parentHash)) {
@@ -443,7 +485,7 @@ export class GitService {
     }
 
     private async getParentHashes(commitHash: string): Promise<string[]> {
-        const output = await this.exec(['rev-list', '--parents', '-n', '1', commitHash]);
+        const output = await this.execReadonly(['rev-list', '--parents', '-n', '1', commitHash]);
         const [, ...parents] = output.split(/\s+/);
         return parents;
     }
@@ -489,7 +531,7 @@ export class GitService {
         ].join('%00');
 
         const [output, currentBranch] = await Promise.all([
-            this.execRaw(['for-each-ref', `--format=${FORMAT}`, 'refs/heads', 'refs/remotes']),
+            this.execRawReadonly(['for-each-ref', `--format=${FORMAT}`, 'refs/heads', 'refs/remotes']),
             this.getCurrentBranch().catch(() => 'HEAD'),
         ]);
 
@@ -521,7 +563,7 @@ export class GitService {
     public async getAllTags(): Promise<TagInfo[]> {
         const FORMAT = `%(refname:short)%00%(objectname:short)`;
 
-        const output = await this.execRaw([
+        const output = await this.execRawReadonly([
             'tag', `--format=${FORMAT}`,
         ]);
 
@@ -538,7 +580,12 @@ export class GitService {
         });
     }
 
-    public async getGraphLog(maxCount: number = 300, branches?: string[], pathFilter?: string): Promise<GraphCommitInfo[]> {
+    public async getGraphLog(
+        maxCount: number = 300,
+        branches?: string[],
+        pathFilter?: string,
+        filters: GraphLogFilters = {},
+    ): Promise<GraphCommitInfo[]> {
         const FORMAT = [
             '%H',   // full hash
             '%h',   // short hash
@@ -550,12 +597,30 @@ export class GitService {
             '%D',   // ref names
         ].join('%x1f') + '%x1e';
 
+        const search = filters.search?.trim();
+        const searchScanLimit = search
+            ? Math.max(maxCount, Math.min(maxCount * 20, 5000))
+            : maxCount;
         const args = [
             'log',
             `--format=${FORMAT}`,
-            `--max-count=${maxCount}`,
+            `--max-count=${searchScanLimit}`,
             '--topo-order',
         ];
+
+        const authors = filters.authors?.map((author) => author.trim()).filter(Boolean) ?? [];
+        const dateFrom = filters.dateFrom?.trim();
+        const dateTo = filters.dateTo?.trim();
+
+        if (dateFrom) {
+            args.push(`--since=${dateFrom}T00:00:00`);
+        }
+        if (dateTo) {
+            args.push(`--until=${dateTo}T23:59:59`);
+        }
+        for (const author of authors) {
+            args.push(`--author=${author}`);
+        }
 
         if (branches && branches.length > 0) {
             args.push(...branches);
@@ -566,13 +631,13 @@ export class GitService {
             args.push('--', pathFilter);
         }
 
-        const output = await this.execRaw(args);
+        const output = await this.execRawReadonly(args);
 
         if (!output) {
             return [];
         }
 
-        return output.split(LOG_RECORD_SEP)
+        let commits = output.split(LOG_RECORD_SEP)
             .map((record) => record.replace(/^\n/, '').replace(/\n$/, ''))
             .filter(Boolean)
             .map((record) => {
@@ -591,11 +656,26 @@ export class GitService {
                 refs,
             };
         });
+
+        if (search) {
+            const normalizedSearch = search.toLowerCase();
+            commits = commits.filter((commit) => this.commitMatchesGraphSearch(commit, normalizedSearch));
+        }
+
+        return commits.slice(0, maxCount);
+    }
+
+    private commitMatchesGraphSearch(commit: GraphCommitInfo, normalizedSearch: string): boolean {
+        return commit.message.toLowerCase().includes(normalizedSearch)
+            || commit.hash.toLowerCase().includes(normalizedSearch)
+            || commit.shortHash.toLowerCase().includes(normalizedSearch)
+            || commit.authorName.toLowerCase().includes(normalizedSearch)
+            || commit.authorEmail.toLowerCase().includes(normalizedSearch);
     }
 
     public async getUserName(): Promise<string> {
         try {
-            return (await this.exec(['config', 'user.name'])).trim();
+            return (await this.execReadonly(['config', 'user.name'])).trim();
         } catch {
             return '';
         }
@@ -631,7 +711,7 @@ export class GitService {
         conflicts: GitStatusEntry[];
         conflictState: 'none' | 'merge' | 'rebase';
     }> {
-        const output = await this.execRaw(['status', '--porcelain=v1', '-z', '-u']);
+        const output = await this.execRawReadonly(['status', '--porcelain=v1', '-z', '-u']);
         const staged: GitStatusEntry[] = [];
         const unstaged: GitStatusEntry[] = [];
         const conflicts: GitStatusEntry[] = [];
@@ -756,7 +836,7 @@ export class GitService {
 
     public async getTrackingBranch(): Promise<{ remote: string; branch: string } | undefined> {
         try {
-            const upstream = await this.exec(['rev-parse', '--abbrev-ref', '@{upstream}']);
+            const upstream = await this.execReadonly(['rev-parse', '--abbrev-ref', '@{upstream}']);
             const [remote, ...branchParts] = upstream.split('/');
             return { remote, branch: branchParts.join('/') };
         } catch {
@@ -766,7 +846,7 @@ export class GitService {
 
     public async stashList(): Promise<StashEntry[]> {
         try {
-            const output = await this.exec(['stash', 'list', '--format=%gd %s']);
+            const output = await this.execReadonly(['stash', 'list', '--format=%gd %s']);
             if (!output) { return []; }
             return output.split('\n').map((line) => {
                 // Format: "stash@{0} WIP on main: abc1234 message"
@@ -780,7 +860,7 @@ export class GitService {
     }
 
     public async stash(message?: string): Promise<string> {
-        const args = ['stash', 'push'];
+        const args = ['stash', 'push', '--include-untracked'];
         if (message) { args.push('-m', message); }
         return this.exec(args);
     }
@@ -804,7 +884,7 @@ export class GitService {
     }
 
     public async getStashFiles(index: number): Promise<GitFileChange[]> {
-        const output = await this.execRaw(['stash', 'show', '--name-status', '-M', '-z', `stash@{${index}}`]);
+        const output = await this.execRawReadonly(['stash', 'show', '--name-status', '-M', '-z', `stash@{${index}}`]);
         if (!output) { return []; }
         return this.parseNameStatusZ(output);
     }
