@@ -427,6 +427,10 @@ export class GitService {
         return this.exec(['checkout', ref]);
     }
 
+    public async checkoutDetached(commitHash: string): Promise<string> {
+        return this.exec(['checkout', '--detach', commitHash]);
+    }
+
     public async checkoutNewBranch(branchName: string, startPoint: string): Promise<string> {
         return this.exec(['checkout', '-b', branchName, startPoint]);
     }

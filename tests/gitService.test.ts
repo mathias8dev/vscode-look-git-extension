@@ -684,6 +684,38 @@ describe('GitService branch operations', () => {
         expect(await r.service.getCurrentBranch()).toBe('other');
     });
 
+    it('checks out a local commit in detached HEAD without creating changes', async () => {
+        const r = repo();
+        r.write('file.txt', 'one');
+        const hash = r.commit('initial');
+        r.write('file.txt', 'two');
+        r.commit('second');
+
+        await r.service.checkoutDetached(hash);
+
+        expect(await r.service.getCurrentBranch()).toBe('HEAD');
+        expect(r.gitTrim(['rev-parse', 'HEAD'])).toBe(hash);
+        expect(r.gitTrim(['status', '--porcelain'])).toBe('');
+    });
+
+    it('checks out a remote-tracking commit in detached HEAD without creating changes', async () => {
+        const r = repo();
+        r.write('file.txt', 'base');
+        r.commit('base');
+        r.git(['checkout', '-q', '-b', 'remote-source']);
+        r.write('file.txt', 'remote');
+        const remoteHash = r.commit('remote commit');
+        r.git(['checkout', '-q', 'main']);
+        r.git(['update-ref', 'refs/remotes/origin/remote-source', remoteHash]);
+        r.git(['branch', '-D', 'remote-source']);
+
+        await r.service.checkoutDetached(remoteHash);
+
+        expect(await r.service.getCurrentBranch()).toBe('HEAD');
+        expect(r.gitTrim(['rev-parse', 'HEAD'])).toBe(remoteHash);
+        expect(r.gitTrim(['status', '--porcelain'])).toBe('');
+    });
+
     it('creates and checks out a new branch from a commit', async () => {
         const r = repo();
         r.write('file.txt', 'content');
