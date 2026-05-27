@@ -1265,9 +1265,8 @@ function renderFileIconSvg(filePath: string): string {
     </svg>`;
 }
 
-const FOLDER_ICON_SVG = `<svg class="folder-icon" width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-    <path d="M1.5 2A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5V5.5A1.5 1.5 0 0 0 14.5 4H8L6.5 2H1.5z"
-          fill="var(--vscode-icon-foreground, #c09553)" opacity="0.85"/>
+const FOLDER_ICON_SVG = `<svg class="folder-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <path d="M1.75 4.25A1.75 1.75 0 0 1 3.5 2.5h2.35c.46 0 .9.18 1.24.5l.84.75h4.57a1.75 1.75 0 0 1 1.75 1.75v6A1.75 1.75 0 0 1 12.5 13.25h-9a1.75 1.75 0 0 1-1.75-1.75V4.25zm1.5.25v7c0 .14.11.25.25.25h9a.25.25 0 0 0 .25-.25v-6a.25.25 0 0 0-.25-.25H7.35L6.08 4.1a.35.35 0 0 0-.23-.1H3.5a.25.25 0 0 0-.25.25z" fill="currentColor"/>
 </svg>`;
 
 // File tree structure for the details pane
@@ -1345,7 +1344,7 @@ function renderFileTreeNodes(node: FileTreeNode, hash: string, depth: number): s
 
         if (isFolder) {
             const collapsed = collapsedDetailsFolders.has(child.fullPath);
-            const arrow = collapsed ? '&#9654;' : '&#9660;';
+            const arrow = collapsed ? CHEVRON_RIGHT_SVG : CHEVRON_DOWN_SVG;
             html += `<div class="file-tree-folder" data-folder="${escapeHtml(child.fullPath)}" style="padding-left: ${indent}px;">
                 <span class="tree-arrow">${arrow}</span>
                 ${FOLDER_ICON_SVG}
@@ -1706,7 +1705,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .file-status.renamed { color: var(--vscode-gitDecoration-renamedResourceForeground, #e36209); }
 .file-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-icon { flex-shrink: 0; }
-.folder-icon { flex-shrink: 0; }
+.folder-icon { flex-shrink: 0; color: var(--vscode-symbolIcon-folderForeground, var(--vscode-descriptionForeground)); }
 .file-tree-folder { display: flex; align-items: center; gap: 4px; padding: 2px 4px; cursor: pointer; border-radius: 3px; font-size: 12px; white-space: nowrap; }
 .file-tree-folder:hover { background: var(--vscode-list-hoverBackground); }
 .file-tree-folder-name { overflow: hidden; text-overflow: ellipsis; }

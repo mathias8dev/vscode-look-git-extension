@@ -102,12 +102,13 @@ const ICON_CHECK = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M3.
 const ICON_MERGE_EDITOR = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 3v10M13 3v10M3 8h10" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg>`;
 const ICON_ACCEPT_OURS = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 8h9M8 5l3 3-3 3" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="13" y1="3" x2="13" y2="13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
 const ICON_ACCEPT_THEIRS = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M14 8H5M8 5L5 8l3 3" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="3" y1="3" x2="3" y2="13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+const ICON_STASH_SAVE = `<svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="9" width="12" height="4" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M8 2v6M5.5 5.5L8 8l2.5-2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
 const ICON_STASH_POP = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 12V4M5 7l3-3 3 3" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ICON_STASH_APPLY = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 11V5M5.5 8l2.5-3 2.5 3" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`;
 const ICON_TRASH = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4h10M5 4v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-const ICON_FOLDER = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3H6l1.4 1.5h5.1A1.5 1.5 0 0 1 14 6v5.5A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5z" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/></svg>`;
-const ICON_FOLDER_OPEN = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 6V4.5A1.5 1.5 0 0 1 3.5 3H6l1.4 1.5H12A1.5 1.5 0 0 1 13.5 6H5.2A1.5 1.5 0 0 0 3.8 7l-1.6 4.2A1.2 1.2 0 0 0 3.3 13h8.9a1.5 1.5 0 0 0 1.4-1l1.2-4A1.2 1.2 0 0 0 13.7 6z" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/></svg>`;
-const ICON_FILE = `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 2h5l3 3v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/><path d="M9 2v3h3" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>`;
+const ICON_FOLDER = `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.75 4.25A1.75 1.75 0 0 1 3.5 2.5h2.35c.46 0 .9.18 1.24.5l.84.75h4.57a1.75 1.75 0 0 1 1.75 1.75v6A1.75 1.75 0 0 1 12.5 13.25h-9a1.75 1.75 0 0 1-1.75-1.75V4.25zm1.5.25v7c0 .14.11.25.25.25h9a.25.25 0 0 0 .25-.25v-6a.25.25 0 0 0-.25-.25H7.35L6.08 4.1a.35.35 0 0 0-.23-.1H3.5a.25.25 0 0 0-.25.25z" fill="currentColor"/></svg>`;
+const ICON_FOLDER_OPEN = `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.75 4.25A1.75 1.75 0 0 1 3.5 2.5h2.35c.46 0 .9.18 1.24.5l.84.75h4.57a1.75 1.75 0 0 1 1.75 1.75v6A1.75 1.75 0 0 1 12.5 13.25h-9a1.75 1.75 0 0 1-1.75-1.75V4.25zm1.5.25v7c0 .14.11.25.25.25h9a.25.25 0 0 0 .25-.25v-6a.25.25 0 0 0-.25-.25H7.35L6.08 4.1a.35.35 0 0 0-.23-.1H3.5a.25.25 0 0 0-.25.25z" fill="currentColor"/></svg>`;
+const ICON_FILE = `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1.5A1.5 1.5 0 0 0 2.5 3v10A1.5 1.5 0 0 0 4 14.5h8a1.5 1.5 0 0 0 1.5-1.5V6L10 1.5H4zm6 1.5 3 3h-2.5a.5.5 0 0 1-.5-.5V3z" fill="currentColor"/></svg>`;
 
 const COMMIT_MODES: { id: string; label: string }[] = [
     { id: 'commit', label: 'Commit' },
@@ -150,6 +151,7 @@ function getShellHtml(): string {
                             ${ICON_DROPDOWN}
                         </button>
                     </div>
+                    <p id="commit-hint" class="commit-hint"></p>
                 </div>
                 <div class="dropdown-menu" id="commit-dropdown" style="display:none;"></div>
             </div>
@@ -224,9 +226,21 @@ function renderDropdown(): void {
 
 function updateCommitButton(): void {
     const commitBtn = document.getElementById('commit-btn') as HTMLButtonElement;
+    const hint = document.getElementById('commit-hint');
     const hasMessage = commitMessage.trim().length > 0;
     const hasStaged = statusData !== null && statusData.staged.length > 0;
     commitBtn.disabled = !(hasMessage && hasStaged);
+    if (hint) {
+        if (!hasStaged && !hasMessage) {
+            hint.textContent = 'Stage changes and enter a message to commit.';
+        } else if (!hasStaged) {
+            hint.textContent = 'No staged changes to commit.';
+        } else if (!hasMessage) {
+            hint.textContent = 'Enter a commit message.';
+        } else {
+            hint.textContent = '';
+        }
+    }
 }
 
 // ── Rendering ──
@@ -419,7 +433,7 @@ function renderFilesList(): void {
                     <span class="section-count">${statusData.staged.length}</span>
                 </button>
                 <div class="section-actions">
-                    <button class="icon-btn" id="stash-staged-btn" title="Stash Staged Changes">${ICON_PLUS}</button>
+                    <button class="icon-btn" id="stash-staged-btn" title="Stash Staged Changes">${ICON_STASH_SAVE}</button>
                     <button class="icon-btn" id="unstage-all-btn" title="Unstage All">${ICON_MINUS}</button>
                 </div>
             </div>`;
@@ -446,7 +460,7 @@ function renderFilesList(): void {
                     <span class="section-count">${statusData.unstaged.length}</span>
                 </button>
                 <div class="section-actions">
-                    <button class="icon-btn stash-btn" id="stash-btn" title="Stash Changes">${ICON_PLUS}</button>
+                    <button class="icon-btn stash-btn" id="stash-btn" title="Stash Changes">${ICON_STASH_SAVE}</button>
                     <button class="icon-btn" id="discard-all-btn" title="Discard All Changes">${ICON_DISCARD}</button>
                     <button class="icon-btn" id="stage-all-btn" title="Stage All">${ICON_PLUS}</button>
                 </div>
@@ -855,6 +869,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .commit-section textarea:focus { border-color: var(--vscode-focusBorder); }
 .commit-section textarea::placeholder { color: var(--vscode-input-placeholderForeground); }
 .commit-actions { margin-top: 6px; }
+.commit-hint { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 5px; min-height: 15px; text-align: center; }
 
 /* Split button */
 .split-btn { display: flex; width: 100%; }
@@ -899,6 +914,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .file-row:hover { background: var(--vscode-list-hoverBackground); }
 .file-row:hover .file-actions { visibility: visible; }
 .file-actions { visibility: hidden; display: flex; gap: 1px; margin-left: auto; flex-shrink: 0; }
+.conflict-file-row .file-actions { visibility: visible; }
 
 .file-status-indicator { width: 16px; text-align: center; font-weight: 700; font-size: 11px; flex-shrink: 0; margin-left: 4px; }
 .file-status-indicator.added { color: var(--vscode-gitDecoration-addedResourceForeground, #28a745); }
@@ -932,8 +948,8 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .tree-folder-chevron svg { width: 14px; height: 14px; }
 .tree-folder-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tree-icon { flex-shrink: 0; font-size: 16px; line-height: 1; }
-.folder-icon { color: var(--vscode-icon-foreground, #c5c5c5); opacity: 0.85; }
-.file-icon { color: var(--vscode-icon-foreground, #c5c5c5); opacity: 0.7; }
+.folder-icon { color: var(--vscode-symbolIcon-folderForeground, var(--vscode-descriptionForeground)); flex-shrink: 0; }
+.file-icon { color: var(--vscode-symbolIcon-fileForeground, var(--vscode-descriptionForeground)); flex-shrink: 0; }
 .tree-file-row { padding-right: 8px; gap: 3px; }
 
 /* Stash rows */

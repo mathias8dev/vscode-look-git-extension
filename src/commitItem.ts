@@ -6,11 +6,10 @@ export class CommitItem extends vscode.TreeItem {
     public readonly commitInfo: GitCommitInfo;
 
     constructor(commit: GitCommitInfo, isHead: boolean) {
-        const label = `${commit.shortHash}  ${commit.message}`;
-        super(label, vscode.TreeItemCollapsibleState.Collapsed);
+        super(commit.message, vscode.TreeItemCollapsibleState.Collapsed);
 
         this.commitInfo = commit;
-        this.description = `${commit.authorName} - ${this.formatRelativeDate(commit.authorDate)}`;
+        this.description = `${commit.shortHash} · ${commit.authorName} · ${this.formatRelativeDate(commit.authorDate)}`;
 
         this.tooltip = new vscode.MarkdownString(
             `**${commit.message}**\n\n` +
@@ -37,9 +36,9 @@ export class CommitItem extends vscode.TreeItem {
         const diffDays = Math.floor(diffHours / 24);
 
         if (diffMins < 1) { return 'just now'; }
-        if (diffMins < 60) { return `${diffMins} min ago`; }
-        if (diffHours < 24) { return `${diffHours} hours ago`; }
-        if (diffDays < 30) { return `${diffDays} days ago`; }
+        if (diffMins < 60) { return `${diffMins} minute${diffMins === 1 ? '' : 's'} ago`; }
+        if (diffHours < 24) { return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`; }
+        if (diffDays < 30) { return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`; }
         return date.toLocaleDateString();
     }
 }
@@ -156,6 +155,7 @@ export class FolderItem extends vscode.TreeItem {
         this.commitHash = commitHash;
         this.repoRoot = repoRoot;
         this.contextValue = 'folder';
+        this.id = `${commitHash}:${folderNode.fullPath}`;
 
         // Use resourceUri so VS Code resolves the folder icon from the user's icon theme
         this.resourceUri = vscode.Uri.file(path.join(repoRoot, folderNode.fullPath));

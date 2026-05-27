@@ -211,7 +211,7 @@ describe('CommitItem relative date formatting', () => {
     it('shows minutes ago for a commit within the last hour', () => {
         const fiveMinutesAgo = new Date('2024-04-01T11:55:00Z');
         const item = new CommitItem(makeCommit(fiveMinutesAgo), false);
-        expect(item.description).toContain('min ago');
+        expect(item.description).toContain('minutes ago');
     });
 
     it('shows hours ago for a commit within the last day', () => {
