@@ -273,6 +273,20 @@ describe('GitService refs and graph data', () => {
         expect(byAuthor.map((entry) => entry.message)).toEqual(['quiet subject']);
         expect(byHash.map((entry) => entry.hash)).toEqual([aliceHash]);
     });
+
+    it('keeps ancestor context for graph search results so the UI can preserve topology', async () => {
+        const r = repo();
+        const rootHash = r.commitFile('root.txt', 'root\n', 'root commit');
+        const parentHash = r.commitFile('parent.txt', 'parent\n', 'parent context');
+        const targetHash = r.commitFile('target.txt', 'target\n', 'needle target');
+        r.commitFile('newest.txt', 'newest\n', 'newest unrelated');
+
+        const graph = await r.service.getGraphLog(10, undefined, undefined, { search: 'needle target' });
+
+        expect(graph.map((entry) => entry.hash)).toEqual([targetHash, parentHash, rootHash]);
+        expect(graph[0].matchesFilter).toBe(true);
+        expect(graph[1].matchesFilter).toBe(false);
+    });
 });
 
 describe('GitService stash parsing', () => {

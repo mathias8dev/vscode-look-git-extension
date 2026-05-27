@@ -65,25 +65,36 @@ function renderLine(line: LineDef, cy: number, height: number): string {
     const x2 = GRAPH_PADDING + line.toLane * LANE_WIDTH + LANE_WIDTH / 2;
 
     if (line.type === 'straight') {
-        return `<line class="graph-line" x1="${x1}" y1="-1" x2="${x2}" y2="${height + 1}" stroke="${line.color}" />`;
+        return `<line ${renderLineAttributes(line)} x1="${x1}" y1="-1" x2="${x2}" y2="${height + 1}" stroke="${line.color}" />`;
     }
 
     // Curved lines for merges and forks
     const midY = cy;
-    const bendY = cy + height * 0.22;
+    const bendY = line.role === 'merge-parent' ? cy + height * 0.18 : cy + height * 0.26;
+    const elbowY = height + 1;
     if (line.type === 'merge-left' || line.type === 'merge-right') {
         // From this commit's lane, curve down to the parent's lane
-        return `<path class="graph-line" d="M ${x1} ${midY} C ${x1} ${bendY}, ${x2} ${bendY}, ${x2} ${height + 1}" ` +
+        return `<path ${renderLineAttributes(line)} d="M ${x1} ${midY} C ${x1} ${bendY}, ${x2} ${bendY}, ${x2} ${elbowY}" ` +
                `stroke="${line.color}" fill="none" />`;
     }
 
     if (line.type === 'fork-left' || line.type === 'fork-right') {
         // From this commit's lane, curve down to the new lane
-        return `<path class="graph-line" d="M ${x1} ${midY} C ${x1} ${bendY}, ${x2} ${bendY}, ${x2} ${height + 1}" ` +
+        return `<path ${renderLineAttributes(line)} d="M ${x1} ${midY} C ${x1} ${bendY}, ${x2} ${bendY}, ${x2} ${elbowY}" ` +
                `stroke="${line.color}" fill="none" />`;
     }
 
     return '';
+}
+
+function renderLineAttributes(line: LineDef): string {
+    const classes = [
+        'graph-line',
+        `graph-line-${line.type}`,
+        `graph-line-${line.role}`,
+    ].join(' ');
+    const target = line.targetHash ? ` data-line-target="${escapeHtml(line.targetHash)}"` : '';
+    return `class="${classes}"${target}`;
 }
 
 export function formatRelativeDate(date: Date): string {
@@ -110,9 +121,21 @@ export function formatRelativeDate(date: Date): string {
 }
 
 export function renderRefBadges(refs: RenderedRef[]): string {
-    return refs.map((r) =>
+    return [...refs].sort(compareRenderedRefs).map((r) =>
         `<span class="ref-badge ${r.type}">${escapeHtml(r.name)}</span>`
     ).join('');
+}
+
+function compareRenderedRefs(a: RenderedRef, b: RenderedRef): number {
+    const priority = (ref: RenderedRef): number => {
+        switch (ref.type) {
+            case 'head': return 0;
+            case 'branch-local': return 1;
+            case 'branch-remote': return 2;
+            case 'tag': return 3;
+        }
+    };
+    return priority(a) - priority(b) || a.name.localeCompare(b.name);
 }
 
 export function escapeHtml(str: string): string {

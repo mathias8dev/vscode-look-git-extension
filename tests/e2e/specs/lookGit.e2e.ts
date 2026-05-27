@@ -305,7 +305,8 @@ async function clickGraphToggle(expectActive: boolean): Promise<void> {
 }
 
 async function clickFirstGraphCommit(): Promise<void> {
-    const firstCommitButton = await $('.graph-row .commit-row-button');
+    const matchedButtons = await $$('.graph-row.filter-matched .commit-row-button');
+    const firstCommitButton = matchedButtons[0] ?? await $('.graph-row .commit-row-button');
     await firstCommitButton.waitForClickable();
     await firstCommitButton.click();
 
@@ -321,7 +322,8 @@ async function clickFirstGraphCommit(): Promise<void> {
     }
 
     await browser.execute(() => {
-        const button = document.querySelector<HTMLElement>('.graph-row .commit-row-button');
+        const button = document.querySelector<HTMLElement>('.graph-row.filter-matched .commit-row-button')
+            ?? document.querySelector<HTMLElement>('.graph-row .commit-row-button');
         button?.click();
     });
 }

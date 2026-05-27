@@ -549,6 +549,7 @@ function graphRow(hash: string, message: string): GraphRow {
             lane: 0,
             color: '#f97583',
             lines: [],
+            isPrimary: false,
         },
     };
 }
@@ -580,12 +581,15 @@ describe('Graph webview runtime behavior', () => {
         });
 
         input('#search-input', 'visible');
-        expect([...document.querySelectorAll('.graph-row')]).toHaveLength(1);
+        expect([...document.querySelectorAll('.graph-row')]).toHaveLength(2);
+        expect(document.querySelector('.graph-row[data-hash="abc123456789"]')?.classList.contains('filter-matched')).toBe(true);
+        expect(document.querySelector('.graph-row[data-hash="def123456789"]')?.classList.contains('filter-dimmed')).toBe(true);
+        expect(document.querySelector('.graph-row .commit-graph-svg')).not.toBeNull();
 
-        const renderedRow = document.querySelector('.graph-row');
+        const renderedRow = document.querySelector('.graph-row[data-hash="abc123456789"]');
         expect(renderedRow?.querySelector('.commit-row-button')).not.toBeNull();
-        click('.graph-row');
-        expect(document.querySelector('.graph-row')).toBe(renderedRow);
+        click('.graph-row[data-hash="abc123456789"]');
+        expect(document.querySelector('.graph-row[data-hash="abc123456789"]')).toBe(renderedRow);
         expect(renderedRow?.classList.contains('selected')).toBe(true);
         expect(api.messages).toContainEqual({ type: 'getCommitDetails', hash: 'abc123456789' });
 
@@ -715,6 +719,48 @@ describe('Graph webview runtime behavior', () => {
         } finally {
             (globalThis as any).IntersectionObserver = originalIntersectionObserver;
         }
+    });
+
+    it('does not render hover or path-highlight effects on graph rows', async () => {
+        const api = await bootWebview(GRAPH_WEBVIEW_MODULE);
+        const tip = graphRow('tip123456789', 'tip');
+        tip.commit.parentHashes = ['parent123456789'];
+        tip.laneData.lines = [{
+            fromLane: 0,
+            toLane: 0,
+            color: '#f97583',
+            type: 'straight',
+            targetHash: 'parent123456789',
+            role: 'first-parent',
+        }];
+        const parent = graphRow('parent123456789', 'parent');
+        const side = graphRow('side123456789', 'side');
+        side.laneData.lane = 1;
+        side.laneData.color = '#79b8ff';
+        sendWebviewMessage({
+            type: 'graphData',
+            data: {
+                branches: [],
+                tags: [],
+                rows: [tip, side, parent],
+                maxLane: 1,
+                currentBranch: 'main',
+                currentUser: 'Test User',
+            },
+        });
+
+        document.querySelector<HTMLElement>('.graph-row[data-hash="tip123456789"]')!.dispatchEvent(
+            new MouseEvent('mouseenter', { bubbles: true }),
+        );
+        expect(document.head.textContent).not.toContain('.graph-row:hover');
+        expect(document.head.textContent).not.toContain('graph-path-mode');
+
+        click('.graph-row[data-hash="tip123456789"]');
+        expect(api.messages).toContainEqual({ type: 'getCommitDetails', hash: 'tip123456789' });
+        expect(document.querySelector('#graph-pane')?.classList.contains('graph-path-mode')).toBe(false);
+        expect(document.querySelector('.graph-row[data-hash="tip123456789"]')?.classList.contains('selected')).toBe(true);
+        expect(document.querySelector('.graph-row[data-hash="parent123456789"]')?.className).not.toContain('graph-path');
+        expect(document.querySelector('.graph-row[data-hash="side123456789"]')?.className).not.toContain('graph-path');
     });
 
     it('sends selected branch and path filters back to the extension', async () => {
@@ -854,7 +900,7 @@ describe('Graph webview runtime behavior', () => {
         const listCurrent = document.querySelector<HTMLElement>('.branch-item.current[data-branch="main"]');
         expect(listCurrent).not.toBeNull();
         expect(listCurrent?.querySelector('.current-branch-indicator')?.getAttribute('aria-label')).toBe('Current branch');
-        expect(listCurrent?.querySelector('.branch-remote-pending-indicator')?.getAttribute('aria-label')).toBe('2 incoming changes from origin/main');
+        expect(listCurrent?.querySelector('.branch-remote-pending-indicator')?.getAttribute('aria-label')).toBe('2 commits behind origin/main');
         expect(document.querySelector('.branch-item[data-branch="feature/ui"] .current-branch-indicator')).toBeNull();
         expect(document.querySelector('.branch-item[data-branch="feature/ui"] .branch-remote-pending-indicator')).toBeNull();
         expect(document.querySelector('.branch-item[data-branch="origin/main"] .branch-remote-pending-indicator')).toBeNull();

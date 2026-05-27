@@ -978,32 +978,9 @@ function renderGraphTable(): void {
 
     const pane = document.getElementById('graph-pane')!;
     const tagNames = new Set(graphData.tags.map((t) => t.name));
-
-    let rows = graphData.rows;
-
-    // Apply filters
-    if (searchFilter) {
-        rows = rows.filter((r) => {
-            const c = r.commit;
-            return c.message.toLowerCase().includes(searchFilter)
-                || c.shortHash.toLowerCase().includes(searchFilter)
-                || c.authorName.toLowerCase().includes(searchFilter);
-        });
-    }
-    if (filterAuthors.length > 0) {
-        const authors = new Set(filterAuthors);
-        rows = rows.filter((r) => authors.has(r.commit.authorName));
-    }
-    if (filterDateFrom) {
-        const from = new Date(filterDateFrom).getTime();
-        rows = rows.filter((r) => new Date(r.commit.authorDate).getTime() >= from);
-    }
-    if (filterDateTo) {
-        const to = new Date(filterDateTo).getTime() + 86400000; // include the full day
-        rows = rows.filter((r) => new Date(r.commit.authorDate).getTime() < to);
-    }
+    const rows = getGraphRowsForRendering();
     const hasFilter = !!(searchFilter || filterAuthors.length > 0 || filterDateFrom || filterDateTo || filterPath);
-    const useBullet = hasFilter || !paneState.showGraph;
+    const useBullet = !paneState.showGraph;
     const graphColWidth = useBullet ? 24 : (graphData.maxLane + 2) * 16 + 16;
 
     let html = `<table class="graph-table">
@@ -1016,11 +993,15 @@ function renderGraphTable(): void {
         </tr></thead>
         <tbody>`;
 
-    for (const row of rows) {
+    for (const { row, matchesFilter } of rows) {
         const c = row.commit;
         const refs = parseRefs(c.refs, tagNames);
         const badges = renderRefBadges(refs);
         const isSelected = c.hash === selectedCommitHash ? ' selected' : '';
+        const isPrimary = row.laneData.isPrimary ? ' primary-line' : '';
+        const filterClass = hasFilter
+            ? (matchesFilter ? ' filter-matched' : ' filter-dimmed')
+            : '';
         const date = formatRelativeDate(new Date(c.authorDate));
 
         let graphCell: string;
@@ -1031,7 +1012,7 @@ function renderGraphTable(): void {
             graphCell = renderGraphSvg(row, graphData.maxLane);
         }
 
-        html += `<tr class="graph-row${isSelected}" data-hash="${c.hash}">
+        html += `<tr class="graph-row${isSelected}${isPrimary}${filterClass}" data-hash="${c.hash}">
             <td class="graph-cell">${graphCell}</td>
             <td class="hash-col">${escapeHtml(c.shortHash)}</td>
             <td class="message-col">
@@ -1075,9 +1056,58 @@ function renderGraphTable(): void {
                 vscode.postMessage({ type: 'executeCommand', command, commitHash });
             });
         });
+
     });
 
     observeGraphSentinel(pane);
+}
+
+function getGraphRowsForRendering(): Array<{ row: GraphRow; matchesFilter: boolean }> {
+    if (!graphData) { return []; }
+
+    const hasLocalFilter = Boolean(searchFilter || filterAuthors.length > 0 || filterDateFrom || filterDateTo);
+    const hasAnyFilter = hasLocalFilter || Boolean(filterPath);
+    return graphData.rows.map((row) => {
+        if (!hasAnyFilter) {
+            return { row, matchesFilter: true };
+        }
+
+        const serverMatch = searchFilter ? row.commit.matchesFilter : undefined;
+        const matchesFilter = typeof serverMatch === 'boolean'
+            ? serverMatch
+            : (!hasLocalFilter || graphRowMatchesLocalFilters(row));
+        return { row, matchesFilter };
+    });
+}
+
+function graphRowMatchesLocalFilters(row: GraphRow): boolean {
+    const c = row.commit;
+    if (searchFilter) {
+        const search = searchFilter.toLowerCase();
+        const matchesSearch = c.message.toLowerCase().includes(search)
+            || c.hash.toLowerCase().includes(search)
+            || c.shortHash.toLowerCase().includes(search)
+            || c.authorName.toLowerCase().includes(search)
+            || c.authorEmail.toLowerCase().includes(search);
+        if (!matchesSearch) {
+            return false;
+        }
+    }
+
+    if (filterAuthors.length > 0 && !filterAuthors.includes(c.authorName)) {
+        return false;
+    }
+    if (filterDateFrom && new Date(c.authorDate).getTime() < new Date(filterDateFrom).getTime()) {
+        return false;
+    }
+    if (filterDateTo) {
+        const to = new Date(filterDateTo).getTime() + 86400000; // include the full day
+        if (new Date(c.authorDate).getTime() >= to) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 function getGraphPaginationHtml(): string {
@@ -1618,9 +1648,11 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .graph-pane { overflow: auto; position: relative; }
 .graph-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .graph-table th { position: sticky; top: 0; background: var(--vscode-editor-background); border-bottom: 1px solid var(--vscode-panel-border); padding: 4px 8px; text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; color: var(--vscode-descriptionForeground); z-index: 1; }
-.graph-row { cursor: pointer; }
-.graph-row:hover { background: var(--vscode-list-hoverBackground); }
+.graph-row { cursor: pointer; content-visibility: auto; contain-intrinsic-size: auto 28px; }
 .graph-row.selected { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); box-shadow: inset 2px 0 0 var(--vscode-focusBorder); }
+.graph-row.primary-line .graph-cell { background: color-mix(in srgb, var(--vscode-focusBorder) 8%, transparent); }
+.graph-row.filter-dimmed { opacity: 0.42; }
+.graph-row.filter-matched { box-shadow: inset 2px 0 0 var(--vscode-list-highlightForeground, var(--vscode-focusBorder)); }
 .graph-row td { padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; line-height: 28px; border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 42%, transparent); }
 .commit-row-button { width: 100%; max-width: 100%; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; display: inline-flex; align-items: center; vertical-align: middle; }
 .commit-row-button:focus { outline: none; }
@@ -1630,6 +1662,10 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .graph-cell svg { display: block; }
 .commit-graph-svg { overflow: visible; shape-rendering: geometricPrecision; }
 .graph-line { stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.82; }
+.graph-line-first-parent { stroke-width: 2.6; opacity: 0.92; }
+.graph-line-merge-parent { stroke-width: 2; opacity: 0.72; stroke-dasharray: 0; }
+.graph-line-pass-through { opacity: 0.58; }
+.graph-row.primary-line .graph-line-first-parent { stroke-width: 3; }
 .commit-dot-halo { opacity: 0.22; }
 .commit-dot { filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.45)); }
 .filter-bullet { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 auto; vertical-align: middle; }

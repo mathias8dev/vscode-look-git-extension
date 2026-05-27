@@ -34,9 +34,11 @@ export class GraphDataProvider {
         ]);
 
         const currentBranch = branches.find((branch) => branch.isCurrent)?.name ?? 'HEAD';
+        const primaryBranch = filterBranches?.length === 1 ? filterBranches[0] : currentBranch;
+        const primaryBranchHash = branches.find((branch) => branch.name === primaryBranch)?.hash;
         const hasMore = rawCommits.length > requestedCount;
         const commits = rawCommits.slice(0, requestedCount);
-        const rows = assignLanes(commits);
+        const rows = assignLanes(commits, { primaryBranch, primaryBranchHash });
         const maxLane = getMaxLane(rows);
 
         return { branches, tags, rows, maxLane, currentBranch, currentUser, hasMore, loadedCount: commits.length };

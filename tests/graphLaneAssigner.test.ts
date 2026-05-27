@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { assignLanes, getMaxLane } from '../src/graphView/graphLaneAssigner';
 import type { GraphCommitInfo } from '../src/gitService';
 
-function commit(hash: string, parents: string[] = []): GraphCommitInfo {
+function commit(hash: string, parents: string[] = [], refs: string[] = []): GraphCommitInfo {
     return {
         hash,
         shortHash: hash.substring(0, 7),
@@ -11,7 +11,7 @@ function commit(hash: string, parents: string[] = []): GraphCommitInfo {
         authorEmail: 'test@example.com',
         authorDate: new Date('2024-01-01T00:00:00Z'),
         parentHashes: parents,
-        refs: [],
+        refs,
     };
 }
 
@@ -163,5 +163,64 @@ describe('graphLaneAssigner advanced cases', () => {
 
         expect(rows.map((row) => row.laneData.lane)).toEqual([0, 0, 0, 0]);
         expect(getMaxLane(rows)).toBe(0);
+    });
+
+    it('pins the primary branch tip and first-parent chain to lane 0', () => {
+        const rows = assignLanes([
+            commit('feature-tip', ['shared-base'], ['feature/ui']),
+            commit('main-tip', ['main-parent'], ['HEAD -> main']),
+            commit('main-parent', ['shared-base']),
+            commit('shared-base'),
+        ], { primaryBranch: 'main' });
+
+        expect(rows.map((row) => [row.commit.hash, row.laneData.lane])).toEqual([
+            ['feature-tip', 1],
+            ['main-tip', 0],
+            ['main-parent', 0],
+            ['shared-base', 0],
+        ]);
+        expect(rows[1].laneData.isPrimary).toBe(true);
+        expect(rows[2].laneData.isPrimary).toBe(true);
+        expect(rows[2].laneData.lines).toContainEqual(expect.objectContaining({
+            fromLane: 1,
+            toLane: 0,
+            type: 'merge-left',
+            role: 'merge-parent',
+            targetHash: 'shared-base',
+        }));
+    });
+
+    it('uses the branch hash to pin a selected branch even when refs are missing', () => {
+        const rows = assignLanes([
+            commit('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', ['base-a']),
+            commit('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', ['base-b']),
+            commit('base-a'),
+            commit('base-b'),
+        ], { primaryBranchHash: 'bbbbbbb' });
+
+        expect(rows[0].laneData.lane).toBe(1);
+        expect(rows[1].laneData.lane).toBe(0);
+        expect(rows[1].laneData.isPrimary).toBe(true);
+    });
+
+    it('keeps existing lane assignments stable when older commits are appended', () => {
+        const firstPage = [
+            commit('main-tip', ['main-parent'], ['HEAD -> main']),
+            commit('feature-tip', ['feature-parent'], ['feature/ui']),
+        ];
+        const firstRows = assignLanes(firstPage, { primaryBranch: 'main' });
+        const extendedRows = assignLanes([
+            ...firstPage,
+            commit('main-parent', ['root']),
+            commit('feature-parent', ['root']),
+            commit('root'),
+        ], { primaryBranch: 'main' });
+
+        expect(extendedRows.slice(0, firstRows.length).map((row) => row.laneData.lane)).toEqual(
+            firstRows.map((row) => row.laneData.lane),
+        );
+        expect(extendedRows.slice(0, firstRows.length).map((row) => row.laneData.color)).toEqual(
+            firstRows.map((row) => row.laneData.color),
+        );
     });
 });

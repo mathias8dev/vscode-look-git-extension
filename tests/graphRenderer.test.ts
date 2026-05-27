@@ -22,7 +22,10 @@ function row(type: GraphRow['laneData']['lines'][number]['type'] = 'straight'): 
                 toLane: type === 'straight' ? 0 : 1,
                 color: '#f97583',
                 type,
+                targetHash: 'parent',
+                role: type === 'straight' ? 'first-parent' : 'merge-parent',
             }],
+            isPrimary: false,
         },
     };
 }
@@ -32,7 +35,8 @@ describe('graphRenderer', () => {
         const svg = renderGraphSvg(row(), 1);
 
         expect(svg).toContain('class="commit-graph-svg"');
-        expect(svg).toContain('class="graph-line"');
+        expect(svg).toContain('class="graph-line graph-line-straight graph-line-first-parent"');
+        expect(svg).toContain('data-line-target="parent"');
         expect(svg).toContain('class="commit-dot-halo"');
         expect(svg).toContain('class="commit-dot"');
         expect(svg).toContain('aria-hidden="true"');
@@ -41,7 +45,7 @@ describe('graphRenderer', () => {
     it('renders curved branch lines with rounded graph-line styling hooks', () => {
         const svg = renderGraphSvg(row('fork-right'), 1);
 
-        expect(svg).toContain('<path class="graph-line"');
+        expect(svg).toContain('<path class="graph-line graph-line-fork-right graph-line-merge-parent"');
         expect(svg).toContain('C ');
     });
 });

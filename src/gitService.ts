@@ -84,6 +84,7 @@ export interface TagInfo {
 
 export interface GraphCommitInfo extends GitCommitInfo {
     refs: string[];
+    matchesFilter?: boolean;
 }
 
 export interface GraphLogFilters {
@@ -647,7 +648,7 @@ export class GitService {
             return [];
         }
 
-        let commits = output.split(LOG_RECORD_SEP)
+        let commits: GraphCommitInfo[] = output.split(LOG_RECORD_SEP)
             .map((record) => record.replace(/^\n/, '').replace(/\n$/, ''))
             .filter(Boolean)
             .map((record) => {
@@ -669,10 +670,53 @@ export class GitService {
 
         if (search) {
             const normalizedSearch = search.toLowerCase();
-            commits = commits.filter((commit) => this.commitMatchesGraphSearch(commit, normalizedSearch));
+            for (const commit of commits) {
+                commit.matchesFilter = this.commitMatchesGraphSearch(commit, normalizedSearch);
+            }
+            commits = this.includeGraphSearchContext(commits, maxCount);
         }
 
         return commits.slice(0, maxCount);
+    }
+
+    private includeGraphSearchContext(commits: GraphCommitInfo[], maxCount: number): GraphCommitInfo[] {
+        const byHash = new Map(commits.map((commit) => [commit.hash, commit]));
+        const included = new Set<string>();
+        const contextDepth = 12;
+
+        for (const commit of commits) {
+            if (!commit.matchesFilter) {
+                continue;
+            }
+
+            included.add(commit.hash);
+            const pending = commit.parentHashes.map((hash) => ({ hash, depth: 1 }));
+            while (pending.length > 0) {
+                const next = pending.shift()!;
+                if (next.depth > contextDepth || included.has(next.hash)) {
+                    continue;
+                }
+
+                const parent = byHash.get(next.hash);
+                if (!parent) {
+                    continue;
+                }
+
+                included.add(parent.hash);
+                for (const parentHash of parent.parentHashes) {
+                    pending.push({ hash: parentHash, depth: next.depth + 1 });
+                }
+            }
+
+            if (included.size >= maxCount * 2) {
+                break;
+            }
+        }
+
+        const contextualCommits = commits.filter((commit) => included.has(commit.hash));
+        return contextualCommits.length > 0
+            ? contextualCommits
+            : commits.filter((commit) => commit.matchesFilter);
     }
 
     private commitMatchesGraphSearch(commit: GraphCommitInfo, normalizedSearch: string): boolean {
