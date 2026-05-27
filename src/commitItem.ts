@@ -221,13 +221,15 @@ function compactFolderTree(node: FolderNode): FolderNode {
 }
 
 export class LoadMoreItem extends vscode.TreeItem {
-    constructor() {
-        super('Load more commits...', vscode.TreeItemCollapsibleState.None);
-        this.command = {
-            command: 'lookGit.loadMore',
-            title: 'Load More',
-        };
+    constructor(isLoading = false) {
+        super(isLoading ? 'Loading commits...' : 'Load more commits...', vscode.TreeItemCollapsibleState.None);
+        if (!isLoading) {
+            this.command = {
+                command: 'lookGit.loadMore',
+                title: 'Load More',
+            };
+        }
         this.contextValue = 'loadMore';
-        this.iconPath = new vscode.ThemeIcon('ellipsis');
+        this.iconPath = new vscode.ThemeIcon(isLoading ? 'sync~spin' : 'ellipsis');
     }
 }

@@ -688,6 +688,38 @@ describe('CommitHistoryProvider pagination', () => {
         expect(allItems).toHaveLength(75);
         expect(allItems.some((item) => item instanceof LoadMoreItem)).toBe(false);
     });
+
+    it('shows a loading item while the next tree page is being fetched', async () => {
+        const commits = Array.from({ length: 75 }, (_, index) => commit(index));
+        let resolveNextPage!: () => void;
+        const nextPage = new Promise<void>((resolve) => {
+            resolveNextPage = resolve;
+        });
+        const service = {
+            getLog: vi.fn(async (limit: number, skip: number) => {
+                if (skip === 0) {
+                    return commits.slice(skip, skip + limit);
+                }
+                await nextPage;
+                return commits.slice(skip, skip + limit);
+            }),
+            getCommitFiles: vi.fn(async () => []),
+            getWorkingDirectory: vi.fn(() => '/workspace'),
+        };
+        const provider = new CommitHistoryProvider(service as any);
+
+        await provider.getChildren();
+        const loadMorePromise = provider.loadMore();
+        const loadingItems = await provider.getChildren();
+        const loadingItem = loadingItems.at(-1) as LoadMoreItem;
+
+        expect(loadingItem).toBeInstanceOf(LoadMoreItem);
+        expect(loadingItem.label).toBe('Loading commits...');
+        expect(loadingItem.command).toBeUndefined();
+
+        resolveNextPage();
+        await loadMorePromise;
+    });
 });
 
 describe('GraphViewProvider webview messages', () => {

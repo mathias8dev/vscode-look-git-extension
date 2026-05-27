@@ -681,6 +681,8 @@ describe('Graph webview runtime behavior', () => {
             const currentObserver = observers.at(-1)!;
             currentObserver.trigger();
             currentObserver.trigger();
+            expect(document.querySelector('#graph-loading-more')).not.toBeNull();
+            expect(document.querySelector('#graph-scroll-sentinel')).toBeNull();
 
             expect(api.messages.filter((message) => (
                 typeof message === 'object'
@@ -706,6 +708,7 @@ describe('Graph webview runtime behavior', () => {
             });
 
             expect(document.querySelector('#graph-scroll-sentinel')).toBeNull();
+            expect(document.querySelector('#graph-loading-more')).toBeNull();
         } finally {
             (globalThis as any).IntersectionObserver = originalIntersectionObserver;
         }

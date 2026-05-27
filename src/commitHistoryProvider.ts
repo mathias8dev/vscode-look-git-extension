@@ -38,11 +38,14 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
             return this.loadMorePromise;
         }
 
+        this.loadMoreScheduled = false;
         this.loadMorePromise = this.loadMorePage();
+        this._onDidChangeTreeData.fire();
         try {
             await this.loadMorePromise;
         } finally {
             this.loadMorePromise = undefined;
+            this._onDidChangeTreeData.fire();
         }
     }
 
@@ -51,7 +54,6 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
         const newCommits = await this.gitService.getLog(this.pageSize, skip);
         this.commits.push(...newCommits);
         this.hasMore = newCommits.length === this.pageSize;
-        this._onDidChangeTreeData.fire();
     }
 
     getTreeItem(element: TreeItem): vscode.TreeItem {
@@ -119,7 +121,7 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
         );
 
         if (this.hasMore) {
-            items.push(new LoadMoreItem());
+            items.push(new LoadMoreItem(this.loadMoreScheduled || Boolean(this.loadMorePromise)));
         }
 
         return items;
@@ -131,6 +133,7 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
         }
 
         this.loadMoreScheduled = true;
+        this._onDidChangeTreeData.fire();
         setTimeout(() => {
             this.loadMoreScheduled = false;
             void this.loadMore().catch((error) => {

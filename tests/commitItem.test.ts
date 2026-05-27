@@ -171,6 +171,14 @@ describe('LoadMoreItem', () => {
         const item = new LoadMoreItem();
         expect(item.contextValue).toBe('loadMore');
     });
+
+    it('renders a non-clickable loading state', () => {
+        const item = new LoadMoreItem(true);
+
+        expect(item.label).toBe('Loading commits...');
+        expect(item.command).toBeUndefined();
+        expect((item.iconPath as any).id).toBe('sync~spin');
+    });
 });
 
 describe('CommitItem relative date formatting', () => {

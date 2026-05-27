@@ -135,6 +135,7 @@ function requestMoreGraphData(): void {
     }
 
     isLoadingMoreGraph = true;
+    renderGraphTable();
     vscode.postMessage({ type: 'loadMoreGraph' });
 }
 
@@ -1022,7 +1023,12 @@ function renderGraphTable(): void {
     }
 
     html += '</tbody></table>';
-    if (graphData.hasMore) {
+    if (isLoadingMoreGraph) {
+        html += `<div id="graph-loading-more" class="graph-loading-more" role="status" aria-live="polite">
+            <span class="graph-loading-spinner" aria-hidden="true"></span>
+            <span>Loading commits...</span>
+        </div>`;
+    } else if (graphData.hasMore) {
         html += '<div id="graph-scroll-sentinel" class="graph-scroll-sentinel" aria-label="Load more commits"></div>';
     }
 
@@ -1474,6 +1480,7 @@ window.addEventListener('message', (event) => {
         case 'error':
             isLoadingMoreGraph = false;
             console.error('Graph error:', msg.message);
+            renderGraphTable();
             break;
     }
 });
@@ -1584,6 +1591,9 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .filter-bullet { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 auto; vertical-align: middle; }
 .graph-cell { text-align: center; }
 .graph-scroll-sentinel { height: 28px; width: 100%; }
+.graph-loading-more { min-height: 32px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--vscode-descriptionForeground); font-size: 12px; border-top: 1px solid color-mix(in srgb, var(--vscode-panel-border) 42%, transparent); }
+.graph-loading-spinner { width: 14px; height: 14px; border: 2px solid color-mix(in srgb, var(--vscode-descriptionForeground) 35%, transparent); border-top-color: var(--vscode-progressBar-background, var(--vscode-focusBorder)); border-radius: 50%; animation: graph-loading-spin 0.8s linear infinite; }
+@keyframes graph-loading-spin { to { transform: rotate(360deg); } }
 
 .ref-badge { display: inline-block; padding: 0 6px; margin-right: 4px; border-radius: 3px; font-size: 11px; line-height: 18px; font-weight: 500; vertical-align: middle; }
 .ref-badge.branch-local { background: var(--vscode-gitDecoration-addedResourceForeground, #28a745); color: #fff; }
