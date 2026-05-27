@@ -263,7 +263,11 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         try {
             switch (command) {
                 case 'checkout':
-                    await this.gitService.checkout(branch);
+                    if (isRemote) {
+                        await this.gitService.checkoutRemoteBranch(branch);
+                    } else {
+                        await this.gitService.checkout(branch);
+                    }
                     break;
 
                 case 'newBranchFrom': {

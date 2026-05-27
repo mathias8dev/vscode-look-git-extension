@@ -94,6 +94,21 @@ describe('GitService remote workflows with local bare remotes', () => {
         );
     });
 
+    it('checks out a remote graph branch as a local tracking branch instead of detached HEAD', async () => {
+        const fixture = remoteFixture();
+
+        await fixture.local.service.checkoutRemoteBranch('origin/feature/nested');
+
+        expect(fixture.local.gitTrim(['rev-parse', '--abbrev-ref', 'HEAD'])).toBe('feature/nested');
+        expect(fixture.local.gitTrim(['rev-parse', 'HEAD'])).toBe(
+            fixture.local.gitTrim(['rev-parse', 'origin/feature/nested']),
+        );
+        expect(await fixture.local.service.getTrackingBranch()).toEqual({
+            remote: 'origin',
+            branch: 'feature/nested',
+        });
+    });
+
     it('pushes a local branch to the bare remote and sets upstream', async () => {
         const fixture = remoteFixture();
         fixture.local.git(['checkout', '-q', 'local-only']);

@@ -430,12 +430,35 @@ export class GitService {
         return this.exec(['checkout', ref]);
     }
 
+    public async checkoutRemoteBranch(remoteBranch: string): Promise<string> {
+        const slashIdx = remoteBranch.indexOf('/');
+        if (slashIdx === -1) {
+            return this.checkout(remoteBranch);
+        }
+
+        const localBranch = remoteBranch.substring(slashIdx + 1);
+        if (await this.localBranchExists(localBranch)) {
+            return this.checkout(localBranch);
+        }
+
+        return this.exec(['checkout', '--track', remoteBranch]);
+    }
+
     public async checkoutDetached(commitHash: string): Promise<string> {
         return this.exec(['checkout', '--detach', commitHash]);
     }
 
     public async checkoutNewBranch(branchName: string, startPoint: string): Promise<string> {
         return this.exec(['checkout', '-b', branchName, startPoint]);
+    }
+
+    private async localBranchExists(branchName: string): Promise<boolean> {
+        try {
+            await this.execReadonly(['show-ref', '--verify', `refs/heads/${branchName}`]);
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     public async squashCommits(oldestCommitHash: string, commitHashes: string[]): Promise<string> {

@@ -988,6 +988,7 @@ describe('GraphViewProvider webview messages', () => {
                 getCurrentBranch: vi.fn(async () => 'main'),
                 getUserName: vi.fn(async () => 'Test User'),
                 checkout: vi.fn(async () => ''),
+                checkoutRemoteBranch: vi.fn(async () => ''),
                 checkoutNewBranch: vi.fn(async () => ''),
                 deleteBranch: vi.fn(async () => ''),
                 deleteRemoteBranch: vi.fn(async () => ''),
@@ -1012,6 +1013,14 @@ describe('GraphViewProvider webview messages', () => {
             const service = makeGraphService();
             await handle(service, { command: 'checkout', branch: 'feature', isRemote: false });
             expect(service.checkout).toHaveBeenCalledWith('feature');
+            expect(service.checkoutRemoteBranch).not.toHaveBeenCalled();
+        });
+
+        it('remote checkout creates or reuses a local tracking branch', async () => {
+            const service = makeGraphService();
+            await handle(service, { command: 'checkout', branch: 'origin/feature/nested', isRemote: true });
+            expect(service.checkoutRemoteBranch).toHaveBeenCalledWith('origin/feature/nested');
+            expect(service.checkout).not.toHaveBeenCalled();
         });
 
         it('newBranchFrom confirmed calls checkoutNewBranch', async () => {
