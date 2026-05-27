@@ -726,7 +726,7 @@ const CHEVRON_DOWN_SVG = `<svg class="tree-chevron-icon" width="14" height="14" 
 </svg>`;
 
 const INCOMING_CHANGES_SVG = `<svg class="branch-incoming-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-    <path d="M11.25 4.75 4.75 11.25m0 0h5m-5 0v-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M8 2v10m-3.5-3.5L8 12l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
 function renderCurrentBranchIndicator(branch: BranchInfo): string {
@@ -742,9 +742,9 @@ function renderIncomingChangesIndicator(branch: BranchInfo): string {
     }
 
     const upstream = branch.upstream ?? 'upstream';
-    const label = `${behind} incoming ${behind === 1 ? 'change' : 'changes'} from ${upstream}`;
+    const label = `${behind} commit${behind === 1 ? '' : 's'} behind ${upstream}`;
     const escapedLabel = escapeHtml(label);
-    return `<span class="branch-remote-pending-indicator" title="${escapedLabel}" aria-label="${escapedLabel}">${INCOMING_CHANGES_SVG}</span>`;
+    return `<span class="branch-remote-pending-indicator" title="${escapedLabel}" aria-label="${escapedLabel}">${INCOMING_CHANGES_SVG}<span class="branch-behind-count">${behind}</span></span>`;
 }
 
 function renderTreeNodes(node: BranchTreeNode, depth: number): string {
@@ -1588,12 +1588,13 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .branch-item:hover { background: var(--vscode-list-hoverBackground); }
 .branch-item.active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
 .branch-item.current .branch-name { font-weight: 600; color: var(--vscode-foreground); }
-.branch-item .branch-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.branch-item .branch-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
 .current-branch-indicator { width: 14px; height: 14px; border-radius: 50%; background: var(--vscode-gitDecoration-addedResourceForeground, #3fb950); color: var(--vscode-editor-background); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .current-branch-indicator::before { content: ''; width: 6px; height: 3px; border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg) translate(1px, -1px); }
 .branch-item.active .current-branch-indicator { outline: 1px solid currentColor; outline-offset: 1px; }
-.branch-remote-pending-indicator { width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--vscode-gitDecoration-modifiedResourceForeground, var(--vscode-textLink-foreground)); }
-.branch-incoming-icon { display: block; }
+.branch-remote-pending-indicator { display: inline-flex; align-items: center; gap: 1px; flex-shrink: 0; color: var(--vscode-gitDecoration-modifiedResourceForeground, var(--vscode-textLink-foreground)); margin-left: auto; }
+.branch-incoming-icon { display: block; flex-shrink: 0; }
+.branch-behind-count { font-size: 11px; line-height: 1; }
 
 .branch-pane-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 4px 0; border-bottom: 1px solid var(--vscode-panel-border); margin-bottom: 4px; }
 .branch-pane-toolbar .branch-item { flex: 1; }
