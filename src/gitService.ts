@@ -73,6 +73,8 @@ export interface BranchInfo {
     isCurrent: boolean;
     hash: string;
     upstream?: string;
+    ahead: number;
+    behind: number;
 }
 
 export interface TagInfo {
@@ -532,6 +534,7 @@ export class GitService {
             '%(refname)',
             '%(objectname:short)',
             '%(upstream:short)',
+            '%(upstream:track)',
         ].join('%00');
 
         const [output, currentBranch] = await Promise.all([
@@ -553,12 +556,15 @@ export class GitService {
             const name = isRemote
                 ? refName.replace(/^refs\/remotes\//, '')
                 : refName.replace(/^refs\/heads\//, '');
+            const tracking = parseTrackingStatus(parts[3] ?? '');
 
             return {
                 name,
                 isCurrent: !isRemote && name === currentBranch,
                 hash: parts[1],
                 upstream: parts[2] || undefined,
+                ahead: tracking.ahead,
+                behind: tracking.behind,
                 isRemote,
             };
         });
@@ -892,4 +898,10 @@ export class GitService {
         if (!output) { return []; }
         return this.parseNameStatusZ(output);
     }
+}
+
+function parseTrackingStatus(track: string): { ahead: number; behind: number } {
+    const ahead = Number(track.match(/\bahead (\d+)\b/)?.[1] ?? 0);
+    const behind = Number(track.match(/\bbehind (\d+)\b/)?.[1] ?? 0);
+    return { ahead, behind };
 }

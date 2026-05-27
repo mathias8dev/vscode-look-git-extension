@@ -23,6 +23,9 @@ interface BranchInfo {
     isRemote: boolean;
     isCurrent: boolean;
     hash: string;
+    upstream?: string;
+    ahead?: number;
+    behind?: number;
 }
 
 interface TagInfo {
@@ -722,10 +725,26 @@ const CHEVRON_DOWN_SVG = `<svg class="tree-chevron-icon" width="14" height="14" 
     <path d="M4.25 6 8 9.75 11.75 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
+const INCOMING_CHANGES_SVG = `<svg class="branch-incoming-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <path d="M11.25 4.75 4.75 11.25m0 0h5m-5 0v-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
 function renderCurrentBranchIndicator(branch: BranchInfo): string {
     return branch.isCurrent
         ? '<span class="current-branch-indicator" title="Current branch" aria-label="Current branch"></span>'
         : '';
+}
+
+function renderIncomingChangesIndicator(branch: BranchInfo): string {
+    const behind = branch.behind ?? 0;
+    if (branch.isRemote || behind <= 0) {
+        return '';
+    }
+
+    const upstream = branch.upstream ?? 'upstream';
+    const label = `${behind} incoming ${behind === 1 ? 'change' : 'changes'} from ${upstream}`;
+    const escapedLabel = escapeHtml(label);
+    return `<span class="branch-remote-pending-indicator" title="${escapedLabel}" aria-label="${escapedLabel}">${INCOMING_CHANGES_SVG}</span>`;
 }
 
 function renderTreeNodes(node: BranchTreeNode, depth: number): string {
@@ -765,6 +784,7 @@ function renderTreeNodes(node: BranchTreeNode, depth: number): string {
                 ${BRANCH_ICON_SVG}
                 ${renderCurrentBranchIndicator(b)}
                 <span class="branch-name">${escapeHtml(child.name)}</span>
+                ${renderIncomingChangesIndicator(b)}
             </div>`;
         }
 
@@ -780,6 +800,7 @@ function renderTreeNodes(node: BranchTreeNode, depth: number): string {
                 ${BRANCH_ICON_SVG}
                 ${renderCurrentBranchIndicator(b)}
                 <span class="branch-name">${escapeHtml(child.name)}</span>
+                ${renderIncomingChangesIndicator(b)}
             </div>`;
         }
     }
@@ -829,6 +850,7 @@ function renderBranchList(local: BranchInfo[], remote: BranchInfo[]): string {
         html += `<div class="branch-item${isCurrent}${isActive}" data-branch="${escapeHtml(b.name)}">
             ${renderCurrentBranchIndicator(b)}
             <span class="branch-name">${escapeHtml(b.name)}</span>
+            ${renderIncomingChangesIndicator(b)}
         </div>`;
     }
 
@@ -1566,10 +1588,12 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .branch-item:hover { background: var(--vscode-list-hoverBackground); }
 .branch-item.active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
 .branch-item.current .branch-name { font-weight: 600; color: var(--vscode-foreground); }
-.branch-item .branch-name { overflow: hidden; text-overflow: ellipsis; }
+.branch-item .branch-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .current-branch-indicator { width: 14px; height: 14px; border-radius: 50%; background: var(--vscode-gitDecoration-addedResourceForeground, #3fb950); color: var(--vscode-editor-background); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .current-branch-indicator::before { content: ''; width: 6px; height: 3px; border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg) translate(1px, -1px); }
 .branch-item.active .current-branch-indicator { outline: 1px solid currentColor; outline-offset: 1px; }
+.branch-remote-pending-indicator { width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--vscode-gitDecoration-modifiedResourceForeground, var(--vscode-textLink-foreground)); }
+.branch-incoming-icon { display: block; }
 
 .branch-pane-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 4px 0; border-bottom: 1px solid var(--vscode-panel-border); margin-bottom: 4px; }
 .branch-pane-toolbar .branch-item { flex: 1; }

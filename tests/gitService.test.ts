@@ -194,6 +194,33 @@ describe('GitService refs and graph data', () => {
         expect(branches.some((branch) => branch.name === 'origin/HEAD')).toBe(false);
     });
 
+    it('reports incoming remote changes for local branches behind their upstream', async () => {
+        const r = repo();
+        r.write('file.txt', 'one');
+        r.commit('initial');
+        r.git(['remote', 'add', 'origin', '/tmp/look-git-origin.git']);
+        r.git(['checkout', '-q', '-b', 'remote-source']);
+        r.write('remote.txt', 'remote');
+        const remoteHash = r.commit('remote commit');
+        r.git(['checkout', '-q', 'main']);
+        r.git(['update-ref', 'refs/remotes/origin/main', remoteHash]);
+        r.git(['branch', '--set-upstream-to=origin/main', 'main']);
+
+        const branches = await r.service.getAllBranches();
+        const main = branches.find((branch) => branch.name === 'main');
+        const remoteMain = branches.find((branch) => branch.name === 'origin/main');
+
+        expect(main).toEqual(expect.objectContaining({
+            upstream: 'origin/main',
+            ahead: 0,
+            behind: 1,
+        }));
+        expect(remoteMain).toEqual(expect.objectContaining({
+            ahead: 0,
+            behind: 0,
+        }));
+    });
+
     it('filters graph log by path server-side', async () => {
         const r = repo();
         r.write('a.txt', 'a1');
