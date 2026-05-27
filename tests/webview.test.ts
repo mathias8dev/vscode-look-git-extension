@@ -213,7 +213,7 @@ describe('Changes webview runtime behavior', () => {
                 type: 'statusData',
                 data: {
                     staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'staged.txt' }],
-                    unstaged: [],
+                    unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'unstaged.txt' }],
                     conflicts: [],
                     conflictState: 'none',
                     stashes: [{ index: 0, message: 'my stash' }],
@@ -224,6 +224,7 @@ describe('Changes webview runtime behavior', () => {
 
         it('stash-btn posts stash', async () => {
             const api = await bootWithStash();
+            expect(document.querySelector('#stash-btn')?.closest('[data-section="unstaged"]')).not.toBeNull();
             click('#stash-btn');
             expect(api.messages).toContainEqual({ type: 'stash' });
         });
@@ -258,7 +259,7 @@ describe('Changes webview runtime behavior', () => {
         it('expanding stash row then receiving stashFiles renders file rows', async () => {
             const api = await bootWithStash();
             click('[data-section="stashes"] .section-title-row');
-            click('.stash-row[data-stash-index="0"]');
+            click('.stash-expand-btn[data-stash-index="0"]');
             expect(api.messages).toContainEqual({ type: 'getStashFiles', index: 0 });
 
             sendWebviewMessage({
@@ -273,7 +274,7 @@ describe('Changes webview runtime behavior', () => {
         it('clicking stash file row posts openStashDiff', async () => {
             const api = await bootWithStash();
             click('[data-section="stashes"] .section-title-row');
-            click('.stash-row[data-stash-index="0"]');
+            click('.stash-expand-btn[data-stash-index="0"]');
             sendWebviewMessage({
                 type: 'stashFiles',
                 index: 0,
@@ -490,7 +491,7 @@ describe('Changes webview runtime behavior', () => {
         click('#accept-all-theirs-btn');
         click('.conflict-file-row');
         click('[data-section="stashes"] .section-title-row');
-        click('.stash-row');
+        click('.stash-expand-btn');
 
         expect(api.messages).toContainEqual({ type: 'stageAll' });
         expect(api.messages).toContainEqual({ type: 'unstageAll' });

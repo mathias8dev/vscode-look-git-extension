@@ -206,7 +206,7 @@ function renderDropdown(): void {
     let html = '';
     for (const mode of COMMIT_MODES) {
         const active = mode.id === commitMode ? ' active' : '';
-        html += `<div class="dropdown-item${active}" data-mode="${mode.id}">${mode.label}</div>`;
+        html += `<button type="button" class="dropdown-item${active}" data-mode="${mode.id}">${mode.label}</button>`;
     }
     menu.innerHTML = html;
 
@@ -310,11 +310,11 @@ function renderTreeNode(node: TreeNode, isStaged: boolean, depth: number): strin
 
     const folderIcon = isExpanded ? ICON_FOLDER_OPEN : ICON_FOLDER;
     let html = `
-        <div class="tree-folder-row" data-folder-key="${escapeHtml(folderKey)}" style="padding-left:${indent}px">
+        <button type="button" class="tree-folder-row" data-folder-key="${escapeHtml(folderKey)}" style="padding-left:${indent}px">
             <span class="tree-folder-chevron">${chevron}</span>
             <span class="tree-icon folder-icon">${folderIcon}</span>
             <span class="tree-folder-name">${escapeHtml(node.name)}</span>
-        </div>`;
+        </button>`;
 
     if (isExpanded) {
         const sortedChildren = [...node.children].sort((a, b) => a.name.localeCompare(b.name));
@@ -391,11 +391,11 @@ function renderFilesList(): void {
         const chevron = conflictsCollapsed ? ICON_CHEVRON_RIGHT : ICON_CHEVRON_DOWN;
         html += `
             <div class="section-header conflict-section" data-section="conflicts">
-                <div class="section-title-row">
+                <button type="button" class="section-title-row">
                     <span class="section-chevron">${chevron}</span>
                     <span class="section-title">Merge Changes</span>
                     <span class="section-count conflict-count">${statusData.conflicts.length}</span>
-                </div>
+                </button>
                 <div class="section-actions">
                     <button class="icon-btn" id="accept-all-theirs-btn" title="Accept All Incoming">${ICON_ACCEPT_THEIRS}</button>
                 </div>
@@ -413,11 +413,11 @@ function renderFilesList(): void {
         const chevron = stagedCollapsed ? ICON_CHEVRON_RIGHT : ICON_CHEVRON_DOWN;
         html += `
             <div class="section-header" data-section="staged">
-                <div class="section-title-row">
+                <button type="button" class="section-title-row">
                     <span class="section-chevron">${chevron}</span>
                     <span class="section-title">Staged Changes</span>
                     <span class="section-count">${statusData.staged.length}</span>
-                </div>
+                </button>
                 <div class="section-actions">
                     <button class="icon-btn" id="stash-staged-btn" title="Stash Staged Changes">${ICON_PLUS}</button>
                     <button class="icon-btn" id="unstage-all-btn" title="Unstage All">${ICON_MINUS}</button>
@@ -440,12 +440,13 @@ function renderFilesList(): void {
         const chevron = unstagedCollapsed ? ICON_CHEVRON_RIGHT : ICON_CHEVRON_DOWN;
         html += `
             <div class="section-header" data-section="unstaged">
-                <div class="section-title-row">
+                <button type="button" class="section-title-row">
                     <span class="section-chevron">${chevron}</span>
                     <span class="section-title">Changes</span>
                     <span class="section-count">${statusData.unstaged.length}</span>
-                </div>
+                </button>
                 <div class="section-actions">
+                    <button class="icon-btn stash-btn" id="stash-btn" title="Stash Changes">${ICON_PLUS}</button>
                     <button class="icon-btn" id="discard-all-btn" title="Discard All Changes">${ICON_DISCARD}</button>
                     <button class="icon-btn" id="stage-all-btn" title="Stage All">${ICON_PLUS}</button>
                 </div>
@@ -467,14 +468,11 @@ function renderFilesList(): void {
         const chevron = stashesCollapsed ? ICON_CHEVRON_RIGHT : ICON_CHEVRON_DOWN;
         html += `
             <div class="section-header" data-section="stashes">
-                <div class="section-title-row">
+                <button type="button" class="section-title-row">
                     <span class="section-chevron">${chevron}</span>
                     <span class="section-title">Stashes</span>
                     <span class="section-count">${statusData!.stashes.length}</span>
-                </div>
-                <div class="section-actions">
-                    <button class="icon-btn" id="stash-btn" title="Stash Changes">${ICON_PLUS}</button>
-                </div>
+                </button>
             </div>`;
 
         if (!stashesCollapsed) {
@@ -541,9 +539,11 @@ function renderStashRow(stash: StashEntry): string {
     const chevron = isExpanded ? ICON_CHEVRON_DOWN : ICON_CHEVRON_RIGHT;
     let html = `
         <div class="file-row stash-row" data-stash-index="${stash.index}">
-            <span class="stash-chevron">${chevron}</span>
-            <span class="stash-label">stash@{${stash.index}}</span>
-            <span class="file-name" title="${escapeHtml(stash.message)}">${escapeHtml(stash.message)}</span>
+            <button type="button" class="stash-expand-btn" data-stash-index="${stash.index}">
+                <span class="stash-chevron">${chevron}</span>
+                <span class="stash-label">stash@{${stash.index}}</span>
+                <span class="file-name" title="${escapeHtml(stash.message)}">${escapeHtml(stash.message)}</span>
+            </button>
             <div class="file-actions">
                 <button class="icon-btn stash-pop-btn" data-index="${stash.index}" title="Pop Stash">${ICON_STASH_POP}</button>
                 <button class="icon-btn stash-apply-btn" data-index="${stash.index}" title="Apply Stash">${ICON_STASH_APPLY}</button>
@@ -729,9 +729,11 @@ function wireFileHandlers(): void {
     });
 
     // Stash actions
-    document.getElementById('stash-btn')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        vscode.postMessage({ type: 'stash' });
+    document.querySelectorAll('.stash-btn').forEach((el) => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            vscode.postMessage({ type: 'stash' });
+        });
     });
 
     document.querySelectorAll('.stash-pop-btn').forEach((el) => {
@@ -756,8 +758,9 @@ function wireFileHandlers(): void {
     });
 
     // Stash row expand/collapse
-    document.querySelectorAll('.stash-row').forEach((el) => {
-        el.addEventListener('click', () => {
+    document.querySelectorAll('.stash-expand-btn').forEach((el) => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
             const index = parseInt((el as HTMLElement).dataset.stashIndex!, 10);
             if (expandedStashes.has(index)) {
                 expandedStashes.delete(index);
@@ -865,8 +868,9 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 
 /* Dropdown menu */
 .dropdown-menu { position: absolute; left: 8px; right: 8px; background: var(--vscode-menu-background, var(--vscode-dropdown-background)); border: 1px solid var(--vscode-menu-border, var(--vscode-dropdown-border)); border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); z-index: 100; overflow: hidden; }
-.dropdown-item { padding: 6px 12px; cursor: pointer; font-size: var(--vscode-font-size); color: var(--vscode-menu-foreground, var(--vscode-dropdown-foreground)); }
+.dropdown-item { display: block; width: 100%; padding: 6px 12px; border: 0; background: transparent; cursor: pointer; font: inherit; font-size: var(--vscode-font-size); color: var(--vscode-menu-foreground, var(--vscode-dropdown-foreground)); text-align: left; }
 .dropdown-item:hover { background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground)); color: var(--vscode-menu-selectionForeground, var(--vscode-foreground)); }
+.dropdown-item:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 .dropdown-item.active { font-weight: 600; }
 
 /* ── Files Section ── */
@@ -875,13 +879,15 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 
 /* Section headers */
 .section-header { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 4px; height: 22px; background: var(--vscode-sideBarSectionHeader-background, transparent); border-bottom: 1px solid var(--vscode-panel-border); position: sticky; top: 0; z-index: 1; }
-.section-title-row { display: flex; align-items: center; gap: 2px; cursor: pointer; flex: 1; min-width: 0; user-select: none; }
+.section-title-row { display: flex; align-items: center; gap: 2px; cursor: pointer; flex: 1; min-width: 0; user-select: none; border: 0; background: transparent; color: inherit; font: inherit; height: 100%; text-align: left; }
+.section-title-row:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 .section-chevron { display: flex; align-items: center; flex-shrink: 0; }
 .section-chevron svg { width: 14px; height: 14px; }
 .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--vscode-sideBarSectionHeader-foreground, var(--vscode-foreground)); letter-spacing: 0.3px; }
 .section-count { font-size: 10px; min-width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); padding: 0 4px; margin-left: 4px; flex-shrink: 0; }
 .section-actions { display: flex; gap: 1px; opacity: 0; transition: opacity 0.1s; }
 .section-header:hover .section-actions { opacity: 1; }
+.section-header:focus-within .section-actions { opacity: 1; }
 
 /* Icon buttons */
 .icon-btn { width: 22px; height: 22px; border: none; background: transparent; color: var(--vscode-icon-foreground, var(--vscode-foreground)); border-radius: 3px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; opacity: 0.7; }
@@ -919,8 +925,9 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .file-dir { color: var(--vscode-descriptionForeground); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 2; margin-left: 4px; }
 
 /* Tree view */
-.tree-folder-row { display: flex; align-items: center; gap: 3px; cursor: pointer; font-size: 12px; height: 22px; padding-right: 8px; }
+.tree-folder-row { display: flex; align-items: center; gap: 3px; cursor: pointer; font-size: 12px; height: 22px; padding-right: 8px; width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
 .tree-folder-row:hover { background: var(--vscode-list-hoverBackground); }
+.tree-folder-row:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 .tree-folder-chevron { display: flex; align-items: center; flex-shrink: 0; }
 .tree-folder-chevron svg { width: 14px; height: 14px; }
 .tree-folder-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -931,6 +938,8 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 
 /* Stash rows */
 .stash-row { cursor: pointer; }
+.stash-expand-btn { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1; height: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.stash-expand-btn:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 .stash-chevron { display: flex; align-items: center; flex-shrink: 0; }
 .stash-chevron svg { width: 14px; height: 14px; }
 .stash-label { font-size: 11px; color: var(--vscode-descriptionForeground); white-space: nowrap; flex-shrink: 0; margin-right: 4px; }

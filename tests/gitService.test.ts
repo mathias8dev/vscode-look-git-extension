@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { GitService } from '../src/gitService';
 import { createTempGitRepo, type TempGitRepo } from './helpers/gitRepo';
 
 const repos: TempGitRepo[] = [];
@@ -446,6 +447,26 @@ describe('GitService merge and rebase conflict handling', () => {
         expect(await r.service.isMergeInProgress()).toBe(false);
     });
 
+    it('falls back to reset --merge when merge --abort fails', async () => {
+        const calls: string[][] = [];
+        class FallbackGitService extends GitService {
+            public override async exec(args: string[]): Promise<string> {
+                calls.push(args);
+                if (args.join(' ') === 'merge --abort') {
+                    throw new Error('merge abort failed');
+                }
+                return 'ok';
+            }
+        }
+
+        await new FallbackGitService('/tmp').mergeAbort();
+
+        expect(calls).toEqual([
+            ['merge', '--abort'],
+            ['reset', '--merge'],
+        ]);
+    });
+
     it('returns false for isMergeInProgress on a clean repo', async () => {
         const r = repo();
         r.write('file.txt', 'content');
@@ -823,6 +844,44 @@ describe('GitService staging and working tree operations', () => {
         const status = await r.service.getStatus();
         expect(status.staged).toEqual([]);
         expect(status.unstaged.map((e) => e.filePath).sort()).toEqual(['a.txt', 'b.txt']);
+    });
+
+    it('unstages newly added files with unstageAll', async () => {
+        const r = repo();
+        r.write('base.txt', 'base');
+        r.commit('initial');
+        r.write('new-file.txt', 'new');
+        r.git(['add', '-A']);
+
+        await r.service.unstageAll();
+
+        const status = await r.service.getStatus();
+        expect(status.staged).toEqual([]);
+        expect(status.unstaged).toContainEqual(expect.objectContaining({ filePath: 'new-file.txt' }));
+    });
+
+    it('falls back to reset when restore --staged fails while unstaging', async () => {
+        const calls: string[][] = [];
+        class FallbackGitService extends GitService {
+            public override async exec(args: string[]): Promise<string> {
+                calls.push(args);
+                if (args[0] === 'restore') {
+                    throw new Error('restore failed');
+                }
+                return 'ok';
+            }
+        }
+
+        const service = new FallbackGitService('/tmp');
+        await service.unstageFile('a.txt');
+        await service.unstageAll();
+
+        expect(calls).toEqual([
+            ['restore', '--staged', '--', 'a.txt'],
+            ['reset', '-q', 'HEAD', '--', 'a.txt'],
+            ['restore', '--staged', '.'],
+            ['reset', '-q', 'HEAD', '--', '.'],
+        ]);
     });
 
     it('discards a tracked file modification', async () => {

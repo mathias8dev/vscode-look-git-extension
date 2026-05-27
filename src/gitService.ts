@@ -269,7 +269,11 @@ export class GitService {
     }
 
     public async mergeAbort(): Promise<string> {
-        return this.exec(['merge', '--abort']);
+        try {
+            return await this.exec(['merge', '--abort']);
+        } catch {
+            return this.exec(['reset', '--merge']);
+        }
     }
 
     public async mergeContinue(): Promise<string> {
@@ -702,11 +706,19 @@ export class GitService {
     }
 
     public async unstageFile(filePath: string): Promise<string> {
-        return this.exec(['restore', '--staged', '--', filePath]);
+        try {
+            return await this.exec(['restore', '--staged', '--', filePath]);
+        } catch {
+            return this.exec(['reset', '-q', 'HEAD', '--', filePath]);
+        }
     }
 
     public async unstageAll(): Promise<string> {
-        return this.exec(['restore', '--staged', '.']);
+        try {
+            return await this.exec(['restore', '--staged', '.']);
+        } catch {
+            return this.exec(['reset', '-q', 'HEAD', '--', '.']);
+        }
     }
 
     public async discardFile(filePath: string): Promise<string> {
