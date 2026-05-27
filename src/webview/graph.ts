@@ -135,7 +135,7 @@ function requestMoreGraphData(): void {
     }
 
     isLoadingMoreGraph = true;
-    renderGraphTable();
+    renderGraphPaginationState();
     vscode.postMessage({ type: 'loadMoreGraph' });
 }
 
@@ -1022,15 +1022,7 @@ function renderGraphTable(): void {
         </tr>`;
     }
 
-    html += '</tbody></table>';
-    if (isLoadingMoreGraph) {
-        html += `<div id="graph-loading-more" class="graph-loading-more" role="status" aria-live="polite">
-            <span class="graph-loading-spinner" aria-hidden="true"></span>
-            <span>Loading commits...</span>
-        </div>`;
-    } else if (graphData.hasMore) {
-        html += '<div id="graph-scroll-sentinel" class="graph-scroll-sentinel" aria-label="Load more commits"></div>';
-    }
+    html += `</tbody></table>${getGraphPaginationHtml()}`;
 
     pane.innerHTML = html;
 
@@ -1063,6 +1055,32 @@ function renderGraphTable(): void {
         });
     });
 
+    observeGraphSentinel(pane);
+}
+
+function getGraphPaginationHtml(): string {
+    if (!graphData) { return ''; }
+    if (isLoadingMoreGraph) {
+        return `<div id="graph-loading-more" class="graph-loading-more" role="status" aria-live="polite">
+            <span class="graph-loading-spinner" aria-hidden="true"></span>
+            <span>Loading commits...</span>
+        </div>`;
+    }
+    if (graphData.hasMore) {
+        return '<div id="graph-scroll-sentinel" class="graph-scroll-sentinel" aria-label="Load more commits"></div>';
+    }
+    return '';
+}
+
+function renderGraphPaginationState(): void {
+    const pane = document.getElementById('graph-pane');
+    if (!pane) { return; }
+
+    pane.querySelector('#graph-loading-more, #graph-scroll-sentinel')?.remove();
+    const paginationHtml = getGraphPaginationHtml();
+    if (paginationHtml) {
+        pane.insertAdjacentHTML('beforeend', paginationHtml);
+    }
     observeGraphSentinel(pane);
 }
 
@@ -1480,7 +1498,7 @@ window.addEventListener('message', (event) => {
         case 'error':
             isLoadingMoreGraph = false;
             console.error('Graph error:', msg.message);
-            renderGraphTable();
+            renderGraphPaginationState();
             break;
     }
 });

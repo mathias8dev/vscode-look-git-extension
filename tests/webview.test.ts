@@ -677,12 +677,15 @@ describe('Graph webview runtime behavior', () => {
 
             expect(document.querySelector('#graph-scroll-sentinel')).not.toBeNull();
             expect(observers.length).toBeGreaterThan(0);
+            const firstRenderedRow = document.querySelector('.graph-row');
+            expect(firstRenderedRow).not.toBeNull();
 
             const currentObserver = observers.at(-1)!;
             currentObserver.trigger();
             currentObserver.trigger();
             expect(document.querySelector('#graph-loading-more')).not.toBeNull();
             expect(document.querySelector('#graph-scroll-sentinel')).toBeNull();
+            expect(document.querySelector('.graph-row')).toBe(firstRenderedRow);
 
             expect(api.messages.filter((message) => (
                 typeof message === 'object'

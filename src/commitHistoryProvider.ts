@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { GitService, GitCommitInfo } from './gitService';
+import type { GitService, GitCommitInfo, GitFileChange } from './gitService';
 import { CommitItem, FileChangeItem, FolderItem, LoadMoreItem, buildFolderTree } from './commitItem';
 
 export type TreeItem = CommitItem | FileChangeItem | FolderItem | LoadMoreItem;
@@ -15,6 +15,7 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
     private loadMorePromise?: Promise<void>;
     private loadMoreScheduled = false;
     private viewAsTree = true;
+    private readonly commitFilesCache = new Map<string, Promise<GitFileChange[]>>();
 
     constructor(private gitService: GitService) {
         this.pageSize = vscode.workspace.getConfiguration('lookGit').get('maxCommits', 50);
@@ -30,6 +31,7 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
     public refresh(): void {
         this.commits = [];
         this.hasMore = true;
+        this.commitFilesCache.clear();
         this._onDidChangeTreeData.fire();
     }
 
@@ -71,7 +73,7 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
         // Expanding a commit → show changed files (tree or flat list)
         if (element instanceof CommitItem) {
             try {
-                const files = await this.gitService.getCommitFiles(element.commitInfo.hash);
+                const files = await this.getCommitFiles(element.commitInfo.hash);
                 if (files.length === 0) {
                     return [];
                 }
@@ -163,5 +165,19 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
         }
 
         return items;
+    }
+
+    private getCommitFiles(commitHash: string): Promise<GitFileChange[]> {
+        const cached = this.commitFilesCache.get(commitHash);
+        if (cached) {
+            return cached;
+        }
+
+        const request = this.gitService.getCommitFiles(commitHash).catch((error) => {
+            this.commitFilesCache.delete(commitHash);
+            throw error;
+        });
+        this.commitFilesCache.set(commitHash, request);
+        return request;
     }
 }

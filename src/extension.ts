@@ -116,12 +116,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         useActiveRepository();
     }));
 
-    // Watch Git metadata as a fallback for cases where the built-in Git extension lags.
-    const fileWatcher = vscode.workspace.createFileSystemWatcher('**/.git/**');
-    fileWatcher.onDidChange(debouncedRefreshAll);
-    fileWatcher.onDidCreate(debouncedRefreshAll);
-    fileWatcher.onDidDelete(debouncedRefreshAll);
-    context.subscriptions.push(fileWatcher);
+    // Watch only Git metadata that changes visible repository state. Watching
+    // all of .git also tracks object/log/lock churn and can refresh the views
+    // many times during fetches, rebases, and large commits.
+    const gitMetadataPatterns = [
+        '**/.git/HEAD',
+        '**/.git/index',
+        '**/.git/MERGE_HEAD',
+        '**/.git/REBASE_HEAD',
+        '**/.git/CHERRY_PICK_HEAD',
+        '**/.git/FETCH_HEAD',
+        '**/.git/ORIG_HEAD',
+        '**/.git/packed-refs',
+        '**/.git/refs/**',
+    ];
+    for (const pattern of gitMetadataPatterns) {
+        const fileWatcher = vscode.workspace.createFileSystemWatcher(pattern);
+        fileWatcher.onDidChange(debouncedRefreshAll);
+        fileWatcher.onDidCreate(debouncedRefreshAll);
+        fileWatcher.onDidDelete(debouncedRefreshAll);
+        context.subscriptions.push(fileWatcher);
+    }
 
     context.subscriptions.push(treeView);
 }

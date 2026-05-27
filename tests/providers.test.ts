@@ -721,6 +721,28 @@ describe('CommitHistoryProvider pagination', () => {
         resolveNextPage();
         await loadMorePromise;
     });
+
+    it('reuses loaded commit files until the history is refreshed', async () => {
+        const commits = [commit(1)];
+        const service = {
+            getLog: vi.fn(async (limit: number, skip: number) => commits.slice(skip, skip + limit)),
+            getCommitFiles: vi.fn(async () => [{ status: 'M', filePath: 'src/file.ts' }]),
+            getWorkingDirectory: vi.fn(() => '/workspace'),
+        };
+        const provider = new CommitHistoryProvider(service as any);
+
+        const [item] = await provider.getChildren();
+        await provider.getChildren(item);
+        await provider.getChildren(item);
+
+        expect(service.getCommitFiles).toHaveBeenCalledTimes(1);
+
+        provider.refresh();
+        const [refreshedItem] = await provider.getChildren();
+        await provider.getChildren(refreshedItem);
+
+        expect(service.getCommitFiles).toHaveBeenCalledTimes(2);
+    });
 });
 
 describe('checkout commit command semantics', () => {
