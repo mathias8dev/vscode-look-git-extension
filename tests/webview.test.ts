@@ -887,6 +887,7 @@ describe('Graph webview runtime behavior', () => {
                 branches: [
                     { name: 'main', isRemote: false, isCurrent: true, hash: 'abc1234', upstream: 'origin/main', ahead: 0, behind: 2 },
                     { name: 'feature/ui', isRemote: false, isCurrent: false, hash: 'def1234', upstream: 'origin/feature/ui', ahead: 1, behind: 1 },
+                    { name: 'release/old', isRemote: false, isCurrent: false, hash: '789abcd', upstream: 'origin/release/old', ahead: 0, behind: 150 },
                     { name: 'origin/main', isRemote: true, isCurrent: false, hash: 'abc1234' },
                 ],
                 tags: [],
@@ -901,11 +902,15 @@ describe('Graph webview runtime behavior', () => {
         expect(listCurrent).not.toBeNull();
         expect(listCurrent?.querySelector('.current-branch-indicator')?.getAttribute('aria-label')).toBe('Current branch');
         expect(listCurrent?.querySelector('.branch-remote-pending-indicator')?.getAttribute('aria-label')).toBe('2 commits behind origin/main');
-        expect(listCurrent?.querySelector('.branch-remote-pending-indicator')?.textContent?.trim()).toBe('');
+        expect(listCurrent?.querySelector('.branch-remote-pending-indicator')?.textContent?.trim()).toBe('2');
         expect(listCurrent?.querySelector('.branch-remote-pending-indicator path')?.getAttribute('d')).toBe('M18 6L6 18M6 18L6 9M6 18L15 18');
-        expect(document.head.textContent).toContain('.branch-remote-pending-indicator { width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; margin-left: 10px; }');
+        expect(listCurrent?.querySelector('.branch-remote-pending-indicator path')?.getAttribute('stroke')).toBe('currentColor');
+        expect(document.head.textContent).toContain('margin-left: calc(16px - var(--branch-row-gap, 6px))');
+        expect(document.head.textContent).toContain('color: var(--vscode-icon-foreground, var(--vscode-foreground))');
+        expect(document.head.textContent).toContain('.branch-item.active .branch-remote-pending-indicator { color: var(--vscode-list-activeSelectionForeground); }');
         expect(document.querySelector('.branch-item[data-branch="feature/ui"] .current-branch-indicator')).toBeNull();
         expect(document.querySelector('.branch-item[data-branch="feature/ui"] .branch-remote-pending-indicator')?.getAttribute('aria-label')).toBe('1 commit behind origin/feature/ui');
+        expect(document.querySelector('.branch-item[data-branch="release/old"] .branch-remote-pending-indicator')?.textContent?.trim()).toBe('99+');
         expect(document.querySelector('.branch-item[data-branch="origin/main"] .branch-remote-pending-indicator')).toBeNull();
 
         click('.view-switch-btn[data-mode="tree"]');

@@ -726,7 +726,7 @@ const CHEVRON_DOWN_SVG = `<svg class="tree-chevron-icon" width="14" height="14" 
 </svg>`;
 
 const INCOMING_CHANGES_SVG = `<svg class="branch-incoming-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-    <path d="M18 6L6 18M6 18L6 9M6 18L15 18" stroke="#1C274C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M18 6L6 18M6 18L6 9M6 18L15 18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
 function renderCurrentBranchIndicator(branch: BranchInfo): string {
@@ -744,7 +744,8 @@ function renderIncomingChangesIndicator(branch: BranchInfo): string {
     const upstream = branch.upstream ?? 'upstream';
     const label = `${behind} commit${behind === 1 ? '' : 's'} behind ${upstream}`;
     const escapedLabel = escapeHtml(label);
-    return `<span class="branch-remote-pending-indicator" title="${escapedLabel}" aria-label="${escapedLabel}">${INCOMING_CHANGES_SVG}</span>`;
+    const displayCount = behind >= 100 ? '99+' : String(behind);
+    return `<span class="branch-remote-pending-indicator" title="${escapedLabel}" aria-label="${escapedLabel}">${INCOMING_CHANGES_SVG}<span class="branch-behind-count" aria-hidden="true">${displayCount}</span></span>`;
 }
 
 function renderTreeNodes(node: BranchTreeNode, depth: number): string {
@@ -1614,7 +1615,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 
 .branch-pane { overflow-y: auto; border-right: 1px solid var(--vscode-panel-border); padding: 8px 0; }
 .branch-section-header { padding: 4px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vscode-descriptionForeground); letter-spacing: 0.5px; }
-.branch-item { display: flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 3px; margin: 0 4px; }
+.branch-item { --branch-row-gap: 6px; display: flex; align-items: center; gap: var(--branch-row-gap); min-height: 24px; padding: 2px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 3px; margin: 0 4px; }
 .branch-item:hover { background: var(--vscode-list-hoverBackground); }
 .branch-item.active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
 .branch-item.current .branch-name { font-weight: 600; color: var(--vscode-foreground); }
@@ -1622,8 +1623,10 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .current-branch-indicator { width: 14px; height: 14px; border-radius: 50%; background: var(--vscode-gitDecoration-addedResourceForeground, #3fb950); color: var(--vscode-editor-background); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .current-branch-indicator::before { content: ''; width: 6px; height: 3px; border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg) translate(1px, -1px); }
 .branch-item.active .current-branch-indicator { outline: 1px solid currentColor; outline-offset: 1px; }
-.branch-remote-pending-indicator { width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; margin-left: 10px; }
+.branch-remote-pending-indicator { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; margin-left: calc(16px - var(--branch-row-gap, 6px)); color: var(--vscode-icon-foreground, var(--vscode-foreground)); font-size: 11px; line-height: 1; font-variant-numeric: tabular-nums; }
+.branch-item.active .branch-remote-pending-indicator { color: var(--vscode-list-activeSelectionForeground); }
 .branch-incoming-icon { width: 14px; height: 14px; display: block; }
+.branch-behind-count { color: inherit; min-width: 1ch; }
 
 .branch-pane-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 4px 0; border-bottom: 1px solid var(--vscode-panel-border); margin-bottom: 4px; }
 .branch-pane-toolbar .branch-item { flex: 1; }
@@ -1636,7 +1639,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .branch-tree-folder { display: flex; align-items: center; gap: 4px; min-height: 24px; padding: 2px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; border-radius: 3px; margin: 0 4px; position: relative; }
 .branch-tree-folder:hover { background: var(--vscode-list-hoverBackground); }
 .branch-tree-folder::before, .branch-item.tree-leaf::before { content: ''; position: absolute; left: calc(var(--tree-indent, 0px) + 10px); top: 0; bottom: 0; width: 1px; background: var(--vscode-tree-indentGuidesStroke, var(--vscode-panel-border)); opacity: 0.45; pointer-events: none; }
-.branch-item.tree-leaf { gap: 4px; position: relative; }
+.branch-item.tree-leaf { --branch-row-gap: 4px; position: relative; }
 .tree-arrow { width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--vscode-descriptionForeground); }
 .tree-chevron-icon { display: block; }
 .tree-folder-icon { flex-shrink: 0; color: var(--vscode-symbolIcon-folderForeground, var(--vscode-descriptionForeground)); }
