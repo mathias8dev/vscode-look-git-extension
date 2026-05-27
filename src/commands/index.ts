@@ -16,6 +16,8 @@ import type { GraphViewProvider } from '../graphView/graphPanel';
 import type { ChangesViewProvider } from '../changesView/changesProvider';
 import { showModalWarningMessage } from '../utils/confirmation';
 
+type RepositoryRefreshCallback = () => Promise<void> | void;
+
 // Helper to filter CommitItems from a mixed selection
 function filterCommitItems(items?: readonly unknown[]): CommitItem[] | undefined {
     if (!items || items.length === 0) {
@@ -31,7 +33,21 @@ export function registerCommands(
     historyProvider: CommitHistoryProvider,
     graphViewProvider: GraphViewProvider,
     changesViewProvider: ChangesViewProvider,
+    refreshRepositoryViews?: RepositoryRefreshCallback,
 ): void {
+    const refreshViewsAfterRepositoryMutation = async (): Promise<void> => {
+        if (refreshRepositoryViews) {
+            await refreshRepositoryViews();
+            return;
+        }
+
+        historyProvider.refresh();
+        await Promise.all([
+            graphViewProvider.refresh(),
+            changesViewProvider.refresh(),
+        ]);
+    };
+
     // Focus Git Graph view (user can drag it anywhere in the UI)
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.openGraph', () => {
@@ -56,8 +72,7 @@ export function registerCommands(
             try {
                 await gitService.fetchAll();
                 await vscode.window.showInformationMessage('Fetched from all remotes.');
-                historyProvider.refresh();
-                await changesViewProvider.refresh();
+                await refreshViewsAfterRepositoryMutation();
             } catch (error) {
                 const msg = error instanceof Error ? error.message : String(error);
                 await vscode.window.showErrorMessage(`Fetch failed: ${msg}`);
@@ -70,8 +85,7 @@ export function registerCommands(
             try {
                 await gitService.pull();
                 await vscode.window.showInformationMessage('Pull completed.');
-                historyProvider.refresh();
-                await changesViewProvider.refresh();
+                await refreshViewsAfterRepositoryMutation();
             } catch (error) {
                 const msg = error instanceof Error ? error.message : String(error);
                 await vscode.window.showErrorMessage(`Pull failed: ${msg}`);
@@ -84,7 +98,7 @@ export function registerCommands(
             try {
                 await gitService.push();
                 await vscode.window.showInformationMessage('Push completed.');
-                historyProvider.refresh();
+                await refreshViewsAfterRepositoryMutation();
             } catch (error) {
                 const msg = error instanceof Error ? error.message : String(error);
                 await vscode.window.showErrorMessage(`Push failed: ${msg}`);
@@ -147,7 +161,7 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.checkout', (item?: CommitItem) => {
-            return handleCheckout(gitService, historyProvider, item);
+            return handleCheckout(gitService, historyProvider, item, refreshViewsAfterRepositoryMutation);
         })
     );
 

@@ -4,10 +4,13 @@ import type { CommitHistoryProvider } from '../commitHistoryProvider';
 import type { CommitItem } from '../commitItem';
 import { selectCommitFromQuickPick } from '../utils/confirmation';
 
+type RepositoryRefreshCallback = () => Promise<void> | void;
+
 export async function handleCheckout(
     gitService: GitService,
     historyProvider: CommitHistoryProvider,
-    item?: CommitItem
+    item?: CommitItem,
+    refreshRepositoryViews?: RepositoryRefreshCallback,
 ): Promise<void> {
     const commit = item?.commitInfo
         ?? await selectCommitFromQuickPick(gitService, 'Select a commit to checkout');
@@ -21,7 +24,11 @@ export async function handleCheckout(
         await vscode.window.showInformationMessage(
             `Checked out ${commit.shortHash} in detached HEAD state.`
         );
-        historyProvider.refresh();
+        if (refreshRepositoryViews) {
+            await refreshRepositoryViews();
+        } else {
+            historyProvider.refresh();
+        }
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         await vscode.window.showErrorMessage(`Checkout failed: ${message}`);

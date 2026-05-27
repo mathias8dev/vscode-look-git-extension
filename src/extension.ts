@@ -44,7 +44,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         canSelectMany: true,
     });
 
-    const graphViewProvider = new GraphViewProvider(context.extensionUri, gitService);
+    const changesViewProvider = new ChangesViewProvider(context.extensionUri, gitService);
+
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    let graphViewProvider: GraphViewProvider;
+
+    const refreshRepositoryViews = async (): Promise<void> => {
+        if (refreshTimer) {
+            clearTimeout(refreshTimer);
+            refreshTimer = undefined;
+        }
+
+        commitHistoryProvider.refresh();
+        await Promise.all([
+            graphViewProvider.refresh(),
+            changesViewProvider.refresh(),
+        ]);
+    };
+
+    graphViewProvider = new GraphViewProvider(context.extensionUri, gitService, refreshRepositoryViews);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
             GraphViewProvider.viewType,
@@ -53,7 +71,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         )
     );
 
-    const changesViewProvider = new ChangesViewProvider(context.extensionUri, gitService);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
             ChangesViewProvider.viewType,
@@ -64,16 +81,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     await vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', !!repository);
 
-    registerCommands(context, gitService, commitHistoryProvider, graphViewProvider, changesViewProvider);
+    registerCommands(context, gitService, commitHistoryProvider, graphViewProvider, changesViewProvider, refreshRepositoryViews);
 
     // Debounced refresh for all views when git state changes
-    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     const debouncedRefreshAll = () => {
         if (refreshTimer) { clearTimeout(refreshTimer); }
         refreshTimer = setTimeout(() => {
-            commitHistoryProvider.refresh();
-            void graphViewProvider.refresh();
-            void changesViewProvider.refresh();
+            refreshTimer = undefined;
+            void refreshRepositoryViews();
         }, 150);
     };
 

@@ -799,6 +799,28 @@ describe('checkout commit command semantics', () => {
         expect(service.checkoutNewBranch).not.toHaveBeenCalled();
         expect((vscode.commands as any).calls).toEqual([]);
     });
+
+    it('uses a coordinated repository refresh after detached checkout when provided', async () => {
+        const target = commit(['main']);
+        const service = {
+            checkoutDetached: vi.fn(async () => ''),
+            checkout: vi.fn(async () => ''),
+            checkoutNewBranch: vi.fn(async () => ''),
+        };
+        const historyProvider = { refresh: vi.fn() };
+        const refreshRepositoryViews = vi.fn(async () => undefined);
+
+        await handleCheckout(
+            service as any,
+            historyProvider as any,
+            new CommitItem(target, false),
+            refreshRepositoryViews,
+        );
+
+        expect(service.checkoutDetached).toHaveBeenCalledWith(target.hash);
+        expect(refreshRepositoryViews).toHaveBeenCalledOnce();
+        expect(historyProvider.refresh).not.toHaveBeenCalled();
+    });
 });
 
 describe('GraphViewProvider webview messages', () => {
@@ -1021,6 +1043,29 @@ describe('GraphViewProvider webview messages', () => {
             await handle(service, { command: 'checkout', branch: 'origin/feature/nested', isRemote: true });
             expect(service.checkoutRemoteBranch).toHaveBeenCalledWith('origin/feature/nested');
             expect(service.checkout).not.toHaveBeenCalled();
+        });
+
+        it('uses coordinated repository refresh after branch checkout', async () => {
+            const service = makeGraphService();
+            let provider!: GraphViewProvider;
+            const refreshRepositoryViews = vi.fn(async () => {
+                await provider.refresh();
+            });
+            provider = new GraphViewProvider(vscode.Uri.file('/ext') as any, service as any, refreshRepositoryViews);
+            const view = makeWebviewView();
+            (provider as any).view = view;
+
+            await (provider as any).handleMessage({
+                type: 'executeBranchCommand',
+                command: 'checkout',
+                branch: 'feature',
+                isRemote: false,
+            });
+
+            expect(service.checkout).toHaveBeenCalledWith('feature');
+            expect(refreshRepositoryViews).toHaveBeenCalledOnce();
+            expect(service.getGraphLog).toHaveBeenCalled();
+            expect(view.messages).toContainEqual(expect.objectContaining({ type: 'graphData' }));
         });
 
         it('newBranchFrom confirmed calls checkoutNewBranch', async () => {

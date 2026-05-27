@@ -18,6 +18,8 @@ const ALLOWED_COMMIT_COMMANDS = new Set([
     'lookGit.copyCommitHash',
 ]);
 
+type RepositoryRefreshCallback = () => Promise<void> | void;
+
 export class GraphViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'lookGit.graphView';
 
@@ -36,7 +38,11 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     private pendingRefresh = false;
     private refreshPromise?: Promise<void>;
 
-    constructor(extensionUri: vscode.Uri, gitService: GitService) {
+    constructor(
+        extensionUri: vscode.Uri,
+        gitService: GitService,
+        private readonly refreshRepositoryViews?: RepositoryRefreshCallback,
+    ) {
         this.extensionUri = extensionUri;
         this.gitService = gitService;
         this.dataProvider = new GraphDataProvider(gitService);
@@ -357,14 +363,21 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
                     return;
             }
 
-            this.resetGraphPaging();
-            await this.refresh();
+            await this.refreshAfterRepositoryMutation();
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             await vscode.window.showErrorMessage(`Branch operation failed: ${message}`);
-            this.resetGraphPaging();
-            await this.refresh();
+            await this.refreshAfterRepositoryMutation();
         }
+    }
+
+    private async refreshAfterRepositoryMutation(): Promise<void> {
+        this.resetGraphPaging();
+        if (this.refreshRepositoryViews) {
+            await this.refreshRepositoryViews();
+            return;
+        }
+        await this.refresh();
     }
 
     private async openDiff(filePath: string, commitHash: string, status: string, origPath?: string, parentHash?: string): Promise<void> {
