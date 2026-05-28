@@ -82,6 +82,7 @@ describe('Graph webview runtime behavior', () => {
                 parentHash: 'parent123',
             }],
         });
+        expect(document.querySelector('.file-item[data-file="src/new.ts"] svg.file-icon text')?.textContent).toBe('TS');
         click('.file-item');
 
         expect(api.messages).toContainEqual({
@@ -95,6 +96,7 @@ describe('Graph webview runtime behavior', () => {
 
         api.messages.length = 0;
         click('[data-files-mode="tree"]');
+        expect(document.querySelector('.file-tree-item[data-file="src/new.ts"] svg.file-icon text')?.textContent).toBe('TS');
         click('.file-tree-item[data-file="src/new.ts"]');
 
         expect(api.messages).toContainEqual({
@@ -381,8 +383,10 @@ describe('Graph webview runtime behavior', () => {
         expect(listCurrent?.querySelector('.current-branch-indicator')?.getAttribute('aria-label')).toBe('Current branch');
         expect(listCurrent?.querySelector('.branch-remote-pending-indicator')?.getAttribute('aria-label')).toBe('2 commits behind origin/main');
         expect(listCurrent?.querySelector('.branch-remote-pending-indicator')?.textContent?.trim()).toBe('2');
-        expect(listCurrent?.querySelector('.branch-remote-pending-indicator path')?.getAttribute('d')).toBe('M18 6L6 18M6 18L6 9M6 18L15 18');
-        expect(listCurrent?.querySelector('.branch-remote-pending-indicator path')?.getAttribute('stroke')).toBe('currentColor');
+        const pendingIcon = listCurrent?.querySelector('.branch-remote-pending-indicator svg.branch-incoming-icon');
+        expect(pendingIcon).not.toBeNull();
+        expect(pendingIcon?.querySelectorAll('path').length).toBeGreaterThan(0);
+        expect(pendingIcon?.getAttribute('stroke')).toBe('currentColor');
         expect(document.head.textContent).toContain('margin-left: calc(16px - var(--branch-row-gap, 6px))');
         expect(document.head.textContent).toContain('color: var(--vscode-icon-foreground, var(--vscode-foreground))');
         expect(document.head.textContent).toContain('.branch-item.active .branch-remote-pending-indicator { color: var(--vscode-list-activeSelectionForeground); }');

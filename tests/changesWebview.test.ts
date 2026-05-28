@@ -71,6 +71,22 @@ describe('Changes webview runtime behavior', () => {
                 status: 'M',
             });
         });
+
+        it('renders extension-aware file icons in the list view', async () => {
+            await bootWebview(CHANGES_WEBVIEW_MODULE);
+            sendWebviewMessage({
+                type: 'statusData',
+                data: {
+                    staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'src/index.ts' }],
+                    unstaged: [],
+                    conflicts: [],
+                    conflictState: 'none',
+                    stashes: [],
+                },
+            });
+
+            expect(document.querySelector('.file-row[data-file="src/index.ts"] svg.file-icon text')?.textContent).toBe('TS');
+        });
     });
 
     describe('per-file conflict actions', () => {
@@ -111,6 +127,10 @@ describe('Changes webview runtime behavior', () => {
             click('.conflict-file-row[data-file="conflict.txt"]');
 
             expect(api.messages).toEqual([{ type: 'openMergeEditor', filePath: 'conflict.txt' }]);
+        });
+
+        it('renders extension-aware file icons for conflicts', () => {
+            expect(document.querySelector('.conflict-file-row[data-file="conflict.txt"] svg.file-icon text')?.textContent).toBe('F');
         });
     });
 
@@ -218,6 +238,7 @@ describe('Changes webview runtime behavior', () => {
             });
 
             expect(document.querySelectorAll('.stash-file-row').length).toBeGreaterThan(0);
+            expect(document.querySelector('.stash-file-row[data-file="stashed.ts"] svg.file-icon text')?.textContent).toBe('TS');
         });
 
         it('clears expanded stash file cache when the stash list changes', async () => {
@@ -400,6 +421,7 @@ describe('Changes webview runtime behavior', () => {
             sendWebviewMessage(NESTED_STATUS_DATA);
             click('.tree-folder-row');
             expect(document.querySelectorAll('.tree-file-row').length).toBe(1);
+            expect(document.querySelector('.tree-file-row[data-file="src/commands/index.ts"] svg.file-icon text')?.textContent).toBe('TS');
         });
 
         it('clicking tree-folder-row twice collapses back', async () => {

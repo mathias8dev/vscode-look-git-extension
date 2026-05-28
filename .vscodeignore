@@ -11,6 +11,7 @@ coverage/**
 node_modules/**
 out/**
 src/**
+scripts/**
 tests/**
 
 .gitignore
@@ -23,3 +24,7 @@ vitest.config.ts
 
 **/*.ts
 **/*.map
+!dist/
+!dist/webview/
+!dist/*.js
+!dist/webview/*.js

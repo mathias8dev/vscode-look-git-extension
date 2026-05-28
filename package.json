@@ -2,7 +2,7 @@
   "name": "look-git",
   "displayName": "Look Git",
   "description": "Advanced Git operations: cherry-pick, rebase, reset, revert, drop, and rename commits",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "mathias8dev",
   "engines": {
     "vscode": "^1.85.0"
@@ -81,15 +81,15 @@
     "views": {
       "look-git": [
         {
-          "id": "lookGit.commitHistory",
-          "name": "Commit History",
-          "icon": "resources/look-git-icon.svg",
-          "contextualTitle": "Look Git"
-        },
-        {
           "id": "lookGit.changesView",
           "name": "Changes",
           "type": "webview",
+          "contextualTitle": "Look Git"
+        },
+        {
+          "id": "lookGit.commitHistory",
+          "name": "Commit History",
+          "icon": "resources/look-git-icon.svg",
           "contextualTitle": "Look Git"
         }
       ],
@@ -812,8 +812,10 @@
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-    "package": "npm run check-types && node esbuild.js --production",
+    "package": "npm run check-types && node scripts/clean-dist.js && node esbuild.js --production",
+    "vsix": "vsce package --allow-missing-repository --no-dependencies",
     "lint": "npm run check-types",
+    "preview:icons": "node scripts/generate-icon-preview.js",
     "test": "npm run compile && vitest run",
     "test:integration:compile": "tsc -p tsconfig.integration.json",
     "test:integration": "npm run compile && npm run test:integration:compile && node ./out/test/tests/integration/runTest.js",
@@ -827,6 +829,7 @@
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.9.1",
     "@wdio/cli": "^8.41.0",
     "@wdio/globals": "^8.41.0",
     "@wdio/local-runner": "^8.41.0",

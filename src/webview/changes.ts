@@ -13,7 +13,6 @@ import {
     ICON_CHEVRON_RIGHT,
     ICON_DISCARD,
     ICON_DROPDOWN,
-    ICON_FILE,
     ICON_FOLDER,
     ICON_FOLDER_OPEN,
     ICON_MERGE_EDITOR,
@@ -24,6 +23,7 @@ import {
     ICON_STASH_POP,
     ICON_STASH_SAVE,
     ICON_TRASH,
+    renderFileTypeIcon,
 } from '../icons/webviewIcons';
 import type {
     StatusData,
@@ -273,7 +273,7 @@ function renderTreeFileRow(entry: StatusEntry, isStaged: boolean, depth: number)
     const origAttr = entry.origPath ? ` data-orig="${escapeHtml(entry.origPath)}"` : '';
     return `
         <div class="file-row tree-file-row" data-file="${escapeHtml(entry.filePath)}"${origAttr} data-staged="${isStaged}" data-status="${statusChar}" style="padding-left:${indent}px">
-            <span class="tree-icon file-icon">${ICON_FILE}</span>
+            <span class="tree-icon">${renderFileTypeIcon(entry.filePath)}</span>
             <span class="file-name" title="${escapeHtml(entry.filePath)}">${escapeHtml(fileName)}</span>
             <div class="file-actions">
                 ${actions}
@@ -431,6 +431,7 @@ function renderFileRow(entry: StatusEntry, isStaged: boolean): string {
     const origAttr = entry.origPath ? ` data-orig="${escapeHtml(entry.origPath)}"` : '';
     return `
         <div class="file-row" data-file="${escapeHtml(entry.filePath)}"${origAttr} data-staged="${isStaged}" data-status="${statusChar}">
+            ${renderFileTypeIcon(entry.filePath)}
             <span class="file-name" title="${escapeHtml(entry.filePath)}">${escapeHtml(fileName)}</span>
             ${dirPath ? `<span class="file-dir">${escapeHtml(dirPath)}</span>` : ''}
             <div class="file-actions">
@@ -448,6 +449,7 @@ function renderConflictFileRow(entry: StatusEntry): string {
 
     return `
         <div class="file-row conflict-file-row" data-file="${escapeHtml(entry.filePath)}">
+            ${renderFileTypeIcon(entry.filePath)}
             <span class="file-name" title="${escapeHtml(entry.filePath)}">${escapeHtml(fileName)}</span>
             ${dirPath ? `<span class="file-dir">${escapeHtml(dirPath)}</span>` : ''}
             <div class="file-actions">
@@ -501,6 +503,7 @@ function renderStashFileRow(stashIndex: number, file: StashFileEntry): string {
     const origAttr = file.origPath ? ` data-orig="${escapeHtml(file.origPath)}"` : '';
     return `
         <div class="file-row stash-file-row" data-stash-index="${stashIndex}" data-file="${escapeHtml(file.filePath)}"${origAttr} data-status="${file.status}">
+            ${renderFileTypeIcon(file.filePath)}
             <span class="file-name" title="${escapeHtml(file.filePath)}">${escapeHtml(fileName)}</span>
             ${dirPath ? `<span class="file-dir">${escapeHtml(dirPath)}</span>` : ''}
             <span class="file-status-indicator ${statusClass}">${file.status}</span>

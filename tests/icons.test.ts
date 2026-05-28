@@ -50,6 +50,12 @@ describe('centralized icons', () => {
     it('keeps file icon semantics centralized for special names and unknown extensions', () => {
         expect(getFileIconInfo('Dockerfile')).toEqual({ color: '#384d54', letter: 'Dk' });
         expect(getFileIconInfo('.env.local')).toEqual({ color: '#6a737d', letter: 'Ev' });
+        expect(getFileIconInfo('package.json')).toEqual({ color: '#cb3837', letter: 'Npm' });
+        expect(getFileIconInfo('vite.config.ts')).toEqual({ color: '#646cff', letter: 'Vi' });
+        expect(getFileIconInfo('README.fr.md')).toEqual({ color: '#519aba', letter: 'M' });
+        expect(getFileIconInfo('src/App.vue')).toEqual({ color: '#41b883', letter: 'V' });
+        expect(getFileIconInfo('assets/logo.svg')).toEqual({ color: '#ffb13b', letter: 'Sv' });
+        expect(getFileIconInfo('docs/spec.pdf')).toEqual({ color: '#d73a49', letter: 'Pdf' });
         expect(getFileIconInfo('archive.unknown')).toEqual({ color: '#6a737d', letter: 'F' });
     });
 
