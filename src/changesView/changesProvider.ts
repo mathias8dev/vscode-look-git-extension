@@ -383,7 +383,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         const emptyUri = vscode.Uri.parse(`lookgit-empty:${filePath}`);
 
         const toGitUri = (uri: vscode.Uri, ref: string): vscode.Uri => {
-            const query = JSON.stringify({ path: uri.fsPath, ref });
+            const query = JSON.stringify({ path: uri.path, ref });
             return uri.with({ scheme: 'git', path: uri.path, query });
         };
 
@@ -422,7 +422,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         const emptyUri = vscode.Uri.parse(`lookgit-empty:${filePath}`);
 
         const toGitUri = (uri: vscode.Uri, ref: string): vscode.Uri => {
-            const query = JSON.stringify({ path: uri.fsPath, ref });
+            const query = JSON.stringify({ path: uri.path, ref });
             return uri.with({ scheme: 'git', path: uri.path, query });
         };
 

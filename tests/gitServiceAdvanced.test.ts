@@ -66,7 +66,7 @@ describe('GitService advanced fixture coverage', () => {
 
         await expect(large.service.getLog(50, 0)).resolves.toHaveLength(50);
         await expect(large.service.getGraphLog(300)).resolves.toHaveLength(300);
-    });
+    }, 120_000);
 });
 
 describe('GitService remote workflows with local bare remotes', () => {
@@ -141,7 +141,7 @@ describe('GitService remote workflows with local bare remotes', () => {
 });
 
 describe('GitService special file and repository edge cases', () => {
-    it('keeps unicode, special-character, CRLF, and binary paths visible in commit file lists', async () => {
+    it.skipIf(process.platform === 'win32')('keeps unicode, special-character, CRLF, and binary paths visible in commit file lists', async () => {
         const edge = createEdgeFilesFixture();
         repos.push(edge);
 

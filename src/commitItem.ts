@@ -163,7 +163,7 @@ export class FolderItem extends vscode.TreeItem {
 }
 
 function toGitUri(uri: vscode.Uri, ref: string): vscode.Uri {
-    const query = JSON.stringify({ path: uri.fsPath, ref });
+    const query = JSON.stringify({ path: uri.path, ref });
     return uri.with({ scheme: 'git', path: uri.path, query });
 }
 

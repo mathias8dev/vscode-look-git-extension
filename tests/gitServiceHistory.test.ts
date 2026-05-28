@@ -32,7 +32,10 @@ describe('GitService log parsing', () => {
 });
 
 describe('GitService status parsing', () => {
-    it('parses staged renames with spaces and arrows in file names', async () => {
+    // '>' and '\n' are illegal filename characters on Windows
+    const itPosix = process.platform === 'win32' ? it.skip : it;
+
+    itPosix('parses staged renames with spaces and arrows in file names', async () => {
         const r = repo();
         r.write('old -> file.txt', 'content');
         r.commit('initial');
@@ -48,7 +51,7 @@ describe('GitService status parsing', () => {
         expect(status.unstaged).toEqual([]);
     });
 
-    it('keeps untracked paths with newlines intact', async () => {
+    itPosix('keeps untracked paths with newlines intact', async () => {
         const r = repo();
         r.write('tracked.txt', 'tracked');
         r.commit('initial');

@@ -81,7 +81,8 @@ class TestUri {
 
 export const Uri = {
     file(fsPath: string) {
-        return new TestUri('file', fsPath, fsPath);
+        const normalizedPath = fsPath.replace(/\\/g, '/');
+        return new TestUri('file', normalizedPath, fsPath);
     },
     parse(value: string) {
         const match = value.match(/^([^:]+):(.*)$/);
