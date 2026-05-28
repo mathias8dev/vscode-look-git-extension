@@ -1,6 +1,7 @@
 import type { GitService, BranchInfo, TagInfo, GraphCommitInfo, GitFileChange, GraphLogFilters } from '../gitService';
 import { assignLanes, getMaxLane } from './graphLaneAssigner';
 import type { GraphRow } from './graphLaneAssigner';
+import { getRepositoryWebUrl } from '../utils/remoteUrl';
 
 export interface GraphData {
     branches: BranchInfo[];
@@ -11,6 +12,9 @@ export interface GraphData {
     currentUser: string;
     hasMore: boolean;
     loadedCount: number;
+    hasRemotes: boolean;
+    repositoryWebUrl?: string;
+    currentBranchCommitHashes?: string[];
 }
 
 export class GraphDataProvider {
@@ -24,15 +28,21 @@ export class GraphDataProvider {
     ): Promise<GraphData> {
         const requestedCount = Math.max(1, maxCount);
         const logFilters = hasGraphLogFilters(filters) ? filters : undefined;
-        const [branches, tags, rawCommits, currentUser] = await Promise.all([
+        const [branches, tags, rawCommits, currentUser, remotes, currentBranchCommitHashes] = await Promise.all([
             this.gitService.getAllBranches(),
             this.gitService.getAllTags(),
             logFilters
                 ? this.gitService.getGraphLog(requestedCount + 1, filterBranches, pathFilter, logFilters)
                 : this.gitService.getGraphLog(requestedCount + 1, filterBranches, pathFilter),
             this.gitService.getUserName(),
+            this.getRemotes(),
+            this.getCurrentBranchCommitHashes(Math.max(requestedCount + 1, 1000)),
         ]);
 
+        const remoteUrl = remotes.length > 0
+            ? await this.getRemoteUrl(remotes.includes('origin') ? 'origin' : remotes[0])
+            : undefined;
+        const repositoryWebUrl = getRepositoryWebUrl(remoteUrl);
         const currentBranch = branches.find((branch) => branch.isCurrent)?.name ?? 'HEAD';
         const primaryBranch = filterBranches?.length === 1 ? filterBranches[0] : currentBranch;
         const primaryBranchHash = branches.find((branch) => branch.name === primaryBranch)?.hash;
@@ -41,7 +51,19 @@ export class GraphDataProvider {
         const rows = assignLanes(commits, { primaryBranch, primaryBranchHash });
         const maxLane = getMaxLane(rows);
 
-        return { branches, tags, rows, maxLane, currentBranch, currentUser, hasMore, loadedCount: commits.length };
+        return {
+            branches,
+            tags,
+            rows,
+            maxLane,
+            currentBranch,
+            currentUser,
+            hasMore,
+            loadedCount: commits.length,
+            hasRemotes: remotes.length > 0,
+            repositoryWebUrl,
+            currentBranchCommitHashes,
+        };
     }
 
     public async getCommitFiles(commitHash: string): Promise<GitFileChange[]> {
@@ -50,6 +72,30 @@ export class GraphDataProvider {
 
     public async getCommitMessage(commitHash: string): Promise<string> {
         return this.gitService.getCommitMessage(commitHash);
+    }
+
+    private async getRemotes(): Promise<string[]> {
+        const service = this.gitService as GitService & { getRemotes?: () => Promise<string[]> };
+        if (!service.getRemotes) {
+            return [];
+        }
+        return service.getRemotes().catch(() => []);
+    }
+
+    private async getRemoteUrl(remote: string): Promise<string | undefined> {
+        const service = this.gitService as GitService & { getRemoteUrl?: (remoteName?: string) => Promise<string | undefined> };
+        if (!service.getRemoteUrl) {
+            return undefined;
+        }
+        return service.getRemoteUrl(remote).catch(() => undefined);
+    }
+
+    private async getCurrentBranchCommitHashes(maxCount: number): Promise<string[] | undefined> {
+        const service = this.gitService as GitService & { getHeadCommitHashes?: (maxCount?: number) => Promise<string[]> };
+        if (!service.getHeadCommitHashes) {
+            return undefined;
+        }
+        return service.getHeadCommitHashes(maxCount).catch(() => undefined);
     }
 }
 

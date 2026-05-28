@@ -265,7 +265,13 @@ export async function clickGraphToggle(expectActive: boolean): Promise<void> {
 export async function clickFirstGraphCommit(): Promise<void> {
     const matchedButtons = await $$('.graph-row.filter-matched .commit-row-button');
     const firstCommitButton = matchedButtons[0] ?? await $('.graph-row .commit-row-button');
-    await firstCommitButton.waitForClickable();
+    // Scroll into view first: content-visibility:auto on graph rows means
+    // off-screen rows are not rendered and WebDriver cannot click them.
+    await browser.execute(
+        (selector: string) => document.querySelector(selector)?.scrollIntoView({ block: 'center', inline: 'nearest' }),
+        '.graph-row.filter-matched .commit-row-button, .graph-row .commit-row-button',
+    );
+    await firstCommitButton.waitForClickable({ timeout: 5_000 });
     await firstCommitButton.click();
 
     await browser.waitUntil(async () => {

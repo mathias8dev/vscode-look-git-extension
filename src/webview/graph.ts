@@ -5,7 +5,7 @@ import {
     formatRelativeDate,
     escapeHtml,
 } from './graphRenderer';
-import { showCommitContextMenu, hideContextMenu } from './contextMenu';
+import { getCommitNavigationTarget, showCommitContextMenu, hideContextMenu } from './contextMenu';
 import type { GraphRow } from '../graphView/graphLaneAssigner';
 import { replaceWindowMessageHandler } from './windowMessages';
 import { createBranchPaneController } from './graphBranches';
@@ -32,7 +32,9 @@ let graphData: GraphData | null = null;
 let graphSentinelObserver: IntersectionObserver | null = null;
 let isLoadingMoreGraph = false;
 let selectedCommitHash: string | null = null;
-let lastGraphActivation: { hash: string; time: number } | null = null;
+let selectedCommitHashes = new Set<string>();
+let selectionAnchorHash: string | null = null;
+let lastGraphActivation: { hash: string; time: number; mode: string } | null = null;
 let selectedBranch: string | null = null; // null = all branches
 let filterRequestTimer: number | undefined;
 let filterState: GraphFilterState = createInitialGraphFilterState();
@@ -203,13 +205,14 @@ function initGraphInteractions(): void {
         if (me.button !== 0) { return; }
         const row = findGraphRow(e.target);
         if (!row) { return; }
-        activateGraphRow(row.dataset.hash!);
+        activateGraphRow(row.dataset.hash!, getSelectionMode(me));
     });
 
     graphPane.addEventListener('click', (e) => {
+        const me = e as MouseEvent;
         const row = findGraphRow(e.target);
         if (!row) { return; }
-        activateGraphRow(row.dataset.hash!);
+        activateGraphRow(row.dataset.hash!, getSelectionMode(me));
     });
 
     graphPane.addEventListener('contextmenu', (e) => {
@@ -219,10 +222,20 @@ function initGraphInteractions(): void {
         e.preventDefault();
         const me = e as MouseEvent;
         const hash = row.dataset.hash!;
-        selectedCommitHash = hash;
-        markSelectedGraphRow(hash);
-        showCommitContextMenu(me.clientX, me.clientY, hash, (command, commitHash) => {
-            vscode.postMessage({ type: 'executeCommand', command, commitHash });
+        selectGraphRowForContextMenu(hash);
+        const commandHashes = getSelectedCommitHashesForCommand(hash);
+        showCommitContextMenu(me.clientX, me.clientY, hash, graphData, commandHashes, (command, commitHash) => {
+            const navigationTarget = getCommitNavigationTarget(graphData, commitHash, command);
+            if (navigationTarget) {
+                activateGraphRow(navigationTarget);
+                return;
+            }
+            vscode.postMessage({
+                type: 'executeCommand',
+                command,
+                commitHash,
+                commitHashes: getSelectedCommitHashesForCommand(commitHash),
+            });
         });
     });
 }
@@ -351,7 +364,7 @@ function renderGraphTable(): void {
         const c = row.commit;
         const refs = parseRefs(c.refs, tagNames);
         const badges = renderRefBadges(refs);
-        const isSelected = c.hash === selectedCommitHash ? ' selected' : '';
+        const isSelected = selectedCommitHashes.has(c.hash) ? ' selected' : '';
         const isPrimary = row.laneData.isPrimary ? ' primary-line' : '';
         const filterClass = hasFilter
             ? (matchesFilter ? ' filter-matched' : ' filter-dimmed')
@@ -462,27 +475,99 @@ function renderGraphPaginationState(): void {
     observeGraphSentinel(pane);
 }
 
-function activateGraphRow(hash: string): void {
+type SelectionMode = 'single' | 'range' | 'toggle';
+
+function getSelectionMode(event?: MouseEvent | PointerEvent): SelectionMode {
+    if (event?.shiftKey) { return 'range'; }
+    if (event?.ctrlKey || event?.metaKey) { return 'toggle'; }
+    return 'single';
+}
+
+function activateGraphRow(hash: string, mode: SelectionMode = 'single'): void {
     const now = Date.now();
-    if (lastGraphActivation?.hash === hash && now - lastGraphActivation.time < 80) {
+    if (lastGraphActivation?.hash === hash && lastGraphActivation.mode === mode && now - lastGraphActivation.time < 80) {
         return;
     }
-    lastGraphActivation = { hash, time: now };
+    lastGraphActivation = { hash, time: now, mode };
+
+    updateSelectedCommitHashes(hash, mode);
 
     selectedCommitHash = hash;
-    markSelectedGraphRow(hash);
+    markSelectedGraphRows();
     vscode.postMessage({ type: 'getCommitDetails', hash });
 }
 
-function markSelectedGraphRow(hash: string): void {
+function updateSelectedCommitHashes(hash: string, mode: SelectionMode): void {
+    if (mode === 'range') {
+        const range = getCommitRange(selectionAnchorHash, hash);
+        selectedCommitHashes = new Set(range.length > 0 ? range : [hash]);
+        return;
+    }
+
+    if (mode === 'toggle') {
+        const nextSelection = new Set(selectedCommitHashes);
+        if (nextSelection.has(hash)) {
+            nextSelection.delete(hash);
+        } else {
+            nextSelection.add(hash);
+        }
+        selectedCommitHashes = nextSelection;
+        selectionAnchorHash = hash;
+        return;
+    }
+
+    selectedCommitHashes = new Set([hash]);
+    selectionAnchorHash = hash;
+}
+
+function getCommitRange(anchorHash: string | null, hash: string): string[] {
+    if (!graphData || !anchorHash) {
+        selectionAnchorHash = hash;
+        return [hash];
+    }
+
+    const hashes = graphData.rows.map((row) => row.commit.hash);
+    const anchorIndex = hashes.indexOf(anchorHash);
+    const targetIndex = hashes.indexOf(hash);
+    if (anchorIndex === -1 || targetIndex === -1) {
+        selectionAnchorHash = hash;
+        return [hash];
+    }
+
+    const start = Math.min(anchorIndex, targetIndex);
+    const end = Math.max(anchorIndex, targetIndex);
+    return hashes.slice(start, end + 1);
+}
+
+function selectGraphRowForContextMenu(hash: string): void {
+    if (!selectedCommitHashes.has(hash)) {
+        selectedCommitHashes = new Set([hash]);
+        selectionAnchorHash = hash;
+    }
+    selectedCommitHash = hash;
+    markSelectedGraphRows();
+}
+
+function getSelectedCommitHashesForCommand(primaryHash: string): string[] {
+    if (!graphData || !selectedCommitHashes.has(primaryHash)) {
+        return [primaryHash];
+    }
+
+    const orderedHashes = graphData.rows
+        .map((row) => row.commit.hash)
+        .filter((hash) => selectedCommitHashes.has(hash));
+    return orderedHashes.length > 0 ? orderedHashes : [primaryHash];
+}
+
+function markSelectedGraphRows(): void {
     const pane = document.getElementById('graph-pane');
     if (!pane) { return; }
 
-    pane.querySelector('.graph-row.selected')?.classList.remove('selected');
     for (const row of Array.from(pane.querySelectorAll<HTMLElement>('.graph-row'))) {
-        if (row.dataset.hash === hash) {
+        if (row.dataset.hash && selectedCommitHashes.has(row.dataset.hash)) {
             row.classList.add('selected');
-            break;
+        } else {
+            row.classList.remove('selected');
         }
     }
 }
@@ -535,9 +620,17 @@ replaceWindowMessageHandler('graph', (event) => {
                 const exists = graphData.rows.some((r) => r.commit.hash === selectedCommitHash);
                 if (!exists) {
                     selectedCommitHash = null;
+                    selectedCommitHashes = new Set();
+                    selectionAnchorHash = null;
                     const pane = document.getElementById('details-pane')!;
                     pane.className = 'details-pane empty';
                     pane.innerHTML = '<span>Click a commit to view details</span>';
+                } else {
+                    const availableHashes = new Set(graphData.rows.map((r) => r.commit.hash));
+                    selectedCommitHashes = new Set([...selectedCommitHashes].filter((hash) => availableHashes.has(hash)));
+                    if (selectionAnchorHash && !availableHashes.has(selectionAnchorHash)) {
+                        selectionAnchorHash = selectedCommitHash;
+                    }
                 }
             }
             break;
@@ -554,8 +647,14 @@ replaceWindowMessageHandler('graph', (event) => {
     }
 });
 
-// Close context menu on scroll
-document.addEventListener('scroll', hideContextMenu, true);
+// Close context menu when the surrounding UI scrolls, but keep it open while
+// the user scrolls inside an overflowing context menu.
+document.addEventListener('scroll', (event) => {
+    if (event.target instanceof Element && event.target.closest('.context-menu')) {
+        return;
+    }
+    hideContextMenu();
+}, true);
 
 
 // Boot

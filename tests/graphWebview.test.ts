@@ -481,6 +481,270 @@ describe('Graph webview runtime behavior', () => {
         expect(document.querySelector('#details-pane')!.textContent).toContain('Click a commit to view details');
     });
 
+    describe('commit context menu commands', () => {
+        function rightClick(selector: string): void {
+            const element = document.querySelector<HTMLElement>(selector);
+            if (!element) { throw new Error(`Missing element: ${selector}`); }
+            element.dispatchEvent(
+                new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }),
+            );
+        }
+
+        function modifiedClick(selector: string, modifiers: MouseEventInit = {}): void {
+            const element = document.querySelector<HTMLElement>(selector);
+            if (!element) { throw new Error(`Missing element: ${selector}`); }
+            element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ...modifiers }));
+        }
+
+        function contextItems(): HTMLElement[] {
+            return Array.from(document.querySelectorAll<HTMLElement>('.context-menu-item'));
+        }
+
+        function getContextItem(label: string): HTMLElement {
+            const item = contextItems().find((el) => el.textContent === label);
+            if (!item) { throw new Error(`Missing context menu item: "${label}"`); }
+            return item;
+        }
+
+        function clickContextItem(label: string): void {
+            getContextItem(label).click();
+        }
+
+        async function bootWithCommitGraph(): Promise<MockVsCodeApi> {
+            const api = await bootWebview(GRAPH_WEBVIEW_MODULE);
+            const head = graphRow('head123456789', 'head commit');
+            head.commit.parentHashes = ['mid123456789'];
+            const mid = graphRow('mid123456789', 'middle commit');
+            mid.commit.parentHashes = ['root123456789'];
+            const side = graphRow('side123456789', 'side commit');
+            side.commit.parentHashes = ['root123456789'];
+            const root = graphRow('root123456789', 'root commit');
+            const merge = graphRow('merge123456789', 'merge commit');
+            merge.commit.parentHashes = ['head123456789', 'side123456789'];
+            sendWebviewMessage({
+                type: 'graphData',
+                data: {
+                    branches: [{ name: 'main', isRemote: false, isCurrent: true, hash: 'head123' }],
+                    tags: [],
+                    rows: [merge, head, mid, side, root],
+                    maxLane: 0,
+                    currentBranch: 'main',
+                    currentUser: 'Test User',
+                    hasRemotes: true,
+                    repositoryWebUrl: 'https://github.com/example/look-git',
+                    currentBranchCommitHashes: ['head123456789', 'mid123456789', 'root123456789'],
+                },
+            });
+            return api;
+        }
+
+        it('renders the non-AI graph commit actions and forwards command actions', async () => {
+            const api = await bootWithCommitGraph();
+            rightClick('.graph-row[data-hash="mid123456789"]');
+
+            const labels = contextItems().map((item) => item.textContent);
+            expect(labels).toContain('Copy Revision Number');
+            expect(labels).toContain('Create Patch...');
+            expect(labels).toContain('Show Repository at Revision');
+            expect(labels).toContain('Compare with Local');
+            expect(labels).toContain('Squash Into...');
+            expect(labels).toContain('Interactively Rebase from Here...');
+            expect(labels).toContain("Rebase 'main' onto Selected Commit");
+            expect(labels).toContain('New Branch...');
+            expect(labels).toContain('New Tag...');
+            expect(labels).toContain('View in Browser');
+            expect(labels).not.toContain('Self-Review with AI');
+            expect(labels).not.toContain('Explain Commit with AI Assistant');
+
+            clickContextItem('Create Patch...');
+            expect(api.messages).toContainEqual({
+                type: 'executeCommand',
+                command: 'lookGit.createPatch',
+                commitHash: 'mid123456789',
+                commitHashes: ['mid123456789'],
+            });
+        });
+
+        it('keeps tall context menus inside the viewport and makes them scrollable', async () => {
+            const originalInnerHeight = window.innerHeight;
+            const originalInnerWidth = window.innerWidth;
+            const originalScrollHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollHeight');
+            const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+                .mockImplementation(function getBoundingClientRectMock(this: HTMLElement) {
+                    if (this.classList.contains('context-menu')) {
+                        return {
+                            x: 100,
+                            y: 100,
+                            left: 100,
+                            top: 100,
+                            width: 240,
+                            height: 300,
+                            right: 340,
+                            bottom: 400,
+                            toJSON: () => ({}),
+                        } as DOMRect;
+                    }
+                    return {
+                        x: 0,
+                        y: 0,
+                        left: 0,
+                        top: 0,
+                        width: 0,
+                        height: 0,
+                        right: 0,
+                        bottom: 0,
+                        toJSON: () => ({}),
+                    } as DOMRect;
+                });
+            Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+                configurable: true,
+                get() {
+                    return this.classList.contains('context-menu') ? 300 : 0;
+                },
+            });
+
+            Object.defineProperty(window, 'innerHeight', { configurable: true, value: 120 });
+            Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
+
+            try {
+                await bootWithCommitGraph();
+                rightClick('.graph-row[data-hash="mid123456789"]');
+
+                const menu = document.querySelector<HTMLElement>('.context-menu')!;
+                expect(menu.style.maxHeight).toBe('96px');
+                expect(menu.style.overflowY).toBe('auto');
+                expect(menu.style.top).toBe('4px');
+                expect(Number.parseFloat(menu.style.left)).toBeGreaterThanOrEqual(4);
+
+                menu.dispatchEvent(new Event('scroll', { bubbles: true }));
+                expect(document.querySelector('.context-menu')).toBe(menu);
+
+                document.getElementById('graph-pane')!.dispatchEvent(new Event('scroll', { bubbles: true }));
+                expect(document.querySelector('.context-menu')).toBeNull();
+            } finally {
+                rectSpy.mockRestore();
+                if (originalScrollHeight) {
+                    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', originalScrollHeight);
+                }
+                Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight });
+                Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalInnerWidth });
+            }
+        });
+
+        it('selects individual commits with Ctrl or Command and ranges with Shift', async () => {
+            const api = await bootWithCommitGraph();
+
+            modifiedClick('.graph-row[data-hash="head123456789"]');
+            expect(document.querySelector('.graph-row[data-hash="head123456789"]')?.classList.contains('selected')).toBe(true);
+
+            modifiedClick('.graph-row[data-hash="root123456789"]', { ctrlKey: true });
+            expect(document.querySelector('.graph-row[data-hash="head123456789"]')?.classList.contains('selected')).toBe(true);
+            expect(document.querySelector('.graph-row[data-hash="root123456789"]')?.classList.contains('selected')).toBe(true);
+            expect(document.querySelector('.graph-row[data-hash="mid123456789"]')?.classList.contains('selected')).toBe(false);
+
+            rightClick('.graph-row[data-hash="root123456789"]');
+            expect(getContextItem('Copy Revision Numbers').classList.contains('disabled')).toBe(false);
+            clickContextItem('Copy Revision Numbers');
+            expect(api.messages).toContainEqual({
+                type: 'executeCommand',
+                command: 'lookGit.copyCommitHash',
+                commitHash: 'root123456789',
+                commitHashes: ['head123456789', 'root123456789'],
+            });
+
+            modifiedClick('.graph-row[data-hash="head123456789"]');
+            modifiedClick('.graph-row[data-hash="root123456789"]', { shiftKey: true });
+            expect(document.querySelector('.graph-row[data-hash="head123456789"]')?.classList.contains('selected')).toBe(true);
+            expect(document.querySelector('.graph-row[data-hash="mid123456789"]')?.classList.contains('selected')).toBe(true);
+            expect(document.querySelector('.graph-row[data-hash="root123456789"]')?.classList.contains('selected')).toBe(true);
+
+            api.messages.length = 0;
+            modifiedClick('.graph-row[data-hash="mid123456789"]');
+            modifiedClick('.graph-row[data-hash="root123456789"]', { metaKey: true });
+            rightClick('.graph-row[data-hash="root123456789"]');
+            expect(getContextItem('Create Patches...').classList.contains('disabled')).toBe(false);
+            expect(getContextItem('Reset Current Branch to Here...').classList.contains('disabled')).toBe(true);
+            clickContextItem('Create Patches...');
+            expect(api.messages).toContainEqual({
+                type: 'executeCommand',
+                command: 'lookGit.createPatch',
+                commitHash: 'root123456789',
+                commitHashes: ['mid123456789', 'root123456789'],
+            });
+
+            rightClick('.graph-row[data-hash="root123456789"]');
+            clickContextItem('Revert Commits');
+            expect(api.messages).toContainEqual({
+                type: 'executeCommand',
+                command: 'lookGit.revert',
+                commitHash: 'root123456789',
+                commitHashes: ['mid123456789', 'root123456789'],
+            });
+        });
+
+        it('disables context actions that cannot run for the selected commit', async () => {
+            const api = await bootWithCommitGraph();
+
+            rightClick('.graph-row[data-hash="head123456789"]');
+            expect(getContextItem('Undo Commit...').classList.contains('disabled')).toBe(false);
+            expect(getContextItem('Cherry-Pick').classList.contains('disabled')).toBe(true);
+            api.messages.length = 0;
+            getContextItem('Cherry-Pick').click();
+            expect(api.messages).toEqual([]);
+
+            rightClick('.graph-row[data-hash="root123456789"]');
+            expect(getContextItem('Undo Commit...').classList.contains('disabled')).toBe(true);
+            expect(getContextItem('Fixup...').classList.contains('disabled')).toBe(true);
+            expect(getContextItem('Go to Parent Commit').classList.contains('disabled')).toBe(true);
+
+            rightClick('.graph-row[data-hash="merge123456789"]');
+            expect(getContextItem('Revert Commit').classList.contains('disabled')).toBe(true);
+            expect(getContextItem('Edit Commit Message...').classList.contains('disabled')).toBe(true);
+            expect(getContextItem('Interactively Rebase from Here...').classList.contains('disabled')).toBe(true);
+        });
+
+        it('disables branch-rewrite actions for commits outside the current branch', async () => {
+            await bootWithCommitGraph();
+
+            rightClick('.graph-row[data-hash="side123456789"]');
+
+            expect(getContextItem('Cherry-Pick').classList.contains('disabled')).toBe(false);
+            expect(getContextItem('Create Patch...').classList.contains('disabled')).toBe(false);
+            expect(getContextItem('Edit Commit Message...').classList.contains('disabled')).toBe(true);
+            expect(getContextItem('Fixup...').classList.contains('disabled')).toBe(true);
+            expect(getContextItem('Squash Into...').classList.contains('disabled')).toBe(true);
+            expect(getContextItem('Drop Commits...').classList.contains('disabled')).toBe(true);
+            expect(getContextItem('Interactively Rebase from Here...').classList.contains('disabled')).toBe(true);
+            expect(getContextItem('Push All up to Here...').classList.contains('disabled')).toBe(true);
+        });
+
+        it('disables squash for non-consecutive current branch selections', async () => {
+            await bootWithCommitGraph();
+
+            modifiedClick('.graph-row[data-hash="head123456789"]');
+            modifiedClick('.graph-row[data-hash="root123456789"]', { ctrlKey: true });
+            rightClick('.graph-row[data-hash="root123456789"]');
+
+            expect(getContextItem('Squash Commits...').classList.contains('disabled')).toBe(true);
+            expect(getContextItem('Drop Commits...').classList.contains('disabled')).toBe(false);
+        });
+
+        it('navigates to loaded parent and child commits from the context menu', async () => {
+            const api = await bootWithCommitGraph();
+
+            rightClick('.graph-row[data-hash="mid123456789"]');
+            clickContextItem('Go to Parent Commit');
+            expect(api.messages).toContainEqual({ type: 'getCommitDetails', hash: 'root123456789' });
+            expect(document.querySelector('.graph-row[data-hash="root123456789"]')?.classList.contains('selected')).toBe(true);
+
+            api.messages.length = 0;
+            rightClick('.graph-row[data-hash="mid123456789"]');
+            clickContextItem('Go to Child Commit');
+            expect(api.messages).toContainEqual({ type: 'getCommitDetails', hash: 'head123456789' });
+            expect(document.querySelector('.graph-row[data-hash="head123456789"]')?.classList.contains('selected')).toBe(true);
+        });
+    });
+
     describe('branch context menu commands', () => {
         function rightClick(selector: string): void {
             const element = document.querySelector<HTMLElement>(selector);

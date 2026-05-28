@@ -3,17 +3,32 @@ import type { GitService } from '../gitService';
 import type { CommitHistoryProvider } from '../commitHistoryProvider';
 import type { CommitItem } from '../commitItem';
 import { selectCommitFromQuickPick } from '../utils/confirmation';
+import { ensureNoMergeCommits, ensureSingleCurrentBranchCommit, refreshAfterMutation } from './historySafety';
+
+type RepositoryRefreshCallback = () => Promise<void> | void;
 
 export async function handleRenameCommit(
     gitService: GitService,
     historyProvider: CommitHistoryProvider,
-    item?: CommitItem
+    item?: CommitItem,
+    refreshRepositoryViews?: RepositoryRefreshCallback,
 ): Promise<void> {
     const commit = item?.commitInfo
         ?? await selectCommitFromQuickPick(gitService, 'Select a commit to rename');
 
     if (!commit) {
         return;
+    }
+
+    const log = await gitService.getLog(1, 0);
+    const isHead = log.length > 0 && log[0].hash === commit.hash;
+    if (!isHead) {
+        if (!(await ensureNoMergeCommits([commit], 'Edit commit message'))) {
+            return;
+        }
+        if (!(await ensureSingleCurrentBranchCommit(gitService, commit, 'Edit commit message'))) {
+            return;
+        }
     }
 
     const currentMessage = await gitService.getCommitMessage(commit.hash);
@@ -33,9 +48,6 @@ export async function handleRenameCommit(
     if (!newMessage || newMessage.trim() === currentMessage.trim()) {
         return;
     }
-
-    const log = await gitService.getLog(1, 0);
-    const isHead = log.length > 0 && log[0].hash === commit.hash;
 
     try {
         await vscode.window.withProgress(
@@ -62,7 +74,7 @@ export async function handleRenameCommit(
         await vscode.window.showInformationMessage(
             `Commit ${commit.shortHash} message updated.`
         );
-        historyProvider.refresh();
+        await refreshAfterMutation(historyProvider, refreshRepositoryViews);
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         await vscode.window.showErrorMessage(`Rename failed: ${message}`);

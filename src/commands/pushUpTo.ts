@@ -3,16 +3,23 @@ import type { GitService } from '../gitService';
 import type { CommitHistoryProvider } from '../commitHistoryProvider';
 import type { CommitItem } from '../commitItem';
 import { selectCommitFromQuickPick, showModalInformationMessage } from '../utils/confirmation';
+import { ensureSingleCurrentBranchCommit, refreshAfterMutation } from './historySafety';
+
+type RepositoryRefreshCallback = () => Promise<void> | void;
 
 export async function handlePushUpTo(
     gitService: GitService,
     historyProvider: CommitHistoryProvider,
-    item?: CommitItem
+    item?: CommitItem,
+    refreshRepositoryViews?: RepositoryRefreshCallback,
 ): Promise<void> {
     const commit = item?.commitInfo
         ?? await selectCommitFromQuickPick(gitService, 'Select a commit to push up to');
 
     if (!commit) {
+        return;
+    }
+    if (!(await ensureSingleCurrentBranchCommit(gitService, commit, 'Push up to commit'))) {
         return;
     }
 
@@ -72,7 +79,7 @@ export async function handlePushUpTo(
         await vscode.window.showInformationMessage(
             `Pushed commits up to ${commit.shortHash} to ${remoteName}/${branchName}.`
         );
-        historyProvider.refresh();
+        await refreshAfterMutation(historyProvider, refreshRepositoryViews);
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         await vscode.window.showErrorMessage(`Push failed: ${message}`);

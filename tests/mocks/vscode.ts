@@ -4,6 +4,10 @@ export const TreeItemCollapsibleState = {
     Expanded: 2,
 } as const;
 
+export const ProgressLocation = {
+    Notification: 15,
+} as const;
+
 export class TreeItem {
     public description: unknown;
     public tooltip: unknown;
@@ -124,6 +128,8 @@ export const window = {
     warningMessages: [] as Array<{ message: string; items: string[] }>,
     inputBoxValue: undefined as string | undefined,
     quickPickValue: undefined as string | undefined,
+    saveDialogValue: undefined as TestUri | undefined,
+    saveDialogOptions: [] as unknown[],
     warningChoice: undefined as string | undefined,
     showErrorMessage(message: string) {
         this.errorMessages.push(message);
@@ -143,18 +149,37 @@ export const window = {
     showQuickPick() {
         return Promise.resolve(this.quickPickValue);
     },
+    showSaveDialog(options: unknown) {
+        this.saveDialogOptions.push(options);
+        return Promise.resolve(this.saveDialogValue);
+    },
+    withProgress(_options: unknown, task: () => unknown) {
+        return Promise.resolve(task());
+    },
     reset() {
         this.errorMessages = [];
         this.infoMessages = [];
         this.warningMessages = [];
         this.inputBoxValue = undefined;
         this.quickPickValue = undefined;
+        this.saveDialogValue = undefined;
+        this.saveDialogOptions = [];
         this.warningChoice = undefined;
     },
 };
 
 export const workspace = {
     values: new Map<string, unknown>(),
+    fs: {
+        writes: [] as Array<{ uri: unknown; content: Uint8Array }>,
+        writeFile(uri: unknown, content: Uint8Array) {
+            this.writes.push({ uri, content });
+            return Promise.resolve();
+        },
+        reset() {
+            this.writes = [];
+        },
+    },
     getConfiguration(section?: string) {
         return {
             get: (key: string, defaultValue?: unknown) => {
@@ -170,5 +195,6 @@ export const workspace = {
     },
     reset() {
         this.values = new Map<string, unknown>();
+        this.fs.reset();
     },
 };

@@ -3,11 +3,15 @@ import type { GitService } from '../gitService';
 import type { CommitHistoryProvider } from '../commitHistoryProvider';
 import type { CommitItem } from '../commitItem';
 import { confirmDangerousOperation, selectCommitFromQuickPick } from '../utils/confirmation';
+import { refreshAfterMutation } from './historySafety';
+
+type RepositoryRefreshCallback = () => Promise<void> | void;
 
 export async function handleRebase(
     gitService: GitService,
     historyProvider: CommitHistoryProvider,
-    item?: CommitItem
+    item?: CommitItem,
+    refreshRepositoryViews?: RepositoryRefreshCallback,
 ): Promise<void> {
     const commit = item?.commitInfo
         ?? await selectCommitFromQuickPick(gitService, 'Select a commit to rebase onto');
@@ -34,7 +38,7 @@ export async function handleRebase(
         await vscode.window.showInformationMessage(
             `Rebased onto ${commit.shortHash} successfully.`
         );
-        historyProvider.refresh();
+        await refreshAfterMutation(historyProvider, refreshRepositoryViews);
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
 
@@ -48,7 +52,7 @@ export async function handleRebase(
             if (action === 'Abort Rebase') {
                 await gitService.rebaseAbort();
                 await vscode.window.showInformationMessage('Rebase aborted.');
-                historyProvider.refresh();
+                await refreshAfterMutation(historyProvider, refreshRepositoryViews);
             } else if (action === 'Open Source Control') {
                 await vscode.commands.executeCommand('workbench.view.scm');
             }

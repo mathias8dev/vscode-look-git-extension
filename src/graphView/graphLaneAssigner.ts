@@ -20,6 +20,7 @@ export interface LineDef {
     type: 'straight' | 'merge-left' | 'merge-right' | 'fork-left' | 'fork-right';
     targetHash?: string;
     role: 'pass-through' | 'first-parent' | 'merge-parent';
+    fromTop?: boolean; // true when fromLane had an active straight line above this row
 }
 
 export interface LaneData {
@@ -133,6 +134,7 @@ export function assignLanes(commits: GraphCommitInfo[], options: AssignLaneOptio
                 type: lane < primaryOverrideFromLane ? 'merge-left' : 'merge-right',
                 targetHash: firstParent,
                 role: 'merge-parent',
+                fromTop: true,
             });
         }
 
@@ -151,6 +153,7 @@ export function assignLanes(commits: GraphCommitInfo[], options: AssignLaneOptio
                     type: existingLane < lane ? 'merge-left' : 'merge-right',
                     targetHash: firstParent,
                     role: 'first-parent',
+                    fromTop: true,
                 });
                 // Free current lane since the parent continues elsewhere
                 lanes[lane] = null;

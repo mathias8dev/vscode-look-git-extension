@@ -3,12 +3,16 @@ import type { GitService } from '../gitService';
 import type { CommitHistoryProvider } from '../commitHistoryProvider';
 import type { CommitItem } from '../commitItem';
 import { selectCommitFromQuickPick, showModalInformationMessage } from '../utils/confirmation';
+import { ensureNoMergeCommits, refreshAfterMutation } from './historySafety';
+
+type RepositoryRefreshCallback = () => Promise<void> | void;
 
 export async function handleCherryPick(
     gitService: GitService,
     historyProvider: CommitHistoryProvider,
     item?: CommitItem,
-    selectedItems?: CommitItem[]
+    selectedItems?: CommitItem[],
+    refreshRepositoryViews?: RepositoryRefreshCallback,
 ): Promise<void> {
     // Multi-select: cherry-pick all selected commits (oldest first)
     const items = selectedItems && selectedItems.length > 1 ? selectedItems : undefined;
@@ -17,6 +21,10 @@ export async function handleCherryPick(
         // Reverse so oldest is cherry-picked first (tree shows newest first)
         const commits = [...items].reverse().map((i) => i.commitInfo);
         const hashList = commits.map((c) => c.shortHash).join(', ');
+
+        if (!(await ensureNoMergeCommits(commits, 'Cherry-pick'))) {
+            return;
+        }
 
         const confirmed = await showModalInformationMessage(
             `Cherry-pick ${commits.length} commits (${hashList})?`,
@@ -43,7 +51,7 @@ export async function handleCherryPick(
             await vscode.window.showInformationMessage(
                 `Cherry-picked ${commits.length} commits successfully.`
             );
-            historyProvider.refresh();
+            await refreshAfterMutation(historyProvider, refreshRepositoryViews);
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);
             if (message.includes('CONFLICT') || message.includes('conflict')) {
@@ -72,13 +80,16 @@ export async function handleCherryPick(
     if (!commit) {
         return;
     }
+    if (!(await ensureNoMergeCommits([commit], 'Cherry-pick'))) {
+        return;
+    }
 
     try {
         await gitService.cherryPick(commit.hash);
         await vscode.window.showInformationMessage(
             `Cherry-picked commit ${commit.shortHash}: "${commit.message}"`
         );
-        historyProvider.refresh();
+        await refreshAfterMutation(historyProvider, refreshRepositoryViews);
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
 

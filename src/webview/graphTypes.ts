@@ -31,6 +31,9 @@ export interface GraphData {
     currentUser: string;
     hasMore: boolean;
     loadedCount: number;
+    hasRemotes?: boolean;
+    repositoryWebUrl?: string;
+    currentBranchCommitHashes?: string[];
 }
 
 export type BranchViewMode = 'list' | 'tree';

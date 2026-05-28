@@ -3,12 +3,16 @@ import type { GitService } from '../gitService';
 import type { CommitHistoryProvider } from '../commitHistoryProvider';
 import type { CommitItem } from '../commitItem';
 import { selectCommitFromQuickPick, showModalInformationMessage } from '../utils/confirmation';
+import { ensureNoMergeCommits, refreshAfterMutation } from './historySafety';
+
+type RepositoryRefreshCallback = () => Promise<void> | void;
 
 export async function handleRevert(
     gitService: GitService,
     historyProvider: CommitHistoryProvider,
     item?: CommitItem,
-    selectedItems?: CommitItem[]
+    selectedItems?: CommitItem[],
+    refreshRepositoryViews?: RepositoryRefreshCallback,
 ): Promise<void> {
     // Multi-select: revert all selected commits (newest first to avoid conflicts)
     const items = selectedItems && selectedItems.length > 1 ? selectedItems : undefined;
@@ -16,6 +20,10 @@ export async function handleRevert(
     if (items) {
         const commits = items.map((i) => i.commitInfo);
         const hashList = commits.map((c) => c.shortHash).join(', ');
+
+        if (!(await ensureNoMergeCommits(commits, 'Revert'))) {
+            return;
+        }
 
         const confirmed = await showModalInformationMessage(
             `Revert ${commits.length} commits (${hashList})?`,
@@ -42,7 +50,7 @@ export async function handleRevert(
             await vscode.window.showInformationMessage(
                 `Reverted ${commits.length} commits successfully.`
             );
-            historyProvider.refresh();
+            await refreshAfterMutation(historyProvider, refreshRepositoryViews);
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);
             if (message.includes('CONFLICT') || message.includes('conflict')) {
@@ -71,13 +79,16 @@ export async function handleRevert(
     if (!commit) {
         return;
     }
+    if (!(await ensureNoMergeCommits([commit], 'Revert'))) {
+        return;
+    }
 
     try {
         await gitService.revert(commit.hash);
         await vscode.window.showInformationMessage(
             `Reverted commit ${commit.shortHash}: "${commit.message}"`
         );
-        historyProvider.refresh();
+        await refreshAfterMutation(historyProvider, refreshRepositoryViews);
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
 

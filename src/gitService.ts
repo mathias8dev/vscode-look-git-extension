@@ -259,6 +259,10 @@ export class GitService {
         return this.exec(['reset', `--${mode}`, commitHash]);
     }
 
+    public async undoLastCommit(): Promise<string> {
+        return this.exec(['reset', '--soft', 'HEAD~1']);
+    }
+
     public async revert(commitHash: string): Promise<string> {
         return this.exec(['revert', commitHash]);
     }
@@ -268,6 +272,7 @@ export class GitService {
     }
 
     public async dropCommits(commitHashes: string[]): Promise<string> {
+        await this.assertCommitsAreAncestorsOfHead(commitHashes, 'Drop commits');
         // Find the oldest commit by asking git for the topological order
         const oldestHash = await this.findOldestCommit(commitHashes);
 
@@ -278,6 +283,7 @@ export class GitService {
     }
 
     public async renameCommit(commitHash: string, newMessage: string): Promise<string> {
+        await this.assertCommitsAreAncestorsOfHead([commitHash], 'Rename commit');
         return this.runInteractiveRebase(
             commitHash,
             [[commitHash, 'reword']],
@@ -335,6 +341,25 @@ export class GitService {
         return commitHashes[commitHashes.length - 1];
     }
 
+    public async getHeadCommitHashes(maxCount?: number): Promise<string[]> {
+        const args = ['rev-list'];
+        if (typeof maxCount === 'number' && Number.isFinite(maxCount) && maxCount > 0) {
+            args.push(`--max-count=${Math.floor(maxCount)}`);
+        }
+        args.push('HEAD');
+        const output = await this.execReadonly(args);
+        return output ? output.split('\n').filter(Boolean) : [];
+    }
+
+    public async isAncestorOfHead(commitHash: string): Promise<boolean> {
+        try {
+            await this.execReadonly(['merge-base', '--is-ancestor', commitHash, 'HEAD']);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
     public async hasUncommittedChanges(): Promise<boolean> {
         const output = await this.execReadonly(['status', '--porcelain']);
         return output.length > 0;
@@ -374,6 +399,10 @@ export class GitService {
         return this.exec(['checkout', '-b', branchName, startPoint]);
     }
 
+    public async createDetachedWorktree(worktreePath: string, commitHash: string): Promise<string> {
+        return this.exec(['worktree', 'add', '--detach', worktreePath, commitHash]);
+    }
+
     private async localBranchExists(branchName: string): Promise<boolean> {
         try {
             await this.execReadonly(['show-ref', '--verify', `refs/heads/${branchName}`]);
@@ -383,20 +412,25 @@ export class GitService {
         }
     }
 
-    public async squashCommits(oldestCommitHash: string, commitHashes: string[]): Promise<string> {
+    public async squashCommits(oldestCommitHash: string, commitHashes: string[], message?: string): Promise<string> {
+        await this.assertCommitsAreAncestorsOfHead([oldestCommitHash, ...commitHashes], 'Squash commits');
         // Change "pick" to "squash" for all commits except the oldest one
         return this.runInteractiveRebase(
             oldestCommitHash,
-            commitHashes.map((h) => [h, 'squash'])
+            commitHashes.map((h) => [h, 'squash']),
+            message ? { LOOK_GIT_COMMIT_MESSAGE: message } : {},
+            message ? MESSAGE_EDITOR_SCRIPT : undefined
         );
     }
 
     public async fixupCommit(commitHash: string, targetCommitHash: string): Promise<string> {
+        await this.assertCommitsAreAncestorsOfHead([commitHash, targetCommitHash], 'Fixup commit');
         // Change "pick" to "fixup" for the commit to fold into its predecessor
         return this.runInteractiveRebase(targetCommitHash, [[commitHash, 'fixup']]);
     }
 
     public async pushUpTo(commitHash: string, remoteName: string, branchName: string): Promise<string> {
+        await this.assertCommitsAreAncestorsOfHead([commitHash], 'Push up to commit');
         return this.exec(['push', remoteName, `${commitHash}:refs/heads/${branchName}`]);
     }
 
@@ -406,6 +440,28 @@ export class GitService {
             return [];
         }
         return output.split('\n');
+    }
+
+    public async getRemoteUrl(remoteName?: string): Promise<string | undefined> {
+        const remotes = await this.getRemotes();
+        const remote = remoteName ?? (remotes.includes('origin') ? 'origin' : remotes[0]);
+        if (!remote) {
+            return undefined;
+        }
+        return this.execReadonly(['remote', 'get-url', remote]);
+    }
+
+    public async createPatch(commitHash: string): Promise<string> {
+        return this.execRawReadonly(['format-patch', '-1', '--stdout', commitHash]);
+    }
+
+    public async getFilesChangedFrom(commitHash: string): Promise<GitFileChange[]> {
+        const output = await this.execRawReadonly(['diff', '--name-status', '-z', commitHash, '--']);
+        return output ? parseNameStatusZ(output) : [];
+    }
+
+    public async createTag(tagName: string, commitHash: string): Promise<string> {
+        return this.exec(['tag', tagName, commitHash]);
     }
 
     public async getCommitFiles(commitHash: string): Promise<GitFileChange[]> {
@@ -592,5 +648,18 @@ export class GitService {
 
     public async getStashFiles(index: number): Promise<GitFileChange[]> {
         return queryStashFiles(this.execRawReadonly.bind(this), index);
+    }
+
+    private async assertCommitsAreAncestorsOfHead(commitHashes: string[], operationName: string): Promise<void> {
+        const currentBranch = await this.getCurrentBranch().catch(() => 'HEAD');
+        if (!currentBranch || currentBranch === 'HEAD') {
+            throw new Error(`${operationName} requires a checked-out branch. The repository is currently in detached HEAD.`);
+        }
+
+        for (const hash of commitHashes) {
+            if (!(await this.isAncestorOfHead(hash))) {
+                throw new Error(`${operationName} is only available for commits reachable from the current HEAD: ${hash.substring(0, 12)}`);
+            }
+        }
     }
 }

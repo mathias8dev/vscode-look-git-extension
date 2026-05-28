@@ -152,7 +152,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .file-status-badge.deleted { color: var(--vscode-gitDecoration-deletedResourceForeground, #d73a49); }
 .file-status-badge.renamed { color: var(--vscode-gitDecoration-renamedResourceForeground, #e36209); }
 
-.context-menu { position: fixed; z-index: 100; min-width: 180px; background: var(--vscode-menu-background); color: var(--vscode-menu-foreground); border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border)); border-radius: 4px; padding: 4px 0; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
+.context-menu { position: fixed; z-index: 100; min-width: 180px; max-height: calc(100vh - 8px); overflow-y: auto; overscroll-behavior: contain; background: var(--vscode-menu-background); color: var(--vscode-menu-foreground); border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border)); border-radius: 4px; padding: 4px 0; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
 .context-menu-item { padding: 4px 24px; cursor: pointer; white-space: nowrap; }
 .context-menu-item:hover { background: var(--vscode-menu-selectionBackground); color: var(--vscode-menu-selectionForeground); }
 .context-menu-item.disabled { opacity: 0.4; cursor: default; }

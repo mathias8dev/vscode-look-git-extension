@@ -2,7 +2,7 @@
   "name": "look-git",
   "displayName": "Look Git",
   "description": "Advanced Git operations: cherry-pick, rebase, reset, revert, drop, and rename commits",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "publisher": "mathias8dev",
   "engines": {
     "vscode": "^1.85.0"
@@ -22,6 +22,7 @@
     "type": "git",
     "url": "https://github.com/mathias8dev/vscode-look-git-extension.git"
   },
+  "icon": "resources/look-git-icon.png",
   "main": "./dist/extension.js",
   "extensionDependencies": [
     "vscode.git"
@@ -88,6 +89,7 @@
           "id": "lookGit.changesView",
           "name": "Changes",
           "type": "webview",
+          "icon": "resources/look-git-icon.svg",
           "contextualTitle": "Look Git"
         },
         {
@@ -102,6 +104,7 @@
           "id": "lookGit.graphView",
           "name": "Git Graph",
           "type": "webview",
+          "icon": "resources/look-git-icon.svg",
           "contextualTitle": "Git Graph"
         }
       ]
@@ -184,6 +187,51 @@
       {
         "command": "lookGit.pushUpTo",
         "title": "Push All Up To Here",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.createPatch",
+        "title": "Create Patch",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.showRepositoryAtRevision",
+        "title": "Show Repository at Revision",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.compareWithLocal",
+        "title": "Compare with Local",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.undoCommit",
+        "title": "Undo Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.squashIntoParent",
+        "title": "Squash Into Parent",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.interactiveRebaseFrom",
+        "title": "Interactively Rebase from Here",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.newBranchFromCommit",
+        "title": "New Branch from Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.newTagFromCommit",
+        "title": "New Tag from Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.viewCommitInBrowser",
+        "title": "View Commit in Browser",
         "category": "Look Git"
       },
       {
@@ -504,6 +552,42 @@
         {
           "command": "lookGit.pushUpTo",
           "when": "lookGit.hasRepository"
+        },
+        {
+          "command": "lookGit.createPatch",
+          "when": "false"
+        },
+        {
+          "command": "lookGit.showRepositoryAtRevision",
+          "when": "false"
+        },
+        {
+          "command": "lookGit.compareWithLocal",
+          "when": "false"
+        },
+        {
+          "command": "lookGit.undoCommit",
+          "when": "false"
+        },
+        {
+          "command": "lookGit.squashIntoParent",
+          "when": "false"
+        },
+        {
+          "command": "lookGit.interactiveRebaseFrom",
+          "when": "false"
+        },
+        {
+          "command": "lookGit.newBranchFromCommit",
+          "when": "false"
+        },
+        {
+          "command": "lookGit.newTagFromCommit",
+          "when": "false"
+        },
+        {
+          "command": "lookGit.viewCommitInBrowser",
+          "when": "false"
         },
         {
           "command": "lookGit.refreshHistory",

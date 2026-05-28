@@ -12,6 +12,17 @@ import { handleCheckout } from './checkout';
 import { handleSquash } from './squash';
 import { handleFixup } from './fixup';
 import { handlePushUpTo } from './pushUpTo';
+import {
+    handleCompareWithLocal,
+    handleCreatePatch,
+    handleInteractiveRebaseFrom,
+    handleNewBranchFromCommit,
+    handleNewTagFromCommit,
+    handleShowRepositoryAtRevision,
+    handleSquashIntoParent,
+    handleUndoCommit,
+    handleViewCommitInBrowser,
+} from './graphCommitActions';
 import type { GraphViewProvider } from '../graphView/graphPanel';
 import type { ChangesViewProvider } from '../changesView/changesProvider';
 import { showModalWarningMessage } from '../utils/confirmation';
@@ -117,25 +128,25 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.cherryPick', (item?: CommitItem, selected?: unknown[]) => {
-            return handleCherryPick(gitService, historyProvider, item, filterCommitItems(selected));
+            return handleCherryPick(gitService, historyProvider, item, filterCommitItems(selected), refreshViewsAfterRepositoryMutation);
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.revert', (item?: CommitItem, selected?: unknown[]) => {
-            return handleRevert(gitService, historyProvider, item, filterCommitItems(selected));
+            return handleRevert(gitService, historyProvider, item, filterCommitItems(selected), refreshViewsAfterRepositoryMutation);
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.drop', (item?: CommitItem, selected?: unknown[]) => {
-            return handleDrop(gitService, historyProvider, item, filterCommitItems(selected));
+            return handleDrop(gitService, historyProvider, item, filterCommitItems(selected), refreshViewsAfterRepositoryMutation);
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.squash', (item?: CommitItem, selected?: unknown[]) => {
-            return handleSquash(gitService, historyProvider, item, filterCommitItems(selected));
+            return handleSquash(gitService, historyProvider, item, filterCommitItems(selected), refreshViewsAfterRepositoryMutation);
         })
     );
 
@@ -143,19 +154,19 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.rebase', (item?: CommitItem) => {
-            return handleRebase(gitService, historyProvider, item);
+            return handleRebase(gitService, historyProvider, item, refreshViewsAfterRepositoryMutation);
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.reset', (item?: CommitItem) => {
-            return handleReset(gitService, historyProvider, item);
+            return handleReset(gitService, historyProvider, item, refreshViewsAfterRepositoryMutation);
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.renameCommit', (item?: CommitItem) => {
-            return handleRenameCommit(gitService, historyProvider, item);
+            return handleRenameCommit(gitService, historyProvider, item, refreshViewsAfterRepositoryMutation);
         })
     );
 
@@ -167,13 +178,67 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.fixup', (item?: CommitItem) => {
-            return handleFixup(gitService, historyProvider, item);
+            return handleFixup(gitService, historyProvider, item, refreshViewsAfterRepositoryMutation);
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('lookGit.pushUpTo', (item?: CommitItem) => {
-            return handlePushUpTo(gitService, historyProvider, item);
+            return handlePushUpTo(gitService, historyProvider, item, refreshViewsAfterRepositoryMutation);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.createPatch', (item?: CommitItem, selected?: unknown[]) => {
+            return handleCreatePatch(gitService, item, filterCommitItems(selected));
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.showRepositoryAtRevision', (item?: CommitItem) => {
+            return handleShowRepositoryAtRevision(context, gitService, item);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.compareWithLocal', (item?: CommitItem) => {
+            return handleCompareWithLocal(gitService, item);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.undoCommit', (item?: CommitItem) => {
+            return handleUndoCommit(gitService, historyProvider, item, refreshViewsAfterRepositoryMutation);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.squashIntoParent', (item?: CommitItem) => {
+            return handleSquashIntoParent(gitService, historyProvider, item, refreshViewsAfterRepositoryMutation);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.interactiveRebaseFrom', (item?: CommitItem) => {
+            return handleInteractiveRebaseFrom(gitService, item);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.newBranchFromCommit', (item?: CommitItem) => {
+            return handleNewBranchFromCommit(gitService, item, refreshViewsAfterRepositoryMutation);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.newTagFromCommit', (item?: CommitItem) => {
+            return handleNewTagFromCommit(gitService, historyProvider, item, refreshViewsAfterRepositoryMutation);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('lookGit.viewCommitInBrowser', (item?: CommitItem) => {
+            return handleViewCommitInBrowser(gitService, item);
         })
     );
 

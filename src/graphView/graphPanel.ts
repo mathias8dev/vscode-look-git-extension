@@ -16,6 +16,17 @@ const ALLOWED_COMMIT_COMMANDS = new Set([
     'lookGit.renameCommit',
     'lookGit.fixup',
     'lookGit.copyCommitHash',
+    'lookGit.createPatch',
+    'lookGit.showRepositoryAtRevision',
+    'lookGit.compareWithLocal',
+    'lookGit.undoCommit',
+    'lookGit.squashIntoParent',
+    'lookGit.squash',
+    'lookGit.interactiveRebaseFrom',
+    'lookGit.pushUpTo',
+    'lookGit.newBranchFromCommit',
+    'lookGit.newTagFromCommit',
+    'lookGit.viewCommitInBrowser',
 ]);
 
 type RepositoryRefreshCallback = () => Promise<void> | void;
@@ -202,16 +213,37 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
                 case 'executeCommand': {
                     const command = msg.command as string;
                     const commitHash = msg.commitHash as string;
+                    const commitHashes = Array.isArray(msg.commitHashes)
+                        ? (msg.commitHashes as unknown[]).filter((hash): hash is string => typeof hash === 'string')
+                        : [commitHash];
                     if (!ALLOWED_COMMIT_COMMANDS.has(command)) {
                         await vscode.window.showErrorMessage(`Command is not allowed from Look Git graph: ${command}`);
                         return;
                     }
-                    const commit = await this.gitService.getCommit(commitHash);
+                    const requestedHashes = commitHashes.includes(commitHash)
+                        ? commitHashes
+                        : [commitHash, ...commitHashes];
+                    const uniqueHashes = [...new Set(requestedHashes)];
+                    const commits = await Promise.all(uniqueHashes.map(async (hash) => ({
+                        hash,
+                        commit: await this.gitService.getCommit(hash),
+                    })));
+                    const missing = commits.find((entry) => !entry.commit);
+                    if (missing) {
+                        await vscode.window.showErrorMessage(`Commit not found: ${missing.hash}`);
+                        return;
+                    }
+                    const commit = commits.find((entry) => entry.hash === commitHash)?.commit;
                     if (!commit) {
                         await vscode.window.showErrorMessage(`Commit not found: ${commitHash}`);
                         return;
                     }
-                    await vscode.commands.executeCommand(command, new CommitItem(commit, false));
+                    const selectedItems = commits.map((entry) => new CommitItem(entry.commit!, false));
+                    await vscode.commands.executeCommand(
+                        command,
+                        new CommitItem(commit, false),
+                        selectedItems.length > 1 ? selectedItems : undefined,
+                    );
                     break;
                 }
 

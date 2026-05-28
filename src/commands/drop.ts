@@ -3,6 +3,9 @@ import type { GitService } from '../gitService';
 import type { CommitHistoryProvider } from '../commitHistoryProvider';
 import type { CommitItem } from '../commitItem';
 import { confirmDangerousOperation, selectCommitFromQuickPick, showModalWarningMessage } from '../utils/confirmation';
+import { ensureCommitsOnCurrentBranch, ensureNoMergeCommits, refreshAfterMutation } from './historySafety';
+
+type RepositoryRefreshCallback = () => Promise<void> | void;
 
 async function checkRebaseState(gitService: GitService): Promise<boolean> {
     const inProgress = await gitService.isRebaseInProgress();
@@ -25,7 +28,8 @@ export async function handleDrop(
     gitService: GitService,
     historyProvider: CommitHistoryProvider,
     item?: CommitItem,
-    selectedItems?: CommitItem[]
+    selectedItems?: CommitItem[],
+    refreshRepositoryViews?: RepositoryRefreshCallback,
 ): Promise<void> {
     // Multi-select: drop all selected commits in a single rebase
     const items = selectedItems && selectedItems.length > 1 ? selectedItems : undefined;
@@ -33,6 +37,13 @@ export async function handleDrop(
     if (items) {
         const commits = items.map((i) => i.commitInfo);
         const hashList = commits.map((c) => c.shortHash).join(', ');
+
+        if (!(await ensureNoMergeCommits(commits, 'Drop commits'))) {
+            return;
+        }
+        if (!(await ensureCommitsOnCurrentBranch(gitService, commits, 'Drop commits'))) {
+            return;
+        }
 
         const confirmed = await showModalWarningMessage(
             `Drop ${commits.length} commits (${hashList})? This rewrites history.`,
@@ -71,7 +82,7 @@ export async function handleDrop(
             await vscode.window.showInformationMessage(
                 `Dropped ${commits.length} commits.`
             );
-            historyProvider.refresh();
+            await refreshAfterMutation(historyProvider, refreshRepositoryViews);
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);
             if (message.includes('CONFLICT') || message.includes('conflict')) {
@@ -83,7 +94,7 @@ export async function handleDrop(
                 if (action === 'Abort Rebase') {
                     await gitService.rebaseAbort();
                     await vscode.window.showInformationMessage('Drop aborted, history restored.');
-                    historyProvider.refresh();
+                    await refreshAfterMutation(historyProvider, refreshRepositoryViews);
                 } else if (action === 'Open Source Control') {
                     await vscode.commands.executeCommand('workbench.view.scm');
                 }
@@ -99,6 +110,13 @@ export async function handleDrop(
         ?? await selectCommitFromQuickPick(gitService, 'Select a commit to drop');
 
     if (!commit) {
+        return;
+    }
+
+    if (!(await ensureNoMergeCommits([commit], 'Drop commit'))) {
+        return;
+    }
+    if (!(await ensureCommitsOnCurrentBranch(gitService, [commit], 'Drop commit'))) {
         return;
     }
 
@@ -135,7 +153,7 @@ export async function handleDrop(
         await vscode.window.showInformationMessage(
             `Dropped commit ${commit.shortHash}: "${commit.message}"`
         );
-        historyProvider.refresh();
+        await refreshAfterMutation(historyProvider, refreshRepositoryViews);
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
 
@@ -149,7 +167,7 @@ export async function handleDrop(
             if (action === 'Abort Rebase') {
                 await gitService.rebaseAbort();
                 await vscode.window.showInformationMessage('Drop aborted, history restored.');
-                historyProvider.refresh();
+                await refreshAfterMutation(historyProvider, refreshRepositoryViews);
             } else if (action === 'Open Source Control') {
                 await vscode.commands.executeCommand('workbench.view.scm');
             }

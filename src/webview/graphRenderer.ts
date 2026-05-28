@@ -73,8 +73,8 @@ function renderLine(line: LineDef, cy: number, height: number): string {
     const bendY = line.role === 'merge-parent' ? cy + height * 0.18 : cy + height * 0.26;
     const elbowY = height + 1;
     if (line.type === 'merge-left' || line.type === 'merge-right') {
-        // From this commit's lane, curve down to the parent's lane
-        return `<path ${renderLineAttributes(line)} d="M ${x1} ${midY} C ${x1} ${bendY}, ${x2} ${bendY}, ${x2} ${elbowY}" ` +
+        const startSegment = line.fromTop ? `M ${x1} -1 L ${x1} ${midY}` : `M ${x1} ${midY}`;
+        return `<path ${renderLineAttributes(line)} d="${startSegment} C ${x1} ${bendY}, ${x2} ${bendY}, ${x2} ${elbowY}" ` +
                `stroke="${line.color}" fill="none" />`;
     }
 

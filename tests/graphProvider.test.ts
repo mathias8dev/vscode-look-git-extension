@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { GraphViewProvider } from '../src/graphView/graphPanel';
 import type { GitCommitInfo } from '../src/gitService';
+import type { CommitItem } from '../src/commitItem';
 import { makeWebviewView, resetVscodeMock } from './helpers/providerRuntime';
 
 describe('GraphViewProvider webview messages', () => {
@@ -390,6 +391,72 @@ describe('GraphViewProvider webview messages', () => {
         expect(service.getCommit).toHaveBeenCalledWith(commit.hash);
         expect((vscode.commands as any).calls[0].command).toBe('lookGit.copyCommitHash');
         expect((vscode.commands as any).calls[0].args[0].commitInfo).toEqual(commit);
+    });
+
+    it('allows new graph context menu commands from the webview', async () => {
+        const commit: GitCommitInfo = {
+            hash: 'abc1234567890',
+            shortHash: 'abc1234',
+            message: 'subject',
+            authorName: 'Author',
+            authorEmail: 'a@example.com',
+            authorDate: new Date('2024-01-01T00:00:00Z'),
+            parentHashes: [],
+        };
+        const service = {
+            getCommit: vi.fn(async () => commit),
+        };
+        const provider = new GraphViewProvider(vscode.Uri.file('/ext') as any, service as any);
+
+        await (provider as any).handleMessage({
+            type: 'executeCommand',
+            command: 'lookGit.createPatch',
+            commitHash: commit.hash,
+        });
+
+        expect((vscode.commands as any).calls[0].command).toBe('lookGit.createPatch');
+        expect((vscode.commands as any).calls[0].args[0].commitInfo).toEqual(commit);
+    });
+
+    it('passes selected graph commits to multi-select commands', async () => {
+        const commits: GitCommitInfo[] = [
+            {
+                hash: 'aaa1234567890',
+                shortHash: 'aaa1234',
+                message: 'first',
+                authorName: 'Author',
+                authorEmail: 'a@example.com',
+                authorDate: new Date('2024-01-01T00:00:00Z'),
+                parentHashes: [],
+            },
+            {
+                hash: 'bbb1234567890',
+                shortHash: 'bbb1234',
+                message: 'second',
+                authorName: 'Author',
+                authorEmail: 'a@example.com',
+                authorDate: new Date('2024-01-02T00:00:00Z'),
+                parentHashes: ['aaa1234567890'],
+            },
+        ];
+        const service = {
+            getCommit: vi.fn(async (hash: string) => commits.find((commit) => commit.hash === hash)),
+        };
+        const provider = new GraphViewProvider(vscode.Uri.file('/ext') as any, service as any);
+
+        await (provider as any).handleMessage({
+            type: 'executeCommand',
+            command: 'lookGit.copyCommitHash',
+            commitHash: commits[1].hash,
+            commitHashes: commits.map((commit) => commit.hash),
+        });
+
+        expect((vscode.commands as any).calls[0].command).toBe('lookGit.copyCommitHash');
+        expect((vscode.commands as any).calls[0].args[0].commitInfo).toEqual(commits[1]);
+        expect((vscode.commands as any).calls[0].args[1].map((item: CommitItem) => item.commitInfo.hash)).toEqual([
+            commits[0].hash,
+            commits[1].hash,
+        ]);
     });
 
     it('reports an error when an allowed graph command targets a missing commit', async () => {

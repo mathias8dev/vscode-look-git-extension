@@ -3,6 +3,9 @@ import type { GitService, ResetMode } from '../gitService';
 import type { CommitHistoryProvider } from '../commitHistoryProvider';
 import type { CommitItem } from '../commitItem';
 import { confirmDangerousOperation, selectCommitFromQuickPick } from '../utils/confirmation';
+import { refreshAfterMutation } from './historySafety';
+
+type RepositoryRefreshCallback = () => Promise<void> | void;
 
 interface ResetModeOption {
     label: string;
@@ -14,7 +17,8 @@ interface ResetModeOption {
 export async function handleReset(
     gitService: GitService,
     historyProvider: CommitHistoryProvider,
-    item?: CommitItem
+    item?: CommitItem,
+    refreshRepositoryViews?: RepositoryRefreshCallback,
 ): Promise<void> {
     const commit = item?.commitInfo
         ?? await selectCommitFromQuickPick(gitService, 'Select a commit to reset to');
@@ -64,7 +68,7 @@ export async function handleReset(
         await vscode.window.showInformationMessage(
             `Reset (${selected.mode}) to ${commit.shortHash} successful.`
         );
-        historyProvider.refresh();
+        await refreshAfterMutation(historyProvider, refreshRepositoryViews);
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         await vscode.window.showErrorMessage(`Reset failed: ${message}`);

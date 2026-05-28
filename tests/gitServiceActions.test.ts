@@ -78,6 +78,37 @@ describe('GitService utility methods', () => {
         expect(commit?.hash).toBe(hash);
     });
 
+    it('reports whether commits are reachable from the current HEAD', async () => {
+        const r = repo();
+        r.write('base.txt', 'base');
+        const baseHash = r.commit('base');
+        r.git(['checkout', '-q', '-b', 'feature']);
+        r.write('feature.txt', 'feature');
+        const featureHash = r.commit('feature');
+        r.git(['checkout', '-q', 'main']);
+        r.write('main.txt', 'main');
+        const mainHash = r.commit('main');
+
+        expect(await r.service.isAncestorOfHead(baseHash)).toBe(true);
+        expect(await r.service.isAncestorOfHead(mainHash)).toBe(true);
+        expect(await r.service.isAncestorOfHead(featureHash)).toBe(false);
+        expect(await r.service.getHeadCommitHashes()).toEqual([mainHash, baseHash]);
+    });
+
+    it('rejects history rewrites for commits outside the current branch', async () => {
+        const r = repo();
+        r.write('base.txt', 'base');
+        r.commit('base');
+        r.git(['checkout', '-q', '-b', 'feature']);
+        r.write('feature.txt', 'feature');
+        const featureHash = r.commit('feature');
+        r.git(['checkout', '-q', 'main']);
+        r.write('main.txt', 'main');
+        r.commit('main');
+
+        await expect(r.service.dropCommit(featureHash)).rejects.toThrow(/reachable from the current HEAD/);
+    });
+
     it('drops multiple commits in a single rebase', async () => {
         const r = repo();
         r.write('a.txt', 'a');
@@ -186,4 +217,3 @@ describe('GitService cherry-pick, revert, and reset', () => {
         expect(r.git(['show', 'HEAD:file.txt'])).toBe('one');
     });
 });
-

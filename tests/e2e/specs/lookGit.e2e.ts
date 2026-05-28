@@ -347,7 +347,7 @@ describe('Look Git VS Code E2E', () => {
         await clickFileAction('conflicts/e2e-ours.txt', 'accept-ours-btn');
         await waitForGit(
             () => !splitLines(git(['ls-files', '-u', '--', 'conflicts/e2e-ours.txt'])).length
-                && fs.readFileSync(path.join(repoPath!, 'conflicts/e2e-ours.txt'), 'utf8') === 'current ours\n',
+                && fs.readFileSync(path.join(repoPath!, 'conflicts/e2e-ours.txt'), 'utf8').replace(/\r\n/g, '\n') === 'current ours\n',
             'Expected Accept Current to stage the current version.',
         );
 
@@ -356,7 +356,7 @@ describe('Look Git VS Code E2E', () => {
         await clickFileAction('conflicts/e2e-theirs.txt', 'accept-theirs-btn');
         await waitForGit(
             () => cachedNames().includes('conflicts/e2e-theirs.txt')
-                && fs.readFileSync(path.join(repoPath!, 'conflicts/e2e-theirs.txt'), 'utf8') === 'incoming theirs\n',
+                && fs.readFileSync(path.join(repoPath!, 'conflicts/e2e-theirs.txt'), 'utf8').replace(/\r\n/g, '\n') === 'incoming theirs\n',
             'Expected Accept Incoming to stage the incoming version.',
         );
 

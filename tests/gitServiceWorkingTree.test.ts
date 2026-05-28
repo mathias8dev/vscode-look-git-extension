@@ -231,4 +231,20 @@ describe.sequential('GitService interactive history rewrites', () => {
         expect(r.git(['show', 'HEAD:one.txt'])).toBe('one');
         expect(r.git(['show', 'HEAD:two.txt'])).toBe('two');
     });
+
+    it('uses a custom message when squashing commits', async () => {
+        const r = repo();
+        r.write('base.txt', 'base');
+        r.commit('base');
+        r.write('one.txt', 'one');
+        const oldestHash = r.commit('oldest selected');
+        r.write('two.txt', 'two');
+        const newestHash = r.commit('newest selected');
+
+        await r.service.squashCommits(oldestHash, [newestHash], 'custom squash message');
+
+        expect(messages(r)).toEqual(['custom squash message', 'base']);
+        expect(r.git(['show', 'HEAD:one.txt'])).toBe('one');
+        expect(r.git(['show', 'HEAD:two.txt'])).toBe('two');
+    });
 });
