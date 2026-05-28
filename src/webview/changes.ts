@@ -48,7 +48,7 @@ let stagedCollapsed = false;
 let unstagedCollapsed = false;
 let conflictsCollapsed = false;
 let stashesCollapsed = true;
-let viewAsTree = false;
+let viewAsTree = true;
 
 const stashFileState = new StashFileState<StashFileEntry>();
 const expandedFolders = new Set<string>();
@@ -62,7 +62,7 @@ function loadState(): void {
         unstagedCollapsed = state.unstagedCollapsed ?? false;
         conflictsCollapsed = state.conflictsCollapsed ?? false;
         stashesCollapsed = state.stashesCollapsed ?? true;
-        viewAsTree = state.viewAsTree ?? false;
+        viewAsTree = state.viewAsTree ?? true;
         if (state.expandedFolders) {
             for (const f of state.expandedFolders) { expandedFolders.add(f); }
         }

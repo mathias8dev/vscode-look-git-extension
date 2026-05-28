@@ -74,6 +74,7 @@ describe('Changes webview runtime behavior', () => {
 
         it('renders extension-aware file icons in the list view', async () => {
             await bootWebview(CHANGES_WEBVIEW_MODULE);
+            sendWebviewMessage({ type: 'setViewMode', asTree: false });
             sendWebviewMessage({
                 type: 'statusData',
                 data: {
@@ -453,7 +454,7 @@ describe('Changes webview runtime behavior', () => {
         const api = await bootWebview(CHANGES_WEBVIEW_MODULE);
 
         expect(api.messages).toContainEqual({ type: 'ready' });
-        expect(api.messages).toContainEqual({ type: 'viewModeChanged', asTree: false });
+        expect(api.messages).toContainEqual({ type: 'viewModeChanged', asTree: true });
 
         sendWebviewMessage({
             type: 'statusData',
@@ -514,6 +515,7 @@ describe('Changes webview runtime behavior', () => {
 
     it('renders untrusted file paths and stash messages as text instead of markup', async () => {
         await bootWebview(CHANGES_WEBVIEW_MODULE);
+        sendWebviewMessage({ type: 'setViewMode', asTree: false });
         const unsafePath = 'src/<img src=x onerror="alert(1)">.ts';
         const unsafeStash = '<script>alert("xss")</script>';
 

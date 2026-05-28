@@ -47,8 +47,8 @@ function loadPaneState(): PaneState {
     return {
         branchWidth: state?.branchWidth ?? DEFAULT_BRANCH_WIDTH,
         detailsWidth: state?.detailsWidth ?? DEFAULT_DETAILS_WIDTH,
-        branchViewMode: state?.branchViewMode ?? 'list',
-        filesViewMode: state?.filesViewMode ?? 'list',
+        branchViewMode: state?.branchViewMode ?? 'tree',
+        filesViewMode: state?.filesViewMode ?? 'tree',
         showGraph: state?.showGraph ?? true,
     };
 }

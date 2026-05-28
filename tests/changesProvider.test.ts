@@ -359,7 +359,7 @@ describe('ChangesViewProvider webview messages', () => {
             const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
             (provider as any).view = makeWebviewView();
             await (provider as any).handleMessage({ type: 'openMergeEditor', filePath: 'conflict.txt' });
-            expect((vscode.commands as any).calls[0].command).toBe('merge-conflict.accept.select');
+            expect((vscode.commands as any).calls.some((c: any) => c.command === 'merge-conflict.accept.select')).toBe(true);
         });
 
         it('openMergeEditor falls back to opening the file when the merge command is unavailable', async () => {
@@ -373,7 +373,9 @@ describe('ChangesViewProvider webview messages', () => {
 
             await (provider as any).handleMessage({ type: 'openMergeEditor', filePath: 'conflict.txt' });
 
-            expect((vscode.commands as any).calls.map((c: any) => c.command)).toEqual([
+            expect((vscode.commands as any).calls
+                .map((c: any) => c.command)
+                .filter((command: string) => command !== 'setContext')).toEqual([
                 'merge-conflict.accept.select',
                 'vscode.open',
             ]);
@@ -596,4 +598,3 @@ describe('ChangesViewProvider webview messages', () => {
         expect(calls).toEqual(['accept:a.txt', 'stage:a.txt', 'accept:b.txt', 'stage:b.txt']);
     });
 });
-

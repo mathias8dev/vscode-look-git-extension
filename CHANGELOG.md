@@ -2,7 +2,7 @@
 
 All notable changes to Look Git are documented in this file.
 
-## [0.0.2] - 2026-05-28
+## [1.0.2] - 2026-05-28
 
 ### Added
 
@@ -13,10 +13,13 @@ All notable changes to Look Git are documented in this file.
 
 ### Changed
 
+- Defaulted Commit History, Git Graph, and Changes file views to tree mode while keeping list mode available.
+- Promoted the Commit History tree/list toggle into the visible view title actions.
+- Improved webview styling to better follow injected VS Code theme and font variables.
 - Packaged extension output now excludes development and test artifacts.
 - Extension icons are centralized for reuse across VS Code and webview surfaces.
 
-## [0.0.1] - 2026-02-11
+## [1.0.0] - 2026-02-11
 
 ### Added
 

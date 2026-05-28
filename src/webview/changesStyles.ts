@@ -18,7 +18,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .split-main:hover:not(:disabled) { background: var(--vscode-button-hoverBackground); }
 .split-main:disabled { opacity: 0.5; cursor: default; }
 .split-main svg { width: 14px; height: 14px; flex-shrink: 0; }
-.split-dropdown { width: 26px; display: flex; align-items: center; justify-content: center; padding: 0; border: none; border-left: 1px solid var(--vscode-button-border, rgba(255,255,255,0.2)); background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-radius: 0 3px 3px 0; cursor: pointer; }
+.split-dropdown { width: 26px; display: flex; align-items: center; justify-content: center; padding: 0; border: none; border-left: 1px solid var(--vscode-button-border, transparent); background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-radius: 0 3px 3px 0; cursor: pointer; }
 .split-dropdown:hover { background: var(--vscode-button-hoverBackground); }
 .split-dropdown svg { width: 14px; height: 14px; }
 
@@ -34,13 +34,13 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .empty-state { padding: 24px; text-align: center; color: var(--vscode-descriptionForeground); }
 
 /* Section headers */
-.section-header { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 4px; height: 22px; background: var(--vscode-sideBarSectionHeader-background, transparent); border-bottom: 1px solid var(--vscode-panel-border); position: sticky; top: 0; z-index: 1; }
-.section-title-row { display: flex; align-items: center; gap: 2px; cursor: pointer; flex: 1; min-width: 0; user-select: none; border: 0; background: transparent; color: inherit; font: inherit; height: 100%; text-align: left; }
+.section-header { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 4px; min-height: 22px; line-height: 1.35; background: var(--vscode-sideBarSectionHeader-background, transparent); border-bottom: 1px solid var(--vscode-panel-border); position: sticky; top: 0; z-index: 1; }
+.section-title-row { display: flex; align-items: center; gap: 2px; cursor: pointer; flex: 1; min-width: 0; user-select: none; border: 0; background: transparent; color: inherit; font: inherit; align-self: stretch; text-align: left; }
 .section-title-row:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 .section-chevron { display: flex; align-items: center; flex-shrink: 0; }
 .section-chevron svg { width: 14px; height: 14px; }
 .section-title { font-size: 0.85em; font-weight: 700; text-transform: uppercase; color: var(--vscode-sideBarSectionHeader-foreground, var(--vscode-foreground)); letter-spacing: 0.3px; }
-.section-count { font-size: 0.77em; min-width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); padding: 0 4px; margin-left: 4px; flex-shrink: 0; }
+.section-count { font-size: 0.77em; min-width: 1.6em; min-height: 1.4em; line-height: 1; text-align: center; border-radius: 999px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); padding: 2px 4px; margin-left: 4px; flex-shrink: 0; }
 .section-actions { display: flex; gap: 1px; opacity: 1; }
 
 /* Icon buttons */
@@ -49,7 +49,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .icon-btn svg { width: 16px; height: 16px; }
 
 /* File rows */
-.file-row { display: flex; align-items: center; gap: 4px; padding: 0 8px 0 22px; cursor: pointer; font-size: inherit; height: 22px; }
+.file-row { display: flex; align-items: center; gap: 4px; padding: 0 8px 0 22px; cursor: pointer; font-size: inherit; min-height: 22px; line-height: 1.35; }
 .file-row:hover { background: var(--vscode-list-hoverBackground); }
 .file-actions { visibility: visible; display: flex; gap: 1px; margin-left: auto; flex-shrink: 0; }
 .conflict-file-row .file-actions { visibility: visible; }
@@ -79,7 +79,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .file-dir { color: var(--vscode-descriptionForeground); font-size: 0.85em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 2; margin-left: 4px; }
 
 /* Tree view */
-.tree-folder-row { display: flex; align-items: center; gap: 3px; cursor: pointer; height: 22px; padding-right: 8px; width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
+.tree-folder-row { display: flex; align-items: center; gap: 3px; cursor: pointer; min-height: 22px; line-height: 1.35; padding-right: 8px; width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
 .tree-folder-row:hover { background: var(--vscode-list-hoverBackground); }
 .tree-folder-row:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 .tree-folder-chevron { display: flex; align-items: center; flex-shrink: 0; }
@@ -92,7 +92,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 
 /* Stash rows */
 .stash-row { cursor: pointer; }
-.stash-expand-btn { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1; height: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.stash-expand-btn { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1; align-self: stretch; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .stash-expand-btn:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 .stash-chevron { display: flex; align-items: center; flex-shrink: 0; }
 .stash-chevron svg { width: 14px; height: 14px; }

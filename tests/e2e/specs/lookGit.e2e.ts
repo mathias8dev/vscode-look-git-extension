@@ -44,6 +44,7 @@ describe('Look Git VS Code E2E', () => {
         await openLookGitWorkbench();
         await refreshChanges();
         const changes = await openWebview(/Changes/);
+        await browser.executeWorkbench((vscode: any) => vscode.commands.executeCommand('lookGit.viewAsList'));
 
         await $('.file-row[data-file="src/dirty.txt"]').waitForExist();
         await $('#commit-message').setValue('message without staged files');
@@ -115,6 +116,9 @@ describe('Look Git VS Code E2E', () => {
         await refreshChanges();
         const changes = await openWebview(/Changes/);
 
+        await browser.executeWorkbench((vscode: any) => vscode.commands.executeCommand('lookGit.viewAsTree'));
+        await $('.tree-folder-row[data-folder-key="unstaged:bulk"]').waitForExist();
+        await browser.executeWorkbench((vscode: any) => vscode.commands.executeCommand('lookGit.viewAsList'));
         await $('.file-row[data-file="bulk/a.txt"]').waitForExist();
         await clickSectionAction('unstaged', '#stage-all-btn');
         await waitForGit(
@@ -161,6 +165,7 @@ describe('Look Git VS Code E2E', () => {
         writeFixtureFile('src/e2e-stash-untracked.txt', 'stash untracked from ui\n');
         await refreshChanges();
         let changes = await openWebview(/Changes/);
+        await browser.executeWorkbench((vscode: any) => vscode.commands.executeCommand('lookGit.viewAsList'));
         await $('.file-row[data-file="src/e2e-stash-untracked.txt"]').waitForExist();
         await clickSectionAction('unstaged', '#stash-btn');
         await waitForGit(
@@ -183,6 +188,7 @@ describe('Look Git VS Code E2E', () => {
         writeFixtureFile('src/e2e-stash-apply.txt', 'stash apply from ui\n');
         await refreshChanges();
         changes = await openWebview(/Changes/);
+        await browser.executeWorkbench((vscode: any) => vscode.commands.executeCommand('lookGit.viewAsList'));
         await $('.file-row[data-file="src/e2e-stash-apply.txt"]').waitForExist();
         await clickSectionAction('unstaged', '#stash-btn');
         await waitForGit(
@@ -225,6 +231,7 @@ describe('Look Git VS Code E2E', () => {
         writeFixtureFile('src/e2e-stash-pop.txt', 'stash pop from ui\n');
         await refreshChanges();
         changes = await openWebview(/Changes/);
+        await browser.executeWorkbench((vscode: any) => vscode.commands.executeCommand('lookGit.viewAsList'));
         await $('.file-row[data-file="src/e2e-stash-pop.txt"]').waitForExist();
         await clickSectionAction('unstaged', '#stash-btn');
         await waitForGit(
@@ -415,6 +422,7 @@ describe('Look Git VS Code E2E', () => {
             await openLookGitWorkbench();
             await refreshChanges();
             await openWebview(/Changes/);
+            await browser.executeWorkbench((vscode: any) => vscode.commands.executeCommand('lookGit.viewAsList'));
             await $('.file-row[data-file="modules/e2e-child"]').waitForExist();
 
             await clickFileAction('modules/e2e-child', 'stage-btn');

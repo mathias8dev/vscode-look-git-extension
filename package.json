@@ -2,7 +2,7 @@
   "name": "look-git",
   "displayName": "Look Git",
   "description": "Advanced Git operations: cherry-pick, rebase, reset, revert, drop, and rename commits",
-  "version": "0.0.2",
+  "version": "1.0.2",
   "publisher": "mathias8dev",
   "engines": {
     "vscode": "^1.85.0"
@@ -249,12 +249,14 @@
       {
         "command": "lookGit.historyViewAsTree",
         "title": "Tree",
-        "category": "Look Git"
+        "category": "Look Git",
+        "icon": "$(list-tree)"
       },
       {
         "command": "lookGit.historyViewAsList",
         "title": "List",
-        "category": "Look Git"
+        "category": "Look Git",
+        "icon": "$(list-flat)"
       },
       {
         "command": "lookGit.historyViewAsTreeActive",
@@ -293,6 +295,16 @@
           "command": "lookGit.openGraph",
           "when": "view == lookGit.commitHistory || view == lookGit.graphView",
           "group": "navigation"
+        },
+        {
+          "command": "lookGit.historyViewAsTree",
+          "when": "view == lookGit.commitHistory && !lookGit.historyViewAsTree",
+          "group": "navigation@3"
+        },
+        {
+          "command": "lookGit.historyViewAsList",
+          "when": "view == lookGit.commitHistory && lookGit.historyViewAsTree",
+          "group": "navigation@3"
         },
         {
           "submenu": "lookGit.historyView.viewAs",

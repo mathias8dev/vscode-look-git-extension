@@ -10,13 +10,14 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     private view?: vscode.WebviewView;
     private readonly gitService: GitService;
     private readonly extensionUri: vscode.Uri;
-    private viewAsTree = false;
+    private viewAsTree = true;
     private pendingRefresh = false;
     private refreshPromise?: Promise<void>;
 
     constructor(extensionUri: vscode.Uri, gitService: GitService) {
         this.extensionUri = extensionUri;
         this.gitService = gitService;
+        void vscode.commands.executeCommand('setContext', 'lookGit.viewAsTree', true);
     }
 
     public setViewMode(asTree: boolean): void {

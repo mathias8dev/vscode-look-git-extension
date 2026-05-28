@@ -378,6 +378,7 @@ describe('Graph webview runtime behavior', () => {
             },
         });
 
+        click('.view-switch-btn[data-mode="list"]');
         const listCurrent = document.querySelector<HTMLElement>('.branch-item.current[data-branch="main"]');
         expect(listCurrent).not.toBeNull();
         expect(listCurrent?.querySelector('.current-branch-indicator')?.getAttribute('aria-label')).toBe('Current branch');
@@ -432,6 +433,7 @@ describe('Graph webview runtime behavior', () => {
             fullMessage: '<img src=x onerror="details()">',
             files: [{ status: 'M', filePath: 'src/<script>file</script>.ts' }],
         });
+        click('[data-files-mode="list"]');
 
         expect(document.querySelector('img')).toBeNull();
         expect(document.querySelector('script')).toBeNull();
