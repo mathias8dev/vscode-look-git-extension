@@ -1,23 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-  <!-- Git rounded diamond (thin outline) -->
-  <rect x="5" y="5" width="14" height="14" rx="3" ry="3"
-        transform="rotate(45 12 12)" stroke="#C5C5C5" stroke-width="0.8" fill="none"/>
-
-  <!-- Main diagonal branch line -->
-  <line x1="7.5" y1="16.5" x2="16.5" y2="7.5" stroke="#C5C5C5" stroke-width="0.8" stroke-linecap="round"/>
-  <!-- Side branch -->
-  <line x1="12" y1="12" x2="8.5" y2="8.5" stroke="#C5C5C5" stroke-width="0.8" stroke-linecap="round"/>
-
-  <!-- Commit nodes (small filled dots) -->
-  <circle cx="9" cy="15" r="1.2" fill="#C5C5C5"/>
-  <circle cx="15" cy="9" r="1.2" fill="#C5C5C5"/>
-  <circle cx="9" cy="9" r="1.2" fill="#C5C5C5"/>
-
-  <!-- First + -->
-  <line x1="17" y1="19" x2="19.5" y2="19" stroke="#C5C5C5" stroke-width="0.8" stroke-linecap="round"/>
-  <line x1="18.25" y1="17.75" x2="18.25" y2="20.25" stroke="#C5C5C5" stroke-width="0.8" stroke-linecap="round"/>
-
-  <!-- Second + -->
-  <line x1="20.5" y1="19" x2="23" y2="19" stroke="#C5C5C5" stroke-width="0.8" stroke-linecap="round"/>
-  <line x1="21.75" y1="17.75" x2="21.75" y2="20.25" stroke="#C5C5C5" stroke-width="0.8" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor">
+  <!-- Magnifying glass lens -->
+  <path fill-rule="evenodd" clip-rule="evenodd"
+    d="M6.5 1a5.5 5.5 0 1 0 3.47 9.823l3.603 3.604a.75.75 0 1 0 1.06-1.06L11.03 9.763A5.5 5.5 0 0 0 6.5 1zM2.5 6.5a4 4 0 1 1 8 0 4 4 0 0 1-8 0z"/>
+  <!-- Commit dot (main, center of lens) -->
+  <circle cx="6.5" cy="6.5" r="1.1"/>
+  <!-- Branch line up-left -->
+  <rect x="6" y="3.3" width="1" height="2.4" rx="0.5"/>
+  <!-- Branch line down -->
+  <rect x="6" y="7" width="1" height="2.2" rx="0.5"/>
+  <!-- Feature branch node (upper right) -->
+  <circle cx="8.8" cy="3.8" r="0.9"/>
+  <!-- Feature branch line -->
+  <path d="M7 5.6 C7 4.4 8.8 4.4 8.8 3.8" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/>
+  <!-- Top commit dot -->
+  <circle cx="6.5" cy="3.1" r="0.9"/>
+  <!-- Bottom commit dot -->
+  <circle cx="6.5" cy="9.4" r="0.9"/>
 </svg>
