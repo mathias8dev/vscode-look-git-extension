@@ -4,6 +4,8 @@ import { createRichHistoryFixture } from '../helpers/gitRepo';
 
 const root = process.cwd();
 const fixture = createRichHistoryFixture({ commitCount: 120, dirty: true }).repo;
+const wdioPackageJson = require.resolve('@wdio/cli/package.json');
+const wdioBin = path.join(path.dirname(wdioPackageJson), 'bin/wdio.js');
 
 function createCleanEnvironment(repoPath: string): NodeJS.ProcessEnv {
     const env = { ...process.env };
@@ -18,8 +20,8 @@ function createCleanEnvironment(repoPath: string): NodeJS.ProcessEnv {
 
 try {
     const result = spawnSync(
-        process.platform === 'win32' ? 'npx.cmd' : 'npx',
-        ['wdio', 'run', path.join(root, 'tests/e2e/wdio.conf.js')],
+        process.execPath,
+        [wdioBin, 'run', path.join(root, 'tests/e2e/wdio.conf.js')],
         {
             cwd: root,
             stdio: 'inherit',
