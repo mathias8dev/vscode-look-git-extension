@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Package and release
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main')
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Read package version
+        id: package
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          name="$(node -p "require('./package.json').name")"
+          display_name="$(node -p "require('./package.json').displayName || require('./package.json').name")"
+          tag="v${version}"
+          vsix="${name}-${version}.vsix"
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "display_name=${display_name}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "vsix=${vsix}" >> "$GITHUB_OUTPUT"
+
+      - name: Check existing release
+        id: existing_release
+        shell: bash
+        run: |
+          if gh release view "${{ steps.package.outputs.tag }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release ${{ steps.package.outputs.tag }} already exists."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.existing_release.outputs.exists != 'true'
+        run: npm ci
+
+      - name: Package extension
+        if: steps.existing_release.outputs.exists != 'true'
+        run: npm run vsix -- --out "${{ steps.package.outputs.vsix }}"
+
+      - name: Create tag
+        if: steps.existing_release.outputs.exists != 'true'
+        shell: bash
+        run: |
+          tag="${{ steps.package.outputs.tag }}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "Tag ${tag} already exists."
+          else
+            git tag "${tag}" "$(git rev-parse HEAD)"
+            git push origin "refs/tags/${tag}"
+          fi
+
+      - name: Create GitHub release
+        if: steps.existing_release.outputs.exists != 'true'
+        run: |
+          gh release create "${{ steps.package.outputs.tag }}" \
+            "${{ steps.package.outputs.vsix }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "${{ steps.package.outputs.display_name }} ${{ steps.package.outputs.tag }}" \
+            --generate-notes
