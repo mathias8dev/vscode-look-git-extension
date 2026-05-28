@@ -2,7 +2,7 @@
   "name": "look-git",
   "displayName": "Look Git",
   "description": "Advanced Git operations: cherry-pick, rebase, reset, revert, drop, and rename commits",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "publisher": "mathias8dev",
   "engines": {
     "vscode": "^1.85.0"
@@ -915,6 +915,7 @@
     "package": "npm run check-types && node scripts/clean-dist.js && node esbuild.js --production",
     "vsix": "vsce package --allow-missing-repository --no-dependencies",
     "lint": "npm run check-types",
+    "generate:file-icons": "node scripts/generate-file-icon-assets.js",
     "preview:icons": "node scripts/generate-icon-preview.js",
     "test": "npm run compile && vitest run",
     "test:integration:compile": "tsc -p tsconfig.integration.json",
@@ -925,6 +926,7 @@
     "test:ci": "npm run lint && npm run test && npm run test:integration && npm run test:e2e"
   },
   "devDependencies": {
+    "@iconify/icons-vscode-icons": "^1.2.29",
     "@types/mocha": "^10.0.10",
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",

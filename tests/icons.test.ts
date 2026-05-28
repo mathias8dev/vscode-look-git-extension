@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { describe, expect, it } from 'vitest';
 import {
-    getFileIconInfo,
+    FILE_ICON_IDS,
+    getFileIconId,
     ICON_BRANCH,
     ICON_INCOMING_CHANGES,
     renderFileTypeIcon,
@@ -44,19 +45,34 @@ describe('centralized icons', () => {
     it('exposes reusable webview icons with the classes expected by the UI', () => {
         expect(ICON_BRANCH).toContain('tree-branch-icon');
         expect(ICON_INCOMING_CHANGES).toContain('branch-incoming-icon');
-        expect(renderFileTypeIcon('src/index.ts')).toContain('file-icon');
+        const typescriptIcon = renderFileTypeIcon('src/index.ts');
+        expect(typescriptIcon).toContain('file-icon');
+        expect(typescriptIcon).toContain('data-icon="typescript"');
+        expect(typescriptIcon).not.toContain('<text');
     });
 
     it('keeps file icon semantics centralized for special names and unknown extensions', () => {
-        expect(getFileIconInfo('Dockerfile')).toEqual({ color: '#384d54', letter: 'Dk' });
-        expect(getFileIconInfo('.env.local')).toEqual({ color: '#6a737d', letter: 'Ev' });
-        expect(getFileIconInfo('package.json')).toEqual({ color: '#cb3837', letter: 'Npm' });
-        expect(getFileIconInfo('vite.config.ts')).toEqual({ color: '#646cff', letter: 'Vi' });
-        expect(getFileIconInfo('README.fr.md')).toEqual({ color: '#519aba', letter: 'M' });
-        expect(getFileIconInfo('src/App.vue')).toEqual({ color: '#41b883', letter: 'V' });
-        expect(getFileIconInfo('assets/logo.svg')).toEqual({ color: '#ffb13b', letter: 'Sv' });
-        expect(getFileIconInfo('docs/spec.pdf')).toEqual({ color: '#d73a49', letter: 'Pdf' });
-        expect(getFileIconInfo('archive.unknown')).toEqual({ color: '#6a737d', letter: 'F' });
+        expect(getFileIconId('Dockerfile')).toBe('docker');
+        expect(getFileIconId('.env.local')).toBe('dotenv');
+        expect(getFileIconId('package.json')).toBe('npm');
+        expect(getFileIconId('vite.config.ts')).toBe('vite');
+        expect(getFileIconId('README.fr.md')).toBe('markdown');
+        expect(getFileIconId('src/App.vue')).toBe('vue');
+        expect(getFileIconId('assets/logo.svg')).toBe('svg');
+        expect(getFileIconId('docs/spec.pdf')).toBe('pdf');
+        expect(getFileIconId('archive.unknown')).toBe('file');
+    });
+
+    it('has matching packaged SVG assets for tree view file icons', () => {
+        const repoRoot = process.cwd();
+        const iconAssetDir = path.join(repoRoot, 'resources', 'file-icons');
+        const expectedAssets = [...FILE_ICON_IDS, 'folder', 'folder-opened'];
+
+        for (const iconId of expectedAssets) {
+            const iconPath = path.join(iconAssetDir, `${iconId}.svg`);
+            expect(fs.existsSync(iconPath), iconPath).toBe(true);
+            expect(fs.readFileSync(iconPath, 'utf8')).not.toContain('<text');
+        }
     });
 
     it('centralizes extension host codicon labels', () => {

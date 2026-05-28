@@ -17,7 +17,7 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
     private viewAsTree = true;
     private readonly commitFilesCache = new Map<string, Promise<GitFileChange[]>>();
 
-    constructor(private gitService: GitService) {
+    constructor(private gitService: GitService, private readonly extensionUri?: vscode.Uri) {
         this.pageSize = vscode.workspace.getConfiguration('lookGit').get('maxCommits', 50);
         void vscode.commands.executeCommand('setContext', 'lookGit.historyViewAsTree', true);
     }
@@ -86,7 +86,7 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
 
                 // Flat list: sort by full path, show directory in description
                 const sorted = [...files].sort((a, b) => a.filePath.localeCompare(b.filePath));
-                return sorted.map(f => new FileChangeItem(f, element.commitInfo.hash, repoRoot, true));
+                return sorted.map(f => new FileChangeItem(f, element.commitInfo.hash, repoRoot, true, this.extensionUri));
             } catch (error) {
                 const msg = error instanceof Error ? error.message : String(error);
                 console.error(`Look Git: failed to get files for ${element.commitInfo.shortHash}: ${msg}`);
@@ -155,13 +155,13 @@ export class CommitHistoryProvider implements vscode.TreeDataProvider<TreeItem> 
         // Folders first (sorted alphabetically)
         const sortedFolders = [...node.children.entries()].sort(([a], [b]) => a.localeCompare(b));
         for (const [, child] of sortedFolders) {
-            items.push(new FolderItem(child, commitHash, repoRoot));
+            items.push(new FolderItem(child, commitHash, repoRoot, this.extensionUri));
         }
 
         // Then files (sorted alphabetically)
         const sortedFiles = [...node.files].sort((a, b) => a.filePath.localeCompare(b.filePath));
         for (const file of sortedFiles) {
-            items.push(new FileChangeItem(file, commitHash, repoRoot));
+            items.push(new FileChangeItem(file, commitHash, repoRoot, false, this.extensionUri));
         }
 
         return items;

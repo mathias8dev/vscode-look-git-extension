@@ -86,7 +86,7 @@ describe('Changes webview runtime behavior', () => {
                 },
             });
 
-            expect(document.querySelector('.file-row[data-file="src/index.ts"] svg.file-icon text')?.textContent).toBe('TS');
+            expect(document.querySelector('.file-row[data-file="src/index.ts"] svg.file-icon[data-icon="typescript"]')).not.toBeNull();
         });
     });
 
@@ -131,7 +131,7 @@ describe('Changes webview runtime behavior', () => {
         });
 
         it('renders extension-aware file icons for conflicts', () => {
-            expect(document.querySelector('.conflict-file-row[data-file="conflict.txt"] svg.file-icon text')?.textContent).toBe('F');
+            expect(document.querySelector('.conflict-file-row[data-file="conflict.txt"] svg.file-icon[data-icon="text"]')).not.toBeNull();
         });
     });
 
@@ -239,7 +239,7 @@ describe('Changes webview runtime behavior', () => {
             });
 
             expect(document.querySelectorAll('.stash-file-row').length).toBeGreaterThan(0);
-            expect(document.querySelector('.stash-file-row[data-file="stashed.ts"] svg.file-icon text')?.textContent).toBe('TS');
+            expect(document.querySelector('.stash-file-row[data-file="stashed.ts"] svg.file-icon[data-icon="typescript"]')).not.toBeNull();
         });
 
         it('clears expanded stash file cache when the stash list changes', async () => {
@@ -422,7 +422,7 @@ describe('Changes webview runtime behavior', () => {
             sendWebviewMessage(NESTED_STATUS_DATA);
             click('.tree-folder-row');
             expect(document.querySelectorAll('.tree-file-row').length).toBe(1);
-            expect(document.querySelector('.tree-file-row[data-file="src/commands/index.ts"] svg.file-icon text')?.textContent).toBe('TS');
+            expect(document.querySelector('.tree-file-row[data-file="src/commands/index.ts"] svg.file-icon[data-icon="typescript"]')).not.toBeNull();
         });
 
         it('clicking tree-folder-row twice collapses back', async () => {

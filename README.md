@@ -62,3 +62,4 @@ After the `CI` workflow succeeds on `main`, GitHub Actions will package the exte
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE).
+Third-party notices are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

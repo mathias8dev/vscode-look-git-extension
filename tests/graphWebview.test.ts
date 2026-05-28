@@ -82,7 +82,7 @@ describe('Graph webview runtime behavior', () => {
                 parentHash: 'parent123',
             }],
         });
-        expect(document.querySelector('.file-item[data-file="src/new.ts"] svg.file-icon text')?.textContent).toBe('TS');
+        expect(document.querySelector('.file-item[data-file="src/new.ts"] svg.file-icon[data-icon="typescript"]')).not.toBeNull();
         click('.file-item');
 
         expect(api.messages).toContainEqual({
@@ -96,7 +96,7 @@ describe('Graph webview runtime behavior', () => {
 
         api.messages.length = 0;
         click('[data-files-mode="tree"]');
-        expect(document.querySelector('.file-tree-item[data-file="src/new.ts"] svg.file-icon text')?.textContent).toBe('TS');
+        expect(document.querySelector('.file-tree-item[data-file="src/new.ts"] svg.file-icon[data-icon="typescript"]')).not.toBeNull();
         click('.file-tree-item[data-file="src/new.ts"]');
 
         expect(api.messages).toContainEqual({

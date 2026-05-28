@@ -2,6 +2,14 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [1.1.1] - 2026-05-29
+
+### Changed
+
+- Replaced generated text-based file icons with real `vscode-icons` SVG icons in Changes and Git Graph webviews.
+- Reused the same packaged file and folder SVG icons in Commit History while keeping the native VS Code TreeView behavior.
+- Added third-party notices for bundled icon assets.
+
 ## [1.1.0] - 2026-05-29
 
 ### Added

@@ -36,7 +36,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const repository = getActiveRepository();
 
     const gitService = new GitService(repository?.rootUri.fsPath ?? '');
-    const commitHistoryProvider = new CommitHistoryProvider(gitService);
+    const commitHistoryProvider = new CommitHistoryProvider(gitService, context.extensionUri);
 
     const treeView = vscode.window.createTreeView('lookGit.commitHistory', {
         treeDataProvider: commitHistoryProvider,

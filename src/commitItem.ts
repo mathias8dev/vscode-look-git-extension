@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import type { GitCommitInfo, GitFileChange } from './gitService';
 import { commitThemeIcon, fileThemeIcon, folderThemeIcon, loadMoreThemeIcon } from './icons/vscodeIcons';
+import { fileTreeIconUri, folderTreeIconUri } from './icons/treeFileIcons';
 
 export class CommitItem extends vscode.TreeItem {
     public readonly commitInfo: GitCommitInfo;
@@ -64,7 +65,13 @@ export class FileChangeItem extends vscode.TreeItem {
     public readonly fileChange: GitFileChange;
     public readonly commitHash: string;
 
-    constructor(fileChange: GitFileChange, commitHash: string, repoRoot: string, showFullPath = false) {
+    constructor(
+        fileChange: GitFileChange,
+        commitHash: string,
+        repoRoot: string,
+        showFullPath = false,
+        extensionUri?: vscode.Uri,
+    ) {
         const fileName = path.basename(fileChange.filePath);
         super(fileName, vscode.TreeItemCollapsibleState.None);
 
@@ -82,9 +89,10 @@ export class FileChangeItem extends vscode.TreeItem {
             ? `${dirPath} • ${statusLabel}`
             : statusLabel;
 
-        // Apply decorations color to the label
         const color = STATUS_COLORS[fileChange.status];
-        if (color) {
+        if (extensionUri) {
+            this.iconPath = fileTreeIconUri(fileChange.filePath, extensionUri);
+        } else if (color) {
             this.iconPath = fileThemeIcon();
         }
 
@@ -145,7 +153,7 @@ export class FolderItem extends vscode.TreeItem {
     public readonly commitHash: string;
     public readonly repoRoot: string;
 
-    constructor(folderNode: FolderNode, commitHash: string, repoRoot: string) {
+    constructor(folderNode: FolderNode, commitHash: string, repoRoot: string, extensionUri?: vscode.Uri) {
         super(folderNode.name, vscode.TreeItemCollapsibleState.Expanded);
 
         this.folderNode = folderNode;
@@ -156,7 +164,7 @@ export class FolderItem extends vscode.TreeItem {
 
         // Use resourceUri so VS Code resolves the folder icon from the user's icon theme
         this.resourceUri = vscode.Uri.file(path.join(repoRoot, folderNode.fullPath));
-        this.iconPath = folderThemeIcon();
+        this.iconPath = extensionUri ? folderTreeIconUri(extensionUri) : folderThemeIcon();
 
         this.tooltip = folderNode.fullPath;
     }

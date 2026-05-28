@@ -111,6 +111,14 @@ describe('FileChangeItem', () => {
         }
     });
 
+    it('uses packaged vscode-icons assets when an extension URI is provided', () => {
+        const change: GitFileChange = { status: 'M', filePath: 'src/file.ts' };
+        const extensionUri = vscode.Uri.file('/extension');
+        const item = new FileChangeItem(change, 'abc1234', repoRoot, false, extensionUri);
+
+        expect((item.iconPath as vscode.Uri).path).toBe('/extension/resources/file-icons/typescript.svg');
+    });
+
     it('uses the parentHash in the left-side URI for deleted files when provided', () => {
         const change: GitFileChange = { status: 'D', filePath: 'src/old.ts', parentHash: 'parent123' };
         const item = new FileChangeItem(change, 'abc1234', repoRoot);
@@ -158,6 +166,14 @@ describe('FolderItem', () => {
         const node = { name: 'commands', fullPath: 'src/commands', children: new Map(), files: [] };
         const item = new FolderItem(node, 'abc1234', '/repo');
         expect(item.tooltip).toBe('src/commands');
+    });
+
+    it('uses packaged vscode-icons folder assets when an extension URI is provided', () => {
+        const node = { name: 'commands', fullPath: 'src/commands', children: new Map(), files: [] };
+        const extensionUri = vscode.Uri.file('/extension');
+        const item = new FolderItem(node, 'abc1234', '/repo', extensionUri);
+
+        expect((item.iconPath as vscode.Uri).path).toBe('/extension/resources/file-icons/folder.svg');
     });
 });
 
