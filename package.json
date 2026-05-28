@@ -18,6 +18,10 @@
     "revert",
     "interactive rebase"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mathias8dev/vscode-look-git-extension.git"
+  },
   "main": "./dist/extension.js",
   "extensionDependencies": [
     "vscode.git"
