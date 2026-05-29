@@ -527,6 +527,21 @@ h1 {
     display: grid;
 }
 
+.show-more-changes {
+    justify-self: stretch;
+    min-height: 28px;
+    margin: 4px 12px;
+    border: 1px solid var(--vscode-button-border, transparent);
+    border-radius: 4px;
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, #cccccc));
+    background: var(--vscode-button-secondaryBackground, transparent);
+    font: inherit;
+}
+
+.show-more-changes:hover {
+    background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.1)));
+}
+
 .change-row {
     --depth: 0;
     display: grid;

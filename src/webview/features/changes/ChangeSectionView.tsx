@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { bulkActionsFor, type ChangeBulkAction, type ChangeRowAction } from './changeCommands';
 import { buildChangeTree, type ChangeListItem, type ChangeSection } from './changeTree';
 import type { ChangeSelectionMode, ChangesViewMode } from './changesState';
+import { CHANGE_SECTION_PAGE_SIZE, visibleChangeItems } from './changePagination';
 import { ChangeRow } from './ChangeRow';
 import { TreeNodeView } from './TreeNodeView';
 
@@ -25,8 +27,10 @@ export function ChangeSectionView({
     onRowAction,
     onBulkAction,
 }: ChangeSectionViewProps) {
+    const [visibleLimit, setVisibleLimit] = useState(CHANGE_SECTION_PAGE_SIZE);
     if (section.items.length === 0) { return null; }
-    const tree = buildChangeTree(section.items);
+    const visible = visibleChangeItems(section.items, visibleLimit);
+    const tree = buildChangeTree(visible.items);
     const bulkActions = bulkActionsFor(section);
     return (
         <section className="change-section" aria-labelledby={`${section.id}-title`}>
@@ -66,7 +70,7 @@ export function ChangeSectionView({
                             onRowAction={onRowAction}
                         />
                     ))
-                    : section.items.map((item) => (
+                    : visible.items.map((item) => (
                         <ChangeRow
                             key={item.id}
                             item={item}
@@ -76,6 +80,15 @@ export function ChangeSectionView({
                             onAction={onRowAction}
                         />
                     ))}
+                {visible.hasMore ? (
+                    <button
+                        type="button"
+                        className="show-more-changes"
+                        onClick={() => setVisibleLimit(visible.nextLimit)}
+                    >
+                        Show more
+                    </button>
+                ) : null}
             </div>
         </section>
     );
