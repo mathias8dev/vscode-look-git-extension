@@ -175,6 +175,25 @@ describe('ChangesViewProvider', () => {
         await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalledTimes(2));
     });
 
+    it('posts a missing repository status when no repository is active', async () => {
+        const provider = makeProvider(undefined);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual({
+            type: 'changes/statusData',
+            data: {
+                repositoryState: 'missing',
+                staged: [],
+                unstaged: [],
+                conflicts: [],
+                conflictState: 'none',
+                stashes: [],
+            },
+        }));
+        expect(view.badge?.value).toBe(0);
+    });
+
     it('stageFile calls repo.stageFile and refreshes', async () => {
         const repo = makeRepo();
         const provider = makeProvider(repo);
@@ -183,6 +202,21 @@ describe('ChangesViewProvider', () => {
         view.messageHandler?.({ type: 'changes/stageFile', filePath: 'src/app.ts' });
         await vi.waitFor(() => expect(repo.stageFile).toHaveBeenCalledWith('src/app.ts'));
         await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalledTimes(2));
+    });
+
+    it('batch file commands call git once per file and refresh once', async () => {
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/stageFiles', filePaths: ['a.ts', 'b.ts'] });
+        await vi.waitFor(() => expect(repo.stageFile).toHaveBeenCalledWith('a.ts'));
+        await vi.waitFor(() => expect(repo.stageFile).toHaveBeenCalledWith('b.ts'));
+
+        view.messageHandler?.({ type: 'changes/unstageFiles', filePaths: ['c.ts', 'd.ts'] });
+        await vi.waitFor(() => expect(repo.unstageFile).toHaveBeenCalledWith('c.ts'));
+        await vi.waitFor(() => expect(repo.unstageFile).toHaveBeenCalledWith('d.ts'));
     });
 
     it('stageFile failure posts a protocol error', async () => {
@@ -240,6 +274,17 @@ describe('ChangesViewProvider', () => {
         await vi.waitFor(() => expect(repo.discardFile).toHaveBeenCalledWith('src/file.ts'));
     });
 
+    it('discardFiles confirmed discards selected files', async () => {
+        setWarningChoice('Discard');
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'changes/discardFiles', filePaths: ['src/a.ts', 'src/b.ts'] });
+        await vi.waitFor(() => expect(repo.discardFile).toHaveBeenCalledWith('src/a.ts'));
+        await vi.waitFor(() => expect(repo.discardFile).toHaveBeenCalledWith('src/b.ts'));
+    });
+
     it('accepts conflict sides and stages the resolved file', async () => {
         const repo = makeRepo();
         const provider = makeProvider(repo);
@@ -256,6 +301,7 @@ describe('ChangesViewProvider', () => {
     });
 
     it('accepts incoming changes for every conflict', async () => {
+        setWarningChoice('Accept All Theirs');
         const repo = makeRepo({
             getStatus: vi.fn(async () => ({
                 staged: [],
@@ -277,6 +323,23 @@ describe('ChangesViewProvider', () => {
         await vi.waitFor(() => expect(repo.acceptTheirs).toHaveBeenCalledWith('src/b.ts'));
         await vi.waitFor(() => expect(repo.stageFile).toHaveBeenCalledWith('src/a.ts'));
         await vi.waitFor(() => expect(repo.stageFile).toHaveBeenCalledWith('src/b.ts'));
+    });
+
+    it('routes batch conflict commands to each selected file', async () => {
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/acceptOursFiles', filePaths: ['src/a.ts', 'src/b.ts'] });
+        await vi.waitFor(() => expect(repo.acceptOurs).toHaveBeenCalledWith('src/a.ts'));
+        await vi.waitFor(() => expect(repo.acceptOurs).toHaveBeenCalledWith('src/b.ts'));
+
+        view.messageHandler?.({ type: 'changes/acceptTheirsFiles', filePaths: ['src/c.ts'] });
+        await vi.waitFor(() => expect(repo.acceptTheirs).toHaveBeenCalledWith('src/c.ts'));
+
+        view.messageHandler?.({ type: 'changes/markResolvedFiles', filePaths: ['src/d.ts'] });
+        await vi.waitFor(() => expect(repo.stageFile).toHaveBeenCalledWith('src/d.ts'));
     });
 
     it('continues and aborts active merge or rebase operations', async () => {

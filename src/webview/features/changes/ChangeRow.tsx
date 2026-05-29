@@ -1,20 +1,38 @@
+import type { MouseEvent } from 'react';
 import type { StatusEntry } from '../../../protocol/changes/types';
 import { rowActionsFor, type ChangeRowAction } from './changeCommands';
 import { statusLabel, type ChangeListItem } from './changeTree';
+import type { ChangeSelectionMode } from './changesState';
 import { depthStyle } from './viewStyles';
 
 interface ChangeRowProps {
     readonly item: ChangeListItem;
     readonly depth: number;
+    readonly selected: boolean;
+    readonly onSelect: (item: ChangeListItem, mode: ChangeSelectionMode) => void;
     readonly onAction: (item: ChangeListItem, action: ChangeRowAction) => void;
 }
 
-export function ChangeRow({ item, depth, onAction }: ChangeRowProps) {
+export function ChangeRow({ item, depth, selected, onSelect, onAction }: ChangeRowProps) {
     const entry = item.entry;
     const actions = rowActionsFor(item);
     return (
-        <article className="change-row" style={depthStyle(depth)} title={entry.filePath}>
+        <article
+            className="change-row"
+            style={depthStyle(depth)}
+            title={entry.filePath}
+            aria-selected={selected}
+            tabIndex={0}
+            onClick={(event) => onSelect(item, selectionModeFromEvent(event))}
+            onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onSelect(item, event.shiftKey ? 'range' : event.ctrlKey || event.metaKey ? 'toggle' : 'replace');
+                }
+            }}
+        >
             <span className={`status-dot status-${statusKind(entry)}`} aria-hidden="true" />
+            <span className="status-code">{statusCode(entry)}</span>
             <span className="file-main">{fileName(entry.filePath)}</span>
             <span className="file-path">{parentPath(entry)}</span>
             <span className="status-label">{statusLabel(entry)}</span>
@@ -24,7 +42,10 @@ export function ChangeRow({ item, depth, onAction }: ChangeRowProps) {
                         key={descriptor.action}
                         type="button"
                         title={descriptor.title}
-                        onClick={() => onAction(item, descriptor.action)}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onAction(item, descriptor.action);
+                        }}
                     >
                         {descriptor.label}
                     </button>
@@ -32,6 +53,12 @@ export function ChangeRow({ item, depth, onAction }: ChangeRowProps) {
             </div>
         </article>
     );
+}
+
+function selectionModeFromEvent(event: MouseEvent<HTMLElement>): ChangeSelectionMode {
+    if (event.shiftKey) { return 'range'; }
+    if (event.ctrlKey || event.metaKey) { return 'toggle'; }
+    return 'replace';
 }
 
 function fileName(filePath: string): string {
@@ -44,6 +71,11 @@ function parentPath(entry: StatusEntry): string {
     const parent = parts.join('/');
     if (entry.origPath) { return `${entry.origPath} -> ${parent || '.'}`; }
     return parent;
+}
+
+function statusCode(entry: StatusEntry): string {
+    const code = `${entry.indexStatus}${entry.workTreeStatus}`.trim();
+    return code || entry.indexStatus || entry.workTreeStatus || '?';
 }
 
 function statusKind(entry: StatusEntry): string {

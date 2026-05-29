@@ -2,10 +2,17 @@ import { useEffect, useReducer } from 'react';
 import type { ChangesExtensionToWebviewMessage, ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
 import type { CommitMode, StashFileEntry } from '../../protocol/changes/types';
 import { messageForBulkAction, messageForRowAction, type ChangeBulkAction, type ChangeRowAction } from '../features/changes/changeCommands';
-import type { ChangeListItem } from '../features/changes/changeTree';
+import type { ChangeListItem, ChangeSectionId } from '../features/changes/changeTree';
 import { ChangesApp } from '../features/changes/ChangesApp';
-import { createInitialChangesState, reduceChangesState, type ChangesViewMode } from '../features/changes/changesState';
+import {
+    createInitialChangesState,
+    reduceChangesState,
+    type ChangeSelectionMode,
+    type ChangesSortMode,
+    type ChangesViewMode,
+} from '../features/changes/changesState';
 import { messageForOperationAction, type ActiveConflictState, type OperationAction } from '../features/changes/operationCommands';
+import { messageForSelectionAction, type ChangeSelectionAction } from '../features/changes/selectionCommands';
 import {
     messageForCreateStash,
     messageForStashAction,
@@ -45,6 +52,17 @@ export function ChangesWebview() {
         <ChangesApp
             state={state}
             onViewModeChange={setViewMode}
+            onSortModeChange={(sortMode: ChangesSortMode) => dispatch({ type: 'setSortMode', sortMode })}
+            onPathFilterChange={(pathFilter: string) => dispatch({ type: 'setPathFilter', pathFilter })}
+            onSectionToggle={(sectionId: ChangeSectionId) => dispatch({ type: 'toggleSection', sectionId })}
+            onSelectItem={(item: ChangeListItem, mode: ChangeSelectionMode, visibleItemIds: readonly string[]) => {
+                dispatch({ type: 'selectChange', selection: { itemId: item.id, mode, visibleItemIds } });
+            }}
+            onClearSelection={() => dispatch({ type: 'clearSelection' })}
+            onSelectionAction={(items: readonly ChangeListItem[], action: ChangeSelectionAction) => {
+                const message = messageForSelectionAction(items, action);
+                if (message) { postToExtension(message); }
+            }}
             onRowAction={(item: ChangeListItem, action: ChangeRowAction) => postToExtension(messageForRowAction(item, action))}
             onBulkAction={(action: ChangeBulkAction) => postToExtension(messageForBulkAction(action))}
             onCommit={(message: string, mode: CommitMode) => postToExtension({ type: 'changes/commit', message, mode })}

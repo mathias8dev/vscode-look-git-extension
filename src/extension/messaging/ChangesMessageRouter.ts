@@ -58,8 +58,22 @@ export class ChangesMessageRouter {
                 await this.refresh();
                 break;
 
+            case 'changes/stageFiles':
+                for (const filePath of msg.filePaths) {
+                    await repo.stageFile(filePath);
+                }
+                await this.refresh();
+                break;
+
             case 'changes/unstageFile':
                 await repo.unstageFile(msg.filePath);
+                await this.refresh();
+                break;
+
+            case 'changes/unstageFiles':
+                for (const filePath of msg.filePaths) {
+                    await repo.unstageFile(filePath);
+                }
                 await this.refresh();
                 break;
 
@@ -79,6 +93,20 @@ export class ChangesMessageRouter {
                 );
                 if (choice === 'Discard') {
                     await repo.discardFile(msg.filePath);
+                    await this.refresh();
+                }
+                break;
+            }
+
+            case 'changes/discardFiles': {
+                const count = msg.filePaths.length;
+                const choice = await showModalWarningMessage(
+                    `Discard changes to ${count} file${count === 1 ? '' : 's'}? This cannot be undone.`, 'Discard',
+                );
+                if (choice === 'Discard') {
+                    for (const filePath of msg.filePaths) {
+                        await repo.discardFile(filePath);
+                    }
                     await this.refresh();
                 }
                 break;
@@ -109,9 +137,24 @@ export class ChangesMessageRouter {
                 await this.refresh();
                 break;
 
+            case 'changes/markResolvedFiles':
+                for (const filePath of msg.filePaths) {
+                    await repo.stageFile(filePath);
+                }
+                await this.refresh();
+                break;
+
             case 'changes/acceptOurs':
                 await repo.acceptOurs(msg.filePath);
                 await repo.stageFile(msg.filePath);
+                await this.refresh();
+                break;
+
+            case 'changes/acceptOursFiles':
+                for (const filePath of msg.filePaths) {
+                    await repo.acceptOurs(filePath);
+                    await repo.stageFile(filePath);
+                }
                 await this.refresh();
                 break;
 
@@ -121,7 +164,19 @@ export class ChangesMessageRouter {
                 await this.refresh();
                 break;
 
+            case 'changes/acceptTheirsFiles':
+                for (const filePath of msg.filePaths) {
+                    await repo.acceptTheirs(filePath);
+                    await repo.stageFile(filePath);
+                }
+                await this.refresh();
+                break;
+
             case 'changes/acceptAllTheirs': {
+                const choice = await showModalWarningMessage(
+                    'Accept incoming changes for all conflicts?', 'Accept All Theirs',
+                );
+                if (choice !== 'Accept All Theirs') { break; }
                 const status = await repo.getStatus();
                 for (const entry of status.conflicts) {
                     await repo.acceptTheirs(entry.filePath);
@@ -347,6 +402,7 @@ export function buildStatusData(
     return {
         type: 'changes/statusData',
         data: {
+            repositoryState: 'available',
             staged: status.staged.map(toEntry),
             unstaged: status.unstaged.map(toEntry),
             conflicts: status.conflicts.map(toEntry),
@@ -360,6 +416,7 @@ export function emptyStatusData(): { type: 'changes/statusData'; data: StatusDat
     return {
         type: 'changes/statusData',
         data: {
+            repositoryState: 'missing',
             staged: [],
             unstaged: [],
             conflicts: [],

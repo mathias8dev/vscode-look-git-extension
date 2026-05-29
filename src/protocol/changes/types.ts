@@ -20,6 +20,7 @@ export interface StashFileEntry {
 export type ConflictState = 'none' | 'merge' | 'rebase';
 
 export interface StatusData {
+    readonly repositoryState?: 'available' | 'missing';
     readonly staged: readonly StatusEntry[];
     readonly unstaged: readonly StatusEntry[];
     readonly conflicts: readonly StatusEntry[];
