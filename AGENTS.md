@@ -174,12 +174,10 @@ src/extension/
 │   ├── GitLockRetry.ts          Exponential backoff on index.lock errors
 │   └── RepoContextFactory.ts    Creates RepoContexts from vscode.git API
 ├── views/
-│   ├── GraphViewProvider.ts     WebviewViewProvider — owns one webview
-│   ├── ChangesViewProvider.ts   WebviewViewProvider — owns one webview
-│   ├── WorktreeViewProvider.ts  TreeDataProvider — native VS Code tree
-│   └── SubmoduleViewProvider.ts TreeDataProvider — native VS Code tree
+│   ├── GraphViewProvider.ts     WebviewViewProvider — owns graph webview (includes worktrees + submodules sections)
+│   └── ChangesViewProvider.ts   WebviewViewProvider — owns changes webview
 ├── messaging/
-│   ├── GraphMessageRouter.ts    Routes graph webview ↔ extension messages
+│   ├── GraphMessageRouter.ts    Routes graph webview ↔ extension messages (incl. worktree + submodule cmds)
 │   └── ChangesMessageRouter.ts  Routes changes webview ↔ extension messages
 ├── commands/
 │   ├── graphCommands.ts
@@ -209,6 +207,7 @@ class GraphMessageRouter {
     this.pending.set(req.repoId, controller);
 
     try {
+      // AbortSignal flows to GitProcessRepository only — use-cases do not receive it
       const data = await this.usecase.execute(req.filters, req.page, controller.signal);
       this.webview.postMessage({ type: 'graph/dataResponse', requestId: req.requestId, data });
     } catch (err) {
@@ -317,6 +316,30 @@ Lifecycle (managed by `RepoRegistry`):
 3. On linked worktree detected: create child context with `kind: 'worktree'`
 4. On submodule detected: create child context with `kind: 'submodule'`
 5. On `repo.onDidClose`: destroy context and cancel all pending operations
+
+### Inter-webview coordination
+
+Webviews cannot share React state (separate iframes). When the active repo changes, the extension pushes `repo/contextChanged` to **all open webviews**. Each webview resets its Zustand store and requests fresh data.
+
+```typescript
+// Extension side — pushed on active repo change
+type RepoContextChangedPush = {
+  readonly type: 'repo/contextChanged';
+  readonly context: SerializedRepoContext;
+};
+
+// Webview side — handled in useRepoSync() hook in each app
+useEffect(() => {
+  if (msg?.type === 'repo/contextChanged') {
+    store.reset();
+    sendRequest({ type: 'graph/dataRequest', ... });
+  }
+}, [msg]);
+```
+
+### Worktrees and submodules — webview only
+
+Worktrees and submodules are rendered **exclusively inside the graph webview** (branch pane and a submodules section). No `TreeDataProvider` is registered for them. The graph webview owns the full sidebar experience for these features.
 
 ---
 
