@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useReducer, type CSSProperties } from 'react';
+import { useEffect, useMemo, useReducer } from 'react';
 import type { ChangesExtensionToWebviewMessage } from '../../../protocol/changes/messages';
-import type { StatusEntry } from '../../../protocol/changes/types';
 import { vscodeApi } from '../../platform/vscodeHost';
 import { ErrorNotice } from '../../shared/ErrorNotice';
-import { buildChangeSections, buildChangeTree, statusLabel, type ChangeListItem, type ChangeSection } from './changeTree';
+import { ChangeSectionView } from './ChangeSectionView';
+import { EmptyState } from './EmptyState';
+import { buildChangeSections } from './changeTree';
 import { createInitialChangesState, getChangeCount, reduceChangesState, type ChangesViewMode } from './changesState';
 
 export function ChangesApp() {
@@ -57,81 +58,10 @@ export function ChangesApp() {
     );
 }
 
-function ChangeSectionView({ section, viewMode }: { readonly section: ChangeSection; readonly viewMode: ChangesViewMode }) {
-    if (section.items.length === 0) { return null; }
-    const tree = buildChangeTree(section.items);
-    return (
-        <section className="change-section" aria-labelledby={`${section.id}-title`}>
-            <header className="change-section-header">
-                <h2 id={`${section.id}-title`}>{section.title}</h2>
-                <span>{section.items.length}</span>
-            </header>
-            <div className="change-list">
-                {viewMode === 'tree'
-                    ? tree.map((node) => <TreeNodeView key={node.id} node={node} />)
-                    : section.items.map((item) => <ChangeRow key={item.id} item={item} depth={0} />)}
-            </div>
-        </section>
-    );
-}
-
-function TreeNodeView({ node }: { readonly node: ReturnType<typeof buildChangeTree>[number] }) {
-    if (node.item) { return <ChangeRow item={node.item} depth={node.depth} />; }
-    return (
-        <div>
-            <div className="change-row folder-row" style={depthStyle(node.depth)}>
-                <span className="file-mark" aria-hidden="true" />
-                <span className="file-main">{node.name}</span>
-            </div>
-            {node.children.map((child) => <TreeNodeView key={child.id} node={child} />)}
-        </div>
-    );
-}
-
-function ChangeRow({ item, depth }: { readonly item: ChangeListItem; readonly depth: number }) {
-    const entry = item.entry;
-    return (
-        <article className="change-row" style={depthStyle(depth)} title={entry.filePath}>
-            <span className={`status-dot status-${statusKind(entry)}`} aria-hidden="true" />
-            <span className="file-main">{fileName(entry.filePath)}</span>
-            <span className="file-path">{parentPath(entry)}</span>
-            <span className="status-label">{statusLabel(entry)}</span>
-        </article>
-    );
-}
-
-function EmptyState({ title }: { readonly title: string }) {
-    return <div className="empty-state">{title}</div>;
-}
-
 function summaryText(count: number): string {
     return count === 1 ? '1 changed file' : `${count} changed files`;
 }
 
 function operationLabel(state: 'merge' | 'rebase'): string {
     return state === 'merge' ? 'Merge' : 'Rebase';
-}
-
-function fileName(filePath: string): string {
-    return filePath.split('/').pop() || filePath;
-}
-
-function parentPath(entry: StatusEntry): string {
-    const parts = entry.filePath.split('/');
-    parts.pop();
-    const parent = parts.join('/');
-    if (entry.origPath) { return `${entry.origPath} -> ${parent || '.'}`; }
-    return parent;
-}
-
-function statusKind(entry: StatusEntry): string {
-    const code = `${entry.indexStatus}${entry.workTreeStatus}`;
-    if (code.includes('U')) { return 'conflict'; }
-    if (code.includes('D')) { return 'deleted'; }
-    if (code.includes('A') || code.includes('?')) { return 'added'; }
-    return 'modified';
-}
-
-function depthStyle(depth: number): CSSProperties & { readonly '--depth': number } {
-    return { '--depth': depth };
 }
