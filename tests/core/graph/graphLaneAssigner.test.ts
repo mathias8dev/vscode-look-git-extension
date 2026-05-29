@@ -1,0 +1,127 @@
+// Ported from main:tests/graphLaneAssigner.test.ts
+import { describe, expect, it } from 'vitest';
+import { assignLanes, getMaxLane } from '../../../src/core/graph/GraphLaneAssigner';
+import type { GraphCommit } from '../../../src/core/git/domain/GitCommit';
+
+function commit(hash: string, parents: string[] = [], refs: string[] = []): GraphCommit {
+    return {
+        hash,
+        shortHash: hash.substring(0, 7),
+        message: hash,
+        authorName: 'Test User',
+        authorEmail: 'test@example.com',
+        authorDate: '2024-01-01T00:00:00Z',
+        parentHashes: parents,
+        refs,
+    };
+}
+
+describe('graphLaneAssigner', () => {
+    it('keeps a linear history on a single lane', () => {
+        const rows = assignLanes([commit('c3', ['c2']), commit('c2', ['c1']), commit('c1')]);
+        expect(rows.map((r) => r.laneData.lane)).toEqual([0, 0, 0]);
+        expect(getMaxLane(rows)).toBe(0);
+        expect(rows[0].laneData.lines).toContainEqual(expect.objectContaining({ fromLane: 0, toLane: 0, type: 'straight' }));
+    });
+
+    it('allocates additional lanes for independent branch tips', () => {
+        const rows = assignLanes([commit('feature', ['base']), commit('main', ['base']), commit('base')]);
+        expect(rows[0].laneData.lane).toBe(0);
+        expect(rows[1].laneData.lane).toBe(1);
+        expect(getMaxLane(rows)).toBe(1);
+    });
+
+    it('draws a merge/fork line for merge commits', () => {
+        const rows = assignLanes([commit('merge', ['main', 'feature']), commit('main', ['base']), commit('feature', ['base']), commit('base')]);
+        expect(rows[0].laneData.lines.map((l) => l.type)).toContain('fork-right');
+        expect(getMaxLane(rows)).toBeGreaterThanOrEqual(1);
+    });
+
+    it('handles an empty commit list', () => {
+        expect(assignLanes([])).toEqual([]);
+        expect(getMaxLane([])).toBe(0);
+    });
+});
+
+describe('graphLaneAssigner advanced cases', () => {
+    it('handles an orphan root commit on lane 0', () => {
+        const rows = assignLanes([commit('orphan')]);
+        expect(rows).toHaveLength(1);
+        expect(rows[0].laneData.lane).toBe(0);
+        expect(rows[0].laneData.lines).toEqual([]);
+    });
+
+    it('draws pass-through straight lines for active lanes not touched by a commit', () => {
+        const rows = assignLanes([commit('feature', ['base']), commit('main', ['base']), commit('base')]);
+        const mainRow = rows[1];
+        const passThrough = mainRow.laneData.lines.find((l) => l.type === 'straight' && l.fromLane !== mainRow.laneData.lane);
+        expect(passThrough).toBeDefined();
+    });
+
+    it('assigns unique colors to simultaneous branches', () => {
+        const rows = assignLanes([commit('a', ['r1']), commit('b', ['r2']), commit('c', ['r3']), commit('r1'), commit('r2'), commit('r3')]);
+        const tipColors = rows.slice(0, 3).map((r) => r.laneData.color);
+        expect(new Set(tipColors).size).toBe(3);
+    });
+
+    it('wraps colors gracefully beyond palette size', () => {
+        const tips = Array.from({ length: 11 }, (_, i) => commit(`c${i}`, [`r${i}`]));
+        const roots = Array.from({ length: 11 }, (_, i) => commit(`r${i}`));
+        const rows = assignLanes([...tips, ...roots]);
+        expect(rows[10].laneData.color).toBe(rows[0].laneData.color);
+    });
+
+    it('bounds max lane for a simple two-branch merge', () => {
+        const rows = assignLanes([commit('merge', ['main', 'feature']), commit('feature', ['base']), commit('main', ['base']), commit('base')]);
+        expect(getMaxLane(rows)).toBe(1);
+    });
+
+    it('generates a fork-right line for the second parent', () => {
+        const rows = assignLanes([commit('merge', ['main', 'feature']), commit('main', ['base']), commit('feature', ['base']), commit('base')]);
+        expect(rows[0].laneData.lines).toContainEqual(expect.objectContaining({ fromLane: 0, toLane: 1, type: 'fork-right' }));
+    });
+
+    it('allocates one lane per additional parent in octopus merge', () => {
+        const rows = assignLanes([
+            commit('merge', ['main', 'feature-a', 'feature-b']),
+            commit('main', ['base']), commit('feature-a', ['base']), commit('feature-b', ['base']), commit('base'),
+        ]);
+        const forks = rows[0].laneData.lines.filter((l) => l.type === 'fork-right');
+        expect(forks).toHaveLength(2);
+        expect(getMaxLane(rows)).toBe(2);
+    });
+
+    it('reuses a freed lane after a branch is consumed', () => {
+        const rows = assignLanes([commit('a', ['ra']), commit('ra'), commit('b', ['rb']), commit('rb')]);
+        expect(rows.map((r) => r.laneData.lane)).toEqual([0, 0, 0, 0]);
+    });
+
+    it('pins the primary branch to lane 0', () => {
+        const rows = assignLanes([
+            commit('feature-tip', ['shared'], ['feature/ui']),
+            commit('main-tip', ['main-parent'], ['HEAD -> main']),
+            commit('main-parent', ['shared']),
+            commit('shared'),
+        ], { primaryBranch: 'main' });
+        expect(rows.map((r) => r.laneData.lane)).toEqual([1, 0, 0, 0]);
+        expect(rows[1].laneData.isPrimary).toBe(true);
+    });
+
+    it('uses hash to pin primary branch when refs are missing', () => {
+        const rows = assignLanes([
+            commit('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', ['base-a']),
+            commit('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', ['base-b']),
+            commit('base-a'), commit('base-b'),
+        ], { primaryBranchHash: 'bbbbbbb' });
+        expect(rows[0].laneData.lane).toBe(1);
+        expect(rows[1].laneData.lane).toBe(0);
+        expect(rows[1].laneData.isPrimary).toBe(true);
+    });
+
+    it('keeps existing lane assignments stable when older commits are appended', () => {
+        const firstPage = [commit('main-tip', ['main-parent'], ['HEAD -> main']), commit('feature-tip', ['fp'], ['feature/ui'])];
+        const firstRows = assignLanes(firstPage, { primaryBranch: 'main' });
+        const extendedRows = assignLanes([...firstPage, commit('main-parent', ['root']), commit('fp', ['root']), commit('root')], { primaryBranch: 'main' });
+        expect(extendedRows.slice(0, 2).map((r) => r.laneData.lane)).toEqual(firstRows.map((r) => r.laneData.lane));
+    });
+});
