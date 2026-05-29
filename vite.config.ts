@@ -9,11 +9,14 @@ export default defineConfig({
     outDir: 'dist/webview',
     sourcemap: true,
     rollupOptions: {
-      input: resolve(__dirname, 'src/webview/main.tsx'),
+      input: {
+        changes: resolve(__dirname, 'src/webview/changes/main.tsx'),
+        graph: resolve(__dirname, 'src/webview/graph/main.tsx'),
+      },
       output: {
-        assetFileNames: 'style[extname]',
+        assetFileNames: '[name][extname]',
         chunkFileNames: 'chunks/[name]-[hash].js',
-        entryFileNames: 'main.js',
+        entryFileNames: '[name].js',
       },
     },
   },
