@@ -1,24 +1,28 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
     "target": "ES2022",
-    "lib": ["ES2022"],
-    "outDir": "out",
-    "sourceMap": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
     "strict": true,
-    "rootDir": "src",
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
+    "isolatedModules": true,
     "resolveJsonModule": true,
-    "types": ["node"]
+    "skipLibCheck": true,
+    "types": ["node", "vscode"]
   },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "vite.config.ts",
+    "esbuild.js"
+  ],
   "exclude": [
-    "node_modules",
-    ".vscode-test",
     "dist",
-    "src/webview",
-    "tests",
-    "vitest.config.ts"
+    "node_modules"
   ]
 }

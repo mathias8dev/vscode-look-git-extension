@@ -3,20 +3,9 @@
   "tasks": [
     {
       "type": "npm",
-      "script": "watch",
-      "problemMatcher": [
-        "$esbuild-watch",
-        "$tsc-watch"
-      ],
-      "isBackground": true,
-      "presentation": {
-        "reveal": "never"
-      },
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "label": "npm: watch"
+      "script": "compile",
+      "group": "build",
+      "problemMatcher": "$tsc"
     }
   ]
 }
