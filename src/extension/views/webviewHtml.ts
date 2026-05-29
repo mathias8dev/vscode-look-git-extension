@@ -11,7 +11,7 @@ export function getWebviewHtml(
         vscode.Uri.joinPath(extensionUri, 'dist', 'webview', `${scriptName}.js`),
     );
     const styleUri = webview.asWebviewUri(
-        vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'style.css'),
+        vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'styles.css'),
     );
 
     return `<!DOCTYPE html>
@@ -20,13 +20,13 @@ export function getWebviewHtml(
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}';" />
+        content="default-src 'none'; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src ${webview.cspSource} 'nonce-${nonce}';" />
   <link rel="stylesheet" href="${styleUri}" />
   <title>Look Git</title>
 </head>
 <body>
   <div id="root"></div>
-  <script nonce="${nonce}" src="${scriptUri}"></script>
+  <script nonce="${nonce}" type="module" src="${scriptUri}"></script>
 </body>
 </html>`;
 }

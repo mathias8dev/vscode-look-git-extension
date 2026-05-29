@@ -122,6 +122,9 @@ describe('ChangesViewProvider', () => {
         provider.resolveWebviewView(view);
         expect(view.webview.html).toContain('Content-Security-Policy');
         expect(view.webview.html).toContain('changes.js');
+        expect(view.webview.html).toContain('styles.css');
+        expect(view.webview.html).toContain('script-src vscode-webview:');
+        expect(view.webview.html).toMatch(/<script nonce="[a-f0-9]+" type="module" src="[^"]*changes\.js"><\/script>/);
         expect(view.webview.html).toMatch(/nonce-[a-f0-9]+/);
     });
 
