@@ -1,6 +1,5 @@
 import type { ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
 import type { ChangeListItem, ChangeSection } from './changeTree';
-import { statusCode } from './changeTree';
 
 export type ChangeRowAction =
     | 'open'
@@ -98,7 +97,8 @@ export function messageForRowAction(item: ChangeListItem, action: ChangeRowActio
                 filePath: entry.filePath,
                 origPath: entry.origPath,
                 isStaged: item.isStaged,
-                status: statusCode(entry),
+                indexStatus: entry.indexStatus,
+                workTreeStatus: entry.workTreeStatus,
             };
         case 'stage':
             return { type: 'changes/stageFile', filePath: entry.filePath };

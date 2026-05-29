@@ -256,19 +256,21 @@ export class ChangesMessageRouter {
                 const origUri = vscode.Uri.file(origPath);
                 const emptyUri = vscode.Uri.parse(`lookgit-empty:${msg.filePath}`);
                 const baseName = path.basename(msg.filePath);
+                const status = msg.isStaged ? msg.indexStatus : msg.workTreeStatus;
+                const baseUri = isRenameLikeStatus(status) ? origUri : fileUri;
+                const baseRef = msg.isStaged ? 'HEAD' : '~';
+                const modifiedUri = msg.isStaged ? toGitUri(fileUri, '') : fileUri;
 
                 let left: vscode.Uri;
                 let right: vscode.Uri;
                 let title: string;
 
-                if (msg.status === 'A') {
-                    left = emptyUri; right = toGitUri(fileUri, ''); title = `${baseName} (Added)`;
-                } else if (msg.status === 'D') {
-                    left = toGitUri(origUri, 'HEAD'); right = emptyUri; title = `${baseName} (Deleted)`;
-                } else if (msg.isStaged) {
-                    left = toGitUri(origUri, 'HEAD'); right = toGitUri(fileUri, ''); title = `${baseName} (Staged)`;
+                if (isAddedStatus(status)) {
+                    left = emptyUri; right = modifiedUri; title = `${baseName} (Added)`;
+                } else if (isDeletedStatus(status)) {
+                    left = toGitUri(baseUri, baseRef); right = emptyUri; title = `${baseName} (Deleted)`;
                 } else {
-                    left = toGitUri(fileUri, '~'); right = fileUri; title = `${baseName} (Working Tree)`;
+                    left = toGitUri(baseUri, baseRef); right = modifiedUri; title = `${baseName} (${msg.isStaged ? 'Staged' : 'Working Tree'})`;
                 }
                 await vscode.commands.executeCommand('vscode.diff', left, right, title);
                 break;
@@ -317,11 +319,16 @@ export class ChangesMessageRouter {
             case 'changes/openStashDiff': {
                 const cwd = repo.cwd;
                 const fileUri = vscode.Uri.file(path.join(cwd, msg.filePath));
+                const origUri = vscode.Uri.file(path.join(cwd, msg.origPath ?? msg.filePath));
+                const emptyUri = vscode.Uri.parse(`lookgit-empty:${msg.filePath}`);
                 const stashRef = `stash@{${msg.index}}`;
+                const baseUri = isRenameLikeStatus(msg.status) ? origUri : fileUri;
+                const left = isAddedStatus(msg.status) ? emptyUri : toGitUri(baseUri, `${stashRef}^`);
+                const right = isDeletedStatus(msg.status) ? emptyUri : toGitUri(fileUri, stashRef);
                 await vscode.commands.executeCommand(
                     'vscode.diff',
-                    toGitUri(fileUri, `${stashRef}^`),
-                    toGitUri(fileUri, stashRef),
+                    left,
+                    right,
                     `${path.basename(msg.filePath)} (Stash ${msg.index})`,
                 );
                 break;
@@ -387,6 +394,18 @@ function errorCodeFor(msg: ChangesWebviewToExtensionMessage): ErrorCode {
 function toGitUri(uri: vscode.Uri, ref: string): vscode.Uri {
     const query = JSON.stringify({ path: uri.path, ref });
     return uri.with({ scheme: 'git', query });
+}
+
+function isAddedStatus(status: string): boolean {
+    return status === 'A' || status === '?';
+}
+
+function isDeletedStatus(status: string): boolean {
+    return status === 'D';
+}
+
+function isRenameLikeStatus(status: string): boolean {
+    return status === 'R' || status === 'C';
 }
 
 export function buildStatusData(

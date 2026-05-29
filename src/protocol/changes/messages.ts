@@ -71,7 +71,8 @@ export interface OpenDiffMessage {
     readonly filePath: string;
     readonly origPath?: string;
     readonly isStaged: boolean;
-    readonly status: string;
+    readonly indexStatus: string;
+    readonly workTreeStatus: string;
 }
 
 export interface StashMessage         { readonly type: 'changes/stash'; readonly message?: string; }

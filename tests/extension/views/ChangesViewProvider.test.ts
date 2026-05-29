@@ -112,6 +112,22 @@ function assertUriWithPath(value: unknown, expectedPathPart: string): void {
     expect(value.path).toContain(expectedPathPart);
 }
 
+function isGitUriLike(value: unknown): value is { readonly scheme: string; readonly query: string } {
+    return typeof value === 'object'
+        && value !== null
+        && 'scheme' in value
+        && 'query' in value
+        && typeof value.scheme === 'string'
+        && typeof value.query === 'string';
+}
+
+function gitUriQuery(value: unknown): { readonly path: string; readonly ref: string } {
+    expect(isGitUriLike(value)).toBe(true);
+    if (!isGitUriLike(value)) { throw new Error('Expected a git URI-like value.'); }
+    expect(value.scheme).toBe('git');
+    return JSON.parse(value.query) as { readonly path: string; readonly ref: string };
+}
+
 describe('ChangesViewProvider', () => {
     beforeEach(resetVscodeMock);
 
@@ -469,6 +485,46 @@ describe('ChangesViewProvider', () => {
                 operation: 'changes/getStashFiles',
             }),
         })));
+    });
+
+    it('opens unstaged rename diffs against the original index path', async () => {
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({
+            type: 'changes/openDiff',
+            filePath: 'src/new-name.ts',
+            origPath: 'src/old-name.ts',
+            isStaged: false,
+            indexStatus: ' ',
+            workTreeStatus: 'R',
+        });
+
+        await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === 'vscode.diff')).toBe(true));
+        const call = getCommandCalls().find((entry) => entry.command === 'vscode.diff');
+        const left = gitUriQuery(call?.args[0]);
+        expect(left).toEqual({ path: '/workspace/src/old-name.ts', ref: '~' });
+        assertUriWithPath(call?.args[1], 'src/new-name.ts');
+    });
+
+    it('opens stash rename diffs against the original stash parent path', async () => {
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({
+            type: 'changes/openStashDiff',
+            index: 2,
+            filePath: 'src/new-name.ts',
+            origPath: 'src/old-name.ts',
+            status: 'R',
+        });
+
+        await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === 'vscode.diff')).toBe(true));
+        const call = getCommandCalls().find((entry) => entry.command === 'vscode.diff');
+        expect(gitUriQuery(call?.args[0])).toEqual({ path: '/workspace/src/old-name.ts', ref: 'stash@{2}^' });
+        expect(gitUriQuery(call?.args[1])).toEqual({ path: '/workspace/src/new-name.ts', ref: 'stash@{2}' });
     });
 
     it('openSubmodule executes vscode.openFolder', async () => {

@@ -87,7 +87,7 @@ describe('protocol discriminated unions', () => {
                 case 'changes/openFile': return msg.filePath satisfies string;
                 case 'changes/openSubmodule': return msg.filePath satisfies string;
                 case 'changes/openMergeEditor': return msg.filePath satisfies string;
-                case 'changes/openDiff': return msg.filePath satisfies string;
+                case 'changes/openDiff': return msg.indexStatus satisfies string;
                 case 'changes/stash': return msg.message satisfies string | undefined;
                 case 'changes/stashStaged': return msg.message satisfies string | undefined;
                 case 'changes/stashPop': return msg.index satisfies number;

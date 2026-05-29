@@ -40,7 +40,8 @@ describe('changeCommands', () => {
             filePath: 'src/app.ts',
             origPath: undefined,
             isStaged: false,
-            status: 'M',
+            indexStatus: ' ',
+            workTreeStatus: 'M',
         });
     });
 
