@@ -76,3 +76,190 @@ h1 {
     color: var(--vscode-descriptionForeground, #9d9d9d);
     font-size: 0.85em;
 }
+
+.changes-shell {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: var(--vscode-sideBar-background, var(--vscode-editor-background, #1e1e1e));
+}
+
+.changes-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px 8px;
+    border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border, #3c3c3c));
+}
+
+.changes-header h1 {
+    margin: 0;
+    font-size: 1em;
+    line-height: 1.3;
+}
+
+.changes-header p {
+    margin: 2px 0 0;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.86em;
+}
+
+.segmented {
+    display: inline-grid;
+    grid-template-columns: repeat(2, minmax(44px, 1fr));
+    border: 1px solid var(--vscode-button-border, var(--vscode-panel-border, #3c3c3c));
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.segmented button {
+    min-height: 26px;
+    border: 0;
+    border-right: 1px solid var(--vscode-button-border, var(--vscode-panel-border, #3c3c3c));
+    padding: 0 8px;
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, #cccccc));
+    background: var(--vscode-button-secondaryBackground, transparent);
+    font: inherit;
+}
+
+.segmented button:last-child {
+    border-right: 0;
+}
+
+.segmented button[aria-pressed="true"] {
+    color: var(--vscode-button-foreground, #ffffff);
+    background: var(--vscode-button-background, #0e639c);
+}
+
+.changes-banner {
+    margin: 8px 10px 0;
+    border: 1px solid var(--vscode-inputValidation-warningBorder, #cca700);
+    border-radius: 4px;
+    padding: 8px 10px;
+    background: var(--vscode-inputValidation-warningBackground, transparent);
+}
+
+.changes-content {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 6px 0 12px;
+}
+
+.change-section {
+    margin-top: 4px;
+}
+
+.change-section-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 28px;
+    padding: 0 12px;
+    background: var(--vscode-sideBarSectionHeader-background, var(--vscode-sideBar-background, #252526));
+    border-top: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
+    border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
+}
+
+.change-section-header h2 {
+    margin: 0;
+    font-size: 0.82em;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.change-section-header span {
+    min-width: 1.6em;
+    padding: 2px 5px;
+    border-radius: 4px;
+    color: var(--vscode-badge-foreground, #ffffff);
+    background: var(--vscode-badge-background, #4d4d4d);
+    font-size: 0.78em;
+    line-height: 1;
+    text-align: center;
+}
+
+.change-list {
+    display: grid;
+}
+
+.change-row {
+    --depth: 0;
+    display: grid;
+    grid-template-columns: 14px minmax(80px, 1fr) minmax(0, 0.8fr) auto;
+    align-items: center;
+    gap: 7px;
+    min-height: 26px;
+    padding: 0 10px 0 calc(12px + var(--depth) * 14px);
+    color: var(--vscode-foreground, #cccccc);
+}
+
+.change-row:hover {
+    background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.08));
+}
+
+.folder-row {
+    grid-template-columns: 14px minmax(80px, 1fr);
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+.file-mark,
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    justify-self: center;
+}
+
+.file-mark {
+    border-radius: 2px;
+    background: var(--vscode-symbolIcon-folderForeground, var(--vscode-descriptionForeground, #9d9d9d));
+}
+
+.status-modified {
+    background: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
+}
+
+.status-added {
+    background: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+}
+
+.status-deleted {
+    background: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
+}
+
+.status-conflict {
+    background: var(--vscode-gitDecoration-conflictingResourceForeground, #e4676b);
+}
+
+.file-main {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-path {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.86em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.status-label {
+    justify-self: end;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.82em;
+}
+
+.empty-state {
+    padding: 28px 14px;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    text-align: center;
+}
