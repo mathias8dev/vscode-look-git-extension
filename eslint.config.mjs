@@ -43,4 +43,62 @@ export default [
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
+  {
+    files: ['src/core/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        paths: ['vscode', 'react', 'react-dom', 'react-dom/client'],
+        patterns: [{
+          group: [
+            '../protocol/**', '../../protocol/**', '../../../protocol/**', '../../../../protocol/**',
+            '../extension/**', '../../extension/**', '../../../extension/**', '../../../../extension/**',
+            '../webview/**', '../../webview/**', '../../../webview/**', '../../../../webview/**',
+          ],
+          message: 'Core must stay independent from protocol, extension, and webview layers.',
+        }],
+      }],
+    },
+  },
+  {
+    files: ['src/protocol/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        paths: ['vscode', 'react', 'react-dom', 'react-dom/client'],
+        patterns: [{
+          group: [
+            '../core/**', '../../core/**', '../../../core/**', '../../../../core/**',
+            '../extension/**', '../../extension/**', '../../../extension/**', '../../../../extension/**',
+            '../webview/**', '../../webview/**', '../../../webview/**', '../../../../webview/**',
+          ],
+          message: 'Protocol must contain serializable contracts only.',
+        }],
+      }],
+    },
+  },
+  {
+    files: ['src/webview/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        paths: ['vscode'],
+        patterns: [{
+          group: [
+            '../core/**', '../../core/**', '../../../core/**', '../../../../core/**',
+            '../extension/**', '../../extension/**', '../../../extension/**', '../../../../extension/**',
+          ],
+          message: 'Webview code may depend on protocol and webview modules only, not core or extension.',
+        }],
+      }],
+    },
+  },
+  {
+    files: ['src/extension/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [{
+          group: ['../webview/**', '../../webview/**', '../../../webview/**', '../../../../webview/**'],
+          message: 'Extension adapters must not import React/webview implementation code.',
+        }],
+      }],
+    },
+  },
 ];

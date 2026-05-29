@@ -3,12 +3,8 @@ import type { GitSubmodule } from '../git/domain/GitWorktree';
 import { parseSubmoduleStatus } from '../parsing/parseSubmoduleStatus';
 
 export async function querySubmoduleStatus(execRawReadonly: GitExec, signal?: AbortSignal): Promise<GitSubmodule[]> {
-    try {
-        const output = await execRawReadonly(['submodule', 'status'], signal);
-        return parseSubmoduleStatus(output);
-    } catch {
-        return [];
-    }
+    const output = await execRawReadonly(['submodule', 'status'], signal);
+    return parseSubmoduleStatus(output);
 }
 
 export async function updateSubmodule(exec: GitExec, submodulePath: string, signal?: AbortSignal): Promise<void> {

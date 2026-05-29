@@ -146,6 +146,23 @@ describe('ChangesViewProvider', () => {
         await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({ type: 'changes/statusData' })));
     });
 
+    it('refresh failure posts a protocol error', async () => {
+        const repo = makeRepo({
+            getStatus: vi.fn(async () => { throw new Error('status failed'); }),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/error',
+            message: 'status failed',
+            error: expect.objectContaining({
+                code: 'refreshFailed',
+                operation: 'changes/refresh',
+            }),
+        })));
+    });
+
     it('ready message triggers refresh', async () => {
         const repo = makeRepo();
         const provider = makeProvider(repo);
@@ -163,6 +180,25 @@ describe('ChangesViewProvider', () => {
         view.messageHandler?.({ type: 'changes/stageFile', filePath: 'src/app.ts' });
         await vi.waitFor(() => expect(repo.stageFile).toHaveBeenCalledWith('src/app.ts'));
         await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalledTimes(2));
+    });
+
+    it('stageFile failure posts a protocol error', async () => {
+        const repo = makeRepo({
+            stageFile: vi.fn(async () => { throw new Error('stage failed'); }),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'changes/stageFile', filePath: 'src/app.ts' });
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/error',
+            message: 'stage failed',
+            error: expect.objectContaining({
+                code: 'gitOperationFailed',
+                operation: 'changes/stageFile',
+                recoverable: true,
+            }),
+        })));
     });
 
     it('uses the current repository from the accessor when messages arrive', async () => {
@@ -217,8 +253,54 @@ describe('ChangesViewProvider', () => {
         const view = makeWebviewView();
         provider.resolveWebviewView(view);
         view.messageHandler?.({ type: 'changes/commit', message: '   ', mode: 'commit' });
-        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({ type: 'changes/commitResult', success: false })));
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/commitResult',
+            success: false,
+            message: 'Commit message cannot be empty.',
+            error: expect.objectContaining({
+                code: 'validationFailed',
+                operation: 'changes/commit',
+            }),
+        })));
         expect(repo.commit).not.toHaveBeenCalled();
+    });
+
+    it('commit failure posts commitResult with a protocol error', async () => {
+        const repo = makeRepo({
+            commit: vi.fn(async () => { throw new Error('commit failed'); }),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'changes/commit', message: 'feat: fail', mode: 'commit' });
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/commitResult',
+            success: false,
+            message: 'commit failed',
+            error: expect.objectContaining({
+                code: 'gitOperationFailed',
+                operation: 'changes/commit',
+            }),
+        })));
+    });
+
+    it('keeps the requestId when loading stash files fails', async () => {
+        const repo = makeRepo({
+            getStashFiles: vi.fn(async () => { throw new Error('stash failed'); }),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'changes/getStashFiles', requestId: 'stash-1', index: 0 });
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/error',
+            requestId: 'stash-1',
+            message: 'stash failed',
+            error: expect.objectContaining({
+                code: 'gitOperationFailed',
+                operation: 'changes/getStashFiles',
+            }),
+        })));
     });
 
     it('openSubmodule executes vscode.openFolder', async () => {

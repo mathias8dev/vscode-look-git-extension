@@ -1,4 +1,4 @@
-import type { RequestId, ErrorMessage } from '../shared/base';
+import type { RequestId, ErrorMessage, ProtocolError } from '../shared/base';
 import type { SerializedRepoContext } from '../shared/repo';
 import type { StatusData, CommitMode, StashFileEntry, ConflictState } from './types';
 
@@ -17,7 +17,8 @@ export interface StatusDataPush {
 export interface CommitResultPush {
     readonly type: 'changes/commitResult';
     readonly success: boolean;
-    readonly error?: string;
+    readonly message?: string;
+    readonly error?: ProtocolError;
 }
 
 export interface StashFilesResponse {
@@ -29,7 +30,9 @@ export interface StashFilesResponse {
 
 export interface ChangesErrorPush {
     readonly type: 'changes/error';
+    readonly requestId?: RequestId;
     readonly message: string;
+    readonly error: ProtocolError;
 }
 
 // ── Webview → Extension (commands — no response expected unless noted) ──────

@@ -110,10 +110,8 @@ export async function queryUserName(execReadonly: GitExec, signal?: AbortSignal)
 }
 
 export async function queryRemotes(execReadonly: GitExec, signal?: AbortSignal): Promise<string[]> {
-    try {
-        const output = await execReadonly(['remote'], signal);
-        return output ? output.split('\n').filter(Boolean) : [];
-    } catch { return []; }
+    const output = await execReadonly(['remote'], signal);
+    return output ? output.split('\n').filter(Boolean) : [];
 }
 
 export async function queryCommitFiles(

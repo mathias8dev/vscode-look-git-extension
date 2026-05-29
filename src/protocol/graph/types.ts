@@ -11,11 +11,6 @@ export interface GraphFilters {
 
 export type GraphPage = Pagination;
 
-export interface GraphRow {
-    readonly commit: GraphCommit;
-    readonly laneData: LaneData;
-}
-
 export interface GraphCommit {
     readonly hash: string;
     readonly shortHash: string;
@@ -26,23 +21,6 @@ export interface GraphCommit {
     readonly parentHashes: readonly string[];
     readonly refs: readonly string[];
     readonly matchesFilter?: boolean;
-}
-
-export interface LaneData {
-    readonly lane: number;
-    readonly color: string;
-    readonly lines: readonly LineDef[];
-    readonly isPrimary: boolean;
-}
-
-export interface LineDef {
-    readonly fromLane: number;
-    readonly toLane: number;
-    readonly color: string;
-    readonly type: 'straight' | 'merge-left' | 'merge-right' | 'fork-left' | 'fork-right';
-    readonly targetHash?: string;
-    readonly role: 'pass-through' | 'first-parent' | 'merge-parent';
-    readonly fromTop?: boolean;
 }
 
 export interface BranchInfo {
@@ -82,8 +60,7 @@ export interface SubmoduleInfo {
 export interface GraphData {
     readonly branches: readonly BranchInfo[];
     readonly tags: readonly TagInfo[];
-    readonly rows: readonly GraphRow[];
-    readonly maxLane: number;
+    readonly commits: readonly GraphCommit[];
     readonly currentBranch: string;
     readonly currentUser: string;
     readonly hasMore: boolean;

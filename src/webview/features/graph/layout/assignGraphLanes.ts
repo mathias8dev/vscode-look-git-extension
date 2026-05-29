@@ -1,8 +1,4 @@
-// GraphRow, LaneData, LineDef are defined in protocol (single source of truth).
-// GraphLaneAssigner imports them — importing pure TS types from protocol is allowed
-// since protocol contains no logic, no VS Code API, no React.
-import type { GraphRow, LaneData, LineDef } from '../../protocol/graph/types';
-import type { GitGraphCommit } from '../git/domain/GitCommit';
+import type { GraphCommit } from '../../../../protocol/graph/types';
 
 const LANE_COLORS = [
     '#f97583', '#79b8ff', '#85e89d', '#ffab70', '#b392f0',
@@ -14,18 +10,29 @@ export interface AssignLaneOptions {
     readonly primaryBranchHash?: string;
 }
 
-// Re-export so consumers don't need to know where rendering types come from.
-export type { GraphRow, LaneData, LineDef };
+export interface GraphRow {
+    readonly commit: GraphCommit;
+    readonly laneData: LaneData;
+}
 
-/**
- * Assigns lanes and colors to a list of commits for graph rendering.
- * Input: GitGraphCommit[] (core, from parsing).
- * Output: GraphRow[] (protocol, sent to webview as-is — no mapping needed).
- *
- * TypeScript structural typing makes GitGraphCommit satisfy GraphCommit:
- * both have the same fields, so no explicit cast is required.
- */
-export function assignLanes(commits: readonly GitGraphCommit[], options: AssignLaneOptions = {}): GraphRow[] {
+export interface LaneData {
+    readonly lane: number;
+    readonly color: string;
+    readonly lines: readonly LineDef[];
+    readonly isPrimary: boolean;
+}
+
+export interface LineDef {
+    readonly fromLane: number;
+    readonly toLane: number;
+    readonly color: string;
+    readonly type: 'straight' | 'merge-left' | 'merge-right' | 'fork-left' | 'fork-right';
+    readonly targetHash?: string;
+    readonly role: 'pass-through' | 'first-parent' | 'merge-parent';
+    readonly fromTop?: boolean;
+}
+
+export function assignLanes(commits: readonly GraphCommit[], options: AssignLaneOptions = {}): GraphRow[] {
     const lanes: (string | null)[] = [];
     const result: GraphRow[] = [];
     const primaryTipIndex = commits.findIndex((c) => isPrimaryTip(c, options));
@@ -68,7 +75,7 @@ export function assignLanes(commits: readonly GitGraphCommit[], options: AssignL
 
         lanes[lane] = null;
 
-        const parents = commit.parentHashes as string[];
+        const parents = commit.parentHashes;
         const firstParent = parents[0];
         const firstParentLane = firstParent ? findLane(firstParent) : -1;
         let primaryOverrideFromLane: number | undefined;
@@ -151,7 +158,7 @@ export function getMaxLane(rows: readonly GraphRow[]): number {
     return max;
 }
 
-function isPrimaryTip(commit: GitGraphCommit, options: AssignLaneOptions): boolean {
+function isPrimaryTip(commit: GraphCommit, options: AssignLaneOptions): boolean {
     if (options.primaryBranchHash) {
         const h = options.primaryBranchHash;
         if (commit.hash.startsWith(h) || commit.shortHash === h) { return true; }

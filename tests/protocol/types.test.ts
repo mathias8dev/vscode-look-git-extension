@@ -1,6 +1,7 @@
 import { describe, it } from 'vitest';
 import type { GraphExtensionToWebviewMessage, GraphWebviewToExtensionMessage } from '../../src/protocol/graph/messages';
 import type { ChangesExtensionToWebviewMessage, ChangesWebviewToExtensionMessage } from '../../src/protocol/changes/messages';
+import type { HistoryExtensionToWebviewMessage } from '../../src/protocol/history/messages';
 
 // Type-level tests: if these compile, the discriminated unions are correct.
 describe('protocol discriminated unions', () => {
@@ -8,11 +9,11 @@ describe('protocol discriminated unions', () => {
         const handle = (msg: GraphExtensionToWebviewMessage) => {
             switch (msg.type) {
                 case 'repo/contextChanged': return msg.context.id satisfies string;
-                case 'graph/dataPush': return msg.data.rows satisfies readonly unknown[];
+                case 'graph/dataPush': return msg.data.commits satisfies readonly unknown[];
                 case 'graph/dataResponse': return msg.requestId satisfies string;
                 case 'graph/commitDetailsResponse': return msg.files satisfies readonly unknown[];
-                case 'graph/error': return msg.message satisfies string;
-                case 'error': return msg.message satisfies string;
+                case 'graph/error': return msg.error.recoverable satisfies boolean;
+                case 'error': return msg.error.message satisfies string;
             }
         };
         void handle; // used
@@ -42,8 +43,20 @@ describe('protocol discriminated unions', () => {
                 case 'changes/statusData': return msg.data.staged satisfies readonly unknown[];
                 case 'changes/commitResult': return msg.success satisfies boolean;
                 case 'changes/stashFiles': return msg.files satisfies readonly unknown[];
-                case 'changes/error': return msg.message satisfies string;
-                case 'error': return msg.message satisfies string;
+                case 'changes/error': return msg.error.recoverable satisfies boolean;
+                case 'error': return msg.error.message satisfies string;
+            }
+        };
+        void handle;
+    });
+
+    it('history extension→webview union is exhaustive', () => {
+        const handle = (msg: HistoryExtensionToWebviewMessage) => {
+            switch (msg.type) {
+                case 'repo/contextChanged': return msg.context.id satisfies string;
+                case 'history/data': return msg.commits satisfies readonly unknown[];
+                case 'history/error': return msg.error.recoverable satisfies boolean;
+                case 'error': return msg.error.message satisfies string;
             }
         };
         void handle;

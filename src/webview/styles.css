@@ -55,3 +55,24 @@ h1 {
     color: var(--vscode-descriptionForeground, #9d9d9d);
     line-height: 1.5;
 }
+
+.error-notice {
+    margin-top: 16px;
+    display: grid;
+    gap: 6px;
+    border: 1px solid var(--vscode-inputValidation-errorBorder, #f14c4c);
+    border-radius: 4px;
+    padding: 10px 12px;
+    color: var(--vscode-inputValidation-errorForeground, var(--vscode-foreground, #cccccc));
+    background: var(--vscode-inputValidation-errorBackground, transparent);
+    line-height: 1.4;
+}
+
+.error-notice strong {
+    font-weight: 600;
+}
+
+.error-notice span {
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.85em;
+}

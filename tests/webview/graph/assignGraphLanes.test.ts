@@ -1,10 +1,9 @@
-// Ported from main:tests/graphLaneAssigner.test.ts
 import { describe, expect, it } from 'vitest';
-import { assignLanes, getMaxLane } from '../../../src/core/graph/GraphLaneAssigner';
-import type { GitGraphCommit } from '../../../src/core/git/domain/GitCommit';
+import type { GraphCommit } from '../../../src/protocol/graph/types';
+import { assignLanes, getMaxLane } from '../../../src/webview/features/graph/layout/assignGraphLanes';
 import { expectItem } from '../../helpers/assertions';
 
-function commit(hash: string, parents: string[] = [], refs: string[] = []): GitGraphCommit {
+function commit(hash: string, parents: string[] = [], refs: string[] = []): GraphCommit {
     return {
         hash,
         shortHash: hash.substring(0, 7),
@@ -17,7 +16,7 @@ function commit(hash: string, parents: string[] = [], refs: string[] = []): GitG
     };
 }
 
-describe('graphLaneAssigner', () => {
+describe('assignGraphLanes', () => {
     it('keeps a linear history on a single lane', () => {
         const rows = assignLanes([commit('c3', ['c2']), commit('c2', ['c1']), commit('c1')]);
         expect(rows.map((r) => r.laneData.lane)).toEqual([0, 0, 0]);
@@ -42,9 +41,7 @@ describe('graphLaneAssigner', () => {
         expect(assignLanes([])).toEqual([]);
         expect(getMaxLane([])).toBe(0);
     });
-});
 
-describe('graphLaneAssigner advanced cases', () => {
     it('handles an orphan root commit on lane 0', () => {
         const rows = assignLanes([commit('orphan')]);
         expect(rows).toHaveLength(1);

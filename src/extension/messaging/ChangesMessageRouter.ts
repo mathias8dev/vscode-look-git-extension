@@ -3,8 +3,10 @@ import * as path from 'path';
 import type { GitRepository } from '../../core/git/GitRepository';
 import type { ChangesWebviewToExtensionMessage, ChangesExtensionToWebviewMessage } from '../../protocol/changes/messages';
 import type { StatusData, StatusEntry } from '../../protocol/changes/types';
+import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import { showModalWarningMessage } from '../utils/confirmation';
+import { createErrorPayload } from './errorSerialization';
 
 type PostMessage = (msg: ChangesExtensionToWebviewMessage) => void;
 type RefreshCallback = () => Promise<void>;
@@ -20,9 +22,19 @@ export class ChangesMessageRouter {
         try {
             await this.dispatch(msg);
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            this.postMessage({ type: 'changes/error', message: `Git operation failed: ${message}` });
-            await this.refresh().catch(() => undefined);
+            this.postChangesError(error, {
+                requestId: requestIdOf(msg),
+                operation: msg.type,
+                code: errorCodeFor(msg),
+            });
+            try {
+                await this.refresh();
+            } catch (refreshError) {
+                this.postChangesError(refreshError, {
+                    operation: 'changes/refreshAfterError',
+                    code: 'refreshFailed',
+                });
+            }
         }
     }
 
@@ -75,7 +87,14 @@ export class ChangesMessageRouter {
             case 'changes/discardAll': {
                 const choice = await showModalWarningMessage('Discard all changes? This cannot be undone.', 'Discard All');
                 if (choice === 'Discard All') {
-                    await repo.unstageAll().catch(() => undefined);
+                    try {
+                        await repo.unstageAll();
+                    } catch (error) {
+                        this.postChangesError(error, {
+                            operation: 'changes/discardAll:unstage',
+                            code: 'gitOperationFailed',
+                        });
+                    }
                     const status = await repo.getStatus();
                     for (const entry of status.unstaged) {
                         await repo.discardFile(entry.filePath);
@@ -115,7 +134,15 @@ export class ChangesMessageRouter {
             case 'changes/commit': {
                 const message = msg.message.trim();
                 if (!message) {
-                    this.postMessage({ type: 'changes/commitResult', success: false, error: 'Commit message cannot be empty.' });
+                    this.postMessage({
+                        type: 'changes/commitResult',
+                        success: false,
+                        ...createErrorPayload(new Error('Commit message cannot be empty.'), {
+                            code: 'validationFailed',
+                            operation: msg.type,
+                            recoverable: true,
+                        }),
+                    });
                     return;
                 }
                 try {
@@ -128,8 +155,15 @@ export class ChangesMessageRouter {
                     this.postMessage({ type: 'changes/commitResult', success: true });
                     await vscode.window.showInformationMessage('Committed successfully.');
                 } catch (error) {
-                    const errMsg = error instanceof Error ? error.message : String(error);
-                    this.postMessage({ type: 'changes/commitResult', success: false, error: errMsg });
+                    this.postMessage({
+                        type: 'changes/commitResult',
+                        success: false,
+                        ...createErrorPayload(error, {
+                            code: 'gitOperationFailed',
+                            operation: msg.type,
+                            recoverable: true,
+                        }),
+                    });
                 }
                 await this.refresh();
                 break;
@@ -256,6 +290,40 @@ export class ChangesMessageRouter {
             default:
                 break;
         }
+    }
+
+    private postChangesError(
+        error: unknown,
+        options: { readonly requestId?: RequestId; readonly operation: string; readonly code: ErrorCode },
+    ): void {
+        this.postMessage({
+            type: 'changes/error',
+            requestId: options.requestId,
+            ...createErrorPayload(error, {
+                code: options.code,
+                operation: options.operation,
+                recoverable: true,
+            }),
+        });
+    }
+}
+
+function requestIdOf(msg: ChangesWebviewToExtensionMessage): RequestId | undefined {
+    return 'requestId' in msg ? msg.requestId : undefined;
+}
+
+function errorCodeFor(msg: ChangesWebviewToExtensionMessage): ErrorCode {
+    switch (msg.type) {
+        case 'changes/openFile':
+        case 'changes/openSubmodule':
+        case 'changes/openMergeEditor':
+        case 'changes/openDiff':
+        case 'changes/openStashDiff':
+            return 'vscodeCommandFailed';
+        case 'changes/commit':
+            return 'gitOperationFailed';
+        default:
+            return 'gitOperationFailed';
     }
 }
 

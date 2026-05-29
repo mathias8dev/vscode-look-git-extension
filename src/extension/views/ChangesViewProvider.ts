@@ -3,6 +3,7 @@ import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryR
 import type { ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
 import type { SerializedRepoContext } from '../../protocol/shared/repo';
 import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '../messaging/ChangesMessageRouter';
+import { createErrorPayload } from '../messaging/errorSerialization';
 import { getWebviewHtml } from './webviewHtml';
 
 export class ChangesViewProvider implements vscode.WebviewViewProvider {
@@ -81,10 +82,16 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     this.view.webview.postMessage(buildStatusData(status, stashes));
                 }
             } catch (error) {
-                const message = error instanceof Error ? error.message : String(error);
                 this.updateBadge(0);
                 if (this.view.visible) {
-                    this.view.webview.postMessage({ type: 'changes/error', message });
+                    this.view.webview.postMessage({
+                        type: 'changes/error',
+                        ...createErrorPayload(error, {
+                            code: 'refreshFailed',
+                            operation: 'changes/refresh',
+                            recoverable: true,
+                        }),
+                    });
                 }
             }
         }

@@ -2,10 +2,11 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import type { GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse } from '../../protocol/graph/messages';
 import type { GraphData, GraphFilters } from '../../protocol/graph/types';
-import { assignLanes, getMaxLane } from '../../core/graph/GraphLaneAssigner';
+import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
-import { toProtocolSubmodule, toProtocolBranch, toProtocolWorktree } from '../mapping/toProtocol';
+import { toProtocolSubmodule, toProtocolBranch, toProtocolGraphCommit, toProtocolWorktree } from '../mapping/toProtocol';
 import { showModalWarningMessage } from '../utils/confirmation';
+import { createErrorPayload, isAbortError } from './errorSerialization';
 
 type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
 
@@ -26,9 +27,12 @@ export class GraphMessageRouter {
         try {
             await this.dispatch(msg);
         } catch (error) {
-            if ((error as Error).name === 'AbortError') { return; }
-            const message = error instanceof Error ? error.message : String(error);
-            this.postMessage({ type: 'graph/error', message });
+            if (isAbortError(error)) { return; }
+            this.postGraphError(error, {
+                requestId: requestIdOf(msg),
+                operation: msg.type,
+                code: errorCodeFor(msg),
+            });
         }
     }
 
@@ -49,7 +53,7 @@ export class GraphMessageRouter {
                     const response: GraphDataResponse = { type: 'graph/dataResponse', requestId: msg.requestId, data };
                     this.postMessage(response);
                 } finally {
-                    this.pending.delete(key);
+                    if (this.pending.get(key) === ctrl) { this.pending.delete(key); }
                 }
                 break;
             }
@@ -64,7 +68,7 @@ export class GraphMessageRouter {
                     const response: GraphDataResponse = { type: 'graph/dataResponse', requestId: msg.requestId, data };
                     this.postMessage(response);
                 } finally {
-                    this.pending.delete(key);
+                    if (this.pending.get(key) === ctrl) { this.pending.delete(key); }
                 }
                 break;
             }
@@ -122,14 +126,19 @@ export class GraphMessageRouter {
         }
     }
 
-    async pushGraphData(filters: GraphFilters | undefined, _signal: AbortSignal | undefined): Promise<void> {
-        const repo = this.repositories.currentRepository;
-        if (!repo) {
-            this.postMessage({ type: 'graph/dataPush', repoId: '', data: emptyGraphData() });
-            return;
+    async pushGraphData(filters: GraphFilters | undefined, signal: AbortSignal | undefined): Promise<void> {
+        try {
+            const repo = this.repositories.currentRepository;
+            if (!repo) {
+                this.postMessage({ type: 'graph/dataPush', repoId: '', data: emptyGraphData() });
+                return;
+            }
+            const data = await this.buildGraphData(filters ?? {}, 0, 300, signal);
+            this.postMessage({ type: 'graph/dataPush', repoId: repo.cwd, data });
+        } catch (error) {
+            if (isAbortError(error)) { return; }
+            this.postGraphError(error, { operation: 'graph/refresh', code: 'refreshFailed' });
         }
-        const data = await this.buildGraphData(filters ?? {}, 0, 300);
-        this.postMessage({ type: 'graph/dataPush', repoId: repo.cwd, data });
     }
 
     private async buildGraphData(
@@ -140,7 +149,7 @@ export class GraphMessageRouter {
     ): Promise<GraphData> {
         const repo = this.repositories.requireRepository();
         const maxCount = offset + limit + 1;
-        const [rawCommits, branches, tags, currentUser, remotes, worktrees, submodules] = await Promise.all([
+        const [rawCommits, branches, tags, currentUser, remotesResult, worktreesResult, submodulesResult] = await Promise.all([
             repo.getGraphLog(maxCount, filters.branches, filters.path, {
                 search: filters.search,
                 authors: filters.authors,
@@ -150,25 +159,22 @@ export class GraphMessageRouter {
             repo.getAllBranches(signal),
             repo.getAllTags(signal),
             repo.getUserName(signal),
-            repo.getRemotes(signal),
-            repo.listWorktrees(signal).catch(() => []),
-            repo.getSubmoduleStatus(signal).catch(() => []),
+            settleOptional(repo.getRemotes(signal)),
+            settleOptional(repo.listWorktrees(signal)),
+            settleOptional(repo.getSubmoduleStatus(signal)),
         ]);
+        const remotes = this.optionalResultOrEmpty(remotesResult, 'graph/listRemotes');
+        const worktrees = this.optionalResultOrEmpty(worktreesResult, 'graph/listWorktrees');
+        const submodules = this.optionalResultOrEmpty(submodulesResult, 'graph/listSubmodules');
 
         const sliced = rawCommits.slice(offset, offset + limit);
         const hasMore = rawCommits.length > offset + limit;
         const currentBranch = branches.find((b) => b.isCurrent)?.name ?? 'HEAD';
-        const primaryBranch = filters.branches?.length === 1 ? filters.branches[0] : currentBranch;
-        const primaryBranchHash = branches.find((b) => b.name === primaryBranch)?.hash;
-
-        const rows = assignLanes(sliced, { primaryBranch, primaryBranchHash });
-        const maxLane = getMaxLane(rows);
 
         return {
             branches: branches.map(toProtocolBranch),
             tags: tags.map((t) => ({ name: t.name, hash: t.hash })),
-            rows,
-            maxLane,
+            commits: sliced.map(toProtocolGraphCommit),
             currentBranch,
             currentUser,
             hasMore,
@@ -279,6 +285,47 @@ export class GraphMessageRouter {
         }
         await this.pushGraphData(undefined, undefined);
     }
+
+    private postGraphError(
+        error: unknown,
+        options: { readonly requestId?: RequestId; readonly operation: string; readonly code: ErrorCode },
+    ): void {
+        this.postMessage({
+            type: 'graph/error',
+            requestId: options.requestId,
+            ...createErrorPayload(error, {
+                code: options.code,
+                operation: options.operation,
+                recoverable: true,
+            }),
+        });
+    }
+
+    private optionalResultOrEmpty<T>(
+        result: PromiseSettledResult<readonly T[]>,
+        operation: string,
+    ): readonly T[] {
+        if (result.status === 'fulfilled') { return result.value; }
+        if (isAbortError(result.reason)) { throw result.reason; }
+        this.postGraphError(result.reason, { operation, code: 'optionalDataUnavailable' });
+        return [];
+    }
+}
+
+async function settleOptional<T>(promise: Promise<readonly T[]>): Promise<PromiseSettledResult<readonly T[]>> {
+    return promise.then(
+        (value) => ({ status: 'fulfilled', value }) as const,
+        (reason: unknown) => ({ status: 'rejected', reason }) as const,
+    );
+}
+
+function requestIdOf(msg: GraphWebviewToExtensionMessage): RequestId | undefined {
+    return 'requestId' in msg ? msg.requestId : undefined;
+}
+
+function errorCodeFor(msg: GraphWebviewToExtensionMessage): ErrorCode {
+    if (msg.type === 'graph/openDiff') { return 'vscodeCommandFailed'; }
+    return 'gitOperationFailed';
 }
 
 function toGitUri(uri: vscode.Uri, ref: string): vscode.Uri {
@@ -289,8 +336,7 @@ function emptyGraphData(): GraphData {
     return {
         branches: [],
         tags: [],
-        rows: [],
-        maxLane: 0,
+        commits: [],
         currentBranch: '',
         currentUser: '',
         hasMore: false,

@@ -1,7 +1,22 @@
 // Mapping functions: Git-prefix core types → protocol types (webview-facing)
+import type { GitGraphCommit } from '../../core/git/domain/GitCommit';
 import type { GitBranch } from '../../core/git/domain/GitStatus';
 import type { GitWorktree, GitSubmodule } from '../../core/git/domain/GitWorktree';
-import type { BranchInfo, WorktreeInfo, SubmoduleInfo, SubmoduleStatus } from '../../protocol/graph/types';
+import type { BranchInfo, GraphCommit, WorktreeInfo, SubmoduleInfo, SubmoduleStatus } from '../../protocol/graph/types';
+
+export function toProtocolGraphCommit(commit: GitGraphCommit): GraphCommit {
+    return {
+        hash: commit.hash,
+        shortHash: commit.shortHash,
+        message: commit.message,
+        authorName: commit.authorName,
+        authorEmail: commit.authorEmail,
+        authorDate: commit.authorDate,
+        parentHashes: commit.parentHashes,
+        refs: commit.refs,
+        matchesFilter: commit.matchesFilter,
+    };
+}
 
 export function toProtocolBranch(b: GitBranch): BranchInfo {
     return {

@@ -3,12 +3,8 @@ import type { GitWorktree } from '../git/domain/GitWorktree';
 import { parseWorktreeList } from '../parsing/parseWorktreeList';
 
 export async function queryWorktrees(execRawReadonly: GitExec, signal?: AbortSignal): Promise<GitWorktree[]> {
-    try {
-        const output = await execRawReadonly(['worktree', 'list', '--porcelain'], signal);
-        return parseWorktreeList(output);
-    } catch {
-        return [];
-    }
+    const output = await execRawReadonly(['worktree', 'list', '--porcelain'], signal);
+    return parseWorktreeList(output);
 }
 
 export async function addWorktree(

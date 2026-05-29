@@ -1,4 +1,4 @@
-import type { RequestId, ErrorMessage } from '../shared/base';
+import type { RequestId, ErrorMessage, ProtocolError } from '../shared/base';
 import type { SerializedRepoContext } from '../shared/repo';
 import type { GraphData, GraphFilters, GraphPage, CommitFileChange } from './types';
 
@@ -19,6 +19,7 @@ export interface GraphErrorPush {
     readonly type: 'graph/error';
     readonly requestId?: RequestId;
     readonly message: string;
+    readonly error: ProtocolError;
 }
 
 // ── Extension → Webview (responses — echo requestId) ───────────────────────

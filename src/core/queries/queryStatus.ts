@@ -37,17 +37,13 @@ export async function queryStashList(
     execReadonly: GitExec,
     signal?: AbortSignal,
 ): Promise<GitStash[]> {
-    try {
-        const output = await execReadonly(['stash', 'list', '--format=%gd %s'], signal);
-        if (!output) { return []; }
-        return output.split('\n').filter(Boolean).map((line) => {
-            const match = line.match(/^stash@\{(\d+)\}\s+(.*)/);
-            if (!match) { return { index: 0, message: line }; }
-            return { index: parseInt(match[1] ?? '0', 10), message: match[2] ?? '' };
-        });
-    } catch {
-        return [];
-    }
+    const output = await execReadonly(['stash', 'list', '--format=%gd %s'], signal);
+    if (!output) { return []; }
+    return output.split('\n').filter(Boolean).map((line) => {
+        const match = line.match(/^stash@\{(\d+)\}\s+(.*)/);
+        if (!match) { return { index: 0, message: line }; }
+        return { index: parseInt(match[1] ?? '0', 10), message: match[2] ?? '' };
+    });
 }
 
 export async function queryStashFiles(

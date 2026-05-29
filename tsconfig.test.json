@@ -9,6 +9,7 @@
   },
   "include": [
     "tests/**/*.ts",
+    "tests/**/*.tsx",
     "src/**/*.ts"
   ],
   "exclude": [
