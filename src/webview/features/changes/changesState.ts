@@ -10,6 +10,12 @@ export interface ChangesState {
     readonly viewMode: ChangesViewMode;
     readonly loading: boolean;
     readonly error: ProtocolError | undefined;
+    readonly commitFeedback: CommitFeedback | undefined;
+}
+
+export interface CommitFeedback {
+    readonly success: boolean;
+    readonly message: string | undefined;
 }
 
 export type ChangesAction =
@@ -23,6 +29,7 @@ export function createInitialChangesState(): ChangesState {
         viewMode: 'tree',
         loading: true,
         error: undefined,
+        commitFeedback: undefined,
     };
 }
 
@@ -50,8 +57,8 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
             return { ...state, loading: false, error: readProtocolError(message) };
         case 'changes/commitResult':
             return message.success
-                ? { ...state, error: undefined }
-                : { ...state, error: message.error };
+                ? { ...state, error: undefined, commitFeedback: { success: true, message: undefined } }
+                : { ...state, error: message.error, commitFeedback: { success: false, message: message.message } };
         case 'repo/contextChanged':
         case 'changes/stashFiles':
             return state;

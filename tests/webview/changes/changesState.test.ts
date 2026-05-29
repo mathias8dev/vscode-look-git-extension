@@ -43,6 +43,15 @@ describe('changesState', () => {
         expect(state.error).toEqual(expect.objectContaining({ code: 'refreshFailed' }));
     });
 
+    it('stores commit feedback from commit result messages', () => {
+        const state = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: { type: 'changes/commitResult', success: true },
+        });
+
+        expect(state.commitFeedback).toEqual({ success: true, message: undefined });
+    });
+
     it('switches view modes locally', () => {
         const state = reduceChangesState(createInitialChangesState(), { type: 'setViewMode', viewMode: 'list' });
         expect(state.viewMode).toBe('list');

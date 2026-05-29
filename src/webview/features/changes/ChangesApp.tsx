@@ -3,6 +3,7 @@ import type { ChangesExtensionToWebviewMessage } from '../../../protocol/changes
 import { vscodeApi } from '../../platform/vscodeHost';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import { ChangeSectionView } from './ChangeSectionView';
+import { CommitComposer } from './CommitComposer';
 import { EmptyState } from './EmptyState';
 import { buildChangeSections } from './changeTree';
 import { createInitialChangesState, getChangeCount, reduceChangesState, type ChangesViewMode } from './changesState';
@@ -46,6 +47,12 @@ export function ChangesApp() {
             ) : null}
 
             <ErrorNotice error={state.error} />
+
+            <CommitComposer
+                stagedCount={state.status.staged.length}
+                conflictState={state.status.conflictState}
+                feedback={state.commitFeedback}
+            />
 
             <section className="changes-content" aria-label="Repository changes">
                 {state.loading ? <EmptyState title="Loading changes" /> : null}

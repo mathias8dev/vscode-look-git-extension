@@ -140,6 +140,55 @@ h1 {
     background: var(--vscode-inputValidation-warningBackground, transparent);
 }
 
+.commit-composer {
+    display: grid;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border, #3c3c3c));
+}
+
+.commit-composer textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 66px;
+    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, #3c3c3c));
+    border-radius: 4px;
+    padding: 7px 8px;
+    color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
+    background: var(--vscode-input-background, transparent);
+    font: inherit;
+    line-height: 1.4;
+}
+
+.commit-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.86em;
+}
+
+.commit-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.commit-actions button {
+    min-height: 28px;
+    border: 1px solid var(--vscode-button-border, transparent);
+    border-radius: 4px;
+    padding: 0 8px;
+    color: var(--vscode-button-foreground, #ffffff);
+    background: var(--vscode-button-background, #0e639c);
+    font: inherit;
+}
+
+.commit-actions button:disabled {
+    opacity: 0.45;
+}
+
 .changes-content {
     flex: 1;
     min-height: 0;
