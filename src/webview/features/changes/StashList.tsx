@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { StashEntry, StashFileEntry } from '../../../protocol/changes/types';
 import { Codicon } from '../../shared/Codicon';
-import type { CreateStashKind, StashEntryAction } from './stashCommands';
+import { CreateStashKind, type StashEntryAction } from './stashCommands';
 import { StashItem } from './StashItem';
 
 interface StashListProps {
@@ -33,7 +33,7 @@ export function StashList({
     const canStashStaged = stagedCount > 0;
 
     const createStash = (kind: CreateStashKind) => {
-        if ((kind === 'staged' && !canStashStaged) || (kind === 'all' && !canStashAll)) { return; }
+        if ((kind === CreateStashKind.Staged && !canStashStaged) || (kind === CreateStashKind.All && !canStashAll)) { return; }
         onCreateStash(kind, message);
         setMessage('');
     };
@@ -62,8 +62,8 @@ export function StashList({
                             onChange={(event) => setMessage(event.currentTarget.value)}
                         />
                         <div className="stash-create-actions">
-                            <button type="button" disabled={!canStashAll} onClick={() => createStash('all')}>Stash</button>
-                            <button type="button" disabled={!canStashStaged} onClick={() => createStash('staged')}>Staged</button>
+                            <button type="button" disabled={!canStashAll} onClick={() => createStash(CreateStashKind.All)}>Stash</button>
+                            <button type="button" disabled={!canStashStaged} onClick={() => createStash(CreateStashKind.Staged)}>Staged</button>
                         </div>
                     </div>
                     <div className="stash-list">

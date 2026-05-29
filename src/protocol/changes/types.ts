@@ -20,10 +20,19 @@ export interface StashFileEntry {
     readonly origPath?: string;
 }
 
-export type ConflictState = 'none' | 'merge' | 'rebase';
+export enum ConflictState {
+    None = 'none',
+    Merge = 'merge',
+    Rebase = 'rebase',
+}
+
+export enum RepositoryState {
+    Available = 'available',
+    Missing = 'missing',
+}
 
 export interface StatusData {
-    readonly repositoryState?: 'available' | 'missing';
+    readonly repositoryState?: RepositoryState;
     readonly staged: readonly StatusEntry[];
     readonly unstaged: readonly StatusEntry[];
     readonly conflicts: readonly StatusEntry[];
@@ -31,4 +40,9 @@ export interface StatusData {
     readonly stashes: readonly StashEntry[];
 }
 
-export type CommitMode = 'commit' | 'amend' | 'commitPush' | 'commitSync';
+export enum CommitMode {
+    Commit = 'commit',
+    Amend = 'amend',
+    CommitPush = 'commitPush',
+    CommitSync = 'commitSync',
+}

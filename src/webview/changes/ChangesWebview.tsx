@@ -15,8 +15,8 @@ import {
     messageForCreateStash,
     messageForStashAction,
     messageForStashFileDiff,
+    StashEntryAction,
     type CreateStashKind,
-    type StashEntryAction,
 } from '../features/changes/stashCommands';
 import { vscodeApi } from '../platform/vscodeHost';
 
@@ -45,7 +45,7 @@ export function ChangesWebview() {
         const hasFiles = Object.prototype.hasOwnProperty.call(state.stashFilesByIndex, index);
         dispatch({ type: 'toggleStash', index });
         if (!isExpanded && !hasFiles) {
-            postToExtension(messageForStashAction(index, 'loadFiles'));
+            postToExtension(messageForStashAction(index, StashEntryAction.LoadFiles));
         }
     };
 

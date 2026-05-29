@@ -1,6 +1,6 @@
 import type { StashEntry, StashFileEntry } from '../../../protocol/changes/types';
 import { Codicon } from '../../shared/Codicon';
-import type { StashEntryAction } from './stashCommands';
+import { StashEntryAction } from './stashCommands';
 import { StashFileRow } from './StashFileRow';
 
 interface StashItemProps {
@@ -31,13 +31,13 @@ export function StashItem({ stash, expanded, files, onToggle, onAction, onFileDi
                     <span>{stash.message}</span>
                 </div>
                 <div className="stash-actions">
-                    <button type="button" onClick={() => onAction(stash.index, 'apply')}>
+                    <button type="button" onClick={() => onAction(stash.index, StashEntryAction.Apply)}>
                         Apply
                     </button>
-                    <button type="button" onClick={() => onAction(stash.index, 'pop')}>
+                    <button type="button" onClick={() => onAction(stash.index, StashEntryAction.Pop)}>
                         Pop
                     </button>
-                    <button type="button" onClick={() => onAction(stash.index, 'drop')}>
+                    <button type="button" onClick={() => onAction(stash.index, StashEntryAction.Drop)}>
                         Drop
                     </button>
                 </div>

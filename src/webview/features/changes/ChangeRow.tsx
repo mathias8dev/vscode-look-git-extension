@@ -1,8 +1,8 @@
 import type { StatusEntry } from '../../../protocol/changes/types';
 import { IconButton } from '../../shared/IconButton';
-import { rowActionsFor, type ChangeRowAction } from './changeCommands';
+import { ChangeRowAction, rowActionsFor } from './changeCommands';
 import type { ChangeListItem } from './changeTree';
-import type { ChangeSelectionMode } from './changesState';
+import { ChangeSelectionMode } from './changesState';
 import { FileTypeIcon } from './FileTypeIcon';
 import { iconKindForStatusEntry } from './fileIconModel';
 import { depthStyle } from './viewStyles';
@@ -27,13 +27,13 @@ export function ChangeRow({ item, depth, selected, onSelect, onAction }: ChangeR
             tabIndex={0}
             onClick={(event) => {
                 if (event.shiftKey) {
-                    onSelect(item, 'range');
+                    onSelect(item, ChangeSelectionMode.Range);
                 } else if (event.ctrlKey || event.metaKey) {
-                    onSelect(item, 'toggle');
+                    onSelect(item, ChangeSelectionMode.Toggle);
                 } else {
-                    onSelect(item, 'replace');
+                    onSelect(item, ChangeSelectionMode.Replace);
                     if (!entry.isSubmodule) {
-                        onAction(item, 'diff');
+                        onAction(item, ChangeRowAction.Diff);
                     }
                 }
             }}
@@ -50,15 +50,15 @@ export function ChangeRow({ item, depth, selected, onSelect, onAction }: ChangeR
                 }
                 if (event.key === 'Enter') {
                     event.preventDefault();
-                    onSelect(item, 'replace');
+                    onSelect(item, ChangeSelectionMode.Replace);
                     if (!entry.isSubmodule) {
-                        onAction(item, 'diff');
+                        onAction(item, ChangeRowAction.Diff);
                     }
                     return;
                 }
                 if (event.key === ' ') {
                     event.preventDefault();
-                    onSelect(item, event.shiftKey ? 'range' : event.ctrlKey || event.metaKey ? 'toggle' : 'replace');
+                    onSelect(item, event.shiftKey ? ChangeSelectionMode.Range : event.ctrlKey || event.metaKey ? ChangeSelectionMode.Toggle : ChangeSelectionMode.Replace);
                 }
             }}
         >

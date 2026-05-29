@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildChangeSections, buildChangeTree, statusLabel } from '../../../src/webview/features/changes/changeTree';
+import { ConflictState } from '../../../src/protocol/changes/types';
 
 describe('changeTree', () => {
     it('builds semantic sections in display order', () => {
@@ -7,7 +8,7 @@ describe('changeTree', () => {
             conflicts: [{ indexStatus: 'U', workTreeStatus: 'U', filePath: 'conflict.ts' }],
             staged: [{ indexStatus: 'A', workTreeStatus: ' ', filePath: 'src/new.ts' }],
             unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'README.md' }],
-            conflictState: 'merge',
+            conflictState: ConflictState.Merge,
             stashes: [],
         });
 
@@ -23,7 +24,7 @@ describe('changeTree', () => {
                 { indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/features/a.ts' },
                 { indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/features/b.ts' },
             ],
-            conflictState: 'none',
+            conflictState: ConflictState.None,
             stashes: [],
         });
         const tree = buildChangeTree(sections[2]?.items ?? []);

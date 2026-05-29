@@ -1,13 +1,27 @@
 import type { ChangesExtensionToWebviewMessage } from '../../../protocol/changes/messages';
+import { ConflictState, RepositoryState } from '../../../protocol/changes/types';
 import type { StashFileEntry, StatusData } from '../../../protocol/changes/types';
 import type { ProtocolError } from '../../../protocol/shared/base';
 import { readProtocolError } from '../../shared/useProtocolError';
-import type { ChangeSectionId } from './changeTree';
+import { ChangeSectionId } from './changeTree';
 import { rememberCommitMessage } from './commitComposerModel';
 
-export type ChangesViewMode = 'tree' | 'list';
-export type ChangesSortMode = 'path' | 'status' | 'directory';
-export type ChangeSelectionMode = 'replace' | 'toggle' | 'range';
+export enum ChangesViewMode {
+    Tree = 'tree',
+    List = 'list',
+}
+
+export enum ChangesSortMode {
+    Path = 'path',
+    Status = 'status',
+    Directory = 'directory',
+}
+
+export enum ChangeSelectionMode {
+    Replace = 'replace',
+    Toggle = 'toggle',
+    Range = 'range',
+}
 
 export interface ChangesState {
     readonly status: StatusData;
@@ -59,8 +73,8 @@ export type ChangesAction =
 export function createInitialChangesState(preferences: ChangesStatePreferences = {}): ChangesState {
     return {
         status: emptyStatusData(),
-        viewMode: preferences.viewMode ?? 'tree',
-        sortMode: preferences.sortMode ?? 'path',
+        viewMode: preferences.viewMode ?? ChangesViewMode.Tree,
+        sortMode: preferences.sortMode ?? ChangesSortMode.Path,
         pathFilter: preferences.pathFilter ?? '',
         commitMessageHistory: preferences.commitMessageHistory ?? [],
         loading: true,
@@ -149,7 +163,7 @@ function toggledSection(sectionIds: readonly ChangeSectionId[], sectionId: Chang
 }
 
 function reduceSelection(state: ChangesState, input: SelectChangeInput): ChangesState {
-    if (input.mode === 'range') {
+    if (input.mode === ChangeSelectionMode.Range) {
         const anchorId = state.selectionAnchorId ?? input.itemId;
         return {
             ...state,
@@ -158,7 +172,7 @@ function reduceSelection(state: ChangesState, input: SelectChangeInput): Changes
         };
     }
 
-    if (input.mode === 'toggle') {
+    if (input.mode === ChangeSelectionMode.Toggle) {
         return {
             ...state,
             selectedItemIds: toggledItem(state.selectedItemIds, input.itemId),
@@ -190,11 +204,11 @@ function rangeSelection(visibleItemIds: readonly string[], anchorId: string, ite
 
 function emptyStatusData(): StatusData {
     return {
-        repositoryState: 'missing',
+        repositoryState: RepositoryState.Missing,
         staged: [],
         unstaged: [],
         conflicts: [],
-        conflictState: 'none',
+        conflictState: ConflictState.None,
         stashes: [],
     };
 }

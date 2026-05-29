@@ -4,22 +4,24 @@ import {
     messageForStashAction,
     messageForStashFileDiff,
     stashFilesRequestId,
+    CreateStashKind,
+    StashEntryAction,
 } from '../../../src/webview/features/changes/stashCommands';
 
 describe('stashCommands', () => {
     it('creates stash commands with normalized optional messages', () => {
-        expect(messageForCreateStash('all', '  save work  ')).toEqual({
+        expect(messageForCreateStash(CreateStashKind.All, '  save work  ')).toEqual({
             type: 'changes/stash',
             message: 'save work',
         });
-        expect(messageForCreateStash('staged', '   ')).toEqual({ type: 'changes/stashStaged' });
+        expect(messageForCreateStash(CreateStashKind.Staged, '   ')).toEqual({ type: 'changes/stashStaged' });
     });
 
     it('creates stash entry action messages', () => {
-        expect(messageForStashAction(2, 'apply')).toEqual({ type: 'changes/stashApply', index: 2 });
-        expect(messageForStashAction(2, 'pop')).toEqual({ type: 'changes/stashPop', index: 2 });
-        expect(messageForStashAction(2, 'drop')).toEqual({ type: 'changes/stashDrop', index: 2 });
-        expect(messageForStashAction(2, 'loadFiles')).toEqual({
+        expect(messageForStashAction(2, StashEntryAction.Apply)).toEqual({ type: 'changes/stashApply', index: 2 });
+        expect(messageForStashAction(2, StashEntryAction.Pop)).toEqual({ type: 'changes/stashPop', index: 2 });
+        expect(messageForStashAction(2, StashEntryAction.Drop)).toEqual({ type: 'changes/stashDrop', index: 2 });
+        expect(messageForStashAction(2, StashEntryAction.LoadFiles)).toEqual({
             type: 'changes/getStashFiles',
             index: 2,
             requestId: 'changes:stash-files:2',

@@ -1,4 +1,4 @@
-import type { ChangesSortMode, ChangesViewMode } from './changesState';
+import { ChangesSortMode, ChangesViewMode } from './changesState';
 
 interface ChangesToolbarProps {
     readonly pathFilter: string;
@@ -31,13 +31,13 @@ export function ChangesToolbar({
                 aria-label="Sort changes"
                 onChange={(event) => onSortModeChange(event.currentTarget.value as ChangesSortMode)}
             >
-                <option value="path">Path</option>
-                <option value="status">Status</option>
-                <option value="directory">Folder</option>
+                <option value={ChangesSortMode.Path}>Path</option>
+                <option value={ChangesSortMode.Status}>Status</option>
+                <option value={ChangesSortMode.Directory}>Folder</option>
             </select>
             <div className="segmented" role="group" aria-label="Changes view mode">
-                <button type="button" aria-pressed={viewMode === 'tree'} onClick={() => onViewModeChange('tree')}>Tree</button>
-                <button type="button" aria-pressed={viewMode === 'list'} onClick={() => onViewModeChange('list')}>List</button>
+                <button type="button" aria-pressed={viewMode === ChangesViewMode.Tree} onClick={() => onViewModeChange(ChangesViewMode.Tree)}>Tree</button>
+                <button type="button" aria-pressed={viewMode === ChangesViewMode.List} onClick={() => onViewModeChange(ChangesViewMode.List)}>List</button>
             </div>
         </section>
     );

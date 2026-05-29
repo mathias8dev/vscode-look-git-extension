@@ -1,4 +1,4 @@
-import type { CommitMode, ConflictState } from '../../../protocol/changes/types';
+import { CommitMode, ConflictState } from '../../../protocol/changes/types';
 
 export type ConventionalCommitType =
     | ''
@@ -38,10 +38,10 @@ export interface CommitMessageStats {
 }
 
 export const COMMIT_MODE_OPTIONS: readonly CommitModeOption[] = [
-    { mode: 'commit', label: 'Commit', primary: true },
-    { mode: 'amend', label: 'Amend' },
-    { mode: 'commitPush', label: 'Commit & Push' },
-    { mode: 'commitSync', label: 'Commit & Sync' },
+    { mode: CommitMode.Commit, label: 'Commit', primary: true },
+    { mode: CommitMode.Amend, label: 'Amend' },
+    { mode: CommitMode.CommitPush, label: 'Commit & Push' },
+    { mode: CommitMode.CommitSync, label: 'Commit & Sync' },
 ];
 
 export const CONVENTIONAL_COMMIT_TYPES: readonly ConventionalCommitType[] = [
@@ -63,9 +63,9 @@ export function canSubmitCommit(input: CommitAvailabilityInput): boolean {
 }
 
 export function commitBlockReason(input: CommitAvailabilityInput): string | undefined {
-    if (input.conflictState !== 'none') { return 'Resolve conflicts before committing.'; }
+    if (input.conflictState !== ConflictState.None) { return 'Resolve conflicts before committing.'; }
     if (input.message.trim().length === 0) { return 'Commit message required.'; }
-    if (input.mode !== 'amend' && input.stagedCount === 0) { return 'Stage files before committing.'; }
+    if (input.mode !== CommitMode.Amend && input.stagedCount === 0) { return 'Stage files before committing.'; }
     return undefined;
 }
 

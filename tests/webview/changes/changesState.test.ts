@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialChangesState, getChangeCount, reduceChangesState } from '../../../src/webview/features/changes/changesState';
+import { createInitialChangesState, getChangeCount, reduceChangesState, ChangesViewMode, ChangesSortMode, ChangeSelectionMode } from '../../../src/webview/features/changes/changesState';
+import { ChangeSectionId } from '../../../src/webview/features/changes/changeTree';
+import { ConflictState } from '../../../src/protocol/changes/types';
 
 describe('changesState', () => {
     it('starts in tree loading mode', () => {
         expect(createInitialChangesState()).toEqual(expect.objectContaining({
-            viewMode: 'tree',
-            sortMode: 'path',
+            viewMode: ChangesViewMode.Tree,
+            sortMode: ChangesSortMode.Path,
             pathFilter: '',
             loading: true,
             error: undefined,
@@ -14,16 +16,16 @@ describe('changesState', () => {
 
     it('starts with persisted preferences when provided', () => {
         expect(createInitialChangesState({
-            viewMode: 'list',
-            sortMode: 'status',
+            viewMode: ChangesViewMode.List,
+            sortMode: ChangesSortMode.Status,
             pathFilter: 'src',
-            collapsedSectionIds: ['staged'],
+            collapsedSectionIds: [ChangeSectionId.Staged],
             commitMessageHistory: ['feat: one'],
         })).toEqual(expect.objectContaining({
-            viewMode: 'list',
-            sortMode: 'status',
+            viewMode: ChangesViewMode.List,
+            sortMode: ChangesSortMode.Status,
             pathFilter: 'src',
-            collapsedSectionIds: ['staged'],
+            collapsedSectionIds: [ChangeSectionId.Staged],
             commitMessageHistory: ['feat: one'],
         }));
     });
@@ -37,7 +39,7 @@ describe('changesState', () => {
                     staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'src/app.ts' }],
                     unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'README.md' }],
                     conflicts: [],
-                    conflictState: 'none',
+                    conflictState: ConflictState.None,
                     stashes: [],
                 },
             },
@@ -82,21 +84,21 @@ describe('changesState', () => {
     });
 
     it('switches view modes locally', () => {
-        const state = reduceChangesState(createInitialChangesState(), { type: 'setViewMode', viewMode: 'list' });
-        expect(state.viewMode).toBe('list');
+        const state = reduceChangesState(createInitialChangesState(), { type: 'setViewMode', viewMode: ChangesViewMode.List });
+        expect(state.viewMode).toBe(ChangesViewMode.List);
     });
 
     it('stores path filter and sort mode locally', () => {
         const filtered = reduceChangesState(createInitialChangesState(), { type: 'setPathFilter', pathFilter: 'src' });
-        const sorted = reduceChangesState(filtered, { type: 'setSortMode', sortMode: 'status' });
+        const sorted = reduceChangesState(filtered, { type: 'setSortMode', sortMode: ChangesSortMode.Status });
         expect(sorted.pathFilter).toBe('src');
-        expect(sorted.sortMode).toBe('status');
+        expect(sorted.sortMode).toBe(ChangesSortMode.Status);
     });
 
     it('toggles collapsed sections locally', () => {
-        const collapsed = reduceChangesState(createInitialChangesState(), { type: 'toggleSection', sectionId: 'unstaged' });
-        const expanded = reduceChangesState(collapsed, { type: 'toggleSection', sectionId: 'unstaged' });
-        expect(collapsed.collapsedSectionIds).toEqual(['unstaged']);
+        const collapsed = reduceChangesState(createInitialChangesState(), { type: 'toggleSection', sectionId: ChangeSectionId.Unstaged });
+        const expanded = reduceChangesState(collapsed, { type: 'toggleSection', sectionId: ChangeSectionId.Unstaged });
+        expect(collapsed.collapsedSectionIds).toEqual([ChangeSectionId.Unstaged]);
         expect(expanded.collapsedSectionIds).toEqual([]);
     });
 
@@ -104,15 +106,15 @@ describe('changesState', () => {
         const visibleItemIds = ['a', 'b', 'c', 'd'];
         const selectedA = reduceChangesState(createInitialChangesState(), {
             type: 'selectChange',
-            selection: { itemId: 'a', visibleItemIds, mode: 'replace' },
+            selection: { itemId: 'a', visibleItemIds, mode: ChangeSelectionMode.Replace },
         });
         const selectedAC = reduceChangesState(selectedA, {
             type: 'selectChange',
-            selection: { itemId: 'c', visibleItemIds, mode: 'toggle' },
+            selection: { itemId: 'c', visibleItemIds, mode: ChangeSelectionMode.Toggle },
         });
         const selectedRange = reduceChangesState(selectedAC, {
             type: 'selectChange',
-            selection: { itemId: 'd', visibleItemIds, mode: 'range' },
+            selection: { itemId: 'd', visibleItemIds, mode: ChangeSelectionMode.Range },
         });
 
         expect(selectedA.selectedItemIds).toEqual(['a']);
@@ -123,7 +125,7 @@ describe('changesState', () => {
     it('clears selection when requested', () => {
         const selected = reduceChangesState(createInitialChangesState(), {
             type: 'selectChange',
-            selection: { itemId: 'a', visibleItemIds: ['a'], mode: 'replace' },
+            selection: { itemId: 'a', visibleItemIds: ['a'], mode: ChangeSelectionMode.Replace },
         });
         const cleared = reduceChangesState(selected, { type: 'clearSelection' });
         expect(cleared.selectedItemIds).toEqual([]);

@@ -1,6 +1,10 @@
 import type { StatusData, StatusEntry } from '../../../protocol/changes/types';
 
-export type ChangeSectionId = 'conflicts' | 'staged' | 'unstaged';
+export enum ChangeSectionId {
+    Conflicts = 'conflicts',
+    Staged = 'staged',
+    Unstaged = 'unstaged',
+}
 
 export interface ChangeListItem {
     readonly id: string;
@@ -27,19 +31,19 @@ export interface ChangeSection {
 export function buildChangeSections(status: StatusData): readonly ChangeSection[] {
     return [
         {
-            id: 'conflicts',
+            id: ChangeSectionId.Conflicts,
             title: 'Conflicts',
-            items: status.conflicts.map((entry) => toItem('conflicts', entry, false)),
+            items: status.conflicts.map((entry) => toItem(ChangeSectionId.Conflicts, entry, false)),
         },
         {
-            id: 'staged',
+            id: ChangeSectionId.Staged,
             title: 'Staged',
-            items: status.staged.map((entry) => toItem('staged', entry, true)),
+            items: status.staged.map((entry) => toItem(ChangeSectionId.Staged, entry, true)),
         },
         {
-            id: 'unstaged',
+            id: ChangeSectionId.Unstaged,
             title: 'Changes',
-            items: status.unstaged.map((entry) => toItem('unstaged', entry, false)),
+            items: status.unstaged.map((entry) => toItem(ChangeSectionId.Unstaged, entry, false)),
         },
     ];
 }

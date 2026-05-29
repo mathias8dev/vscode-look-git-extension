@@ -1,18 +1,25 @@
 import type { ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
 import type { CodiconName } from '../../shared/Codicon';
-import type { ChangeListItem, ChangeSection } from './changeTree';
+import { ChangeSectionId, type ChangeListItem, type ChangeSection } from './changeTree';
 
-export type ChangeRowAction =
-    | 'open'
-    | 'diff'
-    | 'stage'
-    | 'unstage'
-    | 'discard'
-    | 'openMergeEditor'
-    | 'markResolved'
-    | 'acceptOurs'
-    | 'acceptTheirs';
-export type ChangeBulkAction = 'stageAll' | 'unstageAll' | 'discardAll' | 'acceptAllTheirs';
+export enum ChangeRowAction {
+    Open = 'open',
+    Diff = 'diff',
+    Stage = 'stage',
+    Unstage = 'unstage',
+    Discard = 'discard',
+    OpenMergeEditor = 'openMergeEditor',
+    MarkResolved = 'markResolved',
+    AcceptOurs = 'acceptOurs',
+    AcceptTheirs = 'acceptTheirs',
+}
+
+export enum ChangeBulkAction {
+    StageAll = 'stageAll',
+    UnstageAll = 'unstageAll',
+    DiscardAll = 'discardAll',
+    AcceptAllTheirs = 'acceptAllTheirs',
+}
 
 export interface ChangeActionDescriptor<TAction extends string> {
     readonly action: TAction;
@@ -22,62 +29,62 @@ export interface ChangeActionDescriptor<TAction extends string> {
 }
 
 export function rowActionsFor(item: ChangeListItem): readonly ChangeActionDescriptor<ChangeRowAction>[] {
-    if (item.section === 'staged') {
+    if (item.section === ChangeSectionId.Staged) {
         return [
-            { action: 'diff', icon: 'diff', label: 'Diff', title: 'Open diff' },
-            { action: 'unstage', icon: 'remove', label: 'Unstage', title: 'Unstage file' },
-            { action: 'open', icon: 'go-to-file', label: 'Open', title: 'Open file' },
+            { action: ChangeRowAction.Diff, icon: 'diff', label: 'Diff', title: 'Open diff' },
+            { action: ChangeRowAction.Unstage, icon: 'remove', label: 'Unstage', title: 'Unstage file' },
+            { action: ChangeRowAction.Open, icon: 'go-to-file', label: 'Open', title: 'Open file' },
         ];
     }
 
     if (item.entry.isSubmodule) {
-        if (item.section === 'conflicts') {
+        if (item.section === ChangeSectionId.Conflicts) {
             return [
-                { action: 'markResolved', icon: 'check', label: 'Resolved', title: 'Mark resolved' },
-                { action: 'open', icon: 'folder-opened', label: 'Open', title: 'Open submodule' },
+                { action: ChangeRowAction.MarkResolved, icon: 'check', label: 'Resolved', title: 'Mark resolved' },
+                { action: ChangeRowAction.Open, icon: 'folder-opened', label: 'Open', title: 'Open submodule' },
             ];
         }
         return [
-            { action: 'stage', icon: 'add', label: 'Stage', title: 'Stage submodule gitlink' },
-            { action: 'open', icon: 'folder-opened', label: 'Open', title: 'Open submodule' },
+            { action: ChangeRowAction.Stage, icon: 'add', label: 'Stage', title: 'Stage submodule gitlink' },
+            { action: ChangeRowAction.Open, icon: 'folder-opened', label: 'Open', title: 'Open submodule' },
         ];
     }
 
-    if (item.section === 'conflicts') {
+    if (item.section === ChangeSectionId.Conflicts) {
         return [
-            { action: 'openMergeEditor', icon: 'git-merge', label: 'Merge', title: 'Open merge editor' },
-            { action: 'acceptOurs', icon: 'fold-up', label: 'Ours', title: 'Accept current changes (ours)' },
-            { action: 'acceptTheirs', icon: 'fold-down', label: 'Theirs', title: 'Accept incoming changes (theirs)' },
-            { action: 'markResolved', icon: 'check', label: 'Resolved', title: 'Mark resolved' },
-            { action: 'open', icon: 'go-to-file', label: 'Open', title: 'Open file' },
+            { action: ChangeRowAction.OpenMergeEditor, icon: 'git-merge', label: 'Merge', title: 'Open merge editor' },
+            { action: ChangeRowAction.AcceptOurs, icon: 'fold-up', label: 'Ours', title: 'Accept current changes (ours)' },
+            { action: ChangeRowAction.AcceptTheirs, icon: 'fold-down', label: 'Theirs', title: 'Accept incoming changes (theirs)' },
+            { action: ChangeRowAction.MarkResolved, icon: 'check', label: 'Resolved', title: 'Mark resolved' },
+            { action: ChangeRowAction.Open, icon: 'go-to-file', label: 'Open', title: 'Open file' },
         ];
     }
 
     return [
-        { action: 'diff', icon: 'diff', label: 'Diff', title: 'Open diff' },
-        { action: 'stage', icon: 'add', label: 'Stage', title: 'Stage file' },
-        { action: 'discard', icon: 'trash', label: 'Discard', title: 'Discard changes' },
-        { action: 'open', icon: 'go-to-file', label: 'Open', title: 'Open file' },
+        { action: ChangeRowAction.Diff, icon: 'diff', label: 'Diff', title: 'Open diff' },
+        { action: ChangeRowAction.Stage, icon: 'add', label: 'Stage', title: 'Stage file' },
+        { action: ChangeRowAction.Discard, icon: 'trash', label: 'Discard', title: 'Discard changes' },
+        { action: ChangeRowAction.Open, icon: 'go-to-file', label: 'Open', title: 'Open file' },
     ];
 }
 
 export function bulkActionsFor(section: ChangeSection): readonly ChangeActionDescriptor<ChangeBulkAction>[] {
-    if (section.id === 'staged') {
+    if (section.id === ChangeSectionId.Staged) {
         return section.items.length > 0
-            ? [{ action: 'unstageAll', icon: 'remove', label: 'Unstage All', title: 'Unstage all staged files' }]
+            ? [{ action: ChangeBulkAction.UnstageAll, icon: 'remove', label: 'Unstage All', title: 'Unstage all staged files' }]
             : [];
     }
-    if (section.id === 'unstaged') {
+    if (section.id === ChangeSectionId.Unstaged) {
         return section.items.length > 0
             ? [
-                { action: 'stageAll', icon: 'add', label: 'Stage All', title: 'Stage all changed files' },
-                { action: 'discardAll', icon: 'trash', label: 'Discard All', title: 'Discard all unstaged changes' },
+                { action: ChangeBulkAction.StageAll, icon: 'add', label: 'Stage All', title: 'Stage all changed files' },
+                { action: ChangeBulkAction.DiscardAll, icon: 'trash', label: 'Discard All', title: 'Discard all unstaged changes' },
             ]
             : [];
     }
-    if (section.id === 'conflicts') {
+    if (section.id === ChangeSectionId.Conflicts) {
         return section.items.length > 0
-            ? [{ action: 'acceptAllTheirs', icon: 'fold-down', label: 'Accept All Theirs', title: 'Accept incoming for all conflicts' }]
+            ? [{ action: ChangeBulkAction.AcceptAllTheirs, icon: 'fold-down', label: 'Accept All Theirs', title: 'Accept incoming for all conflicts' }]
             : [];
     }
     return [];
@@ -86,11 +93,11 @@ export function bulkActionsFor(section: ChangeSection): readonly ChangeActionDes
 export function messageForRowAction(item: ChangeListItem, action: ChangeRowAction): ChangesWebviewToExtensionMessage {
     const entry = item.entry;
     switch (action) {
-        case 'open':
+        case ChangeRowAction.Open:
             return entry.isSubmodule
                 ? { type: 'changes/openSubmodule', filePath: entry.filePath }
                 : { type: 'changes/openFile', filePath: entry.filePath };
-        case 'diff':
+        case ChangeRowAction.Diff:
             return {
                 type: 'changes/openDiff',
                 filePath: entry.filePath,
@@ -99,32 +106,32 @@ export function messageForRowAction(item: ChangeListItem, action: ChangeRowActio
                 indexStatus: entry.indexStatus,
                 workTreeStatus: entry.workTreeStatus,
             };
-        case 'stage':
+        case ChangeRowAction.Stage:
             return { type: 'changes/stageFile', filePath: entry.filePath };
-        case 'unstage':
+        case ChangeRowAction.Unstage:
             return { type: 'changes/unstageFile', filePath: entry.filePath };
-        case 'discard':
+        case ChangeRowAction.Discard:
             return { type: 'changes/discardFile', filePath: entry.filePath };
-        case 'openMergeEditor':
+        case ChangeRowAction.OpenMergeEditor:
             return { type: 'changes/openMergeEditor', filePath: entry.filePath };
-        case 'markResolved':
+        case ChangeRowAction.MarkResolved:
             return { type: 'changes/markResolved', filePath: entry.filePath };
-        case 'acceptOurs':
+        case ChangeRowAction.AcceptOurs:
             return { type: 'changes/acceptOurs', filePath: entry.filePath };
-        case 'acceptTheirs':
+        case ChangeRowAction.AcceptTheirs:
             return { type: 'changes/acceptTheirs', filePath: entry.filePath };
     }
 }
 
 export function messageForBulkAction(action: ChangeBulkAction): ChangesWebviewToExtensionMessage {
     switch (action) {
-        case 'stageAll':
+        case ChangeBulkAction.StageAll:
             return { type: 'changes/stageAll' };
-        case 'unstageAll':
+        case ChangeBulkAction.UnstageAll:
             return { type: 'changes/unstageAll' };
-        case 'discardAll':
+        case ChangeBulkAction.DiscardAll:
             return { type: 'changes/discardAll' };
-        case 'acceptAllTheirs':
+        case ChangeBulkAction.AcceptAllTheirs:
             return { type: 'changes/acceptAllTheirs' };
     }
 }

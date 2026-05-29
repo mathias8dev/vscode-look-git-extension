@@ -1,8 +1,17 @@
 import type { ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
 import type { StashFileEntry } from '../../../protocol/changes/types';
 
-export type CreateStashKind = 'all' | 'staged';
-export type StashEntryAction = 'apply' | 'pop' | 'drop' | 'loadFiles';
+export enum CreateStashKind {
+    All = 'all',
+    Staged = 'staged',
+}
+
+export enum StashEntryAction {
+    Apply = 'apply',
+    Pop = 'pop',
+    Drop = 'drop',
+    LoadFiles = 'loadFiles',
+}
 
 export function messageForCreateStash(
     kind: CreateStashKind,
@@ -10,20 +19,20 @@ export function messageForCreateStash(
 ): ChangesWebviewToExtensionMessage {
     const trimmedMessage = message.trim();
     const payload = trimmedMessage ? { message: trimmedMessage } : {};
-    return kind === 'staged'
+    return kind === CreateStashKind.Staged
         ? { type: 'changes/stashStaged', ...payload }
         : { type: 'changes/stash', ...payload };
 }
 
 export function messageForStashAction(index: number, action: StashEntryAction): ChangesWebviewToExtensionMessage {
     switch (action) {
-        case 'apply':
+        case StashEntryAction.Apply:
             return { type: 'changes/stashApply', index };
-        case 'pop':
+        case StashEntryAction.Pop:
             return { type: 'changes/stashPop', index };
-        case 'drop':
+        case StashEntryAction.Drop:
             return { type: 'changes/stashDrop', index };
-        case 'loadFiles':
+        case StashEntryAction.LoadFiles:
             return { type: 'changes/getStashFiles', index, requestId: stashFilesRequestId(index) };
     }
 }

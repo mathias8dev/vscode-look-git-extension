@@ -6,25 +6,26 @@ import {
     messageStats,
     rememberCommitMessage,
 } from '../../../src/webview/features/changes/commitComposerModel';
+import { CommitMode, ConflictState } from '../../../src/protocol/changes/types';
 
 describe('commitComposerModel', () => {
     it('blocks empty messages', () => {
-        expect(canSubmitCommit({ message: '   ', mode: 'commit', stagedCount: 1, conflictState: 'none' })).toBe(false);
-        expect(commitBlockReason({ message: '   ', mode: 'commit', stagedCount: 1, conflictState: 'none' })).toBe('Commit message required.');
+        expect(canSubmitCommit({ message: '   ', mode: CommitMode.Commit, stagedCount: 1, conflictState: ConflictState.None })).toBe(false);
+        expect(commitBlockReason({ message: '   ', mode: CommitMode.Commit, stagedCount: 1, conflictState: ConflictState.None })).toBe('Commit message required.');
     });
 
     it('blocks regular commits without staged files', () => {
-        expect(canSubmitCommit({ message: 'feat: add', mode: 'commit', stagedCount: 0, conflictState: 'none' })).toBe(false);
-        expect(commitBlockReason({ message: 'feat: add', mode: 'commitPush', stagedCount: 0, conflictState: 'none' })).toBe('Stage files before committing.');
+        expect(canSubmitCommit({ message: 'feat: add', mode: CommitMode.Commit, stagedCount: 0, conflictState: ConflictState.None })).toBe(false);
+        expect(commitBlockReason({ message: 'feat: add', mode: CommitMode.CommitPush, stagedCount: 0, conflictState: ConflictState.None })).toBe('Stage files before committing.');
     });
 
     it('allows amend with only a message', () => {
-        expect(canSubmitCommit({ message: 'feat: amend', mode: 'amend', stagedCount: 0, conflictState: 'none' })).toBe(true);
+        expect(canSubmitCommit({ message: 'feat: amend', mode: CommitMode.Amend, stagedCount: 0, conflictState: ConflictState.None })).toBe(true);
     });
 
     it('blocks commits during merge or rebase conflicts', () => {
-        expect(commitBlockReason({ message: 'feat: add', mode: 'commit', stagedCount: 1, conflictState: 'merge' })).toBe('Resolve conflicts before committing.');
-        expect(commitBlockReason({ message: 'feat: add', mode: 'commit', stagedCount: 1, conflictState: 'rebase' })).toBe('Resolve conflicts before committing.');
+        expect(commitBlockReason({ message: 'feat: add', mode: CommitMode.Commit, stagedCount: 1, conflictState: ConflictState.Merge })).toBe('Resolve conflicts before committing.');
+        expect(commitBlockReason({ message: 'feat: add', mode: CommitMode.Commit, stagedCount: 1, conflictState: ConflictState.Rebase })).toBe('Resolve conflicts before committing.');
     });
 
     it('builds optional conventional commit messages', () => {

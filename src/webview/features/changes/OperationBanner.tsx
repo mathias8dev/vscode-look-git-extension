@@ -1,4 +1,5 @@
-import type { ActiveConflictState, OperationAction } from './operationCommands';
+import { OperationAction, type ActiveConflictState } from './operationCommands';
+import { ConflictState } from '../../../protocol/changes/types';
 
 interface OperationBannerProps {
     readonly conflictState: ActiveConflictState;
@@ -14,9 +15,9 @@ export function OperationBanner({ conflictState, conflictCount, onAction }: Oper
                 <span>{conflictCountText(conflictCount)}</span>
             </div>
             <div className="operation-actions">
-                <button type="button" onClick={() => onAction('acceptAllTheirs')}>Accept All Theirs</button>
-                <button type="button" onClick={() => onAction('continue')}>Continue</button>
-                <button type="button" onClick={() => onAction('abort')}>Abort</button>
+                <button type="button" onClick={() => onAction(OperationAction.AcceptAllTheirs)}>Accept All Theirs</button>
+                <button type="button" onClick={() => onAction(OperationAction.Continue)}>Continue</button>
+                <button type="button" onClick={() => onAction(OperationAction.Abort)}>Abort</button>
             </div>
         </section>
     );
@@ -27,5 +28,5 @@ function conflictCountText(count: number): string {
 }
 
 function operationLabel(state: ActiveConflictState): string {
-    return state === 'merge' ? 'Merge' : 'Rebase';
+    return state === ConflictState.Merge ? 'Merge' : 'Rebase';
 }

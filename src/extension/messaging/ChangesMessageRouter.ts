@@ -3,6 +3,7 @@ import * as path from 'path';
 import type { GitRepository } from '../../core/git/GitRepository';
 import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
 import type { ChangesWebviewToExtensionMessage, ChangesExtensionToWebviewMessage } from '../../protocol/changes/messages';
+import { CommitMode, ConflictState, RepositoryState } from '../../protocol/changes/types';
 import type { StatusData, StatusEntry } from '../../protocol/changes/types';
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
@@ -204,10 +205,10 @@ export class ChangesMessageRouter {
                 }
                 try {
                     switch (msg.mode) {
-                        case 'amend':      await repo.commitAmend(message); break;
-                        case 'commitPush': await repo.commit(message); await repo.push(); break;
-                        case 'commitSync': await repo.commit(message); await repo.pullAndPush(); break;
-                        default:           await repo.commit(message); break;
+                        case CommitMode.Amend:      await repo.commitAmend(message); break;
+                        case CommitMode.CommitPush: await repo.commit(message); await repo.push(); break;
+                        case CommitMode.CommitSync: await repo.commit(message); await repo.pullAndPush(); break;
+                        default:                    await repo.commit(message); break;
                     }
                     this.postMessage({ type: 'changes/commitResult', success: true });
                     await vscode.window.showInformationMessage('Committed successfully.');
@@ -335,16 +336,16 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/continueOp':
-                if (msg.conflictState === 'merge') { await repo.mergeContinue(); }
+                if (msg.conflictState === ConflictState.Merge) { await repo.mergeContinue(); }
                 else { await repo.rebaseContinue(); }
                 await this.refresh();
                 break;
 
             case 'changes/abortOp': {
-                const opName = msg.conflictState === 'merge' ? 'merge' : 'rebase';
+                const opName = msg.conflictState === ConflictState.Merge ? 'merge' : 'rebase';
                 const choice = await showModalWarningMessage(`Abort the current ${opName}?`, 'Abort');
                 if (choice === 'Abort') {
-                    if (msg.conflictState === 'merge') { await repo.mergeAbort(); }
+                    if (msg.conflictState === ConflictState.Merge) { await repo.mergeAbort(); }
                     else { await repo.rebaseAbort(); }
                     await this.refresh();
                 }
@@ -428,11 +429,11 @@ export function buildStatusData(
     return {
         type: 'changes/statusData',
         data: {
-            repositoryState: 'available',
+            repositoryState: RepositoryState.Available,
             staged: status.staged.map(toEntry),
             unstaged: status.unstaged.map(toEntry),
             conflicts: status.conflicts.map(toEntry),
-            conflictState: status.conflictState,
+            conflictState: toProtocolConflictState(status.conflictState),
             stashes: stashes.map((s) => ({ index: s.index, message: s.message })),
         },
     };
@@ -442,12 +443,20 @@ export function emptyStatusData(): { type: 'changes/statusData'; data: StatusDat
     return {
         type: 'changes/statusData',
         data: {
-            repositoryState: 'missing',
+            repositoryState: RepositoryState.Missing,
             staged: [],
             unstaged: [],
             conflicts: [],
-            conflictState: 'none',
+            conflictState: ConflictState.None,
             stashes: [],
         },
     };
+}
+
+function toProtocolConflictState(state: 'none' | 'merge' | 'rebase'): ConflictState {
+    switch (state) {
+        case 'merge': return ConflictState.Merge;
+        case 'rebase': return ConflictState.Rebase;
+        default: return ConflictState.None;
+    }
 }

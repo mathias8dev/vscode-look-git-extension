@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import type { CommitMode, ConflictState, StashFileEntry } from '../../../protocol/changes/types';
+import { ConflictState, RepositoryState } from '../../../protocol/changes/types';
+import type { CommitMode, StashFileEntry } from '../../../protocol/changes/types';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import type { ChangeBulkAction, ChangeRowAction } from './changeCommands';
 import { ChangeSectionView } from './ChangeSectionView';
@@ -53,7 +54,7 @@ export function ChangesApp({
     const selectedItemIds = useMemo(() => new Set(state.selectedItemIds), [state.selectedItemIds]);
     const changeCount = getChangeCount(state.status);
     const visibleChangeCount = visibleItemIds.length;
-    const hasRepository = state.status.repositoryState !== 'missing';
+    const hasRepository = state.status.repositoryState !== RepositoryState.Missing;
 
     return (
         <main className="changes-shell">
@@ -111,7 +112,7 @@ function operationBannerFor(
     conflictCount: number,
     onOperationAction: (conflictState: ActiveConflictState, action: OperationAction) => void,
 ) {
-    if (conflictState === 'none') { return null; }
+    if (conflictState === ConflictState.None) { return null; }
     return (
         <OperationBanner
             conflictState={conflictState}

@@ -1,5 +1,5 @@
-import type { ChangeSectionId } from './changeTree';
-import type { ChangesSortMode, ChangesState, ChangesStatePreferences, ChangesViewMode } from './changesState';
+import { ChangeSectionId } from './changeTree';
+import { ChangesSortMode, ChangesViewMode, type ChangesState, type ChangesStatePreferences } from './changesState';
 
 interface PersistedChangesWebviewState {
     readonly viewMode?: unknown;
@@ -9,9 +9,9 @@ interface PersistedChangesWebviewState {
     readonly commitMessageHistory?: unknown;
 }
 
-const VIEW_MODES: ReadonlySet<ChangesViewMode> = new Set(['tree', 'list']);
-const SORT_MODES: ReadonlySet<ChangesSortMode> = new Set(['path', 'status', 'directory']);
-const SECTION_IDS: ReadonlySet<ChangeSectionId> = new Set(['conflicts', 'staged', 'unstaged']);
+const VIEW_MODES: ReadonlySet<ChangesViewMode> = new Set([ChangesViewMode.Tree, ChangesViewMode.List]);
+const SORT_MODES: ReadonlySet<ChangesSortMode> = new Set([ChangesSortMode.Path, ChangesSortMode.Status, ChangesSortMode.Directory]);
+const SECTION_IDS: ReadonlySet<ChangeSectionId> = new Set([ChangeSectionId.Conflicts, ChangeSectionId.Staged, ChangeSectionId.Unstaged]);
 
 export function readChangesStatePreferences(value: unknown): ChangesStatePreferences {
     if (!isRecord(value)) { return {}; }

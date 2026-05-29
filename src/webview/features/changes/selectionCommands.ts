@@ -1,34 +1,35 @@
 import type { ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
-import { messageForRowAction, type ChangeActionDescriptor } from './changeCommands';
-import type { ChangeListItem } from './changeTree';
+import { ChangeRowAction, messageForRowAction, type ChangeActionDescriptor } from './changeCommands';
+import { ChangeSectionId, type ChangeListItem } from './changeTree';
 
-export type ChangeSelectionAction =
-    | 'open'
-    | 'diff'
-    | 'stage'
-    | 'unstage'
-    | 'discard'
-    | 'acceptOurs'
-    | 'acceptTheirs'
-    | 'markResolved';
+export enum ChangeSelectionAction {
+    Open = 'open',
+    Diff = 'diff',
+    Stage = 'stage',
+    Unstage = 'unstage',
+    Discard = 'discard',
+    AcceptOurs = 'acceptOurs',
+    AcceptTheirs = 'acceptTheirs',
+    MarkResolved = 'markResolved',
+}
 
 export function selectionActionsFor(items: readonly ChangeListItem[]): readonly ChangeActionDescriptor<ChangeSelectionAction>[] {
     if (items.length === 0) { return []; }
     const singleFileActions: ChangeActionDescriptor<ChangeSelectionAction>[] = items.length === 1
         ? [
-            { action: 'diff', icon: 'diff', label: 'Diff', title: 'Open selected file diff' },
-            { action: 'open', icon: 'go-to-file', label: 'Open', title: 'Open selected file' },
+            { action: ChangeSelectionAction.Diff, icon: 'diff', label: 'Diff', title: 'Open selected file diff' },
+            { action: ChangeSelectionAction.Open, icon: 'go-to-file', label: 'Open', title: 'Open selected file' },
         ]
         : [];
 
     return [
         ...singleFileActions,
-        ...actionIf(hasSection(items, 'unstaged'), { action: 'stage', icon: 'add', label: 'Stage', title: 'Stage selected changes' }),
-        ...actionIf(hasSection(items, 'staged'), { action: 'unstage', icon: 'remove', label: 'Unstage', title: 'Unstage selected changes' }),
-        ...actionIf(hasActionableSection(items, 'unstaged'), { action: 'discard', icon: 'trash', label: 'Discard', title: 'Discard selected changes' }),
-        ...actionIf(hasActionableSection(items, 'conflicts'), { action: 'acceptOurs', icon: 'fold-up', label: 'Ours', title: 'Accept current changes for selected conflicts' }),
-        ...actionIf(hasActionableSection(items, 'conflicts'), { action: 'acceptTheirs', icon: 'fold-down', label: 'Theirs', title: 'Accept incoming changes for selected conflicts' }),
-        ...actionIf(hasSection(items, 'conflicts'), { action: 'markResolved', icon: 'check', label: 'Resolved', title: 'Mark selected conflicts resolved' }),
+        ...actionIf(hasSection(items, ChangeSectionId.Unstaged), { action: ChangeSelectionAction.Stage, icon: 'add', label: 'Stage', title: 'Stage selected changes' }),
+        ...actionIf(hasSection(items, ChangeSectionId.Staged), { action: ChangeSelectionAction.Unstage, icon: 'remove', label: 'Unstage', title: 'Unstage selected changes' }),
+        ...actionIf(hasActionableSection(items, ChangeSectionId.Unstaged), { action: ChangeSelectionAction.Discard, icon: 'trash', label: 'Discard', title: 'Discard selected changes' }),
+        ...actionIf(hasActionableSection(items, ChangeSectionId.Conflicts), { action: ChangeSelectionAction.AcceptOurs, icon: 'fold-up', label: 'Ours', title: 'Accept current changes for selected conflicts' }),
+        ...actionIf(hasActionableSection(items, ChangeSectionId.Conflicts), { action: ChangeSelectionAction.AcceptTheirs, icon: 'fold-down', label: 'Theirs', title: 'Accept incoming changes for selected conflicts' }),
+        ...actionIf(hasSection(items, ChangeSectionId.Conflicts), { action: ChangeSelectionAction.MarkResolved, icon: 'check', label: 'Resolved', title: 'Mark selected conflicts resolved' }),
     ];
 }
 
@@ -37,25 +38,25 @@ export function messageForSelectionAction(
     action: ChangeSelectionAction,
 ): ChangesWebviewToExtensionMessage | undefined {
     const firstItem = items[0];
-    if ((action === 'open' || action === 'diff') && items.length === 1 && firstItem) {
-        return messageForRowAction(firstItem, action);
+    if ((action === ChangeSelectionAction.Open || action === ChangeSelectionAction.Diff) && items.length === 1 && firstItem) {
+        return messageForRowAction(firstItem, action as unknown as ChangeRowAction);
     }
 
     switch (action) {
-        case 'stage':
-            return filesMessage('changes/stageFiles', pathsForSection(items, 'unstaged'));
-        case 'unstage':
-            return filesMessage('changes/unstageFiles', pathsForSection(items, 'staged'));
-        case 'discard':
-            return filesMessage('changes/discardFiles', actionablePathsForSection(items, 'unstaged'));
-        case 'acceptOurs':
-            return filesMessage('changes/acceptOursFiles', actionablePathsForSection(items, 'conflicts'));
-        case 'acceptTheirs':
-            return filesMessage('changes/acceptTheirsFiles', actionablePathsForSection(items, 'conflicts'));
-        case 'markResolved':
-            return filesMessage('changes/markResolvedFiles', pathsForSection(items, 'conflicts'));
-        case 'open':
-        case 'diff':
+        case ChangeSelectionAction.Stage:
+            return filesMessage('changes/stageFiles', pathsForSection(items, ChangeSectionId.Unstaged));
+        case ChangeSelectionAction.Unstage:
+            return filesMessage('changes/unstageFiles', pathsForSection(items, ChangeSectionId.Staged));
+        case ChangeSelectionAction.Discard:
+            return filesMessage('changes/discardFiles', actionablePathsForSection(items, ChangeSectionId.Unstaged));
+        case ChangeSelectionAction.AcceptOurs:
+            return filesMessage('changes/acceptOursFiles', actionablePathsForSection(items, ChangeSectionId.Conflicts));
+        case ChangeSelectionAction.AcceptTheirs:
+            return filesMessage('changes/acceptTheirsFiles', actionablePathsForSection(items, ChangeSectionId.Conflicts));
+        case ChangeSelectionAction.MarkResolved:
+            return filesMessage('changes/markResolvedFiles', pathsForSection(items, ChangeSectionId.Conflicts));
+        case ChangeSelectionAction.Open:
+        case ChangeSelectionAction.Diff:
             return undefined;
     }
 }
@@ -67,19 +68,19 @@ function actionIf<TAction extends ChangeSelectionAction>(
     return condition ? [descriptor] : [];
 }
 
-function hasSection(items: readonly ChangeListItem[], section: ChangeListItem['section']): boolean {
+function hasSection(items: readonly ChangeListItem[], section: ChangeSectionId): boolean {
     return items.some((item) => item.section === section);
 }
 
-function hasActionableSection(items: readonly ChangeListItem[], section: ChangeListItem['section']): boolean {
+function hasActionableSection(items: readonly ChangeListItem[], section: ChangeSectionId): boolean {
     return items.some((item) => item.section === section && !item.entry.isSubmodule);
 }
 
-function pathsForSection(items: readonly ChangeListItem[], section: ChangeListItem['section']): readonly string[] {
+function pathsForSection(items: readonly ChangeListItem[], section: ChangeSectionId): readonly string[] {
     return items.filter((item) => item.section === section).map((item) => item.entry.filePath);
 }
 
-function actionablePathsForSection(items: readonly ChangeListItem[], section: ChangeListItem['section']): readonly string[] {
+function actionablePathsForSection(items: readonly ChangeListItem[], section: ChangeSectionId): readonly string[] {
     return items
         .filter((item) => item.section === section && !item.entry.isSubmodule)
         .map((item) => item.entry.filePath);

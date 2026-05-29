@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { changesStateToPersisted, readChangesStatePreferences } from '../../../src/webview/features/changes/changesPersistence';
-import { createInitialChangesState } from '../../../src/webview/features/changes/changesState';
+import { createInitialChangesState, ChangesViewMode, ChangesSortMode } from '../../../src/webview/features/changes/changesState';
+import { ChangeSectionId } from '../../../src/webview/features/changes/changeTree';
 
 describe('changesPersistence', () => {
     it('reads only valid persisted preferences', () => {
@@ -11,8 +12,8 @@ describe('changesPersistence', () => {
             collapsedSectionIds: ['staged', 'bad'],
             commitMessageHistory: ['feat: one'],
         })).toEqual({
-            viewMode: 'list',
-            sortMode: 'directory',
+            viewMode: ChangesViewMode.List,
+            sortMode: ChangesSortMode.Directory,
             pathFilter: 'src',
             collapsedSectionIds: undefined,
             commitMessageHistory: ['feat: one'],
@@ -21,18 +22,18 @@ describe('changesPersistence', () => {
 
     it('serializes only persistent view preferences', () => {
         const state = createInitialChangesState({
-            viewMode: 'list',
-            sortMode: 'status',
+            viewMode: ChangesViewMode.List,
+            sortMode: ChangesSortMode.Status,
             pathFilter: 'README',
-            collapsedSectionIds: ['unstaged'],
+            collapsedSectionIds: [ChangeSectionId.Unstaged],
             commitMessageHistory: ['fix: bug'],
         });
 
         expect(changesStateToPersisted(state)).toEqual({
-            viewMode: 'list',
-            sortMode: 'status',
+            viewMode: ChangesViewMode.List,
+            sortMode: ChangesSortMode.Status,
             pathFilter: 'README',
-            collapsedSectionIds: ['unstaged'],
+            collapsedSectionIds: [ChangeSectionId.Unstaged],
             commitMessageHistory: ['fix: bug'],
         });
     });

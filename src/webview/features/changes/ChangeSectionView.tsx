@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { IconButton } from '../../shared/IconButton';
 import { bulkActionsFor, type ChangeBulkAction, type ChangeRowAction } from './changeCommands';
 import { buildChangeTree, type ChangeListItem, type ChangeSection } from './changeTree';
-import type { ChangeSelectionMode, ChangesViewMode } from './changesState';
+import { ChangesViewMode, type ChangeSelectionMode } from './changesState';
 import { CHANGE_SECTION_PAGE_SIZE, visibleChangeItems } from './changePagination';
 import { ChangeRow } from './ChangeRow';
 import { TreeNodeView } from './TreeNodeView';
@@ -55,7 +55,7 @@ export function ChangeSectionView({
                 </div>
             </header>
             <div id={`${section.id}-items`} className="change-list" hidden={collapsed}>
-                {viewMode === 'tree'
+                {viewMode === ChangesViewMode.Tree
                     ? tree.map((node) => (
                         <TreeNodeView
                             key={node.id}

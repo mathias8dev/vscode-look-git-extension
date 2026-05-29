@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CommitMode, ConflictState } from '../../../protocol/changes/types';
+import { CommitMode } from '../../../protocol/changes/types';
+import type { ConflictState } from '../../../protocol/changes/types';
 import type { CommitFeedback } from './changesState';
 import { canSubmitCommit, commitBlockReason } from './commitComposerModel';
 
@@ -17,9 +18,9 @@ interface CommitOption {
 }
 
 const MORE_OPTIONS: readonly CommitOption[] = [
-    { mode: 'amend', label: 'Amend Last Commit', icon: 'git-commit' },
-    { mode: 'commitPush', label: 'Commit & Push', icon: 'cloud-upload' },
-    { mode: 'commitSync', label: 'Commit & Sync', icon: 'repo-sync' },
+    { mode: CommitMode.Amend, label: 'Amend Last Commit', icon: 'git-commit' },
+    { mode: CommitMode.CommitPush, label: 'Commit & Push', icon: 'cloud-upload' },
+    { mode: CommitMode.CommitSync, label: 'Commit & Sync', icon: 'repo-sync' },
 ];
 
 export function CommitComposer({ stagedCount, conflictState, feedback, onCommit }: CommitComposerProps) {
@@ -29,8 +30,8 @@ export function CommitComposer({ stagedCount, conflictState, feedback, onCommit 
     const dropdownRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
 
-    const canCommit = canSubmitCommit({ message, mode: 'commit', stagedCount, conflictState });
-    const blockedReason = commitBlockReason({ message, mode: 'commit', stagedCount, conflictState });
+    const canCommit = canSubmitCommit({ message, mode: CommitMode.Commit, stagedCount, conflictState });
+    const blockedReason = commitBlockReason({ message, mode: CommitMode.Commit, stagedCount, conflictState });
 
     useEffect(() => {
         if (!showMore) { return; }
@@ -92,7 +93,7 @@ export function CommitComposer({ stagedCount, conflictState, feedback, onCommit 
                 onKeyDown={(event) => {
                     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
                         event.preventDefault();
-                        submitCommit('commit');
+                        submitCommit(CommitMode.Commit);
                     }
                 }}
             />
@@ -108,7 +109,7 @@ export function CommitComposer({ stagedCount, conflictState, feedback, onCommit 
                     type="button"
                     className="commit-main-button"
                     disabled={!canCommit}
-                    onClick={() => submitCommit('commit')}
+                    onClick={() => submitCommit(CommitMode.Commit)}
                 >
                     <i className="codicon codicon-git-commit" aria-hidden="true" />
                     Commit

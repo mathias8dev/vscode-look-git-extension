@@ -1,7 +1,7 @@
 import type { StatusEntry } from '../../../protocol/changes/types';
 import type { ChangeSection, ChangeListItem } from './changeTree';
 import { statusLabel } from './changeTree';
-import type { ChangesSortMode } from './changesState';
+import { ChangesSortMode } from './changesState';
 
 export function filterAndSortSections(
     sections: readonly ChangeSection[],
@@ -43,11 +43,11 @@ function sortItems(items: readonly ChangeListItem[], sortMode: ChangesSortMode):
 
 function compareItems(left: ChangeListItem, right: ChangeListItem, sortMode: ChangesSortMode): number {
     switch (sortMode) {
-        case 'status':
+        case ChangesSortMode.Status:
             return byStatus(left, right) || byPath(left, right);
-        case 'directory':
+        case ChangesSortMode.Directory:
             return byDirectory(left, right) || byPath(left, right);
-        case 'path':
+        case ChangesSortMode.Path:
             return byPath(left, right);
     }
 }

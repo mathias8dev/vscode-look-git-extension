@@ -1,19 +1,24 @@
 import type { ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
-import type { ConflictState } from '../../../protocol/changes/types';
+import { ConflictState } from '../../../protocol/changes/types';
 
-export type ActiveConflictState = Exclude<ConflictState, 'none'>;
-export type OperationAction = 'continue' | 'abort' | 'acceptAllTheirs';
+export type ActiveConflictState = Exclude<ConflictState, ConflictState.None>;
+
+export enum OperationAction {
+    Continue = 'continue',
+    Abort = 'abort',
+    AcceptAllTheirs = 'acceptAllTheirs',
+}
 
 export function messageForOperationAction(
     conflictState: ActiveConflictState,
     action: OperationAction,
 ): ChangesWebviewToExtensionMessage {
     switch (action) {
-        case 'continue':
+        case OperationAction.Continue:
             return { type: 'changes/continueOp', conflictState };
-        case 'abort':
+        case OperationAction.Abort:
             return { type: 'changes/abortOp', conflictState };
-        case 'acceptAllTheirs':
+        case OperationAction.AcceptAllTheirs:
             return { type: 'changes/acceptAllTheirs' };
     }
 }
