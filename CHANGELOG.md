@@ -2,6 +2,17 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [1.1.2] - 2026-05-29
+
+### Added
+
+- Added a multi-select branch filter choicebox in Git Graph with an `All` option.
+
+### Changed
+
+- Made Git Graph filter chips toggle their dropdowns open and closed.
+- Debounced Branch and User filter refreshes so multi-select interactions stay responsive.
+
 ## [1.1.1] - 2026-05-29
 
 ### Changed

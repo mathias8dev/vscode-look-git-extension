@@ -275,6 +275,101 @@ describe('Graph webview runtime behavior', () => {
         });
     });
 
+    it('opens a branch choicebox and sends all or multiple branch filters', async () => {
+        vi.useFakeTimers();
+        try {
+            const api = await bootWebview(GRAPH_WEBVIEW_MODULE);
+            sendWebviewMessage({
+                type: 'graphData',
+                data: {
+                    branches: [
+                        { name: 'main', isRemote: false, isCurrent: true, hash: 'main123' },
+                        { name: 'feature/ui', isRemote: false, isCurrent: false, hash: 'abc1234' },
+                        { name: 'origin/feature/ui', isRemote: true, isCurrent: false, hash: 'def1234' },
+                    ],
+                    tags: [],
+                    rows: [graphRow('abc123456789', 'commit')],
+                    maxLane: 0,
+                    currentBranch: 'main',
+                    currentUser: 'Test User',
+                },
+            });
+            api.messages.length = 0;
+
+            click('[data-filter="branch"]');
+            const allCheckbox = document.querySelector<HTMLInputElement>('input[data-branch-filter="__all__"]')!;
+            const featureCheckbox = document.querySelector<HTMLInputElement>('input[value="feature/ui"]')!;
+            const remoteCheckbox = document.querySelector<HTMLInputElement>('input[value="origin/feature/ui"]')!;
+            expect(allCheckbox.checked).toBe(true);
+
+            featureCheckbox.checked = true;
+            featureCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+            expect(document.querySelector('.branch-item[data-branch="feature/ui"]')?.classList.contains('active')).toBe(true);
+            expect(api.messages).toEqual([]);
+
+            remoteCheckbox.checked = true;
+            remoteCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+            expect(document.querySelector('[data-filter="branch"]')?.textContent).toContain('2 branches');
+            expect(api.messages).toEqual([]);
+
+            vi.advanceTimersByTime(250);
+            expect(api.messages).toContainEqual({
+                type: 'selectBranch',
+                branches: ['feature/ui', 'origin/feature/ui'],
+                path: undefined,
+            });
+
+            api.messages.length = 0;
+            allCheckbox.checked = true;
+            allCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+            expect(allCheckbox.checked).toBe(true);
+            expect(document.querySelector('.branch-item[data-branch="__all__"]')?.classList.contains('active')).toBe(true);
+            vi.advanceTimersByTime(250);
+            expect(api.messages).toContainEqual({
+                type: 'selectBranch',
+                branches: undefined,
+                path: undefined,
+            });
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('toggles filter dropdowns open and closed from their chips', async () => {
+        await bootWebview(GRAPH_WEBVIEW_MODULE);
+        const row = graphRow('abc123456789', 'commit');
+        row.commit.authorName = 'Alice Toggle';
+        sendWebviewMessage({
+            type: 'graphData',
+            data: {
+                branches: [{ name: 'feature/ui', isRemote: false, isCurrent: false, hash: 'abc1234' }],
+                tags: [],
+                rows: [row],
+                maxLane: 0,
+                currentBranch: 'main',
+                currentUser: 'Alice Toggle',
+            },
+        });
+
+        click('[data-filter="branch"]');
+        expect(document.querySelector('.branch-dropdown')).not.toBeNull();
+        click('[data-filter="branch"]');
+        expect(document.querySelector('.branch-dropdown')).toBeNull();
+
+        click('[data-filter="user"]');
+        expect(document.querySelector('.user-dropdown')).not.toBeNull();
+        click('[data-filter="date"]');
+        expect(document.querySelector('.user-dropdown')).toBeNull();
+        expect(document.querySelector('.date-dropdown')).not.toBeNull();
+        click('[data-filter="date"]');
+        expect(document.querySelector('.date-dropdown')).toBeNull();
+
+        click('[data-filter="paths"]');
+        expect(document.querySelector('.path-dropdown')).not.toBeNull();
+        click('[data-filter="paths"]');
+        expect(document.querySelector('.path-dropdown')).toBeNull();
+    });
+
     it('sends search, user, and date filters back to the extension', async () => {
         vi.useFakeTimers();
         try {
@@ -321,6 +416,7 @@ describe('Graph webview runtime behavior', () => {
             const bobCheckbox = document.querySelector<HTMLInputElement>('input[value="Bob Search"]')!;
             bobCheckbox.checked = true;
             bobCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+            vi.advanceTimersByTime(250);
             expect(api.messages).toContainEqual({
                 type: 'selectBranch',
                 branches: undefined,

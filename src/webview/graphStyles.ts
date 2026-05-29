@@ -26,6 +26,8 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .filter-dropdown-item:hover { background: var(--vscode-menu-selectionBackground); color: var(--vscode-menu-selectionForeground); }
 
 .user-dropdown { min-width: 200px; padding: 4px 0; }
+.branch-dropdown { min-width: 220px; padding: 4px 0; }
+.filter-dropdown-section { padding: 6px 12px 3px; font-size: 0.85em; font-weight: 600; text-transform: uppercase; color: var(--vscode-descriptionForeground); }
 .filter-dropdown-check { display: flex; align-items: center; gap: 6px; padding: 4px 12px; cursor: pointer; white-space: nowrap; font-size: inherit; }
 .filter-dropdown-check:hover { background: var(--vscode-list-hoverBackground); }
 .filter-dropdown-check input[type="checkbox"] { margin: 0; cursor: pointer; accent-color: var(--vscode-focusBorder); }

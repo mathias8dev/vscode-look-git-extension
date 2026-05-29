@@ -1,18 +1,22 @@
 import { escapeHtml } from './graphRenderer';
-import type { GraphData, GraphFilterState } from './graphTypes';
+import type { BranchInfo, GraphData, GraphFilterState } from './graphTypes';
 
 interface GraphFilterDeps {
     getData(): GraphData | null;
     getState(): GraphFilterState;
     setState(state: GraphFilterState): void;
-    getSelectedBranch(): string | null;
-    setSelectedBranch(branch: string | null): void;
+    getSelectedBranches(): string[];
+    setSelectedBranches(branches: string[]): void;
     requestGraphData(): void;
+    scheduleGraphDataRequest(): void;
     renderBranchPane(): void;
     renderGraphTable(): void;
 }
 
 let activeDropdown: HTMLElement | null = null;
+let activeDropdownFilter: string | null = null;
+let outsideClickCleanup: (() => void) | null = null;
+let outsideClickTimer: number | undefined;
 
 export function createInitialGraphFilterState(): GraphFilterState {
     return {
@@ -28,16 +32,19 @@ export function createGraphFilterController(deps: GraphFilterDeps): { render(): 
     function render(): void {
         const bar = document.getElementById('filter-bar')!;
         const state = deps.getState();
-        const selectedBranch = deps.getSelectedBranch();
+        const selectedBranches = deps.getSelectedBranches();
         let html = '';
 
-        if (selectedBranch) {
+        if (selectedBranches.length > 0) {
+            const label = selectedBranches.length === 1
+                ? truncate(selectedBranches[0], 20)
+                : `${selectedBranches.length} branches`;
             html += `<button type="button" class="filter-chip active" data-filter="branch">
-                Branch: <strong>${escapeHtml(truncate(selectedBranch, 20))}</strong>
+                Branch: <strong>${escapeHtml(label)}</strong>
                 <span class="filter-chip-clear" data-clear="branch">&times;</span>
             </button>`;
         } else {
-            html += '<button type="button" class="filter-chip" data-filter="branch">Branch</button>';
+            html += '<button type="button" class="filter-chip" data-filter="branch">Branch &#9662;</button>';
         }
 
         if (state.authors.length > 0) {
@@ -79,10 +86,23 @@ export function createGraphFilterController(deps: GraphFilterDeps): { render(): 
 }
 
 function closeDropdown(): void {
+    if (outsideClickTimer !== undefined) {
+        clearTimeout(outsideClickTimer);
+        outsideClickTimer = undefined;
+    }
+    if (outsideClickCleanup) {
+        outsideClickCleanup();
+        outsideClickCleanup = null;
+    }
     if (activeDropdown) {
         activeDropdown.remove();
         activeDropdown = null;
     }
+    activeDropdownFilter = null;
+}
+
+function isDropdownOpenForFilter(filter: string): boolean {
+    return activeDropdown !== null && activeDropdownFilter === filter;
 }
 
 function showUserDropdown(
@@ -124,6 +144,7 @@ function showUserDropdown(
     dropdown.innerHTML = html;
     document.body.appendChild(dropdown);
     activeDropdown = dropdown;
+    activeDropdownFilter = 'user';
     fitDropdown(dropdown, rect);
 
     dropdown.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
@@ -146,11 +167,108 @@ function showUserDropdown(
             deps.setState({ ...deps.getState(), authors: [...next] });
             render();
             deps.renderGraphTable();
-            deps.requestGraphData();
+            deps.scheduleGraphDataRequest();
         });
     });
 
     keepDropdownOpenUntilOutsideClick(dropdown);
+}
+
+function showBranchDropdown(
+    anchorEl: HTMLElement,
+    deps: GraphFilterDeps,
+    render: () => void,
+): void {
+    closeDropdown();
+
+    const graphData = deps.getData();
+    const branches = graphData?.branches ?? [];
+    const local = branches.filter((branch) => !branch.isRemote);
+    const remote = branches.filter((branch) => branch.isRemote);
+    const selected = new Set(deps.getSelectedBranches());
+    const rect = anchorEl.getBoundingClientRect();
+    const dropdown = document.createElement('div');
+    dropdown.className = 'filter-dropdown branch-dropdown';
+    dropdown.style.left = `${rect.left}px`;
+    dropdown.style.top = `${rect.bottom + 2}px`;
+
+    let html = `<label class="filter-dropdown-check all-option">
+        <input type="checkbox" data-branch-filter="__all__" value="__all__"${selected.size === 0 ? ' checked' : ''} />
+        <span>All</span>
+    </label>`;
+
+    html += renderBranchDropdownSection('Local', local, selected);
+    html += renderBranchDropdownSection('Remote', remote, selected);
+
+    dropdown.innerHTML = html;
+    document.body.appendChild(dropdown);
+    activeDropdown = dropdown;
+    activeDropdownFilter = 'branch';
+    fitDropdown(dropdown, rect);
+
+    dropdown.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+        cb.addEventListener('change', () => {
+            const checkbox = cb as HTMLInputElement;
+            if (checkbox.dataset.branchFilter === '__all__') {
+                applySelectedBranches([], branches, dropdown, deps, render);
+                return;
+            }
+
+            const next = new Set(deps.getSelectedBranches());
+            if (checkbox.checked) {
+                next.add(checkbox.value);
+            } else {
+                next.delete(checkbox.value);
+            }
+            applySelectedBranches([...next], branches, dropdown, deps, render);
+        });
+    });
+
+    keepDropdownOpenUntilOutsideClick(dropdown);
+}
+
+function renderBranchDropdownSection(label: string, branches: BranchInfo[], selected: Set<string>): string {
+    if (branches.length === 0) {
+        return '';
+    }
+
+    let html = `<div class="filter-dropdown-section">${escapeHtml(label)}</div>`;
+    for (const branch of branches) {
+        const checked = selected.has(branch.name) ? ' checked' : '';
+        html += `<label class="filter-dropdown-check">
+            <input type="checkbox" data-branch-filter="branch" value="${escapeHtml(branch.name)}"${checked} />
+            <span>${escapeHtml(branch.name)}</span>
+        </label>`;
+    }
+    return html;
+}
+
+function applySelectedBranches(
+    nextBranches: string[],
+    availableBranches: BranchInfo[],
+    dropdown: HTMLElement,
+    deps: GraphFilterDeps,
+    render: () => void,
+): void {
+    const nextSet = new Set(nextBranches);
+    const ordered = availableBranches
+        .map((branch) => branch.name)
+        .filter((branch) => nextSet.has(branch));
+
+    deps.setSelectedBranches(ordered);
+    syncBranchDropdownChecks(dropdown, ordered);
+    syncBranchPaneSelection(ordered);
+    render();
+    deps.scheduleGraphDataRequest();
+}
+
+function syncBranchDropdownChecks(dropdown: HTMLElement, selectedBranches: string[]): void {
+    const selected = new Set(selectedBranches);
+    dropdown.querySelectorAll<HTMLInputElement>('input[data-branch-filter]').forEach((checkbox) => {
+        checkbox.checked = checkbox.dataset.branchFilter === '__all__'
+            ? selected.size === 0
+            : selected.has(checkbox.value);
+    });
 }
 
 function showDateDropdown(anchorEl: HTMLElement, deps: GraphFilterDeps, render: () => void): void {
@@ -173,6 +291,7 @@ function showDateDropdown(anchorEl: HTMLElement, deps: GraphFilterDeps, render: 
 
     document.body.appendChild(dropdown);
     activeDropdown = dropdown;
+    activeDropdownFilter = 'date';
 
     dropdown.querySelector('#date-apply-btn')!.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -217,6 +336,7 @@ function showPathInput(anchorEl: HTMLElement, deps: GraphFilterDeps, render: () 
 
     document.body.appendChild(dropdown);
     activeDropdown = dropdown;
+    activeDropdownFilter = 'paths';
 
     const input = dropdown.querySelector('#filter-path-input') as HTMLInputElement;
     input.focus();
@@ -259,7 +379,15 @@ function wireFilterBarHandlers(
         el.addEventListener('click', (e) => {
             e.stopPropagation();
             const filter = (el as HTMLElement).dataset.filter!;
+            if (isDropdownOpenForFilter(filter)) {
+                closeDropdown();
+                return;
+            }
+
             switch (filter) {
+                case 'branch':
+                    showBranchDropdown(el as HTMLElement, deps, render);
+                    break;
                 case 'user':
                     showUserDropdown(el as HTMLElement, getUniqueAuthors(deps), deps, render);
                     break;
@@ -288,9 +416,9 @@ function clearFilter(clear: string, deps: GraphFilterDeps): void {
     const state = deps.getState();
     switch (clear) {
         case 'branch':
-            deps.setSelectedBranch(null);
+            deps.setSelectedBranches([]);
             deps.requestGraphData();
-            deps.renderBranchPane();
+            syncBranchPaneSelection([]);
             break;
         case 'user':
             deps.setState({ ...state, authors: [] });
@@ -305,6 +433,14 @@ function clearFilter(clear: string, deps: GraphFilterDeps): void {
             deps.requestGraphData();
             break;
     }
+}
+
+function syncBranchPaneSelection(selectedBranches: string[]): void {
+    const selected = new Set(selectedBranches);
+    document.querySelectorAll<HTMLElement>('#branch-pane .branch-item[data-branch]').forEach((item) => {
+        const branch = item.dataset.branch;
+        item.classList.toggle('active', branch === '__all__' ? selected.size === 0 : Boolean(branch && selected.has(branch)));
+    });
 }
 
 function getUniqueAuthors(deps: GraphFilterDeps): string[] {
@@ -330,12 +466,13 @@ function fitDropdown(dropdown: HTMLElement, anchorRect: DOMRect): void {
 
 function keepDropdownOpenUntilOutsideClick(dropdown: HTMLElement): void {
     dropdown.addEventListener('click', (e) => e.stopPropagation());
-    setTimeout(() => {
+    outsideClickTimer = window.setTimeout(() => {
+        outsideClickTimer = undefined;
         const close = () => {
             closeDropdown();
-            document.removeEventListener('click', close);
         };
         document.addEventListener('click', close);
+        outsideClickCleanup = () => document.removeEventListener('click', close);
     }, 0);
 }
 

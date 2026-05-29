@@ -21,8 +21,8 @@ interface BranchTreeNode {
 
 interface BranchPaneDeps {
     getData(): GraphData | null;
-    getSelectedBranch(): string | null;
-    setSelectedBranch(branch: string | null): void;
+    getSelectedBranches(): string[];
+    setSelectedBranches(branches: string[]): void;
     getViewMode(): BranchViewMode;
     setViewMode(mode: BranchViewMode): void;
     requestGraphData(): void;
@@ -42,12 +42,12 @@ export function createBranchPaneController(deps: BranchPaneDeps): { render(): vo
         const local = graphData.branches.filter((b) => !b.isRemote);
         const remote = graphData.branches.filter((b) => b.isRemote);
         const mode = deps.getViewMode();
-        const selectedBranch = deps.getSelectedBranch();
+        const selectedBranches = deps.getSelectedBranches();
         const listActiveClass = mode === 'list' ? ' active' : '';
         const treeActiveClass = mode === 'tree' ? ' active' : '';
 
         let html = `<div class="branch-pane-toolbar">
-            <div class="branch-item ${selectedBranch === null ? 'active' : ''}" data-branch="__all__">
+            <div class="branch-item ${selectedBranches.length === 0 ? 'active' : ''}" data-branch="__all__">
                 <span class="branch-name">All Branches</span>
             </div>
             <div class="view-switcher">
@@ -57,8 +57,8 @@ export function createBranchPaneController(deps: BranchPaneDeps): { render(): vo
         </div>`;
 
         html += mode === 'list'
-            ? renderBranchList(local, remote, selectedBranch)
-            : renderBranchTreeView(local, remote, selectedBranch);
+            ? renderBranchList(local, remote, selectedBranches)
+            : renderBranchTreeView(local, remote, selectedBranches);
 
         const linkedWorktrees = (graphData.worktrees ?? []).filter((w) => !w.isMain);
         if (linkedWorktrees.length > 0) {
@@ -117,7 +117,7 @@ function renderIncomingChangesIndicator(branch: BranchInfo): string {
     return `<span class="branch-remote-pending-indicator" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${ICON_INCOMING_CHANGES}<span class="branch-behind-count" aria-hidden="true">${displayCount}</span></span>`;
 }
 
-function renderTreeNodes(node: BranchTreeNode, depth: number, selectedBranch: string | null): string {
+function renderTreeNodes(node: BranchTreeNode, depth: number, selectedBranches: string[]): string {
     let html = '';
     const entries = [...node.children.values()].sort((a, b) => {
         const aIsFolder = a.children.size > 0 && !a.branch;
@@ -140,14 +140,14 @@ function renderTreeNodes(node: BranchTreeNode, depth: number, selectedBranch: st
             </div>`;
 
             if (!collapsed) {
-                html += renderTreeNodes(child, depth + 1, selectedBranch);
+                html += renderTreeNodes(child, depth + 1, selectedBranches);
             }
         } else if (child.branch) {
-            html += renderTreeLeaf(child.branch, child.name, indent, selectedBranch);
+            html += renderTreeLeaf(child.branch, child.name, indent, selectedBranches);
         }
 
         if (hasChildren && child.branch) {
-            html += renderTreeLeaf(child.branch, child.name, (depth + 1) * 16, selectedBranch);
+            html += renderTreeLeaf(child.branch, child.name, (depth + 1) * 16, selectedBranches);
         }
     }
 
@@ -158,10 +158,10 @@ function renderTreeLeaf(
     branch: BranchInfo,
     label: string,
     indent: number,
-    selectedBranch: string | null,
+    selectedBranches: string[],
 ): string {
     const isCurrent = branch.isCurrent ? ' current' : '';
-    const isActive = selectedBranch === branch.name ? ' active' : '';
+    const isActive = selectedBranches.includes(branch.name) ? ' active' : '';
     const remoteAttr = branch.isRemote ? ' data-remote="true"' : '';
     return `<div class="branch-item tree-leaf${isCurrent}${isActive}" data-branch="${escapeHtml(branch.name)}"${remoteAttr} style="--tree-indent: ${indent}px; padding-left: ${indent + 4}px;">
         ${ICON_BRANCH}
@@ -174,12 +174,12 @@ function renderTreeLeaf(
 function renderBranchList(
     local: BranchInfo[],
     remote: BranchInfo[],
-    selectedBranch: string | null,
+    selectedBranches: string[],
 ): string {
     let html = '<div class="branch-section-header">Local</div>';
     for (const b of local) {
         const isCurrent = b.isCurrent ? ' current' : '';
-        const isActive = selectedBranch === b.name ? ' active' : '';
+        const isActive = selectedBranches.includes(b.name) ? ' active' : '';
         html += `<div class="branch-item${isCurrent}${isActive}" data-branch="${escapeHtml(b.name)}">
             ${renderCurrentBranchIndicator(b)}
             <span class="branch-name">${escapeHtml(b.name)}</span>
@@ -190,7 +190,7 @@ function renderBranchList(
     if (remote.length > 0) {
         html += '<div class="branch-section-header">Remote</div>';
         for (const b of remote) {
-            const isActive = selectedBranch === b.name ? ' active' : '';
+            const isActive = selectedBranches.includes(b.name) ? ' active' : '';
             html += `<div class="branch-item${isActive}" data-branch="${escapeHtml(b.name)}" data-remote="true">
                 <span class="branch-name">${escapeHtml(b.name)}</span>
             </div>`;
@@ -203,18 +203,18 @@ function renderBranchList(
 function renderBranchTreeView(
     local: BranchInfo[],
     remote: BranchInfo[],
-    selectedBranch: string | null,
+    selectedBranches: string[],
 ): string {
     let html = '';
 
     if (local.length > 0) {
         html += '<div class="branch-section-header">Local</div>';
-        html += renderTreeNodes(buildBranchTree(local), 1, selectedBranch);
+        html += renderTreeNodes(buildBranchTree(local), 1, selectedBranches);
     }
 
     if (remote.length > 0) {
         html += '<div class="branch-section-header">Remote</div>';
-        html += renderTreeNodes(buildBranchTree(remote), 1, selectedBranch);
+        html += renderTreeNodes(buildBranchTree(remote), 1, selectedBranches);
     }
 
     return html;
@@ -305,7 +305,7 @@ function wireBranchPaneHandlers(
         if (!branchItem) { return; }
 
         const branch = branchItem.dataset.branch!;
-        deps.setSelectedBranch(branch === '__all__' ? null : branch);
+        deps.setSelectedBranches(branch === '__all__' ? [] : [branch]);
         deps.requestGraphData();
         deps.renderFilterBar();
         render();

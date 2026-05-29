@@ -35,7 +35,7 @@ let selectedCommitHash: string | null = null;
 let selectedCommitHashes = new Set<string>();
 let selectionAnchorHash: string | null = null;
 let lastGraphActivation: { hash: string; time: number; mode: string } | null = null;
-let selectedBranch: string | null = null; // null = all branches
+let selectedBranches: string[] = []; // empty = all branches
 let filterRequestTimer: number | undefined;
 let filterState: GraphFilterState = createInitialGraphFilterState();
 
@@ -62,8 +62,8 @@ function savePaneState(s: PaneState): void {
 let paneState = loadPaneState();
 const branchPane = createBranchPaneController({
     getData: () => graphData,
-    getSelectedBranch: () => selectedBranch,
-    setSelectedBranch: (branch) => { selectedBranch = branch; },
+    getSelectedBranches: () => selectedBranches,
+    setSelectedBranches: (branches) => { selectedBranches = branches; },
     getViewMode: () => paneState.branchViewMode,
     setViewMode: (mode) => {
         paneState.branchViewMode = mode;
@@ -82,9 +82,10 @@ const filterBar = createGraphFilterController({
     getData: () => graphData,
     getState: () => filterState,
     setState: (state) => { filterState = state; },
-    getSelectedBranch: () => selectedBranch,
-    setSelectedBranch: (branch) => { selectedBranch = branch; },
+    getSelectedBranches: () => selectedBranches,
+    setSelectedBranches: (branches) => { selectedBranches = branches; },
     requestGraphData,
+    scheduleGraphDataRequest,
     renderBranchPane,
     renderGraphTable,
 });
@@ -120,7 +121,7 @@ function requestGraphData(): void {
         dateTo?: string;
     } = {
         type: 'selectBranch',
-        branches: selectedBranch ? [selectedBranch] : undefined,
+        branches: selectedBranches.length > 0 ? [...selectedBranches] : undefined,
         path: filters.path || undefined,
     };
     const search = filters.search.trim();
