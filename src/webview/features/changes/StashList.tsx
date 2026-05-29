@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { StashEntry, StashFileEntry } from '../../../protocol/changes/types';
 import { Codicon } from '../../shared/Codicon';
+import { IconButton } from '../../shared/IconButton';
 import { CreateStashKind, type StashEntryAction } from './stashCommands';
 import { StashItem } from './StashItem';
 
@@ -43,7 +44,7 @@ export function StashList({
             <header className="stash-panel-header">
                 <button
                     type="button"
-                    className="section-toggle"
+                    className="stash-toggle"
                     aria-expanded={!panelCollapsed}
                     onClick={() => setPanelCollapsed(!panelCollapsed)}
                 >
@@ -62,8 +63,18 @@ export function StashList({
                             onChange={(event) => setMessage(event.currentTarget.value)}
                         />
                         <div className="stash-create-actions">
-                            <button type="button" disabled={!canStashAll} onClick={() => createStash(CreateStashKind.All)}>Stash</button>
-                            <button type="button" disabled={!canStashStaged} onClick={() => createStash(CreateStashKind.Staged)}>Staged</button>
+                            <IconButton
+                                icon="archive"
+                                title="Stash all changes"
+                                className={!canStashAll ? 'icon-button-disabled' : ''}
+                                onClick={() => createStash(CreateStashKind.All)}
+                            />
+                            <IconButton
+                                icon="diff-added"
+                                title="Stash staged changes only"
+                                className={!canStashStaged ? 'icon-button-disabled' : ''}
+                                onClick={() => createStash(CreateStashKind.Staged)}
+                            />
                         </div>
                     </div>
                     <div className="stash-list">

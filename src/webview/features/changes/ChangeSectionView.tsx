@@ -36,11 +36,15 @@ export function ChangeSectionView({
     return (
         <section className="change-section" aria-labelledby={`${section.id}-title`}>
             <header className="change-section-header">
-                <IconButton
-                    icon={collapsed ? 'chevron-right' : 'chevron-down'}
+                <button
+                    type="button"
+                    className="section-toggle"
                     title={collapsed ? 'Expand section' : 'Collapse section'}
+                    aria-expanded={!collapsed}
                     onClick={onToggleCollapsed}
-                />
+                >
+                    <i className={`codicon codicon-chevron-${collapsed ? 'right' : 'down'}`} aria-hidden="true" />
+                </button>
                 <h2 id={`${section.id}-title`}>{section.title}</h2>
                 <div className="section-actions">
                     {bulkActions.map((descriptor) => (
@@ -54,37 +58,39 @@ export function ChangeSectionView({
                     <span>{section.items.length}</span>
                 </div>
             </header>
-            <div id={`${section.id}-items`} className="change-list" hidden={collapsed}>
-                {viewMode === ChangesViewMode.Tree
-                    ? tree.map((node) => (
-                        <TreeNodeView
-                            key={node.id}
-                            node={node}
-                            selectedItemIds={selectedItemIds}
-                            onSelectItem={onSelectItem}
-                            onRowAction={onRowAction}
-                        />
-                    ))
-                    : visible.items.map((item) => (
-                        <ChangeRow
-                            key={item.id}
-                            item={item}
-                            depth={0}
-                            selected={selectedItemIds.has(item.id)}
-                            onSelect={onSelectItem}
-                            onAction={onRowAction}
-                        />
-                    ))}
-                {visible.hasMore ? (
-                    <button
-                        type="button"
-                        className="show-more-changes"
-                        onClick={() => setVisibleLimit(visible.nextLimit)}
-                    >
-                        Show more
-                    </button>
-                ) : null}
-            </div>
+            {!collapsed && (
+                <div id={`${section.id}-items`} className="change-list">
+                    {viewMode === ChangesViewMode.Tree
+                        ? tree.map((node) => (
+                            <TreeNodeView
+                                key={node.id}
+                                node={node}
+                                selectedItemIds={selectedItemIds}
+                                onSelectItem={onSelectItem}
+                                onRowAction={onRowAction}
+                            />
+                        ))
+                        : visible.items.map((item) => (
+                            <ChangeRow
+                                key={item.id}
+                                item={item}
+                                depth={0}
+                                selected={selectedItemIds.has(item.id)}
+                                onSelect={onSelectItem}
+                                onAction={onRowAction}
+                            />
+                        ))}
+                    {visible.hasMore ? (
+                        <button
+                            type="button"
+                            className="show-more-changes"
+                            onClick={() => setVisibleLimit(visible.nextLimit)}
+                        >
+                            Show more
+                        </button>
+                    ) : null}
+                </div>
+            )}
         </section>
     );
 }

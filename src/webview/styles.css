@@ -399,32 +399,40 @@ h1 {
 .stash-actions {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
 }
 
-.stash-create-actions button,
-.stash-actions button,
-.stash-toggle,
-.stash-file-row button {
-    min-height: 24px;
-    border: 1px solid var(--vscode-button-border, transparent);
+.stash-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid transparent;
     border-radius: 3px;
-    padding: 0 7px;
-    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, #cccccc));
-    background: var(--vscode-button-secondaryBackground, transparent);
-    font: inherit;
-    font-size: 0.86em;
+    color: var(--vscode-foreground, #cccccc);
+    background: transparent;
+    font-size: inherit;
 }
 
-.stash-create-actions button:hover,
-.stash-actions button:hover,
-.stash-toggle:hover,
-.stash-file-row button:hover {
-    background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.1)));
+.stash-toggle:hover {
+    background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
 }
 
-.stash-create-actions button:disabled {
-    opacity: 0.45;
+.stash-create .icon-button,
+.stash-create-actions .icon-button {
+    opacity: 1;
+}
+
+.stash-create .icon-button:disabled,
+.icon-button-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.stash-item:hover .icon-button {
+    opacity: 1;
 }
 
 .stash-list {
@@ -442,7 +450,8 @@ h1 {
     grid-template-columns: auto minmax(80px, 1fr) auto;
     align-items: center;
     gap: 8px;
-    min-height: 32px;
+    min-height: 28px;
+    padding: 0 8px;
 }
 
 .stash-title {
@@ -475,15 +484,19 @@ h1 {
 }
 
 .stash-file-row {
-    display: grid;
-    grid-template-columns: 14px 16px minmax(80px, 1fr) minmax(0, 0.8fr) auto auto;
+    display: flex;
     align-items: center;
-    gap: 7px;
-    min-height: 28px;
+    gap: 6px;
+    min-height: 22px;
+    padding: 2px 8px 2px 4px;
 }
 
 .stash-file-row:hover {
     background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.08));
+}
+
+.stash-file-row:hover .icon-button {
+    opacity: 1;
 }
 
 .changes-content {
@@ -506,7 +519,7 @@ h1 {
     align-items: center;
     gap: 6px;
     min-height: 28px;
-    padding: 0;
+    padding: 0 8px;
     background: var(--vscode-sideBarSectionHeader-background, var(--vscode-sideBar-background, #252526));
 }
 
@@ -537,6 +550,29 @@ h1 {
 }
 
 .icon-button .codicon {
+    font-size: 14px;
+}
+
+.section-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    color: var(--vscode-foreground, #cccccc);
+    background: transparent;
+    font-size: inherit;
+    flex-shrink: 0;
+}
+
+.section-toggle:hover {
+    background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
+}
+
+.section-toggle .codicon {
     font-size: 14px;
 }
 
@@ -590,7 +626,7 @@ h1 {
     align-items: center;
     gap: 6px;
     min-height: 22px;
-    padding: 0 0 0 calc(var(--depth) * 16px);
+    padding: 2px 8px 2px calc(8px + var(--depth) * 16px);
     color: var(--vscode-foreground, #cccccc);
 }
 

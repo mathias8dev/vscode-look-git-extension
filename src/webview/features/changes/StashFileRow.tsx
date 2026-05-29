@@ -1,4 +1,5 @@
 import type { StashFileEntry } from '../../../protocol/changes/types';
+import { IconButton } from '../../shared/IconButton';
 import { FileTypeIcon } from './FileTypeIcon';
 import { iconKindForStashFile } from './fileIconModel';
 
@@ -11,18 +12,21 @@ interface StashFileRowProps {
 export function StashFileRow({ index, file, onDiff }: StashFileRowProps) {
     return (
         <div className="stash-file-row" title={file.filePath}>
-            <span className={`status-dot status-${statusKind(file.status)}`} aria-hidden="true" />
             <FileTypeIcon kind={iconKindForStashFile(file)} />
-            <span className="file-main">{fileName(file.filePath)}</span>
-            <span className="file-path">{parentPath(file)}</span>
-            <span className="status-label">{file.status}</span>
-            <button
-                type="button"
-                title={`Open stash diff for ${file.filePath}`}
-                onClick={() => onDiff(index, file)}
-            >
-                Diff
-            </button>
+            <div className="file-info">
+                <span className="file-name">{fileName(file.filePath)}</span>
+                <span className="file-path">{parentPath(file)}</span>
+            </div>
+            <div className="row-actions">
+                <IconButton
+                    icon="diff"
+                    title="Open stash diff"
+                    onClick={() => onDiff(index, file)}
+                />
+            </div>
+            <span className={`status-letter status-letter-${statusLetterKind(file.status)}`} aria-hidden="true">
+                {statusLetter(file.status)}
+            </span>
         </div>
     );
 }
@@ -35,13 +39,22 @@ function parentPath(file: StashFileEntry): string {
     const parts = file.filePath.split('/');
     parts.pop();
     const parent = parts.join('/');
-    if (file.origPath) { return `${file.origPath} -> ${parent || '.'}`; }
+    if (file.origPath) { return `${file.origPath} → ${parent || '.'}`; }
     return parent;
 }
 
-function statusKind(status: string): string {
-    if (status.includes('U')) { return 'conflict'; }
-    if (status.includes('D')) { return 'deleted'; }
+function statusLetter(status: string): string {
+    if (status.includes('A') || status.includes('?')) { return 'A'; }
+    if (status.includes('D')) { return 'D'; }
+    if (status.includes('R')) { return 'R'; }
+    if (status.includes('U')) { return 'C'; }
+    return 'M';
+}
+
+function statusLetterKind(status: string): string {
     if (status.includes('A') || status.includes('?')) { return 'added'; }
+    if (status.includes('D')) { return 'deleted'; }
+    if (status.includes('R')) { return 'renamed'; }
+    if (status.includes('U')) { return 'conflict'; }
     return 'modified';
 }

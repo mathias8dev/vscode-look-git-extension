@@ -1,5 +1,6 @@
 import type { StashEntry, StashFileEntry } from '../../../protocol/changes/types';
 import { Codicon } from '../../shared/Codicon';
+import { IconButton } from '../../shared/IconButton';
 import { StashEntryAction } from './stashCommands';
 import { StashFileRow } from './StashFileRow';
 
@@ -31,18 +32,28 @@ export function StashItem({ stash, expanded, files, onToggle, onAction, onFileDi
                     <span>{stash.message}</span>
                 </div>
                 <div className="stash-actions">
-                    <button type="button" onClick={() => onAction(stash.index, StashEntryAction.Apply)}>
-                        Apply
-                    </button>
-                    <button type="button" onClick={() => onAction(stash.index, StashEntryAction.Pop)}>
-                        Pop
-                    </button>
-                    <button type="button" onClick={() => onAction(stash.index, StashEntryAction.Drop)}>
-                        Drop
-                    </button>
+                    <IconButton
+                        icon="check"
+                        title="Apply stash (keep in list)"
+                        onClick={() => onAction(stash.index, StashEntryAction.Apply)}
+                    />
+                    <IconButton
+                        icon="play"
+                        title="Pop stash (apply and remove)"
+                        onClick={() => onAction(stash.index, StashEntryAction.Pop)}
+                    />
+                    <IconButton
+                        icon="trash"
+                        title="Drop stash"
+                        onClick={() => onAction(stash.index, StashEntryAction.Drop)}
+                    />
                 </div>
             </header>
-            {expanded ? <div className="stash-files">{stashFilesContent(stash.index, files, onFileDiff)}</div> : null}
+            {expanded ? (
+                <div className="stash-files">
+                    {stashFilesContent(stash.index, files, onFileDiff)}
+                </div>
+            ) : null}
         </article>
     );
 }
@@ -52,7 +63,7 @@ function stashFilesContent(
     files: readonly StashFileEntry[] | undefined,
     onFileDiff: (index: number, file: StashFileEntry) => void,
 ) {
-    if (!files) { return <p className="stash-placeholder">Loading stash files</p>; }
+    if (!files) { return <p className="stash-placeholder">Loading stash files…</p>; }
     if (files.length === 0) { return <p className="stash-placeholder">No files in this stash</p>; }
     return files.map((file) => (
         <StashFileRow
