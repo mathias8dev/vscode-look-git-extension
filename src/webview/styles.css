@@ -189,6 +189,146 @@ h1 {
     opacity: 0.45;
 }
 
+.stash-panel {
+    display: grid;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border, #3c3c3c));
+}
+
+.stash-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.stash-panel-header h2 {
+    margin: 0;
+    font-size: 0.82em;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.stash-panel-header span {
+    min-width: 1.6em;
+    padding: 2px 5px;
+    border-radius: 4px;
+    color: var(--vscode-badge-foreground, #ffffff);
+    background: var(--vscode-badge-background, #4d4d4d);
+    font-size: 0.78em;
+    line-height: 1;
+    text-align: center;
+}
+
+.stash-create {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+}
+
+.stash-create input {
+    min-width: 0;
+    min-height: 28px;
+    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, #3c3c3c));
+    border-radius: 4px;
+    padding: 0 8px;
+    color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
+    background: var(--vscode-input-background, transparent);
+    font: inherit;
+}
+
+.stash-create-actions,
+.stash-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.stash-create-actions button,
+.stash-actions button,
+.stash-toggle,
+.stash-file-row button {
+    min-height: 24px;
+    border: 1px solid var(--vscode-button-border, transparent);
+    border-radius: 3px;
+    padding: 0 7px;
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, #cccccc));
+    background: var(--vscode-button-secondaryBackground, transparent);
+    font: inherit;
+    font-size: 0.86em;
+}
+
+.stash-create-actions button:hover,
+.stash-actions button:hover,
+.stash-toggle:hover,
+.stash-file-row button:hover {
+    background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.1)));
+}
+
+.stash-create-actions button:disabled {
+    opacity: 0.45;
+}
+
+.stash-list {
+    display: grid;
+    gap: 4px;
+}
+
+.stash-item {
+    display: grid;
+    border-top: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
+}
+
+.stash-item-header {
+    display: grid;
+    grid-template-columns: auto minmax(80px, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+}
+
+.stash-title {
+    min-width: 0;
+    display: grid;
+    gap: 1px;
+}
+
+.stash-title strong,
+.stash-title span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stash-title span,
+.stash-placeholder {
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.86em;
+}
+
+.stash-placeholder {
+    margin: 4px 0;
+}
+
+.stash-files {
+    display: grid;
+    padding: 0 0 4px 18px;
+}
+
+.stash-file-row {
+    display: grid;
+    grid-template-columns: 14px minmax(80px, 1fr) minmax(0, 0.8fr) auto auto;
+    align-items: center;
+    gap: 7px;
+    min-height: 28px;
+}
+
+.stash-file-row:hover {
+    background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.08));
+}
+
 .changes-content {
     flex: 1;
     min-height: 0;

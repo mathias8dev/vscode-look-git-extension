@@ -27,6 +27,8 @@ describe('changesState', () => {
 
         expect(state.loading).toBe(false);
         expect(getChangeCount(state.status)).toBe(2);
+        expect(state.stashFilesByIndex).toEqual({});
+        expect(state.expandedStashIndexes).toEqual([]);
     });
 
     it('stores protocol errors from extension messages', () => {
@@ -55,5 +57,28 @@ describe('changesState', () => {
     it('switches view modes locally', () => {
         const state = reduceChangesState(createInitialChangesState(), { type: 'setViewMode', viewMode: 'list' });
         expect(state.viewMode).toBe('list');
+    });
+
+    it('toggles expanded stashes locally', () => {
+        const expanded = reduceChangesState(createInitialChangesState(), { type: 'toggleStash', index: 1 });
+        const collapsed = reduceChangesState(expanded, { type: 'toggleStash', index: 1 });
+
+        expect(expanded.expandedStashIndexes).toEqual([1]);
+        expect(collapsed.expandedStashIndexes).toEqual([]);
+    });
+
+    it('stores stash files by stash index', () => {
+        const state = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: {
+                type: 'changes/stashFiles',
+                requestId: 'changes:stash-files:0',
+                index: 0,
+                files: [{ status: 'M', filePath: 'src/app.ts' }],
+            },
+        });
+
+        expect(state.loading).toBe(false);
+        expect(state.stashFilesByIndex[0]).toEqual([{ status: 'M', filePath: 'src/app.ts' }]);
     });
 });

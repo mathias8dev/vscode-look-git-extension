@@ -5,8 +5,10 @@ import { ErrorNotice } from '../../shared/ErrorNotice';
 import { ChangeSectionView } from './ChangeSectionView';
 import { CommitComposer } from './CommitComposer';
 import { EmptyState } from './EmptyState';
+import { StashList } from './StashList';
 import { buildChangeSections } from './changeTree';
 import { createInitialChangesState, getChangeCount, reduceChangesState, type ChangesViewMode } from './changesState';
+import { messageForStashAction } from './stashCommands';
 
 export function ChangesApp() {
     const [state, dispatch] = useReducer(reduceChangesState, undefined, createInitialChangesState);
@@ -25,6 +27,15 @@ export function ChangesApp() {
     const setViewMode = (viewMode: ChangesViewMode) => {
         dispatch({ type: 'setViewMode', viewMode });
         vscodeApi.postMessage({ type: 'changes/viewModeChanged', asTree: viewMode === 'tree' });
+    };
+
+    const toggleStash = (index: number) => {
+        const isExpanded = state.expandedStashIndexes.includes(index);
+        const hasFiles = Object.prototype.hasOwnProperty.call(state.stashFilesByIndex, index);
+        dispatch({ type: 'toggleStash', index });
+        if (!isExpanded && !hasFiles) {
+            vscodeApi.postMessage(messageForStashAction(index, 'loadFiles'));
+        }
     };
 
     return (
@@ -60,6 +71,16 @@ export function ChangesApp() {
                 {!state.loading && changeCount > 0 ? sections.map((section) => (
                     <ChangeSectionView key={section.id} section={section} viewMode={state.viewMode} />
                 )) : null}
+                {!state.loading ? (
+                    <StashList
+                        stashes={state.status.stashes}
+                        changeCount={changeCount}
+                        stagedCount={state.status.staged.length}
+                        expandedIndexes={state.expandedStashIndexes}
+                        filesByIndex={state.stashFilesByIndex}
+                        onToggleStash={toggleStash}
+                    />
+                ) : null}
             </section>
         </main>
     );
