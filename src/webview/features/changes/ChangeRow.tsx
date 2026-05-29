@@ -3,6 +3,8 @@ import type { StatusEntry } from '../../../protocol/changes/types';
 import { rowActionsFor, type ChangeRowAction } from './changeCommands';
 import { statusLabel, type ChangeListItem } from './changeTree';
 import type { ChangeSelectionMode } from './changesState';
+import { FileTypeIcon } from './FileTypeIcon';
+import { iconKindForStatusEntry } from './fileIconModel';
 import { depthStyle } from './viewStyles';
 
 interface ChangeRowProps {
@@ -32,6 +34,7 @@ export function ChangeRow({ item, depth, selected, onSelect, onAction }: ChangeR
             }}
         >
             <span className={`status-dot status-${statusKind(entry)}`} aria-hidden="true" />
+            <FileTypeIcon kind={iconKindForStatusEntry(entry)} />
             <span className="status-code">{statusCode(entry)}</span>
             <span className="file-main">{fileName(entry.filePath)}</span>
             <span className="file-path">{parentPath(entry)}</span>

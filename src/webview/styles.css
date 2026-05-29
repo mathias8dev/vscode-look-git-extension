@@ -439,7 +439,7 @@ h1 {
 
 .stash-file-row {
     display: grid;
-    grid-template-columns: 14px minmax(80px, 1fr) minmax(0, 0.8fr) auto auto;
+    grid-template-columns: 14px 16px minmax(80px, 1fr) minmax(0, 0.8fr) auto auto;
     align-items: center;
     gap: 7px;
     min-height: 28px;
@@ -530,7 +530,7 @@ h1 {
 .change-row {
     --depth: 0;
     display: grid;
-    grid-template-columns: 14px minmax(24px, auto) minmax(80px, 1fr) minmax(0, 0.8fr) auto auto;
+    grid-template-columns: 14px 16px minmax(24px, auto) minmax(80px, 1fr) minmax(0, 0.8fr) auto auto;
     align-items: center;
     gap: 7px;
     min-height: 30px;
@@ -596,6 +596,59 @@ h1 {
 
 .status-conflict {
     background: var(--vscode-gitDecoration-conflictingResourceForeground, #e4676b);
+}
+
+.file-type-icon {
+    width: 16px;
+    height: 16px;
+    justify-self: center;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.2;
+}
+
+.file-type-typescript {
+    color: #4ec9b0;
+}
+
+.file-type-javascript {
+    color: #dcdcaa;
+}
+
+.file-type-json {
+    color: #ce9178;
+}
+
+.file-type-markdown {
+    color: #569cd6;
+}
+
+.file-type-css {
+    color: #c586c0;
+}
+
+.file-type-html {
+    color: #e37933;
+}
+
+.file-type-image {
+    color: #b5cea8;
+}
+
+.file-type-package {
+    color: #cb8a40;
+}
+
+.file-type-git {
+    color: #c74e39;
+}
+
+.file-type-submodule,
+.file-type-config,
+.file-type-file {
+    color: var(--vscode-symbolIcon-fileForeground, var(--vscode-descriptionForeground, #9d9d9d));
 }
 
 .status-code {

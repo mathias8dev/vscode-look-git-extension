@@ -1,4 +1,6 @@
 import type { StashFileEntry } from '../../../protocol/changes/types';
+import { FileTypeIcon } from './FileTypeIcon';
+import { iconKindForStashFile } from './fileIconModel';
 
 interface StashFileRowProps {
     readonly index: number;
@@ -10,6 +12,7 @@ export function StashFileRow({ index, file, onDiff }: StashFileRowProps) {
     return (
         <div className="stash-file-row" title={file.filePath}>
             <span className={`status-dot status-${statusKind(file.status)}`} aria-hidden="true" />
+            <FileTypeIcon kind={iconKindForStashFile(file)} />
             <span className="file-main">{fileName(file.filePath)}</span>
             <span className="file-path">{parentPath(file)}</span>
             <span className="status-label">{file.status}</span>
