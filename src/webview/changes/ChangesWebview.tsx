@@ -8,12 +8,9 @@ import {
     createInitialChangesState,
     reduceChangesState,
     type ChangeSelectionMode,
-    type ChangesSortMode,
-    type ChangesViewMode,
 } from '../features/changes/changesState';
 import { changesStateToPersisted, readChangesStatePreferences } from '../features/changes/changesPersistence';
 import { messageForOperationAction, type ActiveConflictState, type OperationAction } from '../features/changes/operationCommands';
-import { messageForSelectionAction, type ChangeSelectionAction } from '../features/changes/selectionCommands';
 import {
     messageForCreateStash,
     messageForStashAction,
@@ -43,11 +40,6 @@ export function ChangesWebview() {
         vscodeApi.setState(changesStateToPersisted(state));
     }, [state]);
 
-    const setViewMode = (viewMode: ChangesViewMode) => {
-        dispatch({ type: 'setViewMode', viewMode });
-        postToExtension({ type: 'changes/viewModeChanged', asTree: viewMode === 'tree' });
-    };
-
     const toggleStash = (index: number) => {
         const isExpanded = state.expandedStashIndexes.includes(index);
         const hasFiles = Object.prototype.hasOwnProperty.call(state.stashFilesByIndex, index);
@@ -60,17 +52,9 @@ export function ChangesWebview() {
     return (
         <ChangesApp
             state={state}
-            onViewModeChange={setViewMode}
-            onSortModeChange={(sortMode: ChangesSortMode) => dispatch({ type: 'setSortMode', sortMode })}
-            onPathFilterChange={(pathFilter: string) => dispatch({ type: 'setPathFilter', pathFilter })}
             onSectionToggle={(sectionId: ChangeSectionId) => dispatch({ type: 'toggleSection', sectionId })}
             onSelectItem={(item: ChangeListItem, mode: ChangeSelectionMode, visibleItemIds: readonly string[]) => {
                 dispatch({ type: 'selectChange', selection: { itemId: item.id, mode, visibleItemIds } });
-            }}
-            onClearSelection={() => dispatch({ type: 'clearSelection' })}
-            onSelectionAction={(items: readonly ChangeListItem[], action: ChangeSelectionAction) => {
-                const message = messageForSelectionAction(items, action);
-                if (message) { postToExtension(message); }
             }}
             onRowAction={(item: ChangeListItem, action: ChangeRowAction) => postToExtension(messageForRowAction(item, action))}
             onBulkAction={(action: ChangeBulkAction) => postToExtension(messageForBulkAction(action))}

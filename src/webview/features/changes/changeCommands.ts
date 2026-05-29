@@ -1,4 +1,5 @@
 import type { ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
+import type { CodiconName } from '../../shared/Codicon';
 import type { ChangeListItem, ChangeSection } from './changeTree';
 
 export type ChangeRowAction =
@@ -15,70 +16,68 @@ export type ChangeBulkAction = 'stageAll' | 'unstageAll' | 'discardAll' | 'accep
 
 export interface ChangeActionDescriptor<TAction extends string> {
     readonly action: TAction;
+    readonly icon: CodiconName;
     readonly label: string;
     readonly title: string;
 }
 
 export function rowActionsFor(item: ChangeListItem): readonly ChangeActionDescriptor<ChangeRowAction>[] {
-    const common: ChangeActionDescriptor<ChangeRowAction>[] = [
-        { action: 'open', label: 'Open', title: 'Open file' },
-        { action: 'diff', label: 'Diff', title: 'Open diff' },
-    ];
-
     if (item.section === 'staged') {
         return [
-            { action: 'unstage', label: 'Unstage', title: 'Unstage file' },
-            ...common,
+            { action: 'diff', icon: 'diff', label: 'Diff', title: 'Open diff' },
+            { action: 'unstage', icon: 'remove', label: 'Unstage', title: 'Unstage file' },
+            { action: 'open', icon: 'go-to-file', label: 'Open', title: 'Open file' },
         ];
     }
 
     if (item.entry.isSubmodule) {
         if (item.section === 'conflicts') {
             return [
-                { action: 'markResolved', label: 'Resolved', title: 'Mark resolved' },
-                ...common,
+                { action: 'markResolved', icon: 'check', label: 'Resolved', title: 'Mark resolved' },
+                { action: 'open', icon: 'folder-opened', label: 'Open', title: 'Open submodule' },
             ];
         }
         return [
-            { action: 'stage', label: 'Stage', title: 'Stage submodule gitlink' },
-            ...common,
+            { action: 'stage', icon: 'add', label: 'Stage', title: 'Stage submodule gitlink' },
+            { action: 'open', icon: 'folder-opened', label: 'Open', title: 'Open submodule' },
         ];
     }
 
     if (item.section === 'conflicts') {
         return [
-            { action: 'openMergeEditor', label: 'Merge', title: 'Open merge editor' },
-            { action: 'acceptOurs', label: 'Ours', title: 'Accept current changes' },
-            { action: 'acceptTheirs', label: 'Theirs', title: 'Accept incoming changes' },
-            { action: 'markResolved', label: 'Resolved', title: 'Mark resolved' },
-            ...common,
+            { action: 'openMergeEditor', icon: 'git-merge', label: 'Merge', title: 'Open merge editor' },
+            { action: 'acceptOurs', icon: 'fold-up', label: 'Ours', title: 'Accept current changes (ours)' },
+            { action: 'acceptTheirs', icon: 'fold-down', label: 'Theirs', title: 'Accept incoming changes (theirs)' },
+            { action: 'markResolved', icon: 'check', label: 'Resolved', title: 'Mark resolved' },
+            { action: 'open', icon: 'go-to-file', label: 'Open', title: 'Open file' },
         ];
     }
 
     return [
-        { action: 'stage', label: 'Stage', title: 'Stage file' },
-        { action: 'discard', label: 'Discard', title: 'Discard file changes' },
-        ...common,
+        { action: 'diff', icon: 'diff', label: 'Diff', title: 'Open diff' },
+        { action: 'stage', icon: 'add', label: 'Stage', title: 'Stage file' },
+        { action: 'discard', icon: 'trash', label: 'Discard', title: 'Discard changes' },
+        { action: 'open', icon: 'go-to-file', label: 'Open', title: 'Open file' },
     ];
 }
 
 export function bulkActionsFor(section: ChangeSection): readonly ChangeActionDescriptor<ChangeBulkAction>[] {
     if (section.id === 'staged') {
         return section.items.length > 0
-            ? [{ action: 'unstageAll', label: 'Unstage All', title: 'Unstage all staged files' }]
+            ? [{ action: 'unstageAll', icon: 'remove', label: 'Unstage All', title: 'Unstage all staged files' }]
             : [];
     }
     if (section.id === 'unstaged') {
         return section.items.length > 0
             ? [
-                { action: 'stageAll', label: 'Stage All', title: 'Stage all changed files' },
-                { action: 'discardAll', label: 'Discard All', title: 'Discard all unstaged changes' },
+                { action: 'stageAll', icon: 'add', label: 'Stage All', title: 'Stage all changed files' },
+                { action: 'discardAll', icon: 'trash', label: 'Discard All', title: 'Discard all unstaged changes' },
             ]
             : [];
     }
     if (section.id === 'conflicts') {
         return section.items.length > 0
-            ? [{ action: 'acceptAllTheirs', label: 'Accept All Theirs', title: 'Accept incoming changes for all conflicts' }]
+            ? [{ action: 'acceptAllTheirs', icon: 'fold-down', label: 'Accept All Theirs', title: 'Accept incoming for all conflicts' }]
             : [];
     }
     return [];

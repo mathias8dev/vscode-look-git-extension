@@ -28,8 +28,8 @@ function submodule(section: ChangeListItem['section'], filePath: string): Change
 describe('selectionCommands', () => {
     it('offers contextual actions for selected changes', () => {
         expect(selectionActionsFor([item('unstaged', 'a.ts')]).map((action) => action.action)).toEqual([
-            'open',
             'diff',
+            'open',
             'stage',
             'discard',
         ]);

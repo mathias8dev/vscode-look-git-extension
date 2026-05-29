@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { StashEntry, StashFileEntry } from '../../../protocol/changes/types';
+import { Codicon } from '../../shared/Codicon';
 import type { CreateStashKind, StashEntryAction } from './stashCommands';
 import { StashItem } from './StashItem';
 
@@ -27,6 +28,7 @@ export function StashList({
     onStashFileDiff,
 }: StashListProps) {
     const [message, setMessage] = useState('');
+    const [panelCollapsed, setPanelCollapsed] = useState(stashes.length === 0);
     const canStashAll = changeCount > 0;
     const canStashStaged = stagedCount > 0;
 
@@ -39,34 +41,48 @@ export function StashList({
     return (
         <section className="stash-panel" aria-label="Stashes">
             <header className="stash-panel-header">
+                <button
+                    type="button"
+                    className="section-toggle"
+                    aria-expanded={!panelCollapsed}
+                    onClick={() => setPanelCollapsed(!panelCollapsed)}
+                >
+                    <Codicon name={panelCollapsed ? 'chevron-right' : 'chevron-down'} />
+                </button>
                 <h2>Stashes</h2>
                 <span>{stashes.length}</span>
             </header>
-            <div className="stash-create">
-                <input
-                    type="text"
-                    value={message}
-                    placeholder="Stash message"
-                    onChange={(event) => setMessage(event.currentTarget.value)}
-                />
-                <div className="stash-create-actions">
-                    <button type="button" disabled={!canStashAll} onClick={() => createStash('all')}>Stash</button>
-                    <button type="button" disabled={!canStashStaged} onClick={() => createStash('staged')}>Stash Staged</button>
-                </div>
-            </div>
-            <div className="stash-list">
-                {stashes.length === 0 ? <p className="stash-placeholder">No stashes</p> : stashes.map((stash) => (
-                    <StashItem
-                        key={stash.index}
-                        stash={stash}
-                        expanded={expandedIndexes.includes(stash.index)}
-                        files={filesByIndex[stash.index]}
-                        onToggle={onToggleStash}
-                        onAction={onStashAction}
-                        onFileDiff={onStashFileDiff}
-                    />
-                ))}
-            </div>
+            {!panelCollapsed ? (
+                <>
+                    <div className="stash-create">
+                        <input
+                            type="text"
+                            value={message}
+                            placeholder="Stash message (optional)"
+                            onChange={(event) => setMessage(event.currentTarget.value)}
+                        />
+                        <div className="stash-create-actions">
+                            <button type="button" disabled={!canStashAll} onClick={() => createStash('all')}>Stash</button>
+                            <button type="button" disabled={!canStashStaged} onClick={() => createStash('staged')}>Staged</button>
+                        </div>
+                    </div>
+                    <div className="stash-list">
+                        {stashes.length === 0
+                            ? <p className="stash-placeholder">No stashes</p>
+                            : stashes.map((stash) => (
+                                <StashItem
+                                    key={stash.index}
+                                    stash={stash}
+                                    expanded={expandedIndexes.includes(stash.index)}
+                                    files={filesByIndex[stash.index]}
+                                    onToggle={onToggleStash}
+                                    onAction={onStashAction}
+                                    onFileDiff={onStashFileDiff}
+                                />
+                            ))}
+                    </div>
+                </>
+            ) : null}
         </section>
     );
 }

@@ -23,6 +23,7 @@ export interface CommitAvailabilityInput {
 export interface CommitModeOption {
     readonly mode: CommitMode;
     readonly label: string;
+    readonly primary?: boolean;
 }
 
 export interface CommitMessageParts {
@@ -37,7 +38,7 @@ export interface CommitMessageStats {
 }
 
 export const COMMIT_MODE_OPTIONS: readonly CommitModeOption[] = [
-    { mode: 'commit', label: 'Commit' },
+    { mode: 'commit', label: 'Commit', primary: true },
     { mode: 'amend', label: 'Amend' },
     { mode: 'commitPush', label: 'Commit & Push' },
     { mode: 'commitSync', label: 'Commit & Sync' },

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { IconButton } from '../../shared/IconButton';
 import { bulkActionsFor, type ChangeBulkAction, type ChangeRowAction } from './changeCommands';
 import { buildChangeTree, type ChangeListItem, type ChangeSection } from './changeTree';
 import type { ChangeSelectionMode, ChangesViewMode } from './changesState';
@@ -35,26 +36,20 @@ export function ChangeSectionView({
     return (
         <section className="change-section" aria-labelledby={`${section.id}-title`}>
             <header className="change-section-header">
-                <button
-                    type="button"
-                    className="section-toggle"
-                    aria-expanded={!collapsed}
-                    aria-controls={`${section.id}-items`}
+                <IconButton
+                    icon={collapsed ? 'chevron-right' : 'chevron-down'}
+                    title={collapsed ? 'Expand section' : 'Collapse section'}
                     onClick={onToggleCollapsed}
-                >
-                    {collapsed ? '>' : 'v'}
-                </button>
+                />
                 <h2 id={`${section.id}-title`}>{section.title}</h2>
                 <div className="section-actions">
                     {bulkActions.map((descriptor) => (
-                        <button
+                        <IconButton
                             key={descriptor.action}
-                            type="button"
+                            icon={descriptor.icon}
                             title={descriptor.title}
                             onClick={() => onBulkAction(descriptor.action)}
-                        >
-                            {descriptor.label}
-                        </button>
+                        />
                     ))}
                     <span>{section.items.length}</span>
                 </div>

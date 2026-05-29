@@ -1,4 +1,5 @@
 import type { StashEntry, StashFileEntry } from '../../../protocol/changes/types';
+import { Codicon } from '../../shared/Codicon';
 import type { StashEntryAction } from './stashCommands';
 import { StashFileRow } from './StashFileRow';
 
@@ -18,10 +19,12 @@ export function StashItem({ stash, expanded, files, onToggle, onAction, onFileDi
                 <button
                     type="button"
                     className="stash-toggle"
+                    title={expanded ? 'Hide files' : 'Show files'}
+                    aria-label={expanded ? 'Hide files' : 'Show files'}
                     aria-expanded={expanded}
                     onClick={() => onToggle(stash.index)}
                 >
-                    {expanded ? 'Hide' : 'Files'}
+                    <Codicon name={expanded ? 'chevron-down' : 'chevron-right'} />
                 </button>
                 <div className="stash-title">
                     <strong>stash@{'{'}{stash.index}{'}'}</strong>

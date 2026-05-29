@@ -1,7 +1,7 @@
-import type { MouseEvent } from 'react';
 import type { StatusEntry } from '../../../protocol/changes/types';
+import { IconButton } from '../../shared/IconButton';
 import { rowActionsFor, type ChangeRowAction } from './changeCommands';
-import { statusLabel, type ChangeListItem } from './changeTree';
+import type { ChangeListItem } from './changeTree';
 import type { ChangeSelectionMode } from './changesState';
 import { FileTypeIcon } from './FileTypeIcon';
 import { iconKindForStatusEntry } from './fileIconModel';
@@ -25,43 +25,69 @@ export function ChangeRow({ item, depth, selected, onSelect, onAction }: ChangeR
             title={entry.filePath}
             aria-selected={selected}
             tabIndex={0}
-            onClick={(event) => onSelect(item, selectionModeFromEvent(event))}
+            onClick={(event) => {
+                if (event.shiftKey) {
+                    onSelect(item, 'range');
+                } else if (event.ctrlKey || event.metaKey) {
+                    onSelect(item, 'toggle');
+                } else {
+                    onSelect(item, 'replace');
+                    if (!entry.isSubmodule) {
+                        onAction(item, 'diff');
+                    }
+                }
+            }}
             onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
+                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    const rows = Array.from(
+                        document.querySelectorAll<HTMLElement>('.change-row[tabindex="0"]'),
+                    );
+                    const idx = rows.indexOf(event.currentTarget);
+                    const next = event.key === 'ArrowDown' ? rows[idx + 1] : rows[idx - 1];
+                    next?.focus();
+                    return;
+                }
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    onSelect(item, 'replace');
+                    if (!entry.isSubmodule) {
+                        onAction(item, 'diff');
+                    }
+                    return;
+                }
+                if (event.key === ' ') {
                     event.preventDefault();
                     onSelect(item, event.shiftKey ? 'range' : event.ctrlKey || event.metaKey ? 'toggle' : 'replace');
                 }
             }}
         >
-            <span className={`status-dot status-${statusKind(entry)}`} aria-hidden="true" />
             <FileTypeIcon kind={iconKindForStatusEntry(entry)} />
-            <span className="status-code">{statusCode(entry)}</span>
-            <span className="file-main">{fileName(entry.filePath)}</span>
-            <span className="file-path">{parentPath(entry)}</span>
-            <span className="status-label">{statusLabel(entry)}</span>
+            <div className="file-info">
+                <span className="file-name">{fileName(entry.filePath)}</span>
+                <span className="file-path">{parentPath(entry)}</span>
+            </div>
             <div className="row-actions" aria-label={`Actions for ${entry.filePath}`}>
                 {actions.map((descriptor) => (
-                    <button
+                    <IconButton
                         key={descriptor.action}
-                        type="button"
+                        icon={descriptor.icon}
                         title={descriptor.title}
                         onClick={(event) => {
                             event.stopPropagation();
                             onAction(item, descriptor.action);
                         }}
-                    >
-                        {descriptor.label}
-                    </button>
+                    />
                 ))}
             </div>
+            <span
+                className={`status-letter status-letter-${statusLetterKind(entry)}`}
+                aria-hidden="true"
+            >
+                {statusDisplayLetter(entry)}
+            </span>
         </article>
     );
-}
-
-function selectionModeFromEvent(event: MouseEvent<HTMLElement>): ChangeSelectionMode {
-    if (event.shiftKey) { return 'range'; }
-    if (event.ctrlKey || event.metaKey) { return 'toggle'; }
-    return 'replace';
 }
 
 function fileName(filePath: string): string {
@@ -72,19 +98,30 @@ function parentPath(entry: StatusEntry): string {
     const parts = entry.filePath.split('/');
     parts.pop();
     const parent = parts.join('/');
-    if (entry.origPath) { return `${entry.origPath} -> ${parent || '.'}`; }
+    if (entry.origPath) { return `${entry.origPath} → ${parent || '.'}`; }
     return parent;
 }
 
-function statusCode(entry: StatusEntry): string {
-    const code = `${entry.indexStatus}${entry.workTreeStatus}`.trim();
-    return code || entry.indexStatus || entry.workTreeStatus || '?';
+function statusDisplayLetter(entry: StatusEntry): string {
+    const idx = entry.indexStatus;
+    const wt = entry.workTreeStatus;
+    if (idx === '?' || wt === '?') { return 'U'; }
+    if (idx === 'U' || wt === 'U') { return 'C'; }
+    if (idx === 'A' && wt === 'A') { return 'C'; }
+    if (idx === 'D' && wt === 'D') { return 'C'; }
+    const status = idx.trim() || wt.trim();
+    if (status === 'R') { return 'R'; }
+    if (status === 'D') { return 'D'; }
+    if (status === 'A') { return 'A'; }
+    return 'M';
 }
 
-function statusKind(entry: StatusEntry): string {
-    const code = `${entry.indexStatus}${entry.workTreeStatus}`;
-    if (code.includes('U')) { return 'conflict'; }
-    if (code.includes('D')) { return 'deleted'; }
-    if (code.includes('A') || code.includes('?')) { return 'added'; }
+function statusLetterKind(entry: StatusEntry): string {
+    const letter = statusDisplayLetter(entry);
+    if (letter === 'U') { return 'untracked'; }
+    if (letter === 'A') { return 'added'; }
+    if (letter === 'D') { return 'deleted'; }
+    if (letter === 'C') { return 'conflict'; }
+    if (letter === 'R') { return 'renamed'; }
     return 'modified';
 }

@@ -13,11 +13,11 @@ function item(section: ChangeListItem['section'], filePath = 'src/app.ts'): Chan
 
 describe('changeCommands', () => {
     it('offers stage/discard actions for unstaged files', () => {
-        expect(rowActionsFor(item('unstaged')).map((action) => action.action)).toEqual(['stage', 'discard', 'open', 'diff']);
+        expect(rowActionsFor(item('unstaged')).map((action) => action.action)).toEqual(['diff', 'stage', 'discard', 'open']);
     });
 
     it('offers unstage actions for staged files', () => {
-        expect(rowActionsFor(item('staged')).map((action) => action.action)).toEqual(['unstage', 'open', 'diff']);
+        expect(rowActionsFor(item('staged')).map((action) => action.action)).toEqual(['diff', 'unstage', 'open']);
     });
 
     it('offers conflict resolution entry points for conflicts', () => {
@@ -27,7 +27,6 @@ describe('changeCommands', () => {
             'acceptTheirs',
             'markResolved',
             'open',
-            'diff',
         ]);
     });
 
@@ -74,7 +73,7 @@ describe('changeCommands', () => {
             ...item('unstaged', 'modules/lib'),
             entry: { indexStatus: 'M', workTreeStatus: ' ', filePath: 'modules/lib', isSubmodule: true },
         };
-        expect(rowActionsFor(submodule).map((action) => action.action)).toEqual(['stage', 'open', 'diff']);
+        expect(rowActionsFor(submodule).map((action) => action.action)).toEqual(['stage', 'open']);
     });
 
     it('creates protocol messages for bulk actions', () => {

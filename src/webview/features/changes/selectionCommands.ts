@@ -16,19 +16,19 @@ export function selectionActionsFor(items: readonly ChangeListItem[]): readonly 
     if (items.length === 0) { return []; }
     const singleFileActions: ChangeActionDescriptor<ChangeSelectionAction>[] = items.length === 1
         ? [
-            { action: 'open', label: 'Open', title: 'Open selected file' },
-            { action: 'diff', label: 'Diff', title: 'Open selected file diff' },
+            { action: 'diff', icon: 'diff', label: 'Diff', title: 'Open selected file diff' },
+            { action: 'open', icon: 'go-to-file', label: 'Open', title: 'Open selected file' },
         ]
         : [];
 
     return [
         ...singleFileActions,
-        ...actionIf(hasSection(items, 'unstaged'), { action: 'stage', label: 'Stage', title: 'Stage selected changes' }),
-        ...actionIf(hasSection(items, 'staged'), { action: 'unstage', label: 'Unstage', title: 'Unstage selected changes' }),
-        ...actionIf(hasActionableSection(items, 'unstaged'), { action: 'discard', label: 'Discard', title: 'Discard selected changes' }),
-        ...actionIf(hasActionableSection(items, 'conflicts'), { action: 'acceptOurs', label: 'Ours', title: 'Accept current changes for selected conflicts' }),
-        ...actionIf(hasActionableSection(items, 'conflicts'), { action: 'acceptTheirs', label: 'Theirs', title: 'Accept incoming changes for selected conflicts' }),
-        ...actionIf(hasSection(items, 'conflicts'), { action: 'markResolved', label: 'Resolved', title: 'Mark selected conflicts resolved' }),
+        ...actionIf(hasSection(items, 'unstaged'), { action: 'stage', icon: 'add', label: 'Stage', title: 'Stage selected changes' }),
+        ...actionIf(hasSection(items, 'staged'), { action: 'unstage', icon: 'remove', label: 'Unstage', title: 'Unstage selected changes' }),
+        ...actionIf(hasActionableSection(items, 'unstaged'), { action: 'discard', icon: 'trash', label: 'Discard', title: 'Discard selected changes' }),
+        ...actionIf(hasActionableSection(items, 'conflicts'), { action: 'acceptOurs', icon: 'fold-up', label: 'Ours', title: 'Accept current changes for selected conflicts' }),
+        ...actionIf(hasActionableSection(items, 'conflicts'), { action: 'acceptTheirs', icon: 'fold-down', label: 'Theirs', title: 'Accept incoming changes for selected conflicts' }),
+        ...actionIf(hasSection(items, 'conflicts'), { action: 'markResolved', icon: 'check', label: 'Resolved', title: 'Mark selected conflicts resolved' }),
     ];
 }
 

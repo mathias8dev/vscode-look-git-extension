@@ -92,6 +92,7 @@
     "@types/vscode": "^1.85.0",
     "@vitejs/plugin-react": "^5.1.1",
     "@vitest/coverage-v8": "^4.1.7",
+    "@vscode/codicons": "^0.0.45",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.1",
     "esbuild": "^0.28.0",
