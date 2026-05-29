@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import type { GitRepository } from '../../core/git/GitRepository';
+import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
 import type { ChangesWebviewToExtensionMessage, ChangesExtensionToWebviewMessage } from '../../protocol/changes/messages';
 import type { StatusData, StatusEntry } from '../../protocol/changes/types';
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import { showModalWarningMessage } from '../utils/confirmation';
+import { toProtocolSubmoduleStatus } from '../mapping/toProtocol';
 import { createErrorPayload } from './errorSerialization';
 
 type PostMessage = (msg: ChangesExtensionToWebviewMessage) => void;
@@ -390,13 +392,18 @@ function toGitUri(uri: vscode.Uri, ref: string): vscode.Uri {
 export function buildStatusData(
     status: Awaited<ReturnType<GitRepository['getStatus']>>,
     stashes: Awaited<ReturnType<GitRepository['stashList']>>,
+    submodules: readonly GitSubmodule[] = [],
 ): { type: 'changes/statusData'; data: StatusData } {
+    const submoduleStatusByPath = new Map(
+        submodules.map((submodule) => [submodule.path, toProtocolSubmoduleStatus(submodule.status)]),
+    );
     const toEntry = (e: typeof status.staged[number]): StatusEntry => ({
         indexStatus: e.indexStatus,
         workTreeStatus: e.workTreeStatus,
         filePath: e.filePath,
         origPath: e.origPath,
         isSubmodule: e.isSubmodule,
+        submoduleStatus: e.isSubmodule ? submoduleStatusByPath.get(e.filePath) : undefined,
     });
 
     return {

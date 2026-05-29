@@ -149,6 +149,32 @@ describe('ChangesViewProvider', () => {
         await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({ type: 'changes/statusData' })));
     });
 
+    it('adds semantic submodule status to submodule changes', async () => {
+        const repo = makeRepo({
+            getStatus: vi.fn(async () => ({
+                staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'modules/lib', isSubmodule: true }],
+                unstaged: [],
+                conflicts: [],
+                conflictState: 'none' as const,
+            })),
+            getSubmoduleStatus: vi.fn(async () => [{ path: 'modules/lib', status: '+' as const }]),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual({
+            type: 'changes/statusData',
+            data: expect.objectContaining({
+                staged: [expect.objectContaining({
+                    filePath: 'modules/lib',
+                    isSubmodule: true,
+                    submoduleStatus: 'out-of-sync',
+                })],
+            }),
+        }));
+    });
+
     it('refresh failure posts a protocol error', async () => {
         const repo = makeRepo({
             getStatus: vi.fn(async () => { throw new Error('status failed'); }),

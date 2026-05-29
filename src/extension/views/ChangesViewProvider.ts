@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { GitRepository, GitSubmodule } from '../../core/git/GitRepository';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import type { ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
 import type { SerializedRepoContext } from '../../protocol/shared/repo';
@@ -73,13 +74,14 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     continue;
                 }
 
-                const [status, stashes] = await Promise.all([
+                const [status, stashes, submodules] = await Promise.all([
                     repo.getStatus(),
                     repo.stashList(),
+                    optionalSubmodules(repo),
                 ]);
                 this.updateBadge(status.staged.length + status.unstaged.length + status.conflicts.length);
                 if (this.view.visible) {
-                    this.view.webview.postMessage(buildStatusData(status, stashes));
+                    this.view.webview.postMessage(buildStatusData(status, stashes, submodules));
                 }
             } catch (error) {
                 this.updateBadge(0);
@@ -107,5 +109,13 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     async notifyRepoChanged(context: SerializedRepoContext): Promise<void> {
         this.view?.webview.postMessage({ type: 'repo/contextChanged', context });
         await this.refresh();
+    }
+}
+
+async function optionalSubmodules(repo: GitRepository): Promise<readonly GitSubmodule[]> {
+    try {
+        return await repo.getSubmoduleStatus();
+    } catch {
+        return [];
     }
 }

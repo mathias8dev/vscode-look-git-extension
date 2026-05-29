@@ -41,18 +41,23 @@ export function toProtocolWorktree(w: GitWorktree): WorktreeInfo {
 }
 
 /** Maps raw git submodule status char to human-readable protocol status. */
-export function toProtocolSubmodule(s: GitSubmodule): SubmoduleInfo {
+export function toProtocolSubmoduleStatus(status: GitSubmodule['status']): SubmoduleStatus {
     const statusMap: Record<GitSubmodule['status'], SubmoduleStatus> = {
         ' ': 'clean',
         '+': 'out-of-sync',
         '-': 'not-initialized',
         'U': 'dirty',
     };
+    return statusMap[status];
+}
+
+/** Maps raw git submodule status char to human-readable protocol status. */
+export function toProtocolSubmodule(s: GitSubmodule): SubmoduleInfo {
     return {
         path: s.path,
         name: s.path.split('/').pop() ?? s.path,
         url: '',           // populated by the caller from .gitmodules if needed
         registeredHash: '', // populated by the caller via git ls-files -s
-        status: statusMap[s.status],
+        status: toProtocolSubmoduleStatus(s.status),
     };
 }

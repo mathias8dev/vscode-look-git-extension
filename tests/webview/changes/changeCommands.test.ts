@@ -68,6 +68,14 @@ describe('changeCommands', () => {
         expect(messageForRowAction(submodule, 'open')).toEqual({ type: 'changes/openSubmodule', filePath: 'modules/lib' });
     });
 
+    it('omits unsafe row actions for submodules', () => {
+        const submodule: ChangeListItem = {
+            ...item('unstaged', 'modules/lib'),
+            entry: { indexStatus: 'M', workTreeStatus: ' ', filePath: 'modules/lib', isSubmodule: true },
+        };
+        expect(rowActionsFor(submodule).map((action) => action.action)).toEqual(['stage', 'open', 'diff']);
+    });
+
     it('creates protocol messages for bulk actions', () => {
         expect(messageForBulkAction('stageAll')).toEqual({ type: 'changes/stageAll' });
         expect(messageForBulkAction('unstageAll')).toEqual({ type: 'changes/unstageAll' });

@@ -33,6 +33,19 @@ export function rowActionsFor(item: ChangeListItem): readonly ChangeActionDescri
         ];
     }
 
+    if (item.entry.isSubmodule) {
+        if (item.section === 'conflicts') {
+            return [
+                { action: 'markResolved', label: 'Resolved', title: 'Mark resolved' },
+                ...common,
+            ];
+        }
+        return [
+            { action: 'stage', label: 'Stage', title: 'Stage submodule gitlink' },
+            ...common,
+        ];
+    }
+
     if (item.section === 'conflicts') {
         return [
             { action: 'openMergeEditor', label: 'Merge', title: 'Open merge editor' },

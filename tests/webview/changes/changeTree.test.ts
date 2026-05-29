@@ -39,5 +39,12 @@ describe('changeTree', () => {
         expect(statusLabel({ indexStatus: ' ', workTreeStatus: 'D', filePath: 'old.ts' })).toBe('Deleted');
         expect(statusLabel({ indexStatus: 'U', workTreeStatus: 'U', filePath: 'conflict.ts' })).toBe('Conflict');
         expect(statusLabel({ indexStatus: 'M', workTreeStatus: ' ', filePath: 'module', isSubmodule: true })).toBe('Submodule');
+        expect(statusLabel({
+            indexStatus: 'M',
+            workTreeStatus: ' ',
+            filePath: 'module',
+            isSubmodule: true,
+            submoduleStatus: 'dirty',
+        })).toBe('Submodule dirty');
     });
 });

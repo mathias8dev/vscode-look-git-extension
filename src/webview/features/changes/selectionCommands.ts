@@ -25,9 +25,9 @@ export function selectionActionsFor(items: readonly ChangeListItem[]): readonly 
         ...singleFileActions,
         ...actionIf(hasSection(items, 'unstaged'), { action: 'stage', label: 'Stage', title: 'Stage selected changes' }),
         ...actionIf(hasSection(items, 'staged'), { action: 'unstage', label: 'Unstage', title: 'Unstage selected changes' }),
-        ...actionIf(hasSection(items, 'unstaged'), { action: 'discard', label: 'Discard', title: 'Discard selected changes' }),
-        ...actionIf(hasSection(items, 'conflicts'), { action: 'acceptOurs', label: 'Ours', title: 'Accept current changes for selected conflicts' }),
-        ...actionIf(hasSection(items, 'conflicts'), { action: 'acceptTheirs', label: 'Theirs', title: 'Accept incoming changes for selected conflicts' }),
+        ...actionIf(hasActionableSection(items, 'unstaged'), { action: 'discard', label: 'Discard', title: 'Discard selected changes' }),
+        ...actionIf(hasActionableSection(items, 'conflicts'), { action: 'acceptOurs', label: 'Ours', title: 'Accept current changes for selected conflicts' }),
+        ...actionIf(hasActionableSection(items, 'conflicts'), { action: 'acceptTheirs', label: 'Theirs', title: 'Accept incoming changes for selected conflicts' }),
         ...actionIf(hasSection(items, 'conflicts'), { action: 'markResolved', label: 'Resolved', title: 'Mark selected conflicts resolved' }),
     ];
 }
@@ -47,11 +47,11 @@ export function messageForSelectionAction(
         case 'unstage':
             return filesMessage('changes/unstageFiles', pathsForSection(items, 'staged'));
         case 'discard':
-            return filesMessage('changes/discardFiles', pathsForSection(items, 'unstaged'));
+            return filesMessage('changes/discardFiles', actionablePathsForSection(items, 'unstaged'));
         case 'acceptOurs':
-            return filesMessage('changes/acceptOursFiles', pathsForSection(items, 'conflicts'));
+            return filesMessage('changes/acceptOursFiles', actionablePathsForSection(items, 'conflicts'));
         case 'acceptTheirs':
-            return filesMessage('changes/acceptTheirsFiles', pathsForSection(items, 'conflicts'));
+            return filesMessage('changes/acceptTheirsFiles', actionablePathsForSection(items, 'conflicts'));
         case 'markResolved':
             return filesMessage('changes/markResolvedFiles', pathsForSection(items, 'conflicts'));
         case 'open':
@@ -71,8 +71,18 @@ function hasSection(items: readonly ChangeListItem[], section: ChangeListItem['s
     return items.some((item) => item.section === section);
 }
 
+function hasActionableSection(items: readonly ChangeListItem[], section: ChangeListItem['section']): boolean {
+    return items.some((item) => item.section === section && !item.entry.isSubmodule);
+}
+
 function pathsForSection(items: readonly ChangeListItem[], section: ChangeListItem['section']): readonly string[] {
     return items.filter((item) => item.section === section).map((item) => item.entry.filePath);
+}
+
+function actionablePathsForSection(items: readonly ChangeListItem[], section: ChangeListItem['section']): readonly string[] {
+    return items
+        .filter((item) => item.section === section && !item.entry.isSubmodule)
+        .map((item) => item.entry.filePath);
 }
 
 function filesMessage(

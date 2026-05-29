@@ -1,4 +1,7 @@
 import type { Pagination } from '../shared/base';
+import type { SubmoduleStatus } from '../shared/repo';
+
+export type { SubmoduleStatus } from '../shared/repo';
 
 export interface GraphFilters {
     readonly search?: string;
@@ -45,8 +48,6 @@ export interface WorktreeInfo {
     readonly isMain: boolean;
     readonly isDetached: boolean;
 }
-
-export type SubmoduleStatus = 'clean' | 'dirty' | 'out-of-sync' | 'not-initialized';
 
 export interface SubmoduleInfo {
     readonly path: string;

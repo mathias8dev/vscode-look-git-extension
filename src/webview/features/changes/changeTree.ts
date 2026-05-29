@@ -85,7 +85,7 @@ export function statusCode(entry: StatusEntry): string {
 }
 
 export function statusLabel(entry: StatusEntry): string {
-    if (entry.isSubmodule) { return 'Submodule'; }
+    if (entry.isSubmodule) { return submoduleLabel(entry.submoduleStatus); }
     const code = statusCode(entry);
     if (code.includes('U')) { return 'Conflict'; }
     if (code.includes('R')) { return 'Renamed'; }
@@ -93,6 +93,20 @@ export function statusLabel(entry: StatusEntry): string {
     if (code.includes('D')) { return 'Deleted'; }
     if (code.includes('M')) { return 'Modified'; }
     return 'Changed';
+}
+
+function submoduleLabel(status: StatusEntry['submoduleStatus']): string {
+    switch (status) {
+        case 'dirty':
+            return 'Submodule dirty';
+        case 'out-of-sync':
+            return 'Submodule out-of-sync';
+        case 'not-initialized':
+            return 'Submodule not initialized';
+        case 'clean':
+        case undefined:
+            return 'Submodule';
+    }
 }
 
 function toItem(section: ChangeSectionId, entry: StatusEntry, isStaged: boolean): ChangeListItem {

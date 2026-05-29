@@ -1,9 +1,12 @@
+import type { SubmoduleStatus } from '../shared/repo';
+
 export interface StatusEntry {
     readonly indexStatus: string;
     readonly workTreeStatus: string;
     readonly filePath: string;
     readonly origPath?: string;
     readonly isSubmodule?: boolean;
+    readonly submoduleStatus?: SubmoduleStatus;
 }
 
 export interface StashEntry {

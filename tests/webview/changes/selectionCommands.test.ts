@@ -15,6 +15,16 @@ function item(section: ChangeListItem['section'], filePath: string): ChangeListI
     };
 }
 
+function submodule(section: ChangeListItem['section'], filePath: string): ChangeListItem {
+    return {
+        ...item(section, filePath),
+        entry: {
+            ...item(section, filePath).entry,
+            isSubmodule: true,
+        },
+    };
+}
+
 describe('selectionCommands', () => {
     it('offers contextual actions for selected changes', () => {
         expect(selectionActionsFor([item('unstaged', 'a.ts')]).map((action) => action.action)).toEqual([
@@ -54,5 +64,14 @@ describe('selectionCommands', () => {
             type: 'changes/openDiff',
             filePath: 'a.ts',
         }));
+    });
+
+    it('excludes submodules from unsafe selection actions', () => {
+        const selected = [submodule('unstaged', 'modules/lib'), item('unstaged', 'src/app.ts')];
+        expect(selectionActionsFor(selected).map((action) => action.action)).toEqual(['stage', 'discard']);
+        expect(messageForSelectionAction(selected, 'discard')).toEqual({
+            type: 'changes/discardFiles',
+            filePaths: ['src/app.ts'],
+        });
     });
 });

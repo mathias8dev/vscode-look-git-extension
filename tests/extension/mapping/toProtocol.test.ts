@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { GitGraphCommit } from '../../../src/core/git/domain/GitCommit';
 import type { GitBranch } from '../../../src/core/git/domain/GitStatus';
-import { toProtocolBranch, toProtocolGraphCommit, toProtocolSubmodule } from '../../../src/extension/mapping/toProtocol';
+import {
+    toProtocolBranch,
+    toProtocolGraphCommit,
+    toProtocolSubmodule,
+    toProtocolSubmoduleStatus,
+} from '../../../src/extension/mapping/toProtocol';
 
 describe('toProtocol mapping', () => {
     it('maps graph commits as semantic protocol data without rendering fields', () => {
@@ -46,6 +51,10 @@ describe('toProtocol mapping', () => {
     });
 
     it('maps submodule status into protocol vocabulary', () => {
+        expect(toProtocolSubmoduleStatus(' ')).toBe('clean');
+        expect(toProtocolSubmoduleStatus('+')).toBe('out-of-sync');
+        expect(toProtocolSubmoduleStatus('-')).toBe('not-initialized');
+        expect(toProtocolSubmoduleStatus('U')).toBe('dirty');
         expect(toProtocolSubmodule({ path: 'packages/lib', status: '+' })).toEqual({
             path: 'packages/lib',
             name: 'lib',
