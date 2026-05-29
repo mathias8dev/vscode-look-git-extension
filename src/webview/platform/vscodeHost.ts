@@ -1,17 +1,18 @@
-import type { WebviewToExtensionMessage } from '../../protocol/messages';
+// Singleton VS Code API — call once at module load, never again.
+// All components import { vscodeApi } from here.
 
-export type WebviewHost = {
-    readonly postMessage: (message: WebviewToExtensionMessage) => void;
+declare function acquireVsCodeApi(): {
+    postMessage(msg: unknown): void;
+    getState(): unknown;
+    setState(state: unknown): void;
 };
 
-declare function acquireVsCodeApi(): WebviewHost;
-
-export function createWebviewHost(): WebviewHost {
+function createApi() {
     if (typeof acquireVsCodeApi === 'function') {
         return acquireVsCodeApi();
     }
-
-    return {
-        postMessage: () => undefined,
-    };
+    // Dev/test fallback
+    return { postMessage: () => undefined, getState: () => undefined, setState: () => undefined };
 }
+
+export const vscodeApi = createApi();
