@@ -2,6 +2,12 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [1.1.3] - 2026-05-29
+
+### Fixed
+
+- Kept the Changes activity badge synchronized with the current change count, including returning to `0` when the working tree becomes clean while the view is visible or hidden.
+
 ## [1.1.2] - 2026-05-29
 
 ### Added

@@ -46,7 +46,61 @@ describe('ChangesViewProvider webview messages', () => {
             expect(view.badge).toEqual({ value: 2, tooltip: '2 changes' });
         });
 
-        it('defers expensive status refresh work while the changes webview is hidden', async () => {
+        it('updates the badge while hidden but defers status payloads and stashes', async () => {
+            const service = {
+                getStatus: vi.fn(async () => ({
+                    staged: [statusEntry('hidden.ts')],
+                    unstaged: [],
+                    conflicts: [],
+                    conflictState: 'none',
+                })),
+                stashList: vi.fn(async () => []),
+            };
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+            view.visible = false;
+            (view as any).badge = { value: 21, tooltip: '21 changes' };
+
+            provider.resolveWebviewView(view as any, {} as any, {} as any);
+
+            await vi.waitFor(() => expect(service.getStatus).toHaveBeenCalledTimes(1));
+            expect(service.stashList).not.toHaveBeenCalled();
+            expect(view.messages).not.toContainEqual(expect.objectContaining({ type: 'statusData' }));
+            expect(view.badge).toEqual({ value: 1, tooltip: '1 change' });
+
+            view.visible = true;
+            view.visibilityHandler?.();
+
+            await vi.waitFor(() => expect(service.getStatus).toHaveBeenCalledTimes(2));
+            expect(service.stashList).toHaveBeenCalledTimes(1);
+            await vi.waitFor(() => {
+                expect(view.badge).toEqual({ value: 1, tooltip: '1 change' });
+            });
+        });
+
+        it('updates a stale badge to zero when the visible working tree becomes clean', async () => {
+            const service = {
+                getStatus: vi.fn(async () => ({
+                    staged: [],
+                    unstaged: [],
+                    conflicts: [],
+                    conflictState: 'none',
+                })),
+                stashList: vi.fn(async () => []),
+            };
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            const view = makeWebviewView();
+            (view as any).badge = { value: 21, tooltip: '21 changes' };
+            (provider as any).view = view;
+
+            await provider.refresh();
+
+            expect(view.badge).toEqual({ value: 0, tooltip: '0 changes' });
+            expect(service.getStatus).toHaveBeenCalledTimes(1);
+            expect(service.stashList).toHaveBeenCalledTimes(1);
+        });
+
+        it('updates a stale badge to zero while hidden when the working tree becomes clean', async () => {
             const service = {
                 getStatus: vi.fn(async () => ({
                     staged: [],
@@ -59,18 +113,14 @@ describe('ChangesViewProvider webview messages', () => {
             const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
             const view = makeWebviewView();
             view.visible = false;
+            (view as any).badge = { value: 21, tooltip: '21 changes' };
+            (provider as any).view = view;
 
-            provider.resolveWebviewView(view as any, {} as any, {} as any);
-            await Promise.resolve();
+            await provider.refresh();
 
-            expect(service.getStatus).not.toHaveBeenCalled();
+            expect(view.badge).toEqual({ value: 0, tooltip: '0 changes' });
+            expect(service.getStatus).toHaveBeenCalledTimes(1);
             expect(service.stashList).not.toHaveBeenCalled();
-
-            view.visible = true;
-            view.visibilityHandler?.();
-
-            await vi.waitFor(() => expect(service.getStatus).toHaveBeenCalledTimes(1));
-            expect(service.stashList).toHaveBeenCalledTimes(1);
         });
     });
 

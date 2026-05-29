@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import * as path from 'path';
-import type { GitService } from '../gitService';
+import type { GitService, GitStatus } from '../gitService';
 import { showModalWarningMessage } from '../utils/confirmation';
 
 export class ChangesViewProvider implements vscode.WebviewViewProvider {
@@ -62,6 +62,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         this.pendingRefresh = true;
 
         if (!this.view.visible) {
+            await this.refreshBadge();
             return;
         }
 
@@ -93,16 +94,32 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 this.gitService.stashList(),
             ]);
             this.view.webview.postMessage({ type: 'statusData', data: { ...status, stashes } });
-
-            // Show total change count as a badge on the view
-            const total = status.staged.length + status.unstaged.length + status.conflicts.length;
-            this.view.badge = total > 0
-                ? { value: total, tooltip: `${total} change${total !== 1 ? 's' : ''}` }
-                : undefined;
+            this.updateBadge(status);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
+            this.setBadgeCount(0);
             this.view.webview.postMessage({ type: 'error', message });
         }
+    }
+
+    private async refreshBadge(): Promise<void> {
+        if (!this.view) { return; }
+        try {
+            const status = await this.gitService.getStatus();
+            this.updateBadge(status);
+        } catch {
+            this.setBadgeCount(0);
+        }
+    }
+
+    private updateBadge(status: GitStatus): void {
+        const total = status.staged.length + status.unstaged.length + status.conflicts.length;
+        this.setBadgeCount(total);
+    }
+
+    private setBadgeCount(total: number): void {
+        if (!this.view) { return; }
+        this.view.badge = { value: total, tooltip: `${total} change${total !== 1 ? 's' : ''}` };
     }
 
     private async handleMessage(msg: { type: string; [key: string]: unknown }): Promise<void> {

@@ -2,7 +2,7 @@
   "name": "look-git",
   "displayName": "Look Git",
   "description": "Advanced Git operations: cherry-pick, rebase, reset, revert, drop, and rename commits",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "publisher": "mathias8dev",
   "engines": {
     "vscode": "^1.85.0"
