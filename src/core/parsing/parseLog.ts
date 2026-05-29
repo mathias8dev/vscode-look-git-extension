@@ -1,4 +1,4 @@
-import type { GitCommit, GraphCommit } from '../git/domain/GitCommit';
+import type { GitCommit, GitGraphCommit } from '../git/domain/GitCommit';
 
 export const LOG_FIELD_SEP = '\x1f';
 export const LOG_RECORD_SEP = '\x1e';
@@ -23,7 +23,7 @@ export function parseCommitLog(output: string): GitCommit[] {
         });
 }
 
-export function parseGraphLog(output: string): GraphCommit[] {
+export function parseGraphLog(output: string): GitGraphCommit[] {
     if (!output) { return []; }
     return output
         .split(LOG_RECORD_SEP)

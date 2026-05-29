@@ -1,4 +1,5 @@
-export interface WorktreeInfo {
+/** Raw worktree from `git worktree list --porcelain`. */
+export interface GitWorktree {
     readonly path: string;
     readonly head: string;
     readonly branch: string | undefined;
@@ -6,7 +7,9 @@ export interface WorktreeInfo {
     readonly isDetached: boolean;
 }
 
-export interface SubmoduleInfo {
+/** Raw submodule from `git submodule status`. Status is the raw git prefix character. */
+export interface GitSubmodule {
     readonly path: string;
-    readonly status: '+' | '-' | 'U' | ' ';  // +modified -uninitialized U conflict ' 'clean
+    /** Raw git prefix: ' '=clean, '+'=modified, '-'=uninitialized, 'U'=conflict */
+    readonly status: ' ' | '+' | '-' | 'U';
 }

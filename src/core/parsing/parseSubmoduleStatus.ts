@@ -1,9 +1,9 @@
-import type { SubmoduleInfo } from '../git/domain/GitWorktree';
+import type { GitSubmodule } from '../git/domain/GitWorktree';
 
 /** Parse the output of `git submodule status`. Returns one entry per submodule. */
-export function parseSubmoduleStatus(output: string): SubmoduleInfo[] {
+export function parseSubmoduleStatus(output: string): GitSubmodule[] {
     if (!output) { return []; }
-    const result: SubmoduleInfo[] = [];
+    const result: GitSubmodule[] = [];
 
     for (const line of output.split('\n')) {
         if (!line) { continue; }
@@ -12,7 +12,7 @@ export function parseSubmoduleStatus(output: string): SubmoduleInfo[] {
         if (match && match[1] && match[2]) {
             result.push({
                 path: match[2].trim(),
-                status: match[1] as SubmoduleInfo['status'],
+                status: match[1] as GitSubmodule['status'],
             });
         }
     }

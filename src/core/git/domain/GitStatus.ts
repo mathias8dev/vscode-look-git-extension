@@ -1,3 +1,4 @@
+/** Raw status entry from git status --porcelain=v1 -z. */
 export interface GitStatusEntry {
     readonly indexStatus: string;
     readonly workTreeStatus: string;
@@ -15,12 +16,13 @@ export interface GitStatus {
     readonly conflictState: ConflictState;
 }
 
-export interface StashEntry {
+export interface GitStash {
     readonly index: number;
     readonly message: string;
 }
 
-export interface BranchInfo {
+/** Raw branch from git branch/for-each-ref. */
+export interface GitBranch {
     readonly name: string;
     readonly isRemote: boolean;
     readonly isCurrent: boolean;
@@ -30,7 +32,8 @@ export interface BranchInfo {
     readonly behind: number;
 }
 
-export interface TagInfo {
+/** Raw tag from git tag. */
+export interface GitTag {
     readonly name: string;
     readonly hash: string;
 }

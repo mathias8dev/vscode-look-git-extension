@@ -1,40 +1,31 @@
-// Ported from main:src/graphView/graphLaneAssigner.ts
-// Pure algorithm — no I/O, no VS Code dependencies
-import type { GraphCommit } from '../git/domain/GitCommit';
+// GraphRow, LaneData, LineDef are defined in protocol (single source of truth).
+// GraphLaneAssigner imports them — importing pure TS types from protocol is allowed
+// since protocol contains no logic, no VS Code API, no React.
+import type { GraphRow, LaneData, LineDef } from '../../protocol/graph/types';
+import type { GitGraphCommit } from '../git/domain/GitCommit';
 
 const LANE_COLORS = [
     '#f97583', '#79b8ff', '#85e89d', '#ffab70', '#b392f0',
     '#f692ce', '#73daca', '#ffd700', '#9ecbff', '#c8d6e5',
 ];
 
-export interface LineDef {
-    readonly fromLane: number;
-    readonly toLane: number;
-    readonly color: string;
-    readonly type: 'straight' | 'merge-left' | 'merge-right' | 'fork-left' | 'fork-right';
-    readonly targetHash?: string;
-    readonly role: 'pass-through' | 'first-parent' | 'merge-parent';
-    readonly fromTop?: boolean;
-}
-
-export interface LaneData {
-    readonly lane: number;
-    readonly color: string;
-    readonly lines: readonly LineDef[];
-    readonly isPrimary: boolean;
-}
-
-export interface GraphRow {
-    readonly commit: GraphCommit;
-    readonly laneData: LaneData;
-}
-
 export interface AssignLaneOptions {
     readonly primaryBranch?: string;
     readonly primaryBranchHash?: string;
 }
 
-export function assignLanes(commits: readonly GraphCommit[], options: AssignLaneOptions = {}): GraphRow[] {
+// Re-export so consumers don't need to know where rendering types come from.
+export type { GraphRow, LaneData, LineDef };
+
+/**
+ * Assigns lanes and colors to a list of commits for graph rendering.
+ * Input: GitGraphCommit[] (core, from parsing).
+ * Output: GraphRow[] (protocol, sent to webview as-is — no mapping needed).
+ *
+ * TypeScript structural typing makes GitGraphCommit satisfy GraphCommit:
+ * both have the same fields, so no explicit cast is required.
+ */
+export function assignLanes(commits: readonly GitGraphCommit[], options: AssignLaneOptions = {}): GraphRow[] {
     const lanes: (string | null)[] = [];
     const result: GraphRow[] = [];
     const primaryTipIndex = commits.findIndex((c) => isPrimaryTip(c, options));
@@ -58,6 +49,10 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
         while (lane >= lanes.length) { lanes.push(null); }
     }
 
+    function laneColor(lane: number): string {
+        return LANE_COLORS[lane % LANE_COLORS.length] ?? '#ffffff';
+    }
+
     for (const commit of commits) {
         const lines: LineDef[] = [];
         const isPrimaryTipCommit = hasPrimaryTip && isPrimaryTip(commit, options);
@@ -68,7 +63,7 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
 
         if (isPrimaryTipCommit) { primaryPending = false; primarySeen = true; ensureLane(0); }
 
-        const color = LANE_COLORS[lane % LANE_COLORS.length] ?? '#ffffff';
+        const color = laneColor(lane);
         const isPrimaryLane = hasPrimaryTip && primarySeen && lane === 0;
 
         lanes[lane] = null;
@@ -85,14 +80,13 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
 
         for (let i = 0; i < lanes.length; i++) {
             if (lanes[i] !== null && i !== lane) {
-                lines.push({ fromLane: i, toLane: i, color: LANE_COLORS[i % LANE_COLORS.length] ?? '#ffffff', type: 'straight', targetHash: lanes[i] ?? undefined, role: 'pass-through' });
+                lines.push({ fromLane: i, toLane: i, color: laneColor(i), type: 'straight', targetHash: lanes[i] ?? undefined, role: 'pass-through' });
             }
         }
 
         if (primaryOverrideFromLane !== undefined) {
             lines.push({
-                fromLane: primaryOverrideFromLane, toLane: lane,
-                color: LANE_COLORS[primaryOverrideFromLane % LANE_COLORS.length] ?? '#ffffff',
+                fromLane: primaryOverrideFromLane, toLane: lane, color: laneColor(primaryOverrideFromLane),
                 type: lane < primaryOverrideFromLane ? 'merge-left' : 'merge-right',
                 targetHash: firstParent, role: 'merge-parent', fromTop: true,
             });
@@ -102,8 +96,7 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
             const existingLane = findLane(firstParent);
             if (existingLane !== -1 && existingLane !== lane && !isPrimaryLane) {
                 lines.push({
-                    fromLane: lane, toLane: existingLane,
-                    color: LANE_COLORS[existingLane % LANE_COLORS.length] ?? '#ffffff',
+                    fromLane: lane, toLane: existingLane, color: laneColor(existingLane),
                     type: existingLane < lane ? 'merge-left' : 'merge-right',
                     targetHash: firstParent, role: 'first-parent', fromTop: true,
                 });
@@ -122,8 +115,7 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
                 const parentLane = findLane(parentHash);
                 if (parentLane !== -1) {
                     lines.push({
-                        fromLane: lane, toLane: parentLane,
-                        color: LANE_COLORS[parentLane % LANE_COLORS.length] ?? '#ffffff',
+                        fromLane: lane, toLane: parentLane, color: laneColor(parentLane),
                         type: parentLane < lane ? 'merge-left' : 'merge-right',
                         targetHash: parentHash, role: 'merge-parent',
                     });
@@ -132,8 +124,7 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
                     ensureLane(newLane);
                     lanes[newLane] = parentHash;
                     lines.push({
-                        fromLane: lane, toLane: newLane,
-                        color: LANE_COLORS[newLane % LANE_COLORS.length] ?? '#ffffff',
+                        fromLane: lane, toLane: newLane, color: laneColor(newLane),
                         type: newLane < lane ? 'fork-left' : 'fork-right',
                         targetHash: parentHash, role: 'merge-parent',
                     });
@@ -141,7 +132,8 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
             }
         }
 
-        result.push({ commit, laneData: { lane, color, lines, isPrimary: isPrimaryLane } });
+        const laneData: LaneData = { lane, color, lines, isPrimary: isPrimaryLane };
+        result.push({ commit, laneData });
     }
 
     return result;
@@ -159,7 +151,7 @@ export function getMaxLane(rows: readonly GraphRow[]): number {
     return max;
 }
 
-function isPrimaryTip(commit: GraphCommit, options: AssignLaneOptions): boolean {
+function isPrimaryTip(commit: GitGraphCommit, options: AssignLaneOptions): boolean {
     if (options.primaryBranchHash) {
         const h = options.primaryBranchHash;
         if (commit.hash.startsWith(h) || commit.shortHash === h) { return true; }

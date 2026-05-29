@@ -1,9 +1,9 @@
 // Ported from main:tests/graphLaneAssigner.test.ts
 import { describe, expect, it } from 'vitest';
 import { assignLanes, getMaxLane } from '../../../src/core/graph/GraphLaneAssigner';
-import type { GraphCommit } from '../../../src/core/git/domain/GitCommit';
+import type { GitGraphCommit } from '../../../src/core/git/domain/GitCommit';
 
-function commit(hash: string, parents: string[] = [], refs: string[] = []): GraphCommit {
+function commit(hash: string, parents: string[] = [], refs: string[] = []): GitGraphCommit {
     return {
         hash,
         shortHash: hash.substring(0, 7),

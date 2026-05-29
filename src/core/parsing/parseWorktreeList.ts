@@ -1,8 +1,8 @@
-import type { WorktreeInfo } from '../git/domain/GitWorktree';
+import type { GitWorktree } from '../git/domain/GitWorktree';
 
-export function parseWorktreeList(output: string): WorktreeInfo[] {
+export function parseWorktreeList(output: string): GitWorktree[] {
     if (!output) { return []; }
-    const worktrees: WorktreeInfo[] = [];
+    const worktrees: GitWorktree[] = [];
     const stanzas = output.split(/\n\n+/);
 
     for (let i = 0; i < stanzas.length; i++) {
@@ -22,7 +22,7 @@ export function parseWorktreeList(output: string): WorktreeInfo[] {
         }
 
         if (!wtPath) { continue; }
-        worktrees.push({ path: wtPath, head, branch, isMain: i === 0, isDetached });
+        worktrees.push({ path: wtPath, head, branch, isMain: i === 0, isDetached } satisfies GitWorktree);
     }
 
     return worktrees;
