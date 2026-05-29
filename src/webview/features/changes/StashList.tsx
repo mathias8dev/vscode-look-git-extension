@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { StashEntry, StashFileEntry } from '../../../protocol/changes/types';
-import { vscodeApi } from '../../platform/vscodeHost';
-import { messageForCreateStash, type CreateStashKind } from './stashCommands';
+import type { CreateStashKind, StashEntryAction } from './stashCommands';
 import { StashItem } from './StashItem';
 
 interface StashListProps {
@@ -11,6 +10,9 @@ interface StashListProps {
     readonly expandedIndexes: readonly number[];
     readonly filesByIndex: Readonly<Record<number, readonly StashFileEntry[]>>;
     readonly onToggleStash: (index: number) => void;
+    readonly onCreateStash: (kind: CreateStashKind, message: string) => void;
+    readonly onStashAction: (index: number, action: StashEntryAction) => void;
+    readonly onStashFileDiff: (index: number, file: StashFileEntry) => void;
 }
 
 export function StashList({
@@ -20,6 +22,9 @@ export function StashList({
     expandedIndexes,
     filesByIndex,
     onToggleStash,
+    onCreateStash,
+    onStashAction,
+    onStashFileDiff,
 }: StashListProps) {
     const [message, setMessage] = useState('');
     const canStashAll = changeCount > 0;
@@ -27,7 +32,7 @@ export function StashList({
 
     const createStash = (kind: CreateStashKind) => {
         if ((kind === 'staged' && !canStashStaged) || (kind === 'all' && !canStashAll)) { return; }
-        vscodeApi.postMessage(messageForCreateStash(kind, message));
+        onCreateStash(kind, message);
         setMessage('');
     };
 
@@ -57,6 +62,8 @@ export function StashList({
                         expanded={expandedIndexes.includes(stash.index)}
                         files={filesByIndex[stash.index]}
                         onToggle={onToggleStash}
+                        onAction={onStashAction}
+                        onFileDiff={onStashFileDiff}
                     />
                 ))}
             </div>

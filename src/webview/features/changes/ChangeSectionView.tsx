@@ -1,6 +1,5 @@
-import { vscodeApi } from '../../platform/vscodeHost';
-import { bulkActionsFor, messageForBulkAction } from './changeCommands';
-import { buildChangeTree, type ChangeSection } from './changeTree';
+import { bulkActionsFor, type ChangeBulkAction, type ChangeRowAction } from './changeCommands';
+import { buildChangeTree, type ChangeListItem, type ChangeSection } from './changeTree';
 import type { ChangesViewMode } from './changesState';
 import { ChangeRow } from './ChangeRow';
 import { TreeNodeView } from './TreeNodeView';
@@ -8,9 +7,11 @@ import { TreeNodeView } from './TreeNodeView';
 interface ChangeSectionViewProps {
     readonly section: ChangeSection;
     readonly viewMode: ChangesViewMode;
+    readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
+    readonly onBulkAction: (action: ChangeBulkAction) => void;
 }
 
-export function ChangeSectionView({ section, viewMode }: ChangeSectionViewProps) {
+export function ChangeSectionView({ section, viewMode, onRowAction, onBulkAction }: ChangeSectionViewProps) {
     if (section.items.length === 0) { return null; }
     const tree = buildChangeTree(section.items);
     const bulkActions = bulkActionsFor(section);
@@ -24,7 +25,7 @@ export function ChangeSectionView({ section, viewMode }: ChangeSectionViewProps)
                             key={descriptor.action}
                             type="button"
                             title={descriptor.title}
-                            onClick={() => vscodeApi.postMessage(messageForBulkAction(descriptor.action))}
+                            onClick={() => onBulkAction(descriptor.action)}
                         >
                             {descriptor.label}
                         </button>
@@ -34,8 +35,8 @@ export function ChangeSectionView({ section, viewMode }: ChangeSectionViewProps)
             </header>
             <div className="change-list">
                 {viewMode === 'tree'
-                    ? tree.map((node) => <TreeNodeView key={node.id} node={node} />)
-                    : section.items.map((item) => <ChangeRow key={item.id} item={item} depth={0} />)}
+                    ? tree.map((node) => <TreeNodeView key={node.id} node={node} onRowAction={onRowAction} />)
+                    : section.items.map((item) => <ChangeRow key={item.id} item={item} depth={0} onAction={onRowAction} />)}
             </div>
         </section>
     );

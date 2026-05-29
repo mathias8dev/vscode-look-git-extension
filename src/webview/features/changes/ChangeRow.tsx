@@ -1,15 +1,15 @@
 import type { StatusEntry } from '../../../protocol/changes/types';
-import { vscodeApi } from '../../platform/vscodeHost';
-import { messageForRowAction, rowActionsFor } from './changeCommands';
+import { rowActionsFor, type ChangeRowAction } from './changeCommands';
 import { statusLabel, type ChangeListItem } from './changeTree';
 import { depthStyle } from './viewStyles';
 
 interface ChangeRowProps {
     readonly item: ChangeListItem;
     readonly depth: number;
+    readonly onAction: (item: ChangeListItem, action: ChangeRowAction) => void;
 }
 
-export function ChangeRow({ item, depth }: ChangeRowProps) {
+export function ChangeRow({ item, depth, onAction }: ChangeRowProps) {
     const entry = item.entry;
     const actions = rowActionsFor(item);
     return (
@@ -24,7 +24,7 @@ export function ChangeRow({ item, depth }: ChangeRowProps) {
                         key={descriptor.action}
                         type="button"
                         title={descriptor.title}
-                        onClick={() => vscodeApi.postMessage(messageForRowAction(item, descriptor.action))}
+                        onClick={() => onAction(item, descriptor.action)}
                     >
                         {descriptor.label}
                     </button>

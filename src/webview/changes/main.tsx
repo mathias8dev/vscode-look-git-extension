@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ChangesApp } from '../features/changes/ChangesApp';
+import { ChangesWebview } from './ChangesWebview';
 import '../styles.css';
 
 const root = document.getElementById('root');
-if (root) { createRoot(root).render(<StrictMode><ChangesApp /></StrictMode>); }
+if (root) { createRoot(root).render(<StrictMode><ChangesWebview /></StrictMode>); }

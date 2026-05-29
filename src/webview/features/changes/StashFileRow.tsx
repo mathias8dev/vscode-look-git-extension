@@ -1,13 +1,12 @@
 import type { StashFileEntry } from '../../../protocol/changes/types';
-import { vscodeApi } from '../../platform/vscodeHost';
-import { messageForStashFileDiff } from './stashCommands';
 
 interface StashFileRowProps {
     readonly index: number;
     readonly file: StashFileEntry;
+    readonly onDiff: (index: number, file: StashFileEntry) => void;
 }
 
-export function StashFileRow({ index, file }: StashFileRowProps) {
+export function StashFileRow({ index, file, onDiff }: StashFileRowProps) {
     return (
         <div className="stash-file-row" title={file.filePath}>
             <span className={`status-dot status-${statusKind(file.status)}`} aria-hidden="true" />
@@ -17,7 +16,7 @@ export function StashFileRow({ index, file }: StashFileRowProps) {
             <button
                 type="button"
                 title={`Open stash diff for ${file.filePath}`}
-                onClick={() => vscodeApi.postMessage(messageForStashFileDiff(index, file))}
+                onClick={() => onDiff(index, file)}
             >
                 Diff
             </button>

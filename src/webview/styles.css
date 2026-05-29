@@ -134,10 +134,47 @@ h1 {
 
 .changes-banner {
     margin: 8px 10px 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
     border: 1px solid var(--vscode-inputValidation-warningBorder, #cca700);
     border-radius: 4px;
     padding: 8px 10px;
     background: var(--vscode-inputValidation-warningBackground, transparent);
+}
+
+.changes-banner div:first-child {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.changes-banner span {
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.86em;
+}
+
+.operation-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px;
+}
+
+.operation-actions button {
+    min-height: 24px;
+    border: 1px solid var(--vscode-button-border, transparent);
+    border-radius: 3px;
+    padding: 0 7px;
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, #cccccc));
+    background: var(--vscode-button-secondaryBackground, transparent);
+    font: inherit;
+    font-size: 0.86em;
+}
+
+.operation-actions button:hover {
+    background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.1)));
 }
 
 .commit-composer {
@@ -421,6 +458,7 @@ h1 {
 
 .row-actions {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
     gap: 4px;

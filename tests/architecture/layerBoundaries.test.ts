@@ -49,6 +49,27 @@ describe('architecture layer boundaries', () => {
         expect(source).not.toMatch(/\b(rows|maxLane|color|fromLane|toLane)\b/);
         expect(source).toMatch(/\bcommits: readonly GraphCommit\[]/);
     });
+
+    it('keeps changes protocol semantic and free of webview rendering state', () => {
+        const source = fs.readFileSync(path.join(SRC_ROOT, 'protocol', 'changes', 'types.ts'), 'utf8');
+        expect(source).not.toMatch(/\b(ChangeSection|ChangeTree|TreeNode|ViewMode)\b/);
+        expect(source).not.toMatch(/\b(label|title|className|expanded|selected)\b/);
+        expect(source).toMatch(/\bstaged: readonly StatusEntry\[]/);
+        expect(source).toMatch(/\bstashes: readonly StashEntry\[]/);
+    });
+
+    it('keeps reusable webview feature code free of VS Code host side effects', () => {
+        const violations: string[] = [];
+        const featureRoot = path.join(SRC_ROOT, 'webview', 'features');
+        for (const filePath of listSourceFiles(featureRoot)) {
+            const source = fs.readFileSync(filePath, 'utf8');
+            if (source.includes('vscodeHost') || source.includes('vscodeApi') || source.includes('acquireVsCodeApi')) {
+                violations.push(relative(filePath));
+            }
+        }
+
+        expect(violations).toEqual([]);
+    });
 });
 
 function listSourceFiles(dir: string): string[] {

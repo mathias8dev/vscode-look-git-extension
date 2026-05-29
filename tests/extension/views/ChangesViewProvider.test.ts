@@ -240,6 +240,82 @@ describe('ChangesViewProvider', () => {
         await vi.waitFor(() => expect(repo.discardFile).toHaveBeenCalledWith('src/file.ts'));
     });
 
+    it('accepts conflict sides and stages the resolved file', async () => {
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/acceptOurs', filePath: 'src/conflict.ts' });
+        await vi.waitFor(() => expect(repo.acceptOurs).toHaveBeenCalledWith('src/conflict.ts'));
+        await vi.waitFor(() => expect(repo.stageFile).toHaveBeenCalledWith('src/conflict.ts'));
+
+        view.messageHandler?.({ type: 'changes/acceptTheirs', filePath: 'src/other.ts' });
+        await vi.waitFor(() => expect(repo.acceptTheirs).toHaveBeenCalledWith('src/other.ts'));
+        await vi.waitFor(() => expect(repo.stageFile).toHaveBeenCalledWith('src/other.ts'));
+    });
+
+    it('accepts incoming changes for every conflict', async () => {
+        const repo = makeRepo({
+            getStatus: vi.fn(async () => ({
+                staged: [],
+                unstaged: [],
+                conflicts: [
+                    { indexStatus: 'U', workTreeStatus: 'U', filePath: 'src/a.ts' },
+                    { indexStatus: 'U', workTreeStatus: 'U', filePath: 'src/b.ts' },
+                ],
+                conflictState: 'merge' as const,
+            })),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/acceptAllTheirs' });
+
+        await vi.waitFor(() => expect(repo.acceptTheirs).toHaveBeenCalledWith('src/a.ts'));
+        await vi.waitFor(() => expect(repo.acceptTheirs).toHaveBeenCalledWith('src/b.ts'));
+        await vi.waitFor(() => expect(repo.stageFile).toHaveBeenCalledWith('src/a.ts'));
+        await vi.waitFor(() => expect(repo.stageFile).toHaveBeenCalledWith('src/b.ts'));
+    });
+
+    it('continues and aborts active merge or rebase operations', async () => {
+        setWarningChoice('Abort');
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/continueOp', conflictState: 'merge' });
+        await vi.waitFor(() => expect(repo.mergeContinue).toHaveBeenCalled());
+
+        view.messageHandler?.({ type: 'changes/abortOp', conflictState: 'rebase' });
+        await vi.waitFor(() => expect(repo.rebaseAbort).toHaveBeenCalled());
+    });
+
+    it('routes stash commands to the active repository', async () => {
+        setWarningChoice('Drop');
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/stash', message: 'save all' });
+        await vi.waitFor(() => expect(repo.stash).toHaveBeenCalledWith('save all'));
+
+        view.messageHandler?.({ type: 'changes/stashStaged', message: 'save staged' });
+        await vi.waitFor(() => expect(repo.stashStaged).toHaveBeenCalledWith('save staged'));
+
+        view.messageHandler?.({ type: 'changes/stashApply', index: 1 });
+        await vi.waitFor(() => expect(repo.stashApply).toHaveBeenCalledWith(1));
+
+        view.messageHandler?.({ type: 'changes/stashPop', index: 2 });
+        await vi.waitFor(() => expect(repo.stashPop).toHaveBeenCalledWith(2));
+
+        view.messageHandler?.({ type: 'changes/stashDrop', index: 3 });
+        await vi.waitFor(() => expect(repo.stashDrop).toHaveBeenCalledWith(3));
+    });
+
     it('commit posts commitResult success on success', async () => {
         const repo = makeRepo();
         const provider = makeProvider(repo);

@@ -1,16 +1,16 @@
 import { useState } from 'react';
-import type { ConflictState } from '../../../protocol/changes/types';
+import type { CommitMode, ConflictState } from '../../../protocol/changes/types';
 import type { CommitFeedback } from './changesState';
-import { vscodeApi } from '../../platform/vscodeHost';
 import { COMMIT_MODE_OPTIONS, canSubmitCommit, commitBlockReason } from './commitComposerModel';
 
 interface CommitComposerProps {
     readonly stagedCount: number;
     readonly conflictState: ConflictState;
     readonly feedback: CommitFeedback | undefined;
+    readonly onCommit: (message: string, mode: CommitMode) => void;
 }
 
-export function CommitComposer({ stagedCount, conflictState, feedback }: CommitComposerProps) {
+export function CommitComposer({ stagedCount, conflictState, feedback, onCommit }: CommitComposerProps) {
     const [message, setMessage] = useState('');
     const blockedReason = commitBlockReason({ message, mode: 'commit', stagedCount, conflictState });
 
@@ -32,9 +32,7 @@ export function CommitComposer({ stagedCount, conflictState, feedback }: CommitC
                         key={option.mode}
                         type="button"
                         disabled={!canSubmitCommit({ message, mode: option.mode, stagedCount, conflictState })}
-                        onClick={() => {
-                            vscodeApi.postMessage({ type: 'changes/commit', message, mode: option.mode });
-                        }}
+                        onClick={() => onCommit(message, option.mode)}
                     >
                         {option.label}
                     </button>

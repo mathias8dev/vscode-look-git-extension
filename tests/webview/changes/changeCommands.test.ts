@@ -21,7 +21,14 @@ describe('changeCommands', () => {
     });
 
     it('offers conflict resolution entry points for conflicts', () => {
-        expect(rowActionsFor(item('conflicts')).map((action) => action.action)).toEqual(['openMergeEditor', 'markResolved', 'open', 'diff']);
+        expect(rowActionsFor(item('conflicts')).map((action) => action.action)).toEqual([
+            'openMergeEditor',
+            'acceptOurs',
+            'acceptTheirs',
+            'markResolved',
+            'open',
+            'diff',
+        ]);
     });
 
     it('creates protocol messages for row actions', () => {
@@ -34,6 +41,22 @@ describe('changeCommands', () => {
             origPath: undefined,
             isStaged: false,
             status: 'M',
+        });
+    });
+
+    it('creates protocol messages for conflict row actions', () => {
+        const conflict = item('conflicts', 'src/conflicted.ts');
+        expect(messageForRowAction(conflict, 'acceptOurs')).toEqual({
+            type: 'changes/acceptOurs',
+            filePath: 'src/conflicted.ts',
+        });
+        expect(messageForRowAction(conflict, 'acceptTheirs')).toEqual({
+            type: 'changes/acceptTheirs',
+            filePath: 'src/conflicted.ts',
+        });
+        expect(messageForRowAction(conflict, 'markResolved')).toEqual({
+            type: 'changes/markResolved',
+            filePath: 'src/conflicted.ts',
         });
     });
 
@@ -57,6 +80,7 @@ describe('changeCommands', () => {
         const conflicts: ChangeSection = { id: 'conflicts', title: 'Conflicts', items: [item('conflicts')] };
         expect(bulkActionsFor(unstaged).map((action) => action.action)).toEqual(['stageAll', 'discardAll']);
         expect(bulkActionsFor(staged).map((action) => action.action)).toEqual(['unstageAll']);
-        expect(bulkActionsFor(conflicts)).toEqual([]);
+        expect(bulkActionsFor(conflicts).map((action) => action.action)).toEqual(['acceptAllTheirs']);
+        expect(messageForBulkAction('acceptAllTheirs')).toEqual({ type: 'changes/acceptAllTheirs' });
     });
 });

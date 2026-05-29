@@ -2,8 +2,17 @@ import type { ChangesWebviewToExtensionMessage } from '../../../protocol/changes
 import type { ChangeListItem, ChangeSection } from './changeTree';
 import { statusCode } from './changeTree';
 
-export type ChangeRowAction = 'open' | 'diff' | 'stage' | 'unstage' | 'discard' | 'openMergeEditor' | 'markResolved';
-export type ChangeBulkAction = 'stageAll' | 'unstageAll' | 'discardAll';
+export type ChangeRowAction =
+    | 'open'
+    | 'diff'
+    | 'stage'
+    | 'unstage'
+    | 'discard'
+    | 'openMergeEditor'
+    | 'markResolved'
+    | 'acceptOurs'
+    | 'acceptTheirs';
+export type ChangeBulkAction = 'stageAll' | 'unstageAll' | 'discardAll' | 'acceptAllTheirs';
 
 export interface ChangeActionDescriptor<TAction extends string> {
     readonly action: TAction;
@@ -27,6 +36,8 @@ export function rowActionsFor(item: ChangeListItem): readonly ChangeActionDescri
     if (item.section === 'conflicts') {
         return [
             { action: 'openMergeEditor', label: 'Merge', title: 'Open merge editor' },
+            { action: 'acceptOurs', label: 'Ours', title: 'Accept current changes' },
+            { action: 'acceptTheirs', label: 'Theirs', title: 'Accept incoming changes' },
             { action: 'markResolved', label: 'Resolved', title: 'Mark resolved' },
             ...common,
         ];
@@ -51,6 +62,11 @@ export function bulkActionsFor(section: ChangeSection): readonly ChangeActionDes
                 { action: 'stageAll', label: 'Stage All', title: 'Stage all changed files' },
                 { action: 'discardAll', label: 'Discard All', title: 'Discard all unstaged changes' },
             ]
+            : [];
+    }
+    if (section.id === 'conflicts') {
+        return section.items.length > 0
+            ? [{ action: 'acceptAllTheirs', label: 'Accept All Theirs', title: 'Accept incoming changes for all conflicts' }]
             : [];
     }
     return [];
@@ -81,6 +97,10 @@ export function messageForRowAction(item: ChangeListItem, action: ChangeRowActio
             return { type: 'changes/openMergeEditor', filePath: entry.filePath };
         case 'markResolved':
             return { type: 'changes/markResolved', filePath: entry.filePath };
+        case 'acceptOurs':
+            return { type: 'changes/acceptOurs', filePath: entry.filePath };
+        case 'acceptTheirs':
+            return { type: 'changes/acceptTheirs', filePath: entry.filePath };
     }
 }
 
@@ -92,5 +112,7 @@ export function messageForBulkAction(action: ChangeBulkAction): ChangesWebviewTo
             return { type: 'changes/unstageAll' };
         case 'discardAll':
             return { type: 'changes/discardAll' };
+        case 'acceptAllTheirs':
+            return { type: 'changes/acceptAllTheirs' };
     }
 }
