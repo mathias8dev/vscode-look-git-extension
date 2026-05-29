@@ -667,57 +667,11 @@ h1 {
 .status-letter-conflict  { color: var(--vscode-gitDecoration-conflictingResourceForeground, #e4676b); }
 .status-letter-renamed   { color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d); }
 
-.file-type-icon {
+.file-type-icon,
+.folder-type-icon {
     flex: none;
     width: 16px;
     height: 16px;
-    fill: none;
-    stroke: currentColor;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: 1.2;
-}
-
-.file-type-typescript {
-    color: #4ec9b0;
-}
-
-.file-type-javascript {
-    color: #dcdcaa;
-}
-
-.file-type-json {
-    color: #ce9178;
-}
-
-.file-type-markdown {
-    color: #569cd6;
-}
-
-.file-type-css {
-    color: #c586c0;
-}
-
-.file-type-html {
-    color: #e37933;
-}
-
-.file-type-image {
-    color: #b5cea8;
-}
-
-.file-type-package {
-    color: #cb8a40;
-}
-
-.file-type-git {
-    color: #c74e39;
-}
-
-.file-type-submodule,
-.file-type-config,
-.file-type-file {
-    color: var(--vscode-symbolIcon-fileForeground, var(--vscode-descriptionForeground, #9d9d9d));
 }
 
 

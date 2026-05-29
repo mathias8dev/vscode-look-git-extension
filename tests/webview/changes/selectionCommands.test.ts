@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { messageForSelectionAction, selectionActionsFor } from '../../../src/webview/features/changes/selectionCommands';
+import { ChangeSelectionAction, messageForSelectionAction, selectionActionsFor } from '../../../src/webview/features/changes/selectionCommands';
 import { ChangeSectionId, type ChangeListItem } from '../../../src/webview/features/changes/changeTree';
 
 function item(section: ChangeSectionId, filePath: string): ChangeListItem {
@@ -28,27 +28,27 @@ function submodule(section: ChangeSectionId, filePath: string): ChangeListItem {
 describe('selectionCommands', () => {
     it('offers contextual actions for selected changes', () => {
         expect(selectionActionsFor([item(ChangeSectionId.Unstaged, 'a.ts')]).map((action) => action.action)).toEqual([
-            'diff',
-            'open',
-            'stage',
-            'discard',
+            ChangeSelectionAction.Diff,
+            ChangeSelectionAction.Open,
+            ChangeSelectionAction.Stage,
+            ChangeSelectionAction.Discard,
         ]);
 
         expect(selectionActionsFor([item(ChangeSectionId.Staged, 'a.ts'), item(ChangeSectionId.Conflicts, 'b.ts')]).map((action) => action.action)).toEqual([
-            'unstage',
-            'acceptOurs',
-            'acceptTheirs',
-            'markResolved',
+            ChangeSelectionAction.Unstage,
+            ChangeSelectionAction.AcceptOurs,
+            ChangeSelectionAction.AcceptTheirs,
+            ChangeSelectionAction.MarkResolved,
         ]);
     });
 
     it('creates batch messages for selected files', () => {
         const selected = [item(ChangeSectionId.Unstaged, 'a.ts'), item(ChangeSectionId.Unstaged, 'b.ts'), item(ChangeSectionId.Staged, 'c.ts')];
-        expect(messageForSelectionAction(selected, 'stage')).toEqual({
+        expect(messageForSelectionAction(selected, ChangeSelectionAction.Stage)).toEqual({
             type: 'changes/stageFiles',
             filePaths: ['a.ts', 'b.ts'],
         });
-        expect(messageForSelectionAction(selected, 'unstage')).toEqual({
+        expect(messageForSelectionAction(selected, ChangeSelectionAction.Unstage)).toEqual({
             type: 'changes/unstageFiles',
             filePaths: ['c.ts'],
         });
@@ -56,11 +56,11 @@ describe('selectionCommands', () => {
 
     it('uses single-file messages for open and diff', () => {
         const selected = [item(ChangeSectionId.Unstaged, 'a.ts')];
-        expect(messageForSelectionAction(selected, 'open')).toEqual({
+        expect(messageForSelectionAction(selected, ChangeSelectionAction.Open)).toEqual({
             type: 'changes/openFile',
             filePath: 'a.ts',
         });
-        expect(messageForSelectionAction(selected, 'diff')).toEqual(expect.objectContaining({
+        expect(messageForSelectionAction(selected, ChangeSelectionAction.Diff)).toEqual(expect.objectContaining({
             type: 'changes/openDiff',
             filePath: 'a.ts',
         }));
@@ -68,8 +68,11 @@ describe('selectionCommands', () => {
 
     it('excludes submodules from unsafe selection actions', () => {
         const selected = [submodule(ChangeSectionId.Unstaged, 'modules/lib'), item(ChangeSectionId.Unstaged, 'src/app.ts')];
-        expect(selectionActionsFor(selected).map((action) => action.action)).toEqual(['stage', 'discard']);
-        expect(messageForSelectionAction(selected, 'discard')).toEqual({
+        expect(selectionActionsFor(selected).map((action) => action.action)).toEqual([
+            ChangeSelectionAction.Stage,
+            ChangeSelectionAction.Discard,
+        ]);
+        expect(messageForSelectionAction(selected, ChangeSelectionAction.Discard)).toEqual({
             type: 'changes/discardFiles',
             filePaths: ['src/app.ts'],
         });

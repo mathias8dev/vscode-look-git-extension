@@ -3,6 +3,7 @@ import type { ChangeRowAction } from './changeCommands';
 import type { ChangeListItem, ChangeTreeNode } from './changeTree';
 import type { ChangeSelectionMode } from './changesState';
 import { ChangeRow } from './ChangeRow';
+import { FolderIcon } from './FolderIcon';
 import { depthStyle } from './viewStyles';
 
 interface TreeNodeViewProps {
@@ -46,6 +47,7 @@ export function TreeNodeView({ node, selectedItemIds, onSelectItem, onRowAction 
                     className={`codicon codicon-chevron-${folderCollapsed ? 'right' : 'down'} folder-chevron`}
                     aria-hidden="true"
                 />
+                <FolderIcon name={node.name} expanded={!folderCollapsed} />
                 <span className="file-name">{node.name}</span>
             </div>
             {!folderCollapsed ? node.children.map((child) => (

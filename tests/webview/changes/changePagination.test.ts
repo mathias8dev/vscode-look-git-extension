@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { CHANGE_SECTION_PAGE_SIZE, visibleChangeItems } from '../../../src/webview/features/changes/changePagination';
-import type { ChangeListItem } from '../../../src/webview/features/changes/changeTree';
+import { ChangeSectionId, type ChangeListItem } from '../../../src/webview/features/changes/changeTree';
 
 function items(count: number): readonly ChangeListItem[] {
     return Array.from({ length: count }, (_, index) => ({
         id: `item-${index}`,
-        section: 'unstaged',
+        section: ChangeSectionId.Unstaged,
         isStaged: false,
         entry: { indexStatus: ' ', workTreeStatus: 'M', filePath: `file-${index}.ts` },
     }));
