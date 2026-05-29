@@ -4,7 +4,7 @@ import { ChangesViewProvider } from '../../../src/extension/views/ChangesViewPro
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import type { GitRepository } from '../../../src/core/git/GitRepository';
 import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
-import { getCommandCalls, getWarningMessages, setWarningChoice } from '../../mocks/vscode';
+import { getCommandCalls, getInputBoxOptions, getWarningMessages, setInputBoxValue, setWarningChoice } from '../../mocks/vscode';
 
 function makeRepo(overrides: Partial<GitRepository> = {}): GitRepository {
     return {
@@ -325,6 +325,43 @@ describe('ChangesViewProvider', () => {
         view.messageHandler?.({ type: 'changes/discardFiles', filePaths: ['src/a.ts', 'src/b.ts'] });
         await vi.waitFor(() => expect(repo.discardFile).toHaveBeenCalledWith('src/a.ts'));
         await vi.waitFor(() => expect(repo.discardFile).toHaveBeenCalledWith('src/b.ts'));
+    });
+
+    it('discardAll requires a typed destructive confirmation', async () => {
+        setInputBoxValue('DISCARD ALL');
+        const repo = makeRepo({
+            getStatus: vi.fn(async () => ({
+                staged: [],
+                unstaged: [
+                    { indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/a.ts' },
+                    { indexStatus: ' ', workTreeStatus: 'D', filePath: 'src/b.ts' },
+                ],
+                conflicts: [],
+                conflictState: 'none' as const,
+            })),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'changes/discardAll' });
+
+        await vi.waitFor(() => expect(getInputBoxOptions().length).toBeGreaterThan(0));
+        await vi.waitFor(() => expect(repo.unstageAll).toHaveBeenCalled());
+        await vi.waitFor(() => expect(repo.discardFile).toHaveBeenCalledWith('src/a.ts'));
+        await vi.waitFor(() => expect(repo.discardFile).toHaveBeenCalledWith('src/b.ts'));
+    });
+
+    it('discardAll cancellation leaves files untouched', async () => {
+        setInputBoxValue('nope');
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'changes/discardAll' });
+
+        await vi.waitFor(() => expect(getInputBoxOptions().length).toBeGreaterThan(0));
+        expect(repo.unstageAll).not.toHaveBeenCalled();
+        expect(repo.discardFile).not.toHaveBeenCalled();
     });
 
     it('accepts conflict sides and stages the resolved file', async () => {

@@ -6,7 +6,7 @@ import type { ChangesWebviewToExtensionMessage, ChangesExtensionToWebviewMessage
 import type { StatusData, StatusEntry } from '../../protocol/changes/types';
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
-import { showModalWarningMessage } from '../utils/confirmation';
+import { confirmTypedPhrase, showModalWarningMessage } from '../utils/confirmation';
 import { toProtocolSubmoduleStatus } from '../mapping/toProtocol';
 import { createErrorPayload } from './errorSerialization';
 
@@ -115,8 +115,8 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/discardAll': {
-                const choice = await showModalWarningMessage('Discard all changes? This cannot be undone.', 'Discard All');
-                if (choice === 'Discard All') {
+                const confirmed = await confirmTypedPhrase('Discard all changes? This cannot be undone.', 'DISCARD ALL');
+                if (confirmed) {
                     try {
                         await repo.unstageAll();
                     } catch (error) {

@@ -99,6 +99,7 @@ export const window = {
     errorMessages: [] as string[],
     infoMessages: [] as string[],
     warningMessages: [] as Array<{ message: string; items: string[] }>,
+    inputBoxOptions: [] as unknown[],
     inputBoxValue: undefined as string | undefined,
     quickPickValue: undefined as string | undefined,
     saveDialogValue: undefined as TestUri | undefined,
@@ -110,7 +111,10 @@ export const window = {
         this.warningMessages.push({ message, items });
         return Promise.resolve(this.warningChoice);
     },
-    showInputBox() { return Promise.resolve(this.inputBoxValue); },
+    showInputBox(options?: unknown) {
+        this.inputBoxOptions.push(options);
+        return Promise.resolve(this.inputBoxValue);
+    },
     showQuickPick() { return Promise.resolve(this.quickPickValue); },
     showSaveDialog(options: unknown) { this.saveDialogOptions.push(options); return Promise.resolve(this.saveDialogValue); },
     withProgress(_opts: unknown, task: () => unknown) { return Promise.resolve(task()); },
@@ -118,6 +122,7 @@ export const window = {
         this.errorMessages = [];
         this.infoMessages = [];
         this.warningMessages = [];
+        this.inputBoxOptions = [];
         this.inputBoxValue = undefined;
         this.quickPickValue = undefined;
         this.saveDialogValue = undefined;
@@ -138,8 +143,16 @@ export function setWarningChoice(choice: string | undefined): void {
     window.warningChoice = choice;
 }
 
+export function setInputBoxValue(value: string | undefined): void {
+    window.inputBoxValue = value;
+}
+
 export function getWarningMessages(): readonly WarningMessage[] {
     return window.warningMessages;
+}
+
+export function getInputBoxOptions(): readonly unknown[] {
+    return window.inputBoxOptions;
 }
 
 export function getCommandCalls(): readonly CommandCall[] {
