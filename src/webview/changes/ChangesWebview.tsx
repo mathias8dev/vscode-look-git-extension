@@ -11,6 +11,7 @@ import {
     type ChangesSortMode,
     type ChangesViewMode,
 } from '../features/changes/changesState';
+import { changesStateToPersisted, readChangesStatePreferences } from '../features/changes/changesPersistence';
 import { messageForOperationAction, type ActiveConflictState, type OperationAction } from '../features/changes/operationCommands';
 import { messageForSelectionAction, type ChangeSelectionAction } from '../features/changes/selectionCommands';
 import {
@@ -23,7 +24,11 @@ import {
 import { vscodeApi } from '../platform/vscodeHost';
 
 export function ChangesWebview() {
-    const [state, dispatch] = useReducer(reduceChangesState, undefined, createInitialChangesState);
+    const [state, dispatch] = useReducer(
+        reduceChangesState,
+        readChangesStatePreferences(vscodeApi.getState()),
+        createInitialChangesState,
+    );
 
     useEffect(() => {
         const onMessage = (event: MessageEvent<ChangesExtensionToWebviewMessage>) => {
@@ -33,6 +38,10 @@ export function ChangesWebview() {
         postToExtension({ type: 'changes/ready' });
         return () => window.removeEventListener('message', onMessage);
     }, []);
+
+    useEffect(() => {
+        vscodeApi.setState(changesStateToPersisted(state));
+    }, [state]);
 
     const setViewMode = (viewMode: ChangesViewMode) => {
         dispatch({ type: 'setViewMode', viewMode });
@@ -65,7 +74,10 @@ export function ChangesWebview() {
             }}
             onRowAction={(item: ChangeListItem, action: ChangeRowAction) => postToExtension(messageForRowAction(item, action))}
             onBulkAction={(action: ChangeBulkAction) => postToExtension(messageForBulkAction(action))}
-            onCommit={(message: string, mode: CommitMode) => postToExtension({ type: 'changes/commit', message, mode })}
+            onCommit={(message: string, mode: CommitMode) => {
+                dispatch({ type: 'rememberCommitMessage', message });
+                postToExtension({ type: 'changes/commit', message, mode });
+            }}
             onOperationAction={(conflictState: ActiveConflictState, action: OperationAction) => {
                 postToExtension(messageForOperationAction(conflictState, action));
             }}

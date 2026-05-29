@@ -12,6 +12,22 @@ describe('changesState', () => {
         }));
     });
 
+    it('starts with persisted preferences when provided', () => {
+        expect(createInitialChangesState({
+            viewMode: 'list',
+            sortMode: 'status',
+            pathFilter: 'src',
+            collapsedSectionIds: ['staged'],
+            commitMessageHistory: ['feat: one'],
+        })).toEqual(expect.objectContaining({
+            viewMode: 'list',
+            sortMode: 'status',
+            pathFilter: 'src',
+            collapsedSectionIds: ['staged'],
+            commitMessageHistory: ['feat: one'],
+        }));
+    });
+
     it('stores status data from extension messages', () => {
         const state = reduceChangesState(createInitialChangesState(), {
             type: 'message',
@@ -54,6 +70,15 @@ describe('changesState', () => {
         });
 
         expect(state.commitFeedback).toEqual({ success: true, message: undefined });
+    });
+
+    it('remembers commit messages locally', () => {
+        const state = reduceChangesState(createInitialChangesState(), {
+            type: 'rememberCommitMessage',
+            message: 'feat: add changes',
+        });
+
+        expect(state.commitMessageHistory).toEqual(['feat: add changes']);
     });
 
     it('switches view modes locally', () => {

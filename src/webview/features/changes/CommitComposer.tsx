@@ -8,7 +8,6 @@ import {
     canSubmitCommit,
     commitBlockReason,
     messageStats,
-    rememberCommitMessage,
     type ConventionalCommitType,
 } from './commitComposerModel';
 
@@ -16,14 +15,14 @@ interface CommitComposerProps {
     readonly stagedCount: number;
     readonly conflictState: ConflictState;
     readonly feedback: CommitFeedback | undefined;
+    readonly history: readonly string[];
     readonly onCommit: (message: string, mode: CommitMode) => void;
 }
 
-export function CommitComposer({ stagedCount, conflictState, feedback, onCommit }: CommitComposerProps) {
+export function CommitComposer({ stagedCount, conflictState, feedback, history, onCommit }: CommitComposerProps) {
     const [message, setMessage] = useState('');
     const [type, setType] = useState<ConventionalCommitType>('');
     const [scope, setScope] = useState('');
-    const [history, setHistory] = useState<readonly string[]>([]);
     const finalMessage = buildCommitMessage({ type, scope, message });
     const blockedReason = commitBlockReason({ message: finalMessage, mode: 'commit', stagedCount, conflictState });
     const stats = messageStats(finalMessage);
@@ -31,7 +30,6 @@ export function CommitComposer({ stagedCount, conflictState, feedback, onCommit 
     const submitCommit = (mode: CommitMode) => {
         if (!canSubmitCommit({ message: finalMessage, mode, stagedCount, conflictState })) { return; }
         onCommit(finalMessage, mode);
-        setHistory((current) => rememberCommitMessage(current, finalMessage));
         setMessage('');
         setScope('');
         setType('');

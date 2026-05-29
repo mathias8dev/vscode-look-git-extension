@@ -3,6 +3,7 @@ import type { StashFileEntry, StatusData } from '../../../protocol/changes/types
 import type { ProtocolError } from '../../../protocol/shared/base';
 import { readProtocolError } from '../../shared/useProtocolError';
 import type { ChangeSectionId } from './changeTree';
+import { rememberCommitMessage } from './commitComposerModel';
 
 export type ChangesViewMode = 'tree' | 'list';
 export type ChangesSortMode = 'path' | 'status' | 'directory';
@@ -13,6 +14,7 @@ export interface ChangesState {
     readonly viewMode: ChangesViewMode;
     readonly sortMode: ChangesSortMode;
     readonly pathFilter: string;
+    readonly commitMessageHistory: readonly string[];
     readonly loading: boolean;
     readonly error: ProtocolError | undefined;
     readonly commitFeedback: CommitFeedback | undefined;
@@ -21,6 +23,14 @@ export interface ChangesState {
     readonly selectionAnchorId: string | undefined;
     readonly expandedStashIndexes: readonly number[];
     readonly stashFilesByIndex: Readonly<Record<number, readonly StashFileEntry[]>>;
+}
+
+export interface ChangesStatePreferences {
+    readonly viewMode?: ChangesViewMode;
+    readonly sortMode?: ChangesSortMode;
+    readonly pathFilter?: string;
+    readonly collapsedSectionIds?: readonly ChangeSectionId[];
+    readonly commitMessageHistory?: readonly string[];
 }
 
 export interface CommitFeedback {
@@ -39,22 +49,24 @@ export type ChangesAction =
     | { readonly type: 'setViewMode'; readonly viewMode: ChangesViewMode }
     | { readonly type: 'setSortMode'; readonly sortMode: ChangesSortMode }
     | { readonly type: 'setPathFilter'; readonly pathFilter: string }
+    | { readonly type: 'rememberCommitMessage'; readonly message: string }
     | { readonly type: 'toggleSection'; readonly sectionId: ChangeSectionId }
     | { readonly type: 'selectChange'; readonly selection: SelectChangeInput }
     | { readonly type: 'clearSelection' }
     | { readonly type: 'toggleStash'; readonly index: number }
     | { readonly type: 'clearError' };
 
-export function createInitialChangesState(): ChangesState {
+export function createInitialChangesState(preferences: ChangesStatePreferences = {}): ChangesState {
     return {
         status: emptyStatusData(),
-        viewMode: 'tree',
-        sortMode: 'path',
-        pathFilter: '',
+        viewMode: preferences.viewMode ?? 'tree',
+        sortMode: preferences.sortMode ?? 'path',
+        pathFilter: preferences.pathFilter ?? '',
+        commitMessageHistory: preferences.commitMessageHistory ?? [],
         loading: true,
         error: undefined,
         commitFeedback: undefined,
-        collapsedSectionIds: [],
+        collapsedSectionIds: preferences.collapsedSectionIds ?? [],
         selectedItemIds: [],
         selectionAnchorId: undefined,
         expandedStashIndexes: [],
@@ -72,6 +84,8 @@ export function reduceChangesState(state: ChangesState, action: ChangesAction): 
             return { ...state, sortMode: action.sortMode, selectedItemIds: [], selectionAnchorId: undefined };
         case 'setPathFilter':
             return { ...state, pathFilter: action.pathFilter, selectedItemIds: [], selectionAnchorId: undefined };
+        case 'rememberCommitMessage':
+            return { ...state, commitMessageHistory: rememberCommitMessage(state.commitMessageHistory, action.message) };
         case 'toggleSection':
             return { ...state, collapsedSectionIds: toggledSection(state.collapsedSectionIds, action.sectionId) };
         case 'selectChange':
