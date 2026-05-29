@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseWorktreeList } from '../../../src/core/parsing/parseWorktreeList';
+import { expectItem } from '../../helpers/assertions';
 
 const MAIN_STANZA = `worktree /repo
 HEAD abc1234567890abcdef
@@ -13,27 +14,30 @@ describe('parseWorktreeList', () => {
     it('parses main worktree as isMain:true', () => {
         const result = parseWorktreeList(MAIN_STANZA + '\n\n');
         expect(result).toHaveLength(1);
-        expect(result[0].isMain).toBe(true);
-        expect(result[0].isDetached).toBe(false);
-        expect(result[0].path).toBe('/repo');
-        expect(result[0].head).toBe('abc1234567890abcdef');
-        expect(result[0].branch).toBe('refs/heads/main');
+        const main = expectItem(result, 0);
+        expect(main.isMain).toBe(true);
+        expect(main.isDetached).toBe(false);
+        expect(main.path).toBe('/repo');
+        expect(main.head).toBe('abc1234567890abcdef');
+        expect(main.branch).toBe('refs/heads/main');
     });
 
     it('parses linked worktree with isMain:false', () => {
         const output = MAIN_STANZA + '\n\nworktree /wt/feature\nHEAD def456\nbranch refs/heads/feature\n\n';
         const result = parseWorktreeList(output);
         expect(result).toHaveLength(2);
-        expect(result[1].isMain).toBe(false);
-        expect(result[1].path).toBe('/wt/feature');
-        expect(result[1].branch).toBe('refs/heads/feature');
+        const linked = expectItem(result, 1);
+        expect(linked.isMain).toBe(false);
+        expect(linked.path).toBe('/wt/feature');
+        expect(linked.branch).toBe('refs/heads/feature');
     });
 
     it('marks detached worktree as isDetached:true with no branch', () => {
         const output = MAIN_STANZA + '\n\nworktree /wt/detached\nHEAD abc123\ndetached\n\n';
         const result = parseWorktreeList(output);
-        expect(result[1].isDetached).toBe(true);
-        expect(result[1].branch).toBeUndefined();
+        const detached = expectItem(result, 1);
+        expect(detached.isDetached).toBe(true);
+        expect(detached.branch).toBeUndefined();
     });
 
     it('handles multiple linked worktrees', () => {

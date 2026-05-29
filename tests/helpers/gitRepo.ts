@@ -64,6 +64,12 @@ export const FIXTURE_AUTHORS: FixtureAuthor[] = [
     { name: 'Kai Example', email: 'kai@example.com' },
 ];
 
+function fixtureAuthorAt(index: number): FixtureAuthor {
+    const author = FIXTURE_AUTHORS[index % FIXTURE_AUTHORS.length];
+    if (!author) { throw new Error(`Missing fixture author at index ${index}.`); }
+    return author;
+}
+
 export function createTempGitRepo(): TempGitRepo {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-test-'));
 
@@ -116,7 +122,7 @@ export function createTempGitRepo(): TempGitRepo {
             git(['commit', '-q', '-m', message]);
             return gitTrim(['rev-parse', 'HEAD']);
         },
-        commitFile(filePath, content, message, author = FIXTURE_AUTHORS[0], date = '2024-01-01T00:00:00Z') {
+        commitFile(filePath, content, message, author = fixtureAuthorAt(0), date = '2024-01-01T00:00:00Z') {
             const fp = resolveInsideRepo(filePath);
             fs.mkdirSync(path.dirname(fp), { recursive: true });
             fs.writeFileSync(fp, content);
@@ -160,7 +166,7 @@ export function createRichHistoryFixture(options: { commitCount?: number; dirty?
         repo.git(['checkout', '-q', 'main']);
         repo.git(['checkout', '-q', '-b', branch]);
         for (let i = 0; i < 4; i++) {
-            const author = FIXTURE_AUTHORS[(i + branch.length) % FIXTURE_AUTHORS.length];
+            const author = fixtureAuthorAt(i + branch.length);
             const day = String(3 + i + branches.indexOf(branch) * 4).padStart(2, '0');
             repo.commitFile(`${branch.replace(/\//g, '-')}/file-${i}.txt`, `${branch} change ${i}\n`, `${branch} change ${i}`, author, `2024-01-${day}T00:00:00Z`);
         }
@@ -168,7 +174,7 @@ export function createRichHistoryFixture(options: { commitCount?: number; dirty?
 
     repo.git(['checkout', '-q', 'main']);
     for (let i = 0; i < commitCount - 30; i++) {
-        const author = FIXTURE_AUTHORS[i % FIXTURE_AUTHORS.length];
+        const author = fixtureAuthorAt(i);
         const day = String((i % 28) + 1).padStart(2, '0');
         repo.commitFile(`history/commit-${String(i).padStart(3, '0')}.txt`, `history ${i}\n`, `history commit ${i}`, author, `2024-02-${day}T00:00:00Z`);
     }
@@ -190,7 +196,7 @@ export function createLargeHistoryFixture(commitCount = 1000): TempGitRepo {
     const baseTimestamp = Date.UTC(2024, 0, 1, 0, 0, 0) / 1000;
 
     const appendCommit = (index: number, filePath: string, content: string, message: string): void => {
-        const author = FIXTURE_AUTHORS[index % FIXTURE_AUTHORS.length];
+        const author = fixtureAuthorAt(index);
         const timestamp = baseTimestamp + index * 60;
         const blobMark = index + 1;
         stream.push('blob', `mark :${blobMark}`, `data ${Buffer.byteLength(content, 'utf8')}`, content,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parsePorcelainStatus, detectConflictStateFromFiles } from '../../../src/core/parsing/parseStatus';
+import { expectItem } from '../../helpers/assertions';
 
 describe('parsePorcelainStatus', () => {
     it('returns empty buckets for empty output', () => {
@@ -14,15 +15,16 @@ describe('parsePorcelainStatus', () => {
         const output = 'M  staged.ts\0';
         const result = parsePorcelainStatus(output);
         expect(result.staged).toHaveLength(1);
-        expect(result.staged[0].filePath).toBe('staged.ts');
-        expect(result.staged[0].indexStatus).toBe('M');
+        const staged = expectItem(result.staged, 0);
+        expect(staged.filePath).toBe('staged.ts');
+        expect(staged.indexStatus).toBe('M');
     });
 
     it('places an untracked file in unstaged', () => {
         const output = '?? new.ts\0';
         const result = parsePorcelainStatus(output);
         expect(result.unstaged).toHaveLength(1);
-        expect(result.unstaged[0].filePath).toBe('new.ts');
+        expect(expectItem(result.unstaged, 0).filePath).toBe('new.ts');
     });
 
     it('places a modified unstaged file in unstaged', () => {
@@ -44,15 +46,16 @@ describe('parsePorcelainStatus', () => {
         const output = 'M  sub\0';
         const submodulePaths = new Set(['sub']);
         const result = parsePorcelainStatus(output, submodulePaths);
-        expect(result.staged[0].isSubmodule).toBe(true);
+        expect(expectItem(result.staged, 0).isSubmodule).toBe(true);
     });
 
     it('parses renamed file with origPath', () => {
         // Rename: X='R'(rename staged) Y=' ' then new path\0 then orig path\0
         const output = 'R  new.ts\0old.ts\0';
         const result = parsePorcelainStatus(output);
-        expect(result.staged[0].filePath).toBe('new.ts');
-        expect(result.staged[0].origPath).toBe('old.ts');
+        const renamed = expectItem(result.staged, 0);
+        expect(renamed.filePath).toBe('new.ts');
+        expect(renamed.origPath).toBe('old.ts');
     });
 });
 

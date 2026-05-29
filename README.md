@@ -12,8 +12,8 @@ npm run test:integration
 npm run test:e2e
 ```
 
-Run the `Look Git: Hello World` command from VS Code to open the React webview,
-or use the Look Git icon in the Activity Bar.
+Use the Look Git icon in the Activity Bar for Changes and Commit History, or open
+the Git Graph panel view.
 
 ## Architecture
 

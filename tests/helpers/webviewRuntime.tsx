@@ -13,6 +13,10 @@ export interface MockVsCodeApi {
 
 let _api: MockVsCodeApi | null = null;
 
+declare global {
+    var acquireVsCodeApi: (() => MockVsCodeApi | null) | undefined;
+}
+
 /** Install a fresh mock VS Code API and return it. Call before each render. */
 export function createMockVsCodeApi(): MockVsCodeApi {
     _api = {
@@ -21,8 +25,8 @@ export function createMockVsCodeApi(): MockVsCodeApi {
         getState() { return undefined; },
         setState(_state: unknown) {},
     };
-    // Inject into global so platform.ts singleton picks it up
-    (globalThis as any).acquireVsCodeApi = () => _api;
+    // Inject into global so platform.ts singleton picks it up.
+    globalThis.acquireVsCodeApi = () => _api;
     return _api;
 }
 

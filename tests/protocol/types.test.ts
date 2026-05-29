@@ -49,6 +49,40 @@ describe('protocol discriminated unions', () => {
         void handle;
     });
 
+    it('changes webview→extension union is exhaustive', () => {
+        const handle = (msg: ChangesWebviewToExtensionMessage) => {
+            switch (msg.type) {
+                case 'changes/ready': return;
+                case 'changes/viewModeChanged': return msg.asTree satisfies boolean;
+                case 'changes/stageFile': return msg.filePath satisfies string;
+                case 'changes/unstageFile': return msg.filePath satisfies string;
+                case 'changes/stageAll': return;
+                case 'changes/unstageAll': return;
+                case 'changes/discardFile': return msg.filePath satisfies string;
+                case 'changes/discardAll': return;
+                case 'changes/markResolved': return msg.filePath satisfies string;
+                case 'changes/acceptOurs': return msg.filePath satisfies string;
+                case 'changes/acceptTheirs': return msg.filePath satisfies string;
+                case 'changes/acceptAllTheirs': return;
+                case 'changes/commit': return msg.mode satisfies string;
+                case 'changes/openFile': return msg.filePath satisfies string;
+                case 'changes/openSubmodule': return msg.filePath satisfies string;
+                case 'changes/openMergeEditor': return msg.filePath satisfies string;
+                case 'changes/openDiff': return msg.filePath satisfies string;
+                case 'changes/stash': return msg.message satisfies string | undefined;
+                case 'changes/stashStaged': return msg.message satisfies string | undefined;
+                case 'changes/stashPop': return msg.index satisfies number;
+                case 'changes/stashApply': return msg.index satisfies number;
+                case 'changes/stashDrop': return msg.index satisfies number;
+                case 'changes/getStashFiles': return msg.requestId satisfies string;
+                case 'changes/openStashDiff': return msg.filePath satisfies string;
+                case 'changes/continueOp': return msg.conflictState satisfies string;
+                case 'changes/abortOp': return msg.conflictState satisfies string;
+            }
+        };
+        void handle;
+    });
+
     it('all protocol types are readonly and serialisable (no class instances)', () => {
         // If there were non-serialisable fields (Date, Map, class) they would cause
         // TS errors when assigned to JSON-compatible types. This test confirms via compilation.

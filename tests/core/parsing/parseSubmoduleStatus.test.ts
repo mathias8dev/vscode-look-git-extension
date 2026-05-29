@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseSubmoduleStatus, parseSubmodulePaths } from '../../../src/core/parsing/parseSubmoduleStatus';
+import { expectItem } from '../../helpers/assertions';
 
 describe('parseSubmoduleStatus', () => {
     it('returns empty array for empty output', () => {
@@ -10,21 +11,23 @@ describe('parseSubmoduleStatus', () => {
         const output = ' abc123 modules/child (v1.0)';
         const result = parseSubmoduleStatus(output);
         expect(result).toHaveLength(1);
-        expect(result[0].path).toBe('modules/child');
-        expect(result[0].status).toBe(' ');
+        const submodule = expectItem(result, 0);
+        expect(submodule.path).toBe('modules/child');
+        expect(submodule.status).toBe(' ');
     });
 
     it('parses a modified submodule (+ prefix)', () => {
         const output = '+abc123 modules/ui';
         const result = parseSubmoduleStatus(output);
-        expect(result[0].status).toBe('+');
-        expect(result[0].path).toBe('modules/ui');
+        const submodule = expectItem(result, 0);
+        expect(submodule.status).toBe('+');
+        expect(submodule.path).toBe('modules/ui');
     });
 
     it('parses an uninitialized submodule (- prefix)', () => {
         const output = '-0000000 modules/legacy';
         const result = parseSubmoduleStatus(output);
-        expect(result[0].status).toBe('-');
+        expect(expectItem(result, 0).status).toBe('-');
     });
 
     it('handles multiple submodules', () => {

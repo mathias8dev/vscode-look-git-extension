@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
-import type { GitRepository } from '../../core/git/GitRepository';
+import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import type { ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
 import type { SerializedRepoContext } from '../../protocol/shared/repo';
-import { ChangesMessageRouter, buildStatusData, serializeContext } from '../messaging/ChangesMessageRouter';
+import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '../messaging/ChangesMessageRouter';
 import { getWebviewHtml } from './webviewHtml';
 
 export class ChangesViewProvider implements vscode.WebviewViewProvider {
@@ -16,7 +16,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     constructor(
         private readonly extensionUri: vscode.Uri,
-        private readonly repo: GitRepository,
+        private readonly repositories: ActiveRepositoryAccessor,
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -28,7 +28,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         };
         webviewView.webview.html = getWebviewHtml(webviewView.webview, this.extensionUri, 'changes');
 
-        this.router = new ChangesMessageRouter(this.repo, (msg) => {
+        this.router = new ChangesMessageRouter(this.repositories, (msg) => {
             webviewView.webview.postMessage(msg);
         }, () => this.refresh());
 
@@ -52,7 +52,6 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     async refresh(): Promise<void> {
         if (!this.view) { return; }
         this.pendingRefresh = true;
-        if (!this.view.visible) { return; }
         if (this.refreshPromise) { await this.refreshPromise; return; }
 
         this.refreshPromise = this.doRefresh();
@@ -61,19 +60,32 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async doRefresh(): Promise<void> {
-        while (this.view?.visible && this.pendingRefresh) {
+        while (this.view && this.pendingRefresh) {
             this.pendingRefresh = false;
             try {
+                const repo = this.repositories.currentRepository;
+                if (!repo) {
+                    this.updateBadge(0);
+                    if (this.view.visible) {
+                        this.view.webview.postMessage(emptyStatusData());
+                    }
+                    continue;
+                }
+
                 const [status, stashes] = await Promise.all([
-                    this.repo.getStatus(),
-                    this.repo.stashList(),
+                    repo.getStatus(),
+                    repo.stashList(),
                 ]);
-                this.view?.webview.postMessage(buildStatusData(status, stashes));
                 this.updateBadge(status.staged.length + status.unstaged.length + status.conflicts.length);
+                if (this.view.visible) {
+                    this.view.webview.postMessage(buildStatusData(status, stashes));
+                }
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
-                this.view?.webview.postMessage({ type: 'changes/error', message });
                 this.updateBadge(0);
+                if (this.view.visible) {
+                    this.view.webview.postMessage({ type: 'changes/error', message });
+                }
             }
         }
     }

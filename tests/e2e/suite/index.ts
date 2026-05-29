@@ -2,29 +2,25 @@ import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import { runTestCases } from '../../helpers/testRunner';
 
-type HelloWorldPanelResult = {
-    readonly title: string;
-    readonly viewType: string;
-};
-
 export function run(): Promise<void> {
-    return runTestCases('Hello World E2E', [
+    return runTestCases('Look Git E2E', [
         {
-            name: 'opens the React hello world panel from the command',
+            name: 'opens the Look Git Activity Bar views',
             run: async () => {
-                const result = await vscode.commands.executeCommand<HelloWorldPanelResult>('lookGit.helloWorld');
-
-                assert.deepEqual(result, {
-                    title: 'Look Git',
-                    viewType: 'lookGit.helloWorld',
-                });
+                await vscode.commands.executeCommand('workbench.view.extension.look-git');
+                await vscode.commands.executeCommand('lookGit.changesView.focus');
+                await vscode.commands.executeCommand('lookGit.commitHistory.focus');
+                const commands = await vscode.commands.getCommands(true);
+                assert.ok(commands.includes('lookGit.changesView.focus'));
+                assert.ok(commands.includes('lookGit.commitHistory.focus'));
             },
         },
         {
-            name: 'opens the Look Git Activity Bar view',
+            name: 'opens the Git Graph panel view',
             run: async () => {
-                await vscode.commands.executeCommand('workbench.view.extension.look-git');
-                await vscode.commands.executeCommand('lookGit.helloView.focus');
+                await vscode.commands.executeCommand('lookGit.graphView.focus');
+                const commands = await vscode.commands.getCommands(true);
+                assert.ok(commands.includes('lookGit.graphView.focus'));
             },
         },
     ]);

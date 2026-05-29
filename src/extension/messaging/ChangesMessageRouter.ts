@@ -3,8 +3,7 @@ import * as path from 'path';
 import type { GitRepository } from '../../core/git/GitRepository';
 import type { ChangesWebviewToExtensionMessage, ChangesExtensionToWebviewMessage } from '../../protocol/changes/messages';
 import type { StatusData, StatusEntry } from '../../protocol/changes/types';
-import type { SerializedRepoContext } from '../../protocol/shared/repo';
-import { queryStashFiles } from '../../core/queries/queryStatus';
+import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import { showModalWarningMessage } from '../utils/confirmation';
 
 type PostMessage = (msg: ChangesExtensionToWebviewMessage) => void;
@@ -12,7 +11,7 @@ type RefreshCallback = () => Promise<void>;
 
 export class ChangesMessageRouter {
     constructor(
-        private readonly repo: GitRepository,
+        private readonly repositories: ActiveRepositoryAccessor,
         private readonly postMessage: PostMessage,
         private readonly refresh: RefreshCallback,
     ) {}
@@ -31,29 +30,34 @@ export class ChangesMessageRouter {
         switch (msg.type) {
             case 'changes/ready':
                 await this.refresh();
-                break;
+                return;
 
             case 'changes/viewModeChanged':
                 await vscode.commands.executeCommand('setContext', 'lookGit.viewAsTree', msg.asTree);
-                break;
+                return;
+        }
+
+        const repo = this.repositories.requireRepository();
+
+        switch (msg.type) {
 
             case 'changes/stageFile':
-                await this.repo.stageFile(msg.filePath);
+                await repo.stageFile(msg.filePath);
                 await this.refresh();
                 break;
 
             case 'changes/unstageFile':
-                await this.repo.unstageFile(msg.filePath);
+                await repo.unstageFile(msg.filePath);
                 await this.refresh();
                 break;
 
             case 'changes/stageAll':
-                await this.repo.stageAll();
+                await repo.stageAll();
                 await this.refresh();
                 break;
 
             case 'changes/unstageAll':
-                await this.repo.unstageAll();
+                await repo.unstageAll();
                 await this.refresh();
                 break;
 
@@ -62,7 +66,7 @@ export class ChangesMessageRouter {
                     `Discard changes to "${msg.filePath}"? This cannot be undone.`, 'Discard',
                 );
                 if (choice === 'Discard') {
-                    await this.repo.discardFile(msg.filePath);
+                    await repo.discardFile(msg.filePath);
                     await this.refresh();
                 }
                 break;
@@ -71,10 +75,10 @@ export class ChangesMessageRouter {
             case 'changes/discardAll': {
                 const choice = await showModalWarningMessage('Discard all changes? This cannot be undone.', 'Discard All');
                 if (choice === 'Discard All') {
-                    await this.repo.unstageAll().catch(() => undefined);
-                    const status = await this.repo.getStatus();
+                    await repo.unstageAll().catch(() => undefined);
+                    const status = await repo.getStatus();
                     for (const entry of status.unstaged) {
-                        await this.repo.discardFile(entry.filePath);
+                        await repo.discardFile(entry.filePath);
                     }
                     await this.refresh();
                 }
@@ -82,27 +86,27 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/markResolved':
-                await this.repo.stageFile(msg.filePath);
+                await repo.stageFile(msg.filePath);
                 await this.refresh();
                 break;
 
             case 'changes/acceptOurs':
-                await this.repo.acceptOurs(msg.filePath);
-                await this.repo.stageFile(msg.filePath);
+                await repo.acceptOurs(msg.filePath);
+                await repo.stageFile(msg.filePath);
                 await this.refresh();
                 break;
 
             case 'changes/acceptTheirs':
-                await this.repo.acceptTheirs(msg.filePath);
-                await this.repo.stageFile(msg.filePath);
+                await repo.acceptTheirs(msg.filePath);
+                await repo.stageFile(msg.filePath);
                 await this.refresh();
                 break;
 
             case 'changes/acceptAllTheirs': {
-                const status = await this.repo.getStatus();
+                const status = await repo.getStatus();
                 for (const entry of status.conflicts) {
-                    await this.repo.acceptTheirs(entry.filePath);
-                    await this.repo.stageFile(entry.filePath);
+                    await repo.acceptTheirs(entry.filePath);
+                    await repo.stageFile(entry.filePath);
                 }
                 await this.refresh();
                 break;
@@ -116,10 +120,10 @@ export class ChangesMessageRouter {
                 }
                 try {
                     switch (msg.mode) {
-                        case 'amend':      await this.repo.commitAmend(message); break;
-                        case 'commitPush': await this.repo.commit(message); await this.repo.push(); break;
-                        case 'commitSync': await this.repo.pullAndPush(); break;
-                        default:           await this.repo.commit(message); break;
+                        case 'amend':      await repo.commitAmend(message); break;
+                        case 'commitPush': await repo.commit(message); await repo.push(); break;
+                        case 'commitSync': await repo.commit(message); await repo.pullAndPush(); break;
+                        default:           await repo.commit(message); break;
                     }
                     this.postMessage({ type: 'changes/commitResult', success: true });
                     await vscode.window.showInformationMessage('Committed successfully.');
@@ -132,19 +136,19 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/openFile': {
-                const uri = vscode.Uri.file(path.join(this.repo.cwd, msg.filePath));
+                const uri = vscode.Uri.file(path.join(repo.cwd, msg.filePath));
                 await vscode.commands.executeCommand('vscode.open', uri);
                 break;
             }
 
             case 'changes/openSubmodule': {
-                const uri = vscode.Uri.file(path.join(this.repo.cwd, msg.filePath));
+                const uri = vscode.Uri.file(path.join(repo.cwd, msg.filePath));
                 await vscode.commands.executeCommand('vscode.openFolder', uri);
                 break;
             }
 
             case 'changes/openMergeEditor': {
-                const uri = vscode.Uri.file(path.join(this.repo.cwd, msg.filePath));
+                const uri = vscode.Uri.file(path.join(repo.cwd, msg.filePath));
                 try {
                     await vscode.commands.executeCommand('merge-conflict.accept.select', uri);
                 } catch {
@@ -154,7 +158,7 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/openDiff': {
-                const cwd = this.repo.cwd;
+                const cwd = repo.cwd;
                 const filePath = path.join(cwd, msg.filePath);
                 const origPath = msg.origPath ? path.join(cwd, msg.origPath) : filePath;
                 const fileUri = vscode.Uri.file(filePath);
@@ -180,39 +184,36 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/stash':
-                await this.repo.stash(msg.message);
+                await repo.stash(msg.message);
                 await this.refresh();
                 break;
 
             case 'changes/stashStaged':
-                await this.repo.stashStaged(msg.message);
+                await repo.stashStaged(msg.message);
                 await this.refresh();
                 break;
 
             case 'changes/stashPop':
-                await this.repo.stashPop(msg.index);
+                await repo.stashPop(msg.index);
                 await this.refresh();
                 break;
 
             case 'changes/stashApply':
-                await this.repo.stashApply(msg.index);
+                await repo.stashApply(msg.index);
                 await this.refresh();
                 break;
 
             case 'changes/stashDrop': {
                 const choice = await showModalWarningMessage('Drop this stash entry? This cannot be undone.', 'Drop');
                 if (choice === 'Drop') {
-                    await this.repo.stashDrop(msg.index);
+                    await repo.stashDrop(msg.index);
                     await this.refresh();
                 }
                 break;
             }
 
             case 'changes/getStashFiles': {
-                const files = await queryStashFiles(
-                    this.repo.execRaw.bind(this.repo),
-                    msg.index,
-                );
+                const files = await repo.getStashFiles(msg.index);
                 this.postMessage({
                     type: 'changes/stashFiles',
                     requestId: msg.requestId,
@@ -223,7 +224,7 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/openStashDiff': {
-                const cwd = this.repo.cwd;
+                const cwd = repo.cwd;
                 const fileUri = vscode.Uri.file(path.join(cwd, msg.filePath));
                 const stashRef = `stash@{${msg.index}}`;
                 await vscode.commands.executeCommand(
@@ -236,8 +237,8 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/continueOp':
-                if (msg.conflictState === 'merge') { await this.repo.mergeContinue(); }
-                else { await this.repo.rebaseContinue(); }
+                if (msg.conflictState === 'merge') { await repo.mergeContinue(); }
+                else { await repo.rebaseContinue(); }
                 await this.refresh();
                 break;
 
@@ -245,8 +246,8 @@ export class ChangesMessageRouter {
                 const opName = msg.conflictState === 'merge' ? 'merge' : 'rebase';
                 const choice = await showModalWarningMessage(`Abort the current ${opName}?`, 'Abort');
                 if (choice === 'Abort') {
-                    if (msg.conflictState === 'merge') { await this.repo.mergeAbort(); }
-                    else { await this.repo.rebaseAbort(); }
+                    if (msg.conflictState === 'merge') { await repo.mergeAbort(); }
+                    else { await repo.rebaseAbort(); }
                     await this.refresh();
                 }
                 break;
@@ -287,12 +288,15 @@ export function buildStatusData(
     };
 }
 
-export function serializeContext(cwd: string): SerializedRepoContext {
-    const crypto = require('crypto');
+export function emptyStatusData(): { type: 'changes/statusData'; data: StatusData } {
     return {
-        id: crypto.createHash('sha256').update(cwd).digest('hex').substring(0, 16),
-        cwd,
-        kind: 'main',
-        label: cwd.split('/').pop() ?? cwd,
+        type: 'changes/statusData',
+        data: {
+            staged: [],
+            unstaged: [],
+            conflicts: [],
+            conflictState: 'none',
+            stashes: [],
+        },
     };
 }

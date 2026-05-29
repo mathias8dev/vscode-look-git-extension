@@ -12,6 +12,7 @@ export default defineConfig({
       input: {
         changes: resolve(__dirname, 'src/webview/changes/main.tsx'),
         graph: resolve(__dirname, 'src/webview/graph/main.tsx'),
+        history: resolve(__dirname, 'src/webview/history/main.tsx'),
       },
       output: {
         assetFileNames: '[name][extname]',

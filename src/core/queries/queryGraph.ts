@@ -29,8 +29,9 @@ export async function queryGraphLog(
     if (filters.dateFrom) { args.push(`--since=${filters.dateFrom}T00:00:00`); }
     if (filters.dateTo)   { args.push(`--until=${filters.dateTo}T23:59:59`); }
     for (const author of filters.authors ?? []) { args.push(`--author=${author}`); }
-    if (branches?.length) { args.push('--', ...branches); }
-    else if (pathFilter)  { args.push('--', pathFilter); }
+    if (branches?.length) { args.push(...branches); }
+    else { args.push('--all'); }
+    if (pathFilter) { args.push('--', pathFilter); }
 
     const output = await execRawReadonly(args, signal);
     let commits = parseGraphLog(output);

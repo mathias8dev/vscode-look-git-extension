@@ -1,12 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import type { GitRepository } from '../../core/git/GitRepository';
 import type { GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse } from '../../protocol/graph/messages';
 import type { GraphData, GraphFilters } from '../../protocol/graph/types';
 import { assignLanes, getMaxLane } from '../../core/graph/GraphLaneAssigner';
-import { queryAllBranches, queryAllTags, queryCurrentBranch, queryUserName, queryRemotes, queryCommitFiles, queryCommitMessage } from '../../core/queries/queryGraph';
-import { queryWorktrees, addWorktree, removeWorktree } from '../../core/queries/queryWorktrees';
-import { querySubmoduleStatus } from '../../core/queries/querySubmodules';
+import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import { toProtocolSubmodule, toProtocolBranch, toProtocolWorktree } from '../mapping/toProtocol';
 import { showModalWarningMessage } from '../utils/confirmation';
 
@@ -16,7 +13,7 @@ export class GraphMessageRouter {
     private readonly pending = new Map<string, AbortController>();
 
     constructor(
-        private readonly repo: GitRepository,
+        private readonly repositories: ActiveRepositoryAccessor,
         private readonly postMessage: PostMessage,
     ) {}
 
@@ -73,9 +70,10 @@ export class GraphMessageRouter {
             }
 
             case 'graph/commitDetailsRequest': {
+                const repo = this.repositories.requireRepository();
                 const [files, fullMessage] = await Promise.all([
-                    this.repo.getCommitFiles(msg.hash),
-                    this.repo.getCommitMessage(msg.hash),
+                    repo.getCommitFiles(msg.hash),
+                    repo.getCommitMessage(msg.hash),
                 ]);
                 const response: CommitDetailsResponse = {
                     type: 'graph/commitDetailsResponse',
@@ -107,7 +105,8 @@ export class GraphMessageRouter {
                 break;
 
             case 'graph/openDiff': {
-                const cwd = this.repo.cwd;
+                const repo = this.repositories.requireRepository();
+                const cwd = repo.cwd;
                 const fileUri = vscode.Uri.file(path.join(cwd, msg.filePath));
                 const origUri = msg.origPath ? vscode.Uri.file(path.join(cwd, msg.origPath)) : fileUri;
                 const commitHash = msg.commitHash;
@@ -124,8 +123,13 @@ export class GraphMessageRouter {
     }
 
     async pushGraphData(filters: GraphFilters | undefined, _signal: AbortSignal | undefined): Promise<void> {
+        const repo = this.repositories.currentRepository;
+        if (!repo) {
+            this.postMessage({ type: 'graph/dataPush', repoId: '', data: emptyGraphData() });
+            return;
+        }
         const data = await this.buildGraphData(filters ?? {}, 0, 300);
-        this.postMessage({ type: 'graph/dataPush', repoId: this.repo.cwd, data });
+        this.postMessage({ type: 'graph/dataPush', repoId: repo.cwd, data });
     }
 
     private async buildGraphData(
@@ -134,20 +138,21 @@ export class GraphMessageRouter {
         limit: number,
         signal?: AbortSignal,
     ): Promise<GraphData> {
+        const repo = this.repositories.requireRepository();
         const maxCount = offset + limit + 1;
         const [rawCommits, branches, tags, currentUser, remotes, worktrees, submodules] = await Promise.all([
-            this.repo.getGraphLog(maxCount, filters.branches as string[] | undefined, filters.path, {
+            repo.getGraphLog(maxCount, filters.branches, filters.path, {
                 search: filters.search,
-                authors: filters.authors as string[] | undefined,
+                authors: filters.authors,
                 dateFrom: filters.dateFrom,
                 dateTo: filters.dateTo,
             }, signal),
-            queryAllBranches(this.repo.execRaw.bind(this.repo), (s) => queryCurrentBranch(this.repo.exec.bind(this.repo), s), signal),
-            queryAllTags(this.repo.execRaw.bind(this.repo), signal),
-            queryUserName(this.repo.exec.bind(this.repo), signal),
-            queryRemotes(this.repo.exec.bind(this.repo), signal),
-            queryWorktrees(this.repo.execRaw.bind(this.repo), signal).catch(() => []),
-            querySubmoduleStatus(this.repo.execRaw.bind(this.repo), signal).catch(() => []),
+            repo.getAllBranches(signal),
+            repo.getAllTags(signal),
+            repo.getUserName(signal),
+            repo.getRemotes(signal),
+            repo.listWorktrees(signal).catch(() => []),
+            repo.getSubmoduleStatus(signal).catch(() => []),
         ]);
 
         const sliced = rawCommits.slice(offset, offset + limit);
@@ -176,13 +181,14 @@ export class GraphMessageRouter {
     }
 
     private async handleBranchCommand(command: string, branch: string, isRemote: boolean): Promise<void> {
-        const currentBranch = await this.repo.getCurrentBranch();
+        const repo = this.repositories.requireRepository();
+        const currentBranch = await repo.getCurrentBranch();
         switch (command) {
-            case 'checkout':    await this.repo.checkout(branch); break;
+            case 'checkout':    await repo.checkout(branch); break;
             case 'newBranchFrom': {
                 const name = await vscode.window.showInputBox({ prompt: `New branch from "${branch}":` });
                 if (!name) { return; }
-                await this.repo.checkoutNewBranch(name, branch);
+                await repo.checkoutNewBranch(name, branch);
                 break;
             }
             case 'delete': {
@@ -193,31 +199,32 @@ export class GraphMessageRouter {
                     const slashIdx = branch.indexOf('/');
                     const remote = slashIdx === -1 ? 'origin' : branch.substring(0, slashIdx);
                     const remoteBranch = slashIdx === -1 ? branch : branch.substring(slashIdx + 1);
-                    await this.repo.deleteRemoteBranch(remote, remoteBranch);
+                    await repo.deleteRemoteBranch(remote, remoteBranch);
                 } else {
-                    await this.repo.deleteBranch(branch);
+                    await repo.deleteBranch(branch);
                 }
                 break;
             }
             case 'rename': {
                 const name = await vscode.window.showInputBox({ prompt: `Rename "${branch}" to:`, value: branch });
                 if (!name || name === branch) { return; }
-                await this.repo.renameBranch(branch, name);
+                await repo.renameBranch(branch, name);
                 break;
             }
-            case 'push':         await this.repo.pushBranch('origin', branch); break;
-            case 'update':       await this.repo.fetchBranch('origin', branch); break;
-            case 'rebaseOnto':   await this.repo.rebase(branch); break;
-            case 'mergeInto':    await this.repo.merge(branch); break;
+            case 'push':         await repo.pushBranch('origin', branch); break;
+            case 'update':       await repo.fetchBranch('origin', branch); break;
+            case 'rebaseOnto':   await repo.rebase(branch); break;
+            case 'mergeInto':    await repo.merge(branch); break;
             case 'checkoutRebaseOnto':
-                await this.repo.checkout(branch);
-                await this.repo.rebase(currentBranch);
+                await repo.checkout(branch);
+                await repo.rebase(currentBranch);
                 break;
         }
         await this.pushGraphData(undefined, undefined);
     }
 
     private async handleWorktreeCommand(command: string, wtPath?: string): Promise<void> {
+        const repo = this.repositories.requireRepository();
         switch (command) {
             case 'open':
                 if (wtPath) {
@@ -229,9 +236,9 @@ export class GraphMessageRouter {
                 if (!p) { return; }
                 const b = await vscode.window.showInputBox({ prompt: 'Branch name:' });
                 if (!b) { return; }
-                const branches = await this.repo.getAllBranches();
+                const branches = await repo.getAllBranches();
                 const createNew = !branches.some((br) => br.name === b);
-                await addWorktree(this.repo.exec.bind(this.repo), p, b, createNew);
+                await repo.addWorktree(p, b, createNew);
                 await this.pushGraphData(undefined, undefined);
                 break;
             }
@@ -244,7 +251,7 @@ export class GraphMessageRouter {
                     `Remove worktree at "${wtPath}"?${force ? ' Uncommitted changes will be lost.' : ''}`, label,
                 );
                 if (choice !== label) { return; }
-                await removeWorktree(this.repo.exec.bind(this.repo), wtPath, force);
+                await repo.removeWorktree(wtPath, force);
                 await this.pushGraphData(undefined, undefined);
                 break;
             }
@@ -252,21 +259,22 @@ export class GraphMessageRouter {
     }
 
     private async handleSubmoduleCommand(command: string, subPath?: string): Promise<void> {
+        const repo = this.repositories.requireRepository();
         switch (command) {
             case 'open':
                 if (subPath) {
-                    await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(path.join(this.repo.cwd, subPath)));
+                    await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(path.join(repo.cwd, subPath)));
                 }
                 break;
             case 'initialize':
             case 'update':
-                if (subPath) { await this.repo.updateSubmodule(subPath); }
+                if (subPath) { await repo.updateSubmodule(subPath); }
                 break;
             case 'fetch':
-                if (subPath) { await this.repo.exec(['-C', subPath, 'fetch', '--all']); }
+                if (subPath) { await repo.exec(['-C', subPath, 'fetch', '--all']); }
                 break;
             case 'updateAll':
-                await this.repo.updateAllSubmodules();
+                await repo.updateAllSubmodules();
                 break;
         }
         await this.pushGraphData(undefined, undefined);
@@ -275,4 +283,21 @@ export class GraphMessageRouter {
 
 function toGitUri(uri: vscode.Uri, ref: string): vscode.Uri {
     return uri.with({ scheme: 'git', query: JSON.stringify({ path: uri.path, ref }) });
+}
+
+function emptyGraphData(): GraphData {
+    return {
+        branches: [],
+        tags: [],
+        rows: [],
+        maxLane: 0,
+        currentBranch: '',
+        currentUser: '',
+        hasMore: false,
+        loadedCount: 0,
+        totalCount: 0,
+        hasRemotes: false,
+        worktrees: [],
+        submodules: [],
+    };
 }

@@ -1,20 +1,10 @@
-import * as crypto from 'crypto';
 import * as vscode from 'vscode';
 import type { Repository } from '../types/git';
-import { GitProcessRepository } from './git/GitProcessRepository';
+import { ActiveRepositoryRegistry } from './repositories/ActiveRepositoryRegistry';
 import { ChangesViewProvider } from './views/ChangesViewProvider';
+import { CommitHistoryViewProvider } from './views/CommitHistoryViewProvider';
 import { GraphViewProvider } from './views/GraphViewProvider';
 import { getBuiltInGitApi } from './utils/gitExtension';
-import type { SerializedRepoContext } from '../protocol/shared/repo';
-
-function makeContext(repo: GitProcessRepository): SerializedRepoContext {
-    return {
-        id: crypto.createHash('sha256').update(repo.cwd).digest('hex').substring(0, 16),
-        cwd: repo.cwd,
-        kind: 'main',
-        label: repo.cwd.split('/').pop() ?? repo.cwd,
-    };
-}
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const gitApi = await getBuiltInGitApi();
@@ -23,19 +13,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Track per-repo disposables
     const repoDisposables = new Map<string, vscode.Disposable[]>();
 
-    // Active git service — updated when active repo changes
     const getActiveVsRepo = (): Repository | undefined =>
         gitApi.repositories.find((r) => r.ui.selected) ?? gitApi.repositories[0];
 
-    let activeRepo: GitProcessRepository | undefined;
-
-    // Register views
-    const changesProvider = new ChangesViewProvider(context.extensionUri, new GitProcessRepository(''));
-    const graphProvider = new GraphViewProvider(context.extensionUri, new GitProcessRepository(''));
+    const repositories = new ActiveRepositoryRegistry();
+    const changesProvider = new ChangesViewProvider(context.extensionUri, repositories);
+    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories);
+    const graphProvider = new GraphViewProvider(context.extensionUri, repositories);
 
     context.subscriptions.push(
+        repositories,
         vscode.window.registerWebviewViewProvider(ChangesViewProvider.viewType, changesProvider, { webviewOptions: { retainContextWhenHidden: true } }),
+        vscode.window.registerWebviewViewProvider(CommitHistoryViewProvider.viewType, commitHistoryProvider, { webviewOptions: { retainContextWhenHidden: true } }),
         vscode.window.registerWebviewViewProvider(GraphViewProvider.viewType, graphProvider, { webviewOptions: { retainContextWhenHidden: true } }),
+        repositories.onDidChange(({ context: repoContext }) => {
+            void vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', Boolean(repoContext));
+            if (repoContext) {
+                void changesProvider.notifyRepoChanged(repoContext);
+                void commitHistoryProvider.notifyRepoChanged(repoContext);
+                void graphProvider.notifyRepoChanged(repoContext);
+            } else {
+                void changesProvider.refresh();
+                void commitHistoryProvider.refresh();
+                void graphProvider.refresh();
+            }
+        }),
     );
 
     // Update active repo and notify providers
@@ -46,44 +48,35 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (debounceTimer) { clearTimeout(debounceTimer); }
         debounceTimer = setTimeout(() => {
             void changesProvider.refresh();
-            void graphProvider.notifyRepoChanged(makeContext(activeRepo!));
+            void commitHistoryProvider.refresh();
+            void graphProvider.refresh();
         }, DEBOUNCE_MS);
     }
 
-    function useActiveRepo(): void {
+    function syncActiveRepo(): void {
         const vsRepo = getActiveVsRepo();
-        const cwd = vsRepo?.rootUri.fsPath ?? '';
-        if (!cwd) { return; }
-
-        activeRepo = new GitProcessRepository(cwd);
-        // Patch providers with new repo (internal setter — accessed via prototype)
-        (changesProvider as any).repo = activeRepo;
-        (graphProvider as any).repo = activeRepo;
-
-        void vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', true);
-        void changesProvider.notifyRepoChanged(makeContext(activeRepo));
-        void graphProvider.notifyRepoChanged(makeContext(activeRepo));
+        repositories.setActiveRepository(vsRepo?.rootUri.fsPath);
     }
 
     // Wire per-repo state watchers
     function watchRepo(repo: Repository): void {
         const key = repo.rootUri.fsPath;
-        const disposables: vscode.Disposable[] = [
-            repo.state.onDidChange(() => debouncedRefreshAll()),
-            repo.ui.onDidChange(() => useActiveRepo()),
-        ];
+            const disposables: vscode.Disposable[] = [
+                repo.state.onDidChange(() => debouncedRefreshAll()),
+                repo.ui.onDidChange(() => syncActiveRepo()),
+            ];
         repoDisposables.set(key, disposables);
     }
 
     for (const repo of gitApi.repositories) { watchRepo(repo); }
 
     context.subscriptions.push(
-        gitApi.onDidOpenRepository((repo) => { watchRepo(repo); useActiveRepo(); }),
+        gitApi.onDidOpenRepository((repo) => { watchRepo(repo); syncActiveRepo(); }),
         gitApi.onDidCloseRepository((repo) => {
             const key = repo.rootUri.fsPath;
             repoDisposables.get(key)?.forEach((d) => d.dispose());
             repoDisposables.delete(key);
-            useActiveRepo();
+            syncActiveRepo();
         }),
     );
 
@@ -105,7 +98,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         );
     }
 
-    useActiveRepo();
+    syncActiveRepo();
 }
 
 export function deactivate(): void {}

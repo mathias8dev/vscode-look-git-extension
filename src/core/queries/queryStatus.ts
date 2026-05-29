@@ -1,5 +1,4 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import type { GitExec } from '../git/GitRepository';
 import type { GitStatus, GitStash } from '../git/domain/GitStatus';
 import type { GitFileChange } from '../git/domain/GitCommit';

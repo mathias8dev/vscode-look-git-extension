@@ -1,4 +1,5 @@
 import { execFile } from 'child_process';
+import * as path from 'path';
 import { promisify } from 'util';
 import type { GitExec, GitRepository, GraphLogFilters } from '../../core/git/GitRepository';
 import type { GitCommit, GitGraphCommit, GitFileChange } from '../../core/git/domain/GitCommit';
@@ -60,6 +61,7 @@ export class GitProcessRepository implements GitRepository {
                 const { stdout } = await execFileAsync('git', [...args], {
                     cwd: this.cwd, maxBuffer: MAX_BUFFER,
                     env: { ...process.env, ...env },
+                    signal,
                 });
                 return stdout;
             } catch (error) {
@@ -78,7 +80,10 @@ export class GitProcessRepository implements GitRepository {
 
     // ── GitRepository implementation ──────────────────────────────────────
 
-    async getGitDir(): Promise<string> { return this.exec(['rev-parse', '--git-dir']); }
+    async getGitDir(): Promise<string> {
+        const gitDir = await this.exec(['rev-parse', '--git-dir']);
+        return path.isAbsolute(gitDir) ? gitDir : path.resolve(this.cwd, gitDir);
+    }
 
     getStatus(signal?: AbortSignal): Promise<GitStatus> {
         return queryStatus(this.roRaw, this.getGitDir.bind(this), signal);

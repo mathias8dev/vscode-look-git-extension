@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseCommitLog, parseGraphLog, LOG_FIELD_SEP, LOG_RECORD_SEP } from '../../../src/core/parsing/parseLog';
+import { expectItem } from '../../helpers/assertions';
 
 function makeLogRecord(fields: string[]): string {
     return fields.join(LOG_FIELD_SEP);
@@ -20,7 +21,7 @@ describe('parseCommitLog', () => {
         ]);
         const result = parseCommitLog(output);
         expect(result).toHaveLength(1);
-        expect(result[0]).toMatchObject({ hash: 'abc1234567890', shortHash: 'abc1234', message: 'initial commit', authorName: 'Alice', parentHashes: [] });
+        expect(expectItem(result, 0)).toMatchObject({ hash: 'abc1234567890', shortHash: 'abc1234', message: 'initial commit', authorName: 'Alice', parentHashes: [] });
     });
 
     it('parses multiple parent hashes', () => {
@@ -28,7 +29,7 @@ describe('parseCommitLog', () => {
             makeLogRecord(['merge123', 'm123', 'merge commit', 'Bob', 'b@e.com', '2024-01-02T00:00:00Z', 'parent1 parent2']),
         ]);
         const result = parseCommitLog(output);
-        expect(result[0].parentHashes).toEqual(['parent1', 'parent2']);
+        expect(expectItem(result, 0).parentHashes).toEqual(['parent1', 'parent2']);
     });
 
     it('handles unicode in messages and author names', () => {
@@ -36,8 +37,9 @@ describe('parseCommitLog', () => {
             makeLogRecord(['abc', 'abc', 'feat: 你好 / résumé', 'Élise Müller', 'e@e.com', '2024-01-01T00:00:00Z', '']),
         ]);
         const result = parseCommitLog(output);
-        expect(result[0].message).toBe('feat: 你好 / résumé');
-        expect(result[0].authorName).toBe('Élise Müller');
+        const commit = expectItem(result, 0);
+        expect(commit.message).toBe('feat: 你好 / résumé');
+        expect(commit.authorName).toBe('Élise Müller');
     });
 
     it('parses multiple records separated by record separator', () => {
@@ -47,7 +49,7 @@ describe('parseCommitLog', () => {
         ]);
         const result = parseCommitLog(output);
         expect(result).toHaveLength(2);
-        expect(result[1].parentHashes).toEqual(['aaa']);
+        expect(expectItem(result, 1).parentHashes).toEqual(['aaa']);
     });
 
     it('skips blank records', () => {
@@ -63,7 +65,7 @@ describe('parseGraphLog', () => {
             makeLogRecord(['abc', 'abc', 'msg', 'A', 'a@a.com', '2024-01-01T00:00:00Z', '', 'HEAD -> main, origin/main']),
         ]);
         const result = parseGraphLog(output);
-        expect(result[0].refs).toEqual(['HEAD -> main', 'origin/main']);
+        expect(expectItem(result, 0).refs).toEqual(['HEAD -> main', 'origin/main']);
     });
 
     it('returns empty refs array when field 7 is missing', () => {
@@ -71,6 +73,6 @@ describe('parseGraphLog', () => {
             makeLogRecord(['abc', 'abc', 'msg', 'A', 'a@a.com', '2024-01-01T00:00:00Z', '']),
         ]);
         const result = parseGraphLog(output);
-        expect(result[0].refs).toEqual([]);
+        expect(expectItem(result, 0).refs).toEqual([]);
     });
 });

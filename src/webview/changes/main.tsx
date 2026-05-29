@@ -2,8 +2,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-function ChangesApp() {
-    return <div>Changes — loading…</div>;
+export function ChangesApp() {
+    return <div>Changes - loading...</div>;
 }
 
 const root = document.getElementById('root');

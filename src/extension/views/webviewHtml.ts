@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 export function getWebviewHtml(
     webview: vscode.Webview,
     extensionUri: vscode.Uri,
-    scriptName: 'changes' | 'graph',
+    scriptName: 'changes' | 'graph' | 'history',
 ): string {
     const nonce = crypto.randomBytes(16).toString('hex');
     const scriptUri = webview.asWebviewUri(

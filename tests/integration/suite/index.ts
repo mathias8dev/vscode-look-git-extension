@@ -1,16 +1,9 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
-import { createGreeting } from '../../../src/core/hello';
 import { runTestCases } from '../../helpers/testRunner';
 
 export function run(): Promise<void> {
-    return runTestCases('Hello World integration', [
-        {
-            name: 'builds the greeting in pure core logic',
-            run: () => {
-                assert.equal(createGreeting('Look Git'), 'Hello from Look Git');
-            },
-        },
+    return runTestCases('Look Git integration', [
         {
             name: 'activates the extension and contributes commands and views',
             run: async () => {
@@ -21,14 +14,21 @@ export function run(): Promise<void> {
                 assert.equal(extension.isActive, true);
 
                 const commands = await vscode.commands.getCommands(true);
-                assert.ok(commands.includes('lookGit.helloWorld'), 'Expected lookGit.helloWorld to be registered.');
                 assert.ok(
                     commands.includes('workbench.view.extension.look-git'),
                     'Expected the Look Git Activity Bar container command to be registered.',
                 );
                 assert.ok(
-                    commands.includes('lookGit.helloView.focus'),
-                    'Expected the Look Git left-side Hello World view command to be registered.',
+                    commands.includes('lookGit.changesView.focus'),
+                    'Expected the Changes view focus command to be registered.',
+                );
+                assert.ok(
+                    commands.includes('lookGit.commitHistory.focus'),
+                    'Expected the Commit History view focus command to be registered.',
+                );
+                assert.ok(
+                    commands.includes('lookGit.graphView.focus'),
+                    'Expected the Git Graph view focus command to be registered.',
                 );
             },
         },

@@ -20,6 +20,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm run lint
+      - run: npm run compile
       - run: npm test
 
   e2e:
@@ -36,6 +38,12 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Run integration tests
+        if: runner.os != 'Linux'
+        run: npm run test:integration
+      - name: Run integration tests under Xvfb
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:integration
       - name: Run E2E tests
         if: runner.os != 'Linux'
         run: npm run test:e2e

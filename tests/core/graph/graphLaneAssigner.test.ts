@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { assignLanes, getMaxLane } from '../../../src/core/graph/GraphLaneAssigner';
 import type { GitGraphCommit } from '../../../src/core/git/domain/GitCommit';
+import { expectItem } from '../../helpers/assertions';
 
 function commit(hash: string, parents: string[] = [], refs: string[] = []): GitGraphCommit {
     return {
@@ -21,19 +22,19 @@ describe('graphLaneAssigner', () => {
         const rows = assignLanes([commit('c3', ['c2']), commit('c2', ['c1']), commit('c1')]);
         expect(rows.map((r) => r.laneData.lane)).toEqual([0, 0, 0]);
         expect(getMaxLane(rows)).toBe(0);
-        expect(rows[0].laneData.lines).toContainEqual(expect.objectContaining({ fromLane: 0, toLane: 0, type: 'straight' }));
+        expect(expectItem(rows, 0).laneData.lines).toContainEqual(expect.objectContaining({ fromLane: 0, toLane: 0, type: 'straight' }));
     });
 
     it('allocates additional lanes for independent branch tips', () => {
         const rows = assignLanes([commit('feature', ['base']), commit('main', ['base']), commit('base')]);
-        expect(rows[0].laneData.lane).toBe(0);
-        expect(rows[1].laneData.lane).toBe(1);
+        expect(expectItem(rows, 0).laneData.lane).toBe(0);
+        expect(expectItem(rows, 1).laneData.lane).toBe(1);
         expect(getMaxLane(rows)).toBe(1);
     });
 
     it('draws a merge/fork line for merge commits', () => {
         const rows = assignLanes([commit('merge', ['main', 'feature']), commit('main', ['base']), commit('feature', ['base']), commit('base')]);
-        expect(rows[0].laneData.lines.map((l) => l.type)).toContain('fork-right');
+        expect(expectItem(rows, 0).laneData.lines.map((l) => l.type)).toContain('fork-right');
         expect(getMaxLane(rows)).toBeGreaterThanOrEqual(1);
     });
 
@@ -47,13 +48,14 @@ describe('graphLaneAssigner advanced cases', () => {
     it('handles an orphan root commit on lane 0', () => {
         const rows = assignLanes([commit('orphan')]);
         expect(rows).toHaveLength(1);
-        expect(rows[0].laneData.lane).toBe(0);
-        expect(rows[0].laneData.lines).toEqual([]);
+        const row = expectItem(rows, 0);
+        expect(row.laneData.lane).toBe(0);
+        expect(row.laneData.lines).toEqual([]);
     });
 
     it('draws pass-through straight lines for active lanes not touched by a commit', () => {
         const rows = assignLanes([commit('feature', ['base']), commit('main', ['base']), commit('base')]);
-        const mainRow = rows[1];
+        const mainRow = expectItem(rows, 1);
         const passThrough = mainRow.laneData.lines.find((l) => l.type === 'straight' && l.fromLane !== mainRow.laneData.lane);
         expect(passThrough).toBeDefined();
     });
@@ -68,7 +70,7 @@ describe('graphLaneAssigner advanced cases', () => {
         const tips = Array.from({ length: 11 }, (_, i) => commit(`c${i}`, [`r${i}`]));
         const roots = Array.from({ length: 11 }, (_, i) => commit(`r${i}`));
         const rows = assignLanes([...tips, ...roots]);
-        expect(rows[10].laneData.color).toBe(rows[0].laneData.color);
+        expect(expectItem(rows, 10).laneData.color).toBe(expectItem(rows, 0).laneData.color);
     });
 
     it('bounds max lane for a simple two-branch merge', () => {
@@ -78,7 +80,7 @@ describe('graphLaneAssigner advanced cases', () => {
 
     it('generates a fork-right line for the second parent', () => {
         const rows = assignLanes([commit('merge', ['main', 'feature']), commit('main', ['base']), commit('feature', ['base']), commit('base')]);
-        expect(rows[0].laneData.lines).toContainEqual(expect.objectContaining({ fromLane: 0, toLane: 1, type: 'fork-right' }));
+        expect(expectItem(rows, 0).laneData.lines).toContainEqual(expect.objectContaining({ fromLane: 0, toLane: 1, type: 'fork-right' }));
     });
 
     it('allocates one lane per additional parent in octopus merge', () => {
@@ -86,7 +88,7 @@ describe('graphLaneAssigner advanced cases', () => {
             commit('merge', ['main', 'feature-a', 'feature-b']),
             commit('main', ['base']), commit('feature-a', ['base']), commit('feature-b', ['base']), commit('base'),
         ]);
-        const forks = rows[0].laneData.lines.filter((l) => l.type === 'fork-right');
+        const forks = expectItem(rows, 0).laneData.lines.filter((l) => l.type === 'fork-right');
         expect(forks).toHaveLength(2);
         expect(getMaxLane(rows)).toBe(2);
     });
@@ -104,7 +106,7 @@ describe('graphLaneAssigner advanced cases', () => {
             commit('shared'),
         ], { primaryBranch: 'main' });
         expect(rows.map((r) => r.laneData.lane)).toEqual([1, 0, 0, 0]);
-        expect(rows[1].laneData.isPrimary).toBe(true);
+        expect(expectItem(rows, 1).laneData.isPrimary).toBe(true);
     });
 
     it('uses hash to pin primary branch when refs are missing', () => {
@@ -113,9 +115,9 @@ describe('graphLaneAssigner advanced cases', () => {
             commit('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', ['base-b']),
             commit('base-a'), commit('base-b'),
         ], { primaryBranchHash: 'bbbbbbb' });
-        expect(rows[0].laneData.lane).toBe(1);
-        expect(rows[1].laneData.lane).toBe(0);
-        expect(rows[1].laneData.isPrimary).toBe(true);
+        expect(expectItem(rows, 0).laneData.lane).toBe(1);
+        expect(expectItem(rows, 1).laneData.lane).toBe(0);
+        expect(expectItem(rows, 1).laneData.isPrimary).toBe(true);
     });
 
     it('keeps existing lane assignments stable when older commits are appended', () => {

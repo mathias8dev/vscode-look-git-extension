@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseNameStatusZ } from '../../../src/core/parsing/parseNameStatus';
+import { expectItem } from '../../helpers/assertions';
 
 describe('parseNameStatusZ', () => {
     it('returns empty array for empty output', () => {
@@ -15,13 +16,13 @@ describe('parseNameStatusZ', () => {
     it('parses an added file', () => {
         const output = 'A\0new.ts\0';
         const result = parseNameStatusZ(output);
-        expect(result[0].status).toBe('A');
+        expect(expectItem(result, 0).status).toBe('A');
     });
 
     it('parses a deleted file', () => {
         const output = 'D\0old.ts\0';
         const result = parseNameStatusZ(output);
-        expect(result[0].status).toBe('D');
+        expect(expectItem(result, 0).status).toBe('D');
     });
 
     it('parses a renamed file (R status has origPath before newPath)', () => {
@@ -33,14 +34,15 @@ describe('parseNameStatusZ', () => {
     it('parses a copied file (C status)', () => {
         const output = 'C\0source.ts\0dest.ts\0';
         const result = parseNameStatusZ(output);
-        expect(result[0].status).toBe('C');
-        expect(result[0].origPath).toBe('source.ts');
-        expect(result[0].filePath).toBe('dest.ts');
+        const copied = expectItem(result, 0);
+        expect(copied.status).toBe('C');
+        expect(copied.origPath).toBe('source.ts');
+        expect(copied.filePath).toBe('dest.ts');
     });
 
     it('attaches parentHash when provided', () => {
         const result = parseNameStatusZ('M\0file.ts\0', 'abc123');
-        expect(result[0].parentHash).toBe('abc123');
+        expect(expectItem(result, 0).parentHash).toBe('abc123');
     });
 
     it('deduplicates identical paths', () => {

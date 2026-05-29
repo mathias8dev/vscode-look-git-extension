@@ -67,7 +67,9 @@ export const Uri = {
     parse(value: string) {
         const match = value.match(/^([^:]+):(.*)$/);
         if (!match) { throw new Error(`Invalid URI: ${value}`); }
-        const [, scheme, rest] = match;
+        const scheme = match[1];
+        const rest = match[2];
+        if (!scheme || rest === undefined) { throw new Error(`Invalid URI: ${value}`); }
         const qi = rest.indexOf('?');
         const pathValue = qi === -1 ? rest : rest.substring(0, qi);
         const query = qi === -1 ? '' : rest.substring(qi + 1);
@@ -90,6 +92,8 @@ export const commands = {
     failCommand(command: string, error: Error) { this.failures.set(command, error); },
     reset() { this.calls = []; this.failures = new Map(); },
 };
+
+export type CommandCall = typeof commands.calls[number];
 
 export const window = {
     errorMessages: [] as string[],
@@ -121,6 +125,26 @@ export const window = {
         this.warningChoice = undefined;
     },
 };
+
+export type WarningMessage = typeof window.warningMessages[number];
+
+export function resetMockVscode(): void {
+    commands.reset();
+    window.reset();
+    workspace.reset();
+}
+
+export function setWarningChoice(choice: string | undefined): void {
+    window.warningChoice = choice;
+}
+
+export function getWarningMessages(): readonly WarningMessage[] {
+    return window.warningMessages;
+}
+
+export function getCommandCalls(): readonly CommandCall[] {
+    return commands.calls;
+}
 
 export const workspace = {
     values: new Map<string, unknown>(),
