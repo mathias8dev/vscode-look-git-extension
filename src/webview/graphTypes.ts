@@ -20,6 +20,15 @@ export interface FileChange {
     filePath: string;
     origPath?: string;
     parentHash?: string;
+    isSubmodule?: boolean;
+}
+
+export interface WorktreeInfo {
+    path: string;
+    head: string;
+    branch: string | undefined;
+    isMain: boolean;
+    isDetached: boolean;
 }
 
 export interface GraphData {
@@ -34,6 +43,7 @@ export interface GraphData {
     hasRemotes?: boolean;
     repositoryWebUrl?: string;
     currentBranchCommitHashes?: string[];
+    worktrees: WorktreeInfo[];
 }
 
 export type BranchViewMode = 'list' | 'tree';

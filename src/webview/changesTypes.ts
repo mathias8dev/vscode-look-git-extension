@@ -3,6 +3,7 @@ export interface StatusEntry {
     workTreeStatus: string;
     filePath: string;
     origPath?: string;
+    isSubmodule?: boolean;
 }
 
 export interface StashEntry {

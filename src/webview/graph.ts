@@ -360,6 +360,15 @@ function renderGraphTable(): void {
         </tr></thead>
         <tbody>`;
 
+    // Build a map of commit hash → worktree paths (excluding the main worktree)
+    const checkedOutInWorktree = new Map<string, string[]>();
+    for (const wt of graphData.worktrees ?? []) {
+        if (wt.isMain) { continue; }
+        const existing = checkedOutInWorktree.get(wt.head) ?? [];
+        existing.push(wt.path);
+        checkedOutInWorktree.set(wt.head, existing);
+    }
+
     for (const { row, matchesFilter } of rows) {
         const c = row.commit;
         const refs = parseRefs(c.refs, tagNames);
@@ -370,6 +379,11 @@ function renderGraphTable(): void {
             ? (matchesFilter ? ' filter-matched' : ' filter-dimmed')
             : '';
         const date = formatRelativeDate(new Date(c.authorDate));
+
+        const wtPaths = checkedOutInWorktree.get(c.hash);
+        const worktreeBadge = wtPaths
+            ? `<span class="worktree-badge" title="Checked out in: ${escapeHtml(wtPaths.join(', '))}">WT</span>`
+            : '';
 
         let graphCell: string;
         if (useBullet) {
@@ -384,7 +398,7 @@ function renderGraphTable(): void {
             <td class="hash-col">${escapeHtml(c.shortHash)}</td>
             <td class="message-col">
                 <button class="commit-row-button" type="button" data-hash="${c.hash}">
-                    ${badges}<span class="commit-row-message">${escapeHtml(c.message)}</span>
+                    ${badges}<span class="commit-row-message">${escapeHtml(c.message)}</span>${worktreeBadge}
                 </button>
             </td>
             <td class="author-col">${escapeHtml(c.authorName)}</td>

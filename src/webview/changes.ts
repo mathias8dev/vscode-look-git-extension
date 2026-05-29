@@ -22,6 +22,7 @@ import {
     ICON_STASH_APPLY,
     ICON_STASH_POP,
     ICON_STASH_SAVE,
+    ICON_SUBMODULE,
     ICON_TRASH,
     renderFileTypeIcon,
 } from '../icons/webviewIcons';
@@ -262,18 +263,29 @@ function renderTreeFileRow(entry: StatusEntry, isStaged: boolean, depth: number)
     const statusClass = getStatusClass(statusChar);
     const fileName = entry.filePath.split('/').pop() || entry.filePath;
     const indent = depth * 16 + 22;
+    const subAttr = entry.isSubmodule ? ' data-submodule="true"' : '';
+    const icon = entry.isSubmodule ? ICON_SUBMODULE : renderFileTypeIcon(entry.filePath);
 
+    const openSubmoduleBtn = `<button class="icon-btn open-submodule-btn" data-file="${escapeHtml(entry.filePath)}" title="Open Submodule">${ICON_OPEN_FILE}</button>`;
     const openFileBtn = `<button class="icon-btn open-file-btn" data-file="${escapeHtml(entry.filePath)}" title="Open File">${ICON_OPEN_FILE}</button>`;
 
-    const actions = isStaged
-        ? `${openFileBtn}<button class="icon-btn unstage-btn" data-file="${escapeHtml(entry.filePath)}" title="Unstage">${ICON_MINUS}</button>`
-        : `${openFileBtn}<button class="icon-btn discard-btn" data-file="${escapeHtml(entry.filePath)}" title="Discard Changes">${ICON_DISCARD}</button>
-           <button class="icon-btn stage-btn" data-file="${escapeHtml(entry.filePath)}" title="Stage">${ICON_PLUS}</button>`;
+    let actions: string;
+    if (entry.isSubmodule) {
+        // Submodules: stage/unstage only, no discard, no diff — plus an "Open Submodule" button
+        actions = isStaged
+            ? `${openSubmoduleBtn}<button class="icon-btn unstage-btn" data-file="${escapeHtml(entry.filePath)}" title="Unstage">${ICON_MINUS}</button>`
+            : `${openSubmoduleBtn}<button class="icon-btn stage-btn" data-file="${escapeHtml(entry.filePath)}" title="Stage">${ICON_PLUS}</button>`;
+    } else {
+        actions = isStaged
+            ? `${openFileBtn}<button class="icon-btn unstage-btn" data-file="${escapeHtml(entry.filePath)}" title="Unstage">${ICON_MINUS}</button>`
+            : `${openFileBtn}<button class="icon-btn discard-btn" data-file="${escapeHtml(entry.filePath)}" title="Discard Changes">${ICON_DISCARD}</button>
+               <button class="icon-btn stage-btn" data-file="${escapeHtml(entry.filePath)}" title="Stage">${ICON_PLUS}</button>`;
+    }
 
     const origAttr = entry.origPath ? ` data-orig="${escapeHtml(entry.origPath)}"` : '';
     return `
-        <div class="file-row tree-file-row" data-file="${escapeHtml(entry.filePath)}"${origAttr} data-staged="${isStaged}" data-status="${statusChar}" style="padding-left:${indent}px">
-            <span class="tree-icon">${renderFileTypeIcon(entry.filePath)}</span>
+        <div class="file-row tree-file-row" data-file="${escapeHtml(entry.filePath)}"${origAttr} data-staged="${isStaged}" data-status="${statusChar}"${subAttr} style="padding-left:${indent}px">
+            <span class="tree-icon">${icon}</span>
             <span class="file-name" title="${escapeHtml(entry.filePath)}">${escapeHtml(fileName)}</span>
             <div class="file-actions">
                 ${actions}
@@ -420,18 +432,28 @@ function renderFileRow(entry: StatusEntry, isStaged: boolean): string {
     const dirPath = entry.filePath.includes('/')
         ? entry.filePath.substring(0, entry.filePath.lastIndexOf('/'))
         : '';
+    const subAttr = entry.isSubmodule ? ' data-submodule="true"' : '';
+    const icon = entry.isSubmodule ? ICON_SUBMODULE : renderFileTypeIcon(entry.filePath);
 
+    const openSubmoduleBtn = `<button class="icon-btn open-submodule-btn" data-file="${escapeHtml(entry.filePath)}" title="Open Submodule">${ICON_OPEN_FILE}</button>`;
     const openFileBtn = `<button class="icon-btn open-file-btn" data-file="${escapeHtml(entry.filePath)}" title="Open File">${ICON_OPEN_FILE}</button>`;
 
-    const actions = isStaged
-        ? `${openFileBtn}<button class="icon-btn unstage-btn" data-file="${escapeHtml(entry.filePath)}" title="Unstage">${ICON_MINUS}</button>`
-        : `${openFileBtn}<button class="icon-btn discard-btn" data-file="${escapeHtml(entry.filePath)}" title="Discard Changes">${ICON_DISCARD}</button>
-           <button class="icon-btn stage-btn" data-file="${escapeHtml(entry.filePath)}" title="Stage">${ICON_PLUS}</button>`;
+    let actions: string;
+    if (entry.isSubmodule) {
+        actions = isStaged
+            ? `${openSubmoduleBtn}<button class="icon-btn unstage-btn" data-file="${escapeHtml(entry.filePath)}" title="Unstage">${ICON_MINUS}</button>`
+            : `${openSubmoduleBtn}<button class="icon-btn stage-btn" data-file="${escapeHtml(entry.filePath)}" title="Stage">${ICON_PLUS}</button>`;
+    } else {
+        actions = isStaged
+            ? `${openFileBtn}<button class="icon-btn unstage-btn" data-file="${escapeHtml(entry.filePath)}" title="Unstage">${ICON_MINUS}</button>`
+            : `${openFileBtn}<button class="icon-btn discard-btn" data-file="${escapeHtml(entry.filePath)}" title="Discard Changes">${ICON_DISCARD}</button>
+               <button class="icon-btn stage-btn" data-file="${escapeHtml(entry.filePath)}" title="Stage">${ICON_PLUS}</button>`;
+    }
 
     const origAttr = entry.origPath ? ` data-orig="${escapeHtml(entry.origPath)}"` : '';
     return `
-        <div class="file-row" data-file="${escapeHtml(entry.filePath)}"${origAttr} data-staged="${isStaged}" data-status="${statusChar}">
-            ${renderFileTypeIcon(entry.filePath)}
+        <div class="file-row" data-file="${escapeHtml(entry.filePath)}"${origAttr} data-staged="${isStaged}" data-status="${statusChar}"${subAttr}>
+            ${icon}
             <span class="file-name" title="${escapeHtml(entry.filePath)}">${escapeHtml(fileName)}</span>
             ${dirPath ? `<span class="file-dir">${escapeHtml(dirPath)}</span>` : ''}
             <div class="file-actions">

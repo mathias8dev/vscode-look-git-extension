@@ -1,4 +1,4 @@
-import type { GitService, BranchInfo, TagInfo, GraphCommitInfo, GitFileChange, GraphLogFilters } from '../gitService';
+import type { GitService, BranchInfo, TagInfo, GraphCommitInfo, GitFileChange, GraphLogFilters, WorktreeInfo } from '../gitService';
 import { assignLanes, getMaxLane } from './graphLaneAssigner';
 import type { GraphRow } from './graphLaneAssigner';
 import { getRepositoryWebUrl } from '../utils/remoteUrl';
@@ -15,6 +15,7 @@ export interface GraphData {
     hasRemotes: boolean;
     repositoryWebUrl?: string;
     currentBranchCommitHashes?: string[];
+    worktrees: WorktreeInfo[];
 }
 
 export class GraphDataProvider {
@@ -28,7 +29,7 @@ export class GraphDataProvider {
     ): Promise<GraphData> {
         const requestedCount = Math.max(1, maxCount);
         const logFilters = hasGraphLogFilters(filters) ? filters : undefined;
-        const [branches, tags, rawCommits, currentUser, remotes, currentBranchCommitHashes] = await Promise.all([
+        const [branches, tags, rawCommits, currentUser, remotes, currentBranchCommitHashes, worktrees] = await Promise.all([
             this.gitService.getAllBranches(),
             this.gitService.getAllTags(),
             logFilters
@@ -37,6 +38,7 @@ export class GraphDataProvider {
             this.gitService.getUserName(),
             this.getRemotes(),
             this.getCurrentBranchCommitHashes(Math.max(requestedCount + 1, 1000)),
+            (this.gitService.listWorktrees?.() ?? Promise.resolve([] as WorktreeInfo[])).catch(() => [] as WorktreeInfo[]),
         ]);
 
         const remoteUrl = remotes.length > 0
@@ -63,6 +65,7 @@ export class GraphDataProvider {
             hasRemotes: remotes.length > 0,
             repositoryWebUrl,
             currentBranchCommitHashes,
+            worktrees,
         };
     }
 

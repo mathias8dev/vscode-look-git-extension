@@ -74,6 +74,7 @@ function handleFilesSectionClick(
         section,
     );
     if (fileRow) {
+        if (fileRow.dataset.submodule === 'true') { return; } // gitlinks cannot be diffed
         postOpenDiff(fileRow.dataset, actions);
     }
 }
@@ -110,6 +111,7 @@ function getDirectFileAction(
         ['.unstage-btn', (filePath) => ({ type: 'unstageFile', filePath })],
         ['.discard-btn', (filePath) => ({ type: 'discardFile', filePath })],
         ['.open-file-btn', (filePath) => ({ type: 'openFile', filePath })],
+        ['.open-submodule-btn', (filePath) => ({ type: 'openSubmodule', filePath })],
     ];
 
     for (const [selector, buildMessage] of fileActions) {

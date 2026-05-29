@@ -62,6 +62,8 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .branch-item.active .branch-remote-pending-indicator { color: var(--vscode-list-activeSelectionForeground); }
 .branch-incoming-icon { width: 14px; height: 14px; display: block; }
 .branch-behind-count { color: inherit; min-width: 1ch; }
+.worktree-item { color: var(--vscode-descriptionForeground); }
+.worktree-item:hover { color: var(--vscode-foreground); }
 
 .branch-pane-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 4px 0; border-bottom: 1px solid var(--vscode-panel-border); margin-bottom: 4px; }
 .branch-pane-toolbar .branch-item { flex: 1; }
@@ -116,6 +118,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--vscode-font-fami
 .ref-badge.branch-remote { background: var(--vscode-gitDecoration-modifiedResourceForeground, #2188ff); color: #fff; }
 .ref-badge.tag { background: var(--vscode-gitDecoration-ignoredResourceForeground, #6a737d); color: #fff; }
 .ref-badge.head { background: var(--vscode-gitDecoration-untrackedResourceForeground, #f97583); color: #fff; }
+.worktree-badge { display: inline-block; padding: 1px 5px; margin-left: 6px; border-radius: 3px; font-size: 0.77em; font-weight: 600; vertical-align: middle; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); border: 1px solid var(--vscode-badge-background); }
 
 .hash-col { font-family: var(--vscode-editor-font-family, monospace); color: var(--vscode-textLink-foreground); width: 70px; }
 .author-col { width: 120px; color: var(--vscode-descriptionForeground); }

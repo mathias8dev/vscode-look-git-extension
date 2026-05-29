@@ -837,3 +837,189 @@ describe('Graph webview runtime behavior', () => {
         });
     });
 });
+
+describe('Graph webview worktree support', () => {
+    function baseGraphData(overrides = {}) {
+        return {
+            branches: [],
+            tags: [],
+            rows: [],
+            maxLane: 0,
+            currentBranch: 'main',
+            currentUser: 'Test User',
+            worktrees: [],
+            ...overrides,
+        };
+    }
+
+    it('renders a WORKTREES section when non-main worktrees are present', async () => {
+        await bootWebview(GRAPH_WEBVIEW_MODULE);
+        sendWebviewMessage({
+            type: 'graphData',
+            data: baseGraphData({
+                worktrees: [
+                    { path: '/main', head: 'abc', branch: 'refs/heads/main', isMain: true, isDetached: false },
+                    { path: '/wt/feature', head: 'def', branch: 'refs/heads/feature', isMain: false, isDetached: false },
+                ],
+            }),
+        });
+        expect(document.querySelector('.worktree-item')).not.toBeNull();
+        expect(document.querySelector('.worktree-item')!.textContent).toContain('feature');
+    });
+
+    it('derives branch name from refs/heads/ prefix', async () => {
+        await bootWebview(GRAPH_WEBVIEW_MODULE);
+        sendWebviewMessage({
+            type: 'graphData',
+            data: baseGraphData({
+                worktrees: [
+                    { path: '/main', head: 'a', branch: 'refs/heads/main', isMain: true, isDetached: false },
+                    { path: '/wt', head: 'b', branch: 'refs/heads/feat/some-feature', isMain: false, isDetached: false },
+                ],
+            }),
+        });
+        expect(document.querySelector('.worktree-item')!.textContent).toContain('feat/some-feature');
+    });
+
+    it('shows detached label when worktree has no branch', async () => {
+        await bootWebview(GRAPH_WEBVIEW_MODULE);
+        sendWebviewMessage({
+            type: 'graphData',
+            data: baseGraphData({
+                worktrees: [
+                    { path: '/main', head: 'aaa', branch: 'refs/heads/main', isMain: true, isDetached: false },
+                    { path: '/wt', head: 'abc1234', branch: undefined, isMain: false, isDetached: true },
+                ],
+            }),
+        });
+        expect(document.querySelector('.worktree-item')!.textContent).toContain('detached');
+        expect(document.querySelector('.worktree-item')!.textContent).toContain('abc1234');
+    });
+
+    it('does not render WORKTREES section when only main worktree exists', async () => {
+        await bootWebview(GRAPH_WEBVIEW_MODULE);
+        sendWebviewMessage({
+            type: 'graphData',
+            data: baseGraphData({
+                worktrees: [
+                    { path: '/main', head: 'abc', branch: 'refs/heads/main', isMain: true, isDetached: false },
+                ],
+            }),
+        });
+        expect(document.querySelector('.worktree-item')).toBeNull();
+    });
+
+    it('clicking worktree item posts executeWorktreeCommand open', async () => {
+        const api = await bootWebview(GRAPH_WEBVIEW_MODULE);
+        sendWebviewMessage({
+            type: 'graphData',
+            data: baseGraphData({
+                worktrees: [
+                    { path: '/main', head: 'a', branch: 'refs/heads/main', isMain: true, isDetached: false },
+                    { path: '/wt/feature', head: 'b', branch: 'refs/heads/feature', isMain: false, isDetached: false },
+                ],
+            }),
+        });
+        click('.worktree-item');
+        expect(api.messages).toContainEqual({
+            type: 'executeWorktreeCommand',
+            command: 'open',
+            path: '/wt/feature',
+        });
+    });
+
+    it('renders worktree WT badge on commit row when that commit is checked out in a worktree', async () => {
+        await bootWebview(GRAPH_WEBVIEW_MODULE);
+        sendWebviewMessage({
+            type: 'graphData',
+            data: baseGraphData({
+                rows: [graphRow('abc123456789', 'commit in worktree')],
+                worktrees: [
+                    { path: '/main', head: 'other', branch: 'refs/heads/main', isMain: true, isDetached: false },
+                    { path: '/wt', head: 'abc123456789', branch: 'refs/heads/feature', isMain: false, isDetached: false },
+                ],
+            }),
+        });
+        const row = document.querySelector('.graph-row[data-hash="abc123456789"]');
+        expect(row?.querySelector('.worktree-badge')).not.toBeNull();
+    });
+
+    it('does not render WT badge on commit rows not checked out in a worktree', async () => {
+        await bootWebview(GRAPH_WEBVIEW_MODULE);
+        sendWebviewMessage({
+            type: 'graphData',
+            data: baseGraphData({
+                rows: [graphRow('abc123456789', 'regular commit')],
+                worktrees: [
+                    { path: '/main', head: 'other', branch: 'refs/heads/main', isMain: true, isDetached: false },
+                ],
+            }),
+        });
+        const row = document.querySelector('.graph-row[data-hash="abc123456789"]');
+        expect(row?.querySelector('.worktree-badge')).toBeNull();
+    });
+});
+
+describe('Graph webview submodule in commit details', () => {
+    it('submodule file item does not trigger openDiff when clicked', async () => {
+        const api = await bootWebview(GRAPH_WEBVIEW_MODULE);
+        sendWebviewMessage({
+            type: 'graphData',
+            data: {
+                branches: [], tags: [],
+                rows: [graphRow('abc123456789', 'commit')],
+                maxLane: 0, currentBranch: 'main', currentUser: 'Test',
+                worktrees: [],
+            },
+        });
+        click('.graph-row[data-hash="abc123456789"]');
+
+        sendWebviewMessage({
+            type: 'commitDetails',
+            hash: 'abc123456789',
+            fullMessage: 'commit',
+            files: [
+                { status: 'M', filePath: 'modules/child', isSubmodule: true },
+                { status: 'M', filePath: 'src/file.ts', isSubmodule: false },
+            ],
+        });
+
+        const submoduleItem = document.querySelector('.file-item[data-file="modules/child"]') as HTMLElement;
+        const regularItem = document.querySelector('.file-item[data-file="src/file.ts"]') as HTMLElement;
+        expect(submoduleItem).not.toBeNull();
+        expect(regularItem).not.toBeNull();
+
+        // Clicking submodule must NOT post openDiff
+        const before = api.messages.length;
+        submoduleItem.click();
+        expect(api.messages.length).toBe(before);
+
+        // Clicking regular file must post openDiff
+        regularItem.click();
+        expect(api.messages).toContainEqual(expect.objectContaining({ type: 'openDiff', filePath: 'src/file.ts' }));
+    });
+
+    it('submodule file item carries data-submodule attribute', async () => {
+        await bootWebview(GRAPH_WEBVIEW_MODULE);
+        sendWebviewMessage({
+            type: 'graphData',
+            data: {
+                branches: [], tags: [],
+                rows: [graphRow('abc123456789', 'commit')],
+                maxLane: 0, currentBranch: 'main', currentUser: 'Test',
+                worktrees: [],
+            },
+        });
+        click('.graph-row[data-hash="abc123456789"]');
+
+        sendWebviewMessage({
+            type: 'commitDetails',
+            hash: 'abc123456789',
+            fullMessage: 'commit',
+            files: [{ status: 'M', filePath: 'modules/child', isSubmodule: true }],
+        });
+
+        const item = document.querySelector('.file-item[data-file="modules/child"]') as HTMLElement;
+        expect(item?.dataset.submodule).toBe('true');
+    });
+});

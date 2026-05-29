@@ -3,6 +3,7 @@ import type { FileChange, FilesViewMode, GraphData } from './graphTypes';
 import {
     ICON_FOLDER,
     ICON_LIST_VIEW,
+    ICON_SUBMODULE,
     ICON_TREE_CHEVRON_DOWN,
     ICON_TREE_CHEVRON_RIGHT,
     ICON_TREE_VIEW,
@@ -98,9 +99,11 @@ function renderFileList(hash: string, files: FileChange[]): string {
         const statusClass = getStatusClass(file.status);
         const origAttr = file.origPath ? ` data-orig="${escapeHtml(file.origPath)}"` : '';
         const parentAttr = file.parentHash ? ` data-parent="${escapeHtml(file.parentHash)}"` : '';
+        const subAttr = file.isSubmodule ? ' data-submodule="true"' : '';
+        const icon = file.isSubmodule ? ICON_SUBMODULE : renderFileTypeIcon(file.filePath);
         html += `
-            <div class="file-item" data-file="${escapeHtml(file.filePath)}"${origAttr}${parentAttr} data-status="${file.status}" data-hash="${hash}">
-                ${renderFileTypeIcon(file.filePath)}
+            <div class="file-item" data-file="${escapeHtml(file.filePath)}"${origAttr}${parentAttr} data-status="${file.status}" data-hash="${hash}"${subAttr}>
+                ${icon}
                 <span class="file-status ${statusClass}">${file.status}</span>
                 <span class="file-path">${escapeHtml(file.filePath)}</span>
             </div>`;
@@ -195,8 +198,10 @@ function renderFileTreeItem(file: FileChange, label: string, hash: string, inden
     const statusClass = getStatusClass(file.status);
     const origAttr = file.origPath ? ` data-orig="${escapeHtml(file.origPath)}"` : '';
     const parentAttr = file.parentHash ? ` data-parent="${escapeHtml(file.parentHash)}"` : '';
-    return `<div class="file-item file-tree-item" data-file="${escapeHtml(file.filePath)}"${origAttr}${parentAttr} data-status="${escapeHtml(file.status)}" data-hash="${escapeHtml(hash)}" style="padding-left: ${indent}px;">
-        ${renderFileTypeIcon(file.filePath)}
+    const subAttr = file.isSubmodule ? ' data-submodule="true"' : '';
+    const icon = file.isSubmodule ? ICON_SUBMODULE : renderFileTypeIcon(file.filePath);
+    return `<div class="file-item file-tree-item" data-file="${escapeHtml(file.filePath)}"${origAttr}${parentAttr} data-status="${escapeHtml(file.status)}" data-hash="${escapeHtml(hash)}"${subAttr} style="padding-left: ${indent}px;">
+        ${icon}
         <span class="file-path">${escapeHtml(label)}</span>
         <span class="file-status-badge ${statusClass}">${escapeHtml(file.status)}</span>
     </div>`;
@@ -233,6 +238,7 @@ function wireDetailsPaneHandlers(
     pane.querySelectorAll('.file-item').forEach((el) => {
         el.addEventListener('click', () => {
             const d = (el as HTMLElement).dataset;
+            if (d.submodule === 'true') { return; } // gitlinks cannot be diffed
             deps.postMessage({
                 type: 'openDiff',
                 filePath: d.file,

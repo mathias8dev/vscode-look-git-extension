@@ -537,3 +537,53 @@ describe('Changes webview runtime behavior', () => {
         expect(document.querySelector('#files-section')!.textContent).toContain(unsafeStash);
     });
 });
+
+describe('Changes webview submodule entries', () => {
+    // Use root-level paths to avoid the folder-collapse issue in tree view
+    async function bootWithSubmodule(): Promise<MockVsCodeApi> {
+        const api = await bootWebview(CHANGES_WEBVIEW_MODULE);
+        sendWebviewMessage({
+            type: 'statusData',
+            data: {
+                staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'child-sub', isSubmodule: true }],
+                unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'other-sub', isSubmodule: true }],
+                conflicts: [],
+                conflictState: 'none',
+                stashes: [],
+            },
+        });
+        return api;
+    }
+
+    it('staged submodule row has data-submodule attribute', async () => {
+        await bootWithSubmodule();
+        const row = document.querySelector('.file-row[data-file="child-sub"]') as HTMLElement;
+        expect(row).not.toBeNull();
+        expect(row.dataset.submodule).toBe('true');
+    });
+
+    it('clicking staged submodule row does not post openDiff', async () => {
+        const api = await bootWithSubmodule();
+        const before = api.messages.filter((m: any) => m.type === 'openDiff').length;
+        click('.file-row[data-file="child-sub"]');
+        expect(api.messages.filter((m: any) => m.type === 'openDiff').length).toBe(before);
+    });
+
+    it('open-submodule-btn posts openSubmodule message', async () => {
+        const api = await bootWithSubmodule();
+        click('.open-submodule-btn[data-file="child-sub"]');
+        expect(api.messages).toContainEqual({ type: 'openSubmodule', filePath: 'child-sub' });
+    });
+
+    it('no discard-btn for staged submodule entry', async () => {
+        await bootWithSubmodule();
+        const row = document.querySelector('.file-row[data-file="child-sub"]');
+        expect(row?.querySelector('.discard-btn')).toBeNull();
+    });
+
+    it('stage-btn present for unstaged submodule', async () => {
+        await bootWithSubmodule();
+        const btn = document.querySelector('.stage-btn[data-file="other-sub"]');
+        expect(btn).not.toBeNull();
+    });
+});

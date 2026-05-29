@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { GitService } from '../src/gitService';
 import { repo, messages } from './helpers/gitServiceRuntime';
+import { addLinkedWorktree, createSubmoduleFixture, createTempGitRepo } from './helpers/gitRepo';
 
 describe('GitService commit operations', () => {
     it('creates a new commit with the given message', async () => {
@@ -247,4 +248,156 @@ describe.sequential('GitService interactive history rewrites', () => {
         expect(r.git(['show', 'HEAD:one.txt'])).toBe('one');
         expect(r.git(['show', 'HEAD:two.txt'])).toBe('two');
     });
+});
+
+describe('GitService worktree operations', () => {
+    const repos: Array<{ cleanup(): void }> = [];
+    const worktrees: Array<{ cleanup(): void }> = [];
+
+    afterEach(() => {
+        while (worktrees.length) { worktrees.pop()!.cleanup(); }
+        while (repos.length) { repos.pop()!.cleanup(); }
+    });
+
+    it('listWorktrees returns main worktree with isMain:true', async () => {
+        const r = createTempGitRepo();
+        repos.push(r);
+        r.write('a.txt', 'a');
+        r.commit('init');
+
+        const wts = await r.service.listWorktrees();
+
+        expect(wts).toHaveLength(1);
+        expect(wts[0].isMain).toBe(true);
+        expect(wts[0].isDetached).toBe(false);
+        expect(wts[0].path).toBe(r.cwd);
+    });
+
+    it('listWorktrees returns linked worktree path and branch', async () => {
+        const r = createTempGitRepo();
+        repos.push(r);
+        r.write('a.txt', 'a');
+        r.commit('init');
+
+        const wt = addLinkedWorktree(r, 'wt-feature');
+        worktrees.push(wt);
+
+        const wts = await r.service.listWorktrees();
+
+        expect(wts).toHaveLength(2);
+        const linked = wts.find((w) => !w.isMain)!;
+        expect(linked.path).toBe(wt.worktreePath);
+        expect(linked.branch).toBe('refs/heads/wt-feature');
+        expect(linked.isDetached).toBe(false);
+    });
+
+    it('listWorktrees marks detached worktree', async () => {
+        const r = createTempGitRepo();
+        repos.push(r);
+        r.write('a.txt', 'a');
+        const hash = r.commit('init');
+        const wtPath = addLinkedWorktree(r, 'tmp-branch');
+        worktrees.push(wtPath);
+        // convert to detached
+        const detachedService = new GitService(wtPath.worktreePath);
+        await detachedService.checkoutDetached(hash);
+
+        const wts = await r.service.listWorktrees();
+        const linked = wts.find((w) => !w.isMain)!;
+        expect(linked.isDetached).toBe(true);
+        expect(linked.branch).toBeUndefined();
+    });
+
+    it('addWorktree creates a worktree that appears in listWorktrees', async () => {
+        const r = createTempGitRepo();
+        repos.push(r);
+        r.write('a.txt', 'a');
+        r.commit('init');
+
+        const wtPath = require('os').tmpdir() + '/look-git-wt-add-' + Date.now();
+        await r.service.addWorktree(wtPath, 'add-feature', true);
+        worktrees.push({ cleanup: () => { try { r.git(['worktree', 'remove', '--force', wtPath]); } catch { /* */ } require('fs').rmSync(wtPath, { recursive: true, force: true }); } });
+
+        const wts = await r.service.listWorktrees();
+        const found = wts.find((w) => w.path === wtPath);
+        expect(found).toBeDefined();
+        expect(found!.branch).toBe('refs/heads/add-feature');
+    });
+
+    it('removeWorktree removes the worktree from listWorktrees', async () => {
+        const r = createTempGitRepo();
+        repos.push(r);
+        r.write('a.txt', 'a');
+        r.commit('init');
+
+        const wt = addLinkedWorktree(r, 'to-remove');
+        // don't push to worktrees — we remove manually
+        await r.service.removeWorktree(wt.worktreePath);
+        require('fs').rmSync(wt.worktreePath, { recursive: true, force: true });
+
+        const wts = await r.service.listWorktrees();
+        expect(wts.every((w) => w.path !== wt.worktreePath)).toBe(true);
+    });
+});
+
+describe('GitService submodule detection', () => {
+    const fixtures: Array<{ cleanup(): void }> = [];
+
+    afterEach(() => { while (fixtures.length) { fixtures.pop()!.cleanup(); } });
+
+    it('getSubmodulePaths returns empty Set when no submodules', async () => {
+        const r = createTempGitRepo();
+        fixtures.push(r);
+        r.write('a.txt', 'a');
+        r.commit('init');
+
+        const paths = await r.service.getSubmodulePaths();
+        expect(paths.size).toBe(0);
+    });
+
+    it.skipIf(process.platform === 'win32')(
+        'getSubmodulePaths returns registered submodule path',
+        async () => {
+            const { parent, subPath, cleanup } = createSubmoduleFixture();
+            fixtures.push({ cleanup });
+
+            const paths = await parent.service.getSubmodulePaths();
+            expect(paths.has(subPath)).toBe(true);
+        },
+    );
+
+    it.skipIf(process.platform === 'win32')(
+        'getStatus marks staged submodule entry as isSubmodule:true',
+        async () => {
+            const { parent, subPath, cleanup } = createSubmoduleFixture();
+            fixtures.push({ cleanup });
+
+            // Modify the submodule pointer so it appears in staged
+            const childService = new GitService(require('path').join(parent.cwd, subPath));
+            parent.write(require('path').join(subPath, 'extra.txt'), 'extra\n');
+            parent.git(['-C', require('path').join(parent.cwd, subPath), 'add', '-A']);
+            parent.git(['-C', require('path').join(parent.cwd, subPath), 'commit', '-q', '-m', 'child commit']);
+            parent.git(['add', subPath]);
+
+            const status = await parent.service.getStatus();
+            const entry = status.staged.find((e) => e.filePath === subPath);
+            expect(entry).toBeDefined();
+            expect(entry!.isSubmodule).toBe(true);
+        },
+    );
+
+    it.skipIf(process.platform === 'win32')(
+        'getStatus does not mark regular files as isSubmodule',
+        async () => {
+            const { parent, cleanup } = createSubmoduleFixture();
+            fixtures.push({ cleanup });
+            parent.write('regular.txt', 'hello');
+            parent.git(['add', 'regular.txt']);
+
+            const status = await parent.service.getStatus();
+            const entry = status.staged.find((e) => e.filePath === 'regular.txt');
+            expect(entry).toBeDefined();
+            expect(entry!.isSubmodule).toBeFalsy();
+        },
+    );
 });

@@ -16,6 +16,8 @@ import {
     getStatus as queryStatus,
     getStashFiles as queryStashFiles,
     getTrackingBranch as queryTrackingBranch,
+    listWorktrees as queryListWorktrees,
+    getSubmodulePaths as querySubmodulePaths,
     stashList as queryStashList,
 } from './gitWorkingTree';
 import type {
@@ -28,9 +30,10 @@ import type {
     ResetMode,
     StashEntry,
     TagInfo,
+    WorktreeInfo,
 } from './gitTypes';
 
-export type { BranchInfo, GitCommitInfo, GitFileChange, GitFileStatus, GitStatus, GitStatusEntry, GraphCommitInfo, GraphLogFilters, ResetMode, StashEntry, TagInfo } from './gitTypes';
+export type { BranchInfo, GitCommitInfo, GitFileChange, GitFileStatus, GitStatus, GitStatusEntry, GraphCommitInfo, GraphLogFilters, ResetMode, StashEntry, TagInfo, WorktreeInfo } from './gitTypes';
 
 const execFileAsync = promisify(execFile);
 
@@ -403,6 +406,27 @@ export class GitService {
         return this.exec(['worktree', 'add', '--detach', worktreePath, commitHash]);
     }
 
+    public async listWorktrees(): Promise<WorktreeInfo[]> {
+        return queryListWorktrees(this.execRawReadonly.bind(this));
+    }
+
+    public async addWorktree(worktreePath: string, branch: string, createNew = false): Promise<string> {
+        const args = createNew
+            ? ['worktree', 'add', '-b', branch, worktreePath]
+            : ['worktree', 'add', worktreePath, branch];
+        return this.exec(args);
+    }
+
+    public async removeWorktree(worktreePath: string, force = false): Promise<string> {
+        const args: string[] = ['worktree', 'remove', worktreePath];
+        if (force) { args.push('--force'); }
+        return this.exec(args);
+    }
+
+    public async getSubmodulePaths(): Promise<Set<string>> {
+        return querySubmodulePaths(this.execRawReadonly.bind(this));
+    }
+
     private async localBranchExists(branchName: string): Promise<boolean> {
         try {
             await this.execReadonly(['show-ref', '--verify', `refs/heads/${branchName}`]);
@@ -466,12 +490,14 @@ export class GitService {
 
     public async getCommitFiles(commitHash: string): Promise<GitFileChange[]> {
         const parents = await this.getParentHashes(commitHash);
+        const submodulePaths = await this.getGitlinkPaths(parents, commitHash);
 
         if (parents.length === 0) {
             const output = await this.execRawReadonly([
                 'diff-tree', '--root', '--no-commit-id', '-r', '-M', '--name-status', '-z', commitHash,
             ]);
-            return output ? parseNameStatusZ(output) : [];
+            const files = output ? parseNameStatusZ(output) : [];
+            return files.map((f) => submodulePaths.has(f.filePath) ? { ...f, isSubmodule: true } : f);
         }
 
         const result: GitFileChange[] = [];
@@ -484,12 +510,39 @@ export class GitService {
                 const key = `${parentHash}:${change.filePath}`;
                 if (!seen.has(key)) {
                     seen.add(key);
-                    result.push(change);
+                    result.push(submodulePaths.has(change.filePath) ? { ...change, isSubmodule: true } : change);
                 }
             }
         }
 
         return result;
+    }
+
+    private async getGitlinkPaths(parents: string[], commitHash: string): Promise<Set<string>> {
+        try {
+            // Use --raw to get file modes; mode 160000 = gitlink (submodule)
+            const args = parents.length === 0
+                ? ['diff-tree', '--root', '--no-commit-id', '-r', '--raw', '-z', commitHash]
+                : ['diff-tree', '--no-commit-id', '-r', '--raw', '-z', parents[0], commitHash];
+            const raw = await this.execRawReadonly(args);
+            if (!raw) { return new Set(); }
+            const paths = new Set<string>();
+            // Format per entry: ":oldmode newmode oldsha newsha status\0path\0"
+            const tokens = raw.split('\0');
+            for (let i = 0; i < tokens.length; i++) {
+                const token = tokens[i];
+                if (!token.startsWith(':')) { continue; }
+                const parts = token.split(' ');
+                const newMode = parts[1];
+                if (newMode === '160000') {
+                    const filePath = tokens[++i];
+                    if (filePath) { paths.add(filePath); }
+                }
+            }
+            return paths;
+        } catch {
+            return new Set();
+        }
     }
 
     private async getParentHashes(commitHash: string): Promise<string[]> {

@@ -17,6 +17,7 @@ export interface GitFileChange {
     filePath: string;
     origPath?: string;
     parentHash?: string;
+    isSubmodule?: boolean;
 }
 
 export interface GitStatusEntry {
@@ -24,6 +25,15 @@ export interface GitStatusEntry {
     workTreeStatus: string;
     filePath: string;
     origPath?: string;
+    isSubmodule?: boolean;
+}
+
+export interface WorktreeInfo {
+    path: string;
+    head: string;
+    branch: string | undefined;
+    isMain: boolean;
+    isDetached: boolean;
 }
 
 export interface StashEntry {

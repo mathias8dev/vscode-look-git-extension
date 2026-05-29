@@ -420,6 +420,16 @@ describe('ChangesViewProvider webview messages', () => {
             expect((vscode.window as any).errorMessages[0]).toContain('Git operation failed:');
             expect((vscode.window as any).errorMessages[0]).toContain('merge failed');
         });
+
+        it('openSubmodule executes vscode.openFolder with the submodule URI', async () => {
+            const service = makeBaseService();
+            const provider = new ChangesViewProvider(vscode.Uri.file('/ext') as any, service as any);
+            (provider as any).view = makeWebviewView();
+            await (provider as any).handleMessage({ type: 'openSubmodule', filePath: 'modules/child' });
+            const call = (vscode.commands as any).calls.find((c: any) => c.command === 'vscode.openFolder');
+            expect(call).toBeDefined();
+            expect(call.args[0].path).toContain('modules/child');
+        });
     });
 
     it('discardAll unstages before discarding every remaining unstaged file', async () => {

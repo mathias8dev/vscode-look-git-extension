@@ -1,6 +1,6 @@
 import { showContextMenu, type MenuItem } from './contextMenu';
 import { escapeHtml } from './graphRenderer';
-import type { BranchInfo, BranchViewMode, GraphData } from './graphTypes';
+import type { BranchInfo, BranchViewMode, GraphData, WorktreeInfo } from './graphTypes';
 import {
     ICON_BRANCH,
     ICON_BRANCH_FOLDER,
@@ -9,6 +9,7 @@ import {
     ICON_TREE_CHEVRON_DOWN,
     ICON_TREE_CHEVRON_RIGHT,
     ICON_TREE_VIEW,
+    ICON_WORKTREE,
 } from '../icons/webviewIcons';
 
 interface BranchTreeNode {
@@ -58,6 +59,11 @@ export function createBranchPaneController(deps: BranchPaneDeps): { render(): vo
         html += mode === 'list'
             ? renderBranchList(local, remote, selectedBranch)
             : renderBranchTreeView(local, remote, selectedBranch);
+
+        const linkedWorktrees = (graphData.worktrees ?? []).filter((w) => !w.isMain);
+        if (linkedWorktrees.length > 0) {
+            html += renderWorktreesSection(linkedWorktrees);
+        }
 
         pane.innerHTML = html;
         wireBranchPaneHandlers(pane, deps, render);
@@ -214,6 +220,20 @@ function renderBranchTreeView(
     return html;
 }
 
+function renderWorktreesSection(worktrees: WorktreeInfo[]): string {
+    let html = '<div class="branch-section-header">Worktrees</div>';
+    for (const wt of worktrees) {
+        const shortBranch = wt.branch
+            ? wt.branch.replace(/^refs\/heads\//, '')
+            : `(detached ${wt.head.slice(0, 7)})`;
+        html += `<div class="branch-item worktree-item" data-worktree-path="${escapeHtml(wt.path)}" title="${escapeHtml(wt.path)}">
+            ${ICON_WORKTREE}
+            <span class="branch-name">${escapeHtml(shortBranch)}</span>
+        </div>`;
+    }
+    return html;
+}
+
 function buildLocalBranchMenu(branch: string, currentBranch: string): MenuItem[] {
     const isCurrent = branch === currentBranch;
     return [
@@ -275,6 +295,12 @@ function wireBranchPaneHandlers(
             return;
         }
 
+        const worktreeItem = closestInside<HTMLElement>(target, '.worktree-item', pane);
+        if (worktreeItem) {
+            deps.postMessage({ type: 'executeWorktreeCommand', command: 'open', path: worktreeItem.dataset.worktreePath });
+            return;
+        }
+
         const branchItem = closestInside<HTMLElement>(target, '.branch-item', pane);
         if (!branchItem) { return; }
 
@@ -288,6 +314,22 @@ function wireBranchPaneHandlers(
     pane.addEventListener('contextmenu', (event) => {
         const target = event.target;
         if (!(target instanceof Element)) { return; }
+
+        const worktreeItem = closestInside<HTMLElement>(target, '.worktree-item', pane);
+        if (worktreeItem) {
+            event.preventDefault();
+            const wtPath = worktreeItem.dataset.worktreePath!;
+            const items: MenuItem[] = [
+                { label: 'Open in New Window', command: 'open' },
+                { label: '', command: '', separator: true },
+                { label: 'Remove Worktree', command: 'remove' },
+                { label: 'Remove Worktree (Force)', command: 'removeForce' },
+            ];
+            showContextMenu(event.clientX, event.clientY, items, (command) => {
+                deps.postMessage({ type: 'executeWorktreeCommand', command, path: wtPath });
+            });
+            return;
+        }
 
         const branchItem = closestInside<HTMLElement>(target, '.branch-item', pane);
         if (!branchItem) { return; }

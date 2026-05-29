@@ -247,6 +247,13 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
                     break;
                 }
 
+                case 'executeWorktreeCommand': {
+                    const command = msg.command as string;
+                    const worktreePath = msg.path as string | undefined;
+                    await this.handleWorktreeCommand(command, worktreePath);
+                    break;
+                }
+
                 case 'executeBranchCommand': {
                     const command = msg.command as string;
                     const branch = msg.branch as string;
@@ -400,6 +407,54 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
             const message = error instanceof Error ? error.message : String(error);
             await vscode.window.showErrorMessage(`Branch operation failed: ${message}`);
             await this.refreshAfterRepositoryMutation();
+        }
+    }
+
+    private async handleWorktreeCommand(command: string, worktreePath?: string): Promise<void> {
+        try {
+            switch (command) {
+                case 'open':
+                    if (worktreePath) {
+                        await vscode.commands.executeCommand(
+                            'vscode.openFolder',
+                            vscode.Uri.file(worktreePath),
+                            { forceNewWindow: true },
+                        );
+                    }
+                    break;
+
+                case 'add': {
+                    const wtPath = await vscode.window.showInputBox({ prompt: 'Worktree path (absolute)' });
+                    if (!wtPath) { return; }
+                    const branch = await vscode.window.showInputBox({ prompt: 'Branch name for new worktree' });
+                    if (!branch) { return; }
+                    const createNew = !(await this.gitService.getAllBranches()).some((b) => b.name === branch);
+                    await this.gitService.addWorktree(wtPath, branch, createNew);
+                    await this.refreshAfterRepositoryMutation();
+                    break;
+                }
+
+                case 'remove':
+                case 'removeForce': {
+                    if (!worktreePath) { return; }
+                    const force = command === 'removeForce';
+                    const label = force ? 'Remove (Force)' : 'Remove';
+                    const choice = await showModalWarningMessage(
+                        `Remove worktree at "${worktreePath}"?${force ? ' This will discard any uncommitted changes.' : ''}`,
+                        label,
+                    );
+                    if (choice !== label) { return; }
+                    await this.gitService.removeWorktree(worktreePath, force);
+                    await this.refreshAfterRepositoryMutation();
+                    break;
+                }
+
+                default:
+                    break;
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            await vscode.window.showErrorMessage(`Worktree operation failed: ${message}`);
         }
     }
 

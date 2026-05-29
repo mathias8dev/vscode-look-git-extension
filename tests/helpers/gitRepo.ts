@@ -349,3 +349,42 @@ export function createEdgeFilesFixture(): TempGitRepo {
     repo.git(['commit', '-q', '-m', 'add crlf and binary']);
     return repo;
 }
+
+export function addLinkedWorktree(
+    sourceRepo: TempGitRepo,
+    branch: string,
+): { worktreePath: string; cleanup: () => void } {
+    const worktreePath = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-wt-'));
+    sourceRepo.git(['worktree', 'add', '-q', '-b', branch, worktreePath]);
+    return {
+        worktreePath,
+        cleanup: () => {
+            try { sourceRepo.git(['worktree', 'remove', '--force', worktreePath]); } catch { /* ignore */ }
+            removeDirSyncWithRetry(worktreePath);
+        },
+    };
+}
+
+export function createSubmoduleFixture(): { parent: TempGitRepo; subPath: string; cleanup: () => void } {
+    const child = createTempGitRepo();
+    child.write('child.txt', 'child content\n');
+    child.commit('init child');
+
+    const parent = createTempGitRepo();
+    parent.write('root.txt', 'root\n');
+    parent.commit('init parent');
+    parent.git([
+        '-c', 'protocol.file.allow=always',
+        'submodule', 'add', '-q', child.cwd, 'modules/child',
+    ]);
+    parent.git(['commit', '-q', '-m', 'add submodule']);
+
+    return {
+        parent,
+        subPath: 'modules/child',
+        cleanup: () => {
+            child.cleanup();
+            parent.cleanup();
+        },
+    };
+}

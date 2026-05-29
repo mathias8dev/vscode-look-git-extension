@@ -144,6 +144,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         '**/.git/ORIG_HEAD',
         '**/.git/packed-refs',
         '**/.git/refs/**',
+        // Linked worktree metadata lives under .git/worktrees/<name>/
+        '**/.git/worktrees/*/HEAD',
+        '**/.git/worktrees/*/gitdir',
+        '**/.git/worktrees/*/MERGE_HEAD',
+        '**/.git/worktrees/*/REBASE_HEAD',
     ];
     for (const pattern of gitMetadataPatterns) {
         const fileWatcher = vscode.workspace.createFileSystemWatcher(pattern);

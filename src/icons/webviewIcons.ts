@@ -119,6 +119,10 @@ export const ICON_BRANCH_FOLDER = iconifyIcon(defaultFolderIcon, 'folder', { cla
 export const ICON_TREE_CHEVRON_RIGHT = modernIcon('<path d="m9 18 6-6-6-6"/>', { className: 'tree-chevron-icon', size: 14, strokeWidth: 2.2 });
 export const ICON_TREE_CHEVRON_DOWN = modernIcon('<path d="m6 9 6 6 6-6"/>', { className: 'tree-chevron-icon', size: 14, strokeWidth: 2.2 });
 export const ICON_INCOMING_CHANGES = modernIcon('<path d="M18 6 6 18"/><path d="M6 18h8"/><path d="M6 18v-8"/>', { className: 'branch-incoming-icon', size: 14, strokeWidth: 2 });
+// Submodule: nested repo (box inside box)
+export const ICON_SUBMODULE = modernIcon('<rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="10" height="10" rx="1"/><path d="M12 7v10"/><path d="M7 12h10"/>');
+// Worktree: two overlapping branch shapes
+export const ICON_WORKTREE = modernIcon('<circle cx="7" cy="18" r="2"/><circle cx="7" cy="6" r="2"/><circle cx="17" cy="10" r="2"/><line x1="7" y1="8" x2="7" y2="16"/><path d="M7 8c0-2 2-4 4-4h2a4 4 0 0 1 4 4v2"/>',  { size: 14, strokeWidth: 1.8 });
 export const ICON_LIST_VIEW = modernIcon('<path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>', { size: 14, strokeWidth: 2 });
 export const ICON_TREE_VIEW = modernIcon('<path d="M6 4v6"/><path d="M6 10h6"/><path d="M12 10v4"/><path d="M12 14h6"/><path d="M12 18h6"/><circle cx="6" cy="4" r="1.5"/><circle cx="18" cy="14" r="1.5"/><circle cx="18" cy="18" r="1.5"/>', { size: 14, strokeWidth: 1.8 });
 

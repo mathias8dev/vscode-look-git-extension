@@ -209,6 +209,14 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     break;
                 }
 
+                case 'openSubmodule': {
+                    const filePath = msg.filePath as string;
+                    const cwd = this.gitService.getWorkingDirectory();
+                    const submoduleUri = vscode.Uri.file(path.join(cwd, filePath));
+                    await vscode.commands.executeCommand('vscode.openFolder', submoduleUri);
+                    break;
+                }
+
                 case 'openDiff': {
                     const filePath = msg.filePath as string;
                     const origPath = msg.origPath as string | undefined;
