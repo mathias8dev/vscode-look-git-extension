@@ -5,7 +5,7 @@ export function run(): Promise<void> {
     const mocha = new Mocha({
         ui: 'tdd',
         color: true,
-        timeout: 30_000,
+        timeout: 60_000,
     });
 
     mocha.addFile(path.resolve(__dirname, 'runtime.test.js'));

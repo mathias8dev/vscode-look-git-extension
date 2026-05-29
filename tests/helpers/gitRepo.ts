@@ -4,6 +4,27 @@ import * as os from 'os';
 import * as path from 'path';
 import { GitService } from '../../src/gitService';
 
+const RETRYABLE_RM_ERRORS = new Set(['EBUSY', 'ENOTEMPTY', 'EPERM']);
+
+function sleepSync(ms: number): void {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function removeDirSyncWithRetry(dirPath: string): void {
+    for (let attempt = 0; attempt < 8; attempt++) {
+        try {
+            fs.rmSync(dirPath, { recursive: true, force: true });
+            return;
+        } catch (error) {
+            const code = (error as NodeJS.ErrnoException).code;
+            if (!code || !RETRYABLE_RM_ERRORS.has(code) || attempt === 7) {
+                throw error;
+            }
+            sleepSync(100 * (attempt + 1));
+        }
+    }
+}
+
 export interface TempGitRepo {
     cwd: string;
     service: GitService;
@@ -88,7 +109,7 @@ export function createTempGitRepo(): TempGitRepo {
         git(['config', 'gc.auto', '0']);
         git(['config', 'maintenance.auto', 'false']);
     } catch (error) {
-        fs.rmSync(cwd, { recursive: true, force: true });
+        removeDirSyncWithRetry(cwd);
         throw error;
     }
 
@@ -133,7 +154,7 @@ export function createTempGitRepo(): TempGitRepo {
             return gitTrim(['rev-parse', 'HEAD']);
         },
         cleanup() {
-            fs.rmSync(cwd, { recursive: true, force: true });
+            removeDirSyncWithRetry(cwd);
         },
     };
 }
@@ -172,7 +193,7 @@ export function createBareGitRepo(): TempGitRepo {
             throw new Error('Cannot commit working-tree files in a bare fixture repository.');
         },
         cleanup() {
-            fs.rmSync(cwd, { recursive: true, force: true });
+            removeDirSyncWithRetry(cwd);
         },
     };
 }
@@ -238,20 +259,40 @@ export function createRichHistoryFixture(options: { commitCount?: number; dirty?
 
 export function createLargeHistoryFixture(commitCount = 1000): TempGitRepo {
     const repo = createTempGitRepo();
-    repo.commitFile('large/root.txt', 'root\n', 'large root', FIXTURE_AUTHORS[0], '2024-01-01T00:00:00Z');
-    let history = 'root\n';
-    for (let i = 1; i < commitCount; i++) {
-        const author = FIXTURE_AUTHORS[i % FIXTURE_AUTHORS.length];
-        const day = String((i % 28) + 1).padStart(2, '0');
-        history += `large history ${i}\n`;
-        repo.commitFile(
-            'large/history.txt',
-            history,
-            `large commit ${i}`,
-            author,
-            `2024-03-${day}T00:00:00Z`,
+    const stream: string[] = [];
+    const baseTimestamp = Date.UTC(2024, 0, 1, 0, 0, 0) / 1000;
+
+    const appendCommit = (index: number, filePath: string, content: string, message: string): void => {
+        const author = FIXTURE_AUTHORS[index % FIXTURE_AUTHORS.length];
+        const timestamp = baseTimestamp + index * 60;
+        const blobMark = index + 1;
+        stream.push(
+            'blob',
+            `mark :${blobMark}`,
+            `data ${Buffer.byteLength(content, 'utf8')}`,
+            content,
+            'commit refs/heads/main',
+            `author ${author.name} <${author.email}> ${timestamp} +0000`,
+            `committer ${author.name} <${author.email}> ${timestamp} +0000`,
+            `data ${Buffer.byteLength(message, 'utf8')}`,
+            message,
+            `M 100644 :${blobMark} ${filePath}`,
+            '',
         );
+    };
+
+    appendCommit(0, 'large/root.txt', 'root\n', 'large root');
+    for (let i = 1; i < commitCount; i++) {
+        appendCommit(i, 'large/history.txt', `large history ${i}\n`, `large commit ${i}`);
     }
+
+    execFileSync('git', ['fast-import', '--quiet'], {
+        cwd: repo.cwd,
+        input: stream.join('\n'),
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    repo.git(['reset', '--hard', 'main']);
     return repo;
 }
 

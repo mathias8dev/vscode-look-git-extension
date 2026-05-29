@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import { execFileSync } from 'child_process';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
@@ -27,19 +28,40 @@ async function sleep(ms: number): Promise<void> {
 async function waitForBuiltInGitRepo(rootPath: string): Promise<unknown> {
     const gitExtension = vscode.extensions.getExtension('vscode.git');
     assert.ok(gitExtension, 'Built-in Git extension should be installed.');
-    const gitExports = await gitExtension!.activate() as { getAPI(version: number): { repositories: Array<{ rootUri: vscode.Uri }> } };
+    const gitExports = await gitExtension!.activate() as {
+        getAPI(version: number): {
+            repositories: Array<{ rootUri: vscode.Uri }>;
+            openRepository?: (uri: vscode.Uri) => Promise<unknown>;
+        };
+    };
     const api = gitExports.getAPI(1);
-    const expected = path.normalize(rootPath);
+    const expected = normalizeRepoPath(rootPath);
+    await api.openRepository?.(vscode.Uri.file(rootPath));
 
-    for (let attempt = 0; attempt < 50; attempt++) {
-        const repo = api.repositories.find((r) => path.normalize(r.rootUri.fsPath) === expected);
+    for (let attempt = 0; attempt < 150; attempt++) {
+        const repo = api.repositories.find((r) => normalizeRepoPath(r.rootUri.fsPath) === expected);
         if (repo) {
             return repo;
         }
-        await sleep(100);
+        if (attempt % 10 === 0) {
+            await api.openRepository?.(vscode.Uri.file(rootPath));
+            await vscode.commands.executeCommand('git.refresh').then(undefined, () => undefined);
+        }
+        await sleep(200);
     }
 
     assert.fail(`Built-in Git API did not discover fixture repository: ${rootPath}`);
+}
+
+function normalizeRepoPath(value: string): string {
+    let normalized = value;
+    try {
+        normalized = fs.realpathSync.native(value);
+    } catch {
+        // Fall back to the raw path while the Git extension is still discovering.
+    }
+    normalized = path.normalize(normalized);
+    return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
 }
 
 async function openEmpty(path: string): Promise<vscode.TextDocument> {

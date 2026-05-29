@@ -263,21 +263,19 @@ export async function clickGraphToggle(expectActive: boolean): Promise<void> {
 }
 
 export async function clickFirstGraphCommit(): Promise<void> {
-    // content-visibility:auto skips rendering of off-screen rows, making them
-    // non-interactable for WebDriver. Scroll then JS-click to bypass this.
+    // content-visibility:auto can give off-screen row descendants a zero rect
+    // even after WebDriver sees rows in the DOM. Select the row in-page and
+    // dispatch the click from there so the webview's delegated listener runs.
     await browser.waitUntil(() => browser.execute(() => {
-        const target = document.querySelector<HTMLElement>('.graph-row.filter-matched .commit-row-button')
-            ?? document.querySelector<HTMLElement>('.graph-row .commit-row-button');
-        if (!target) { return false; }
-        target.scrollIntoView({ block: 'center', inline: 'nearest' });
-        const rect = target.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
-    }), { timeout: 20_000, timeoutMsg: 'Expected a visible commit row after scrolling.' });
+        return Boolean(document.querySelector('.graph-row.filter-matched') ?? document.querySelector('.graph-row'));
+    }), { timeout: 20_000, timeoutMsg: 'Expected a graph row to exist before clicking.' });
 
     await browser.execute(() => {
-        const target = document.querySelector<HTMLElement>('.graph-row.filter-matched .commit-row-button')
-            ?? document.querySelector<HTMLElement>('.graph-row .commit-row-button');
-        target?.click();
+        const row = document.querySelector<HTMLElement>('.graph-row.filter-matched')
+            ?? document.querySelector<HTMLElement>('.graph-row');
+        if (!row) { return; }
+        row.scrollIntoView({ block: 'center', inline: 'nearest' });
+        (row.querySelector<HTMLElement>('.commit-row-button') ?? row).click();
     });
 
     await browser.waitUntil(async () => {
