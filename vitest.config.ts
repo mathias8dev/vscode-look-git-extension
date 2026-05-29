@@ -8,6 +8,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
     plugins: [react()],
     test: {
+        globals: true,
         environment: 'node',
         environmentMatchGlobs: [
             ['tests/webview/**', 'jsdom'],
