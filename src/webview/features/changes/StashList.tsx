@@ -1,43 +1,27 @@
 import { useState } from 'react';
 import type { StashEntry, StashFileEntry } from '../../../protocol/changes/types';
 import { Codicon } from '../../shared/Codicon';
-import { IconButton } from '../../shared/IconButton';
-import { CreateStashKind, type StashEntryAction } from './stashCommands';
+import type { StashEntryAction } from './stashCommands';
 import { StashItem } from './StashItem';
 
 interface StashListProps {
     readonly stashes: readonly StashEntry[];
-    readonly changeCount: number;
-    readonly stagedCount: number;
     readonly expandedIndexes: readonly number[];
     readonly filesByIndex: Readonly<Record<number, readonly StashFileEntry[]>>;
     readonly onToggleStash: (index: number) => void;
-    readonly onCreateStash: (kind: CreateStashKind, message: string) => void;
     readonly onStashAction: (index: number, action: StashEntryAction) => void;
     readonly onStashFileDiff: (index: number, file: StashFileEntry) => void;
 }
 
 export function StashList({
     stashes,
-    changeCount,
-    stagedCount,
     expandedIndexes,
     filesByIndex,
     onToggleStash,
-    onCreateStash,
     onStashAction,
     onStashFileDiff,
 }: StashListProps) {
-    const [message, setMessage] = useState('');
-    const [panelCollapsed, setPanelCollapsed] = useState(stashes.length === 0);
-    const canStashAll = changeCount > 0;
-    const canStashStaged = stagedCount > 0;
-
-    const createStash = (kind: CreateStashKind) => {
-        if ((kind === CreateStashKind.Staged && !canStashStaged) || (kind === CreateStashKind.All && !canStashAll)) { return; }
-        onCreateStash(kind, message);
-        setMessage('');
-    };
+    const [panelCollapsed, setPanelCollapsed] = useState(false);
 
     return (
         <section className="stash-panel" aria-label="Stashes">
@@ -46,6 +30,7 @@ export function StashList({
                     type="button"
                     className="stash-toggle"
                     aria-expanded={!panelCollapsed}
+                    title={panelCollapsed ? 'Expand stashes' : 'Collapse stashes'}
                     onClick={() => setPanelCollapsed(!panelCollapsed)}
                 >
                     <Codicon name={panelCollapsed ? 'chevron-right' : 'chevron-down'} />
@@ -54,45 +39,19 @@ export function StashList({
                 <span>{stashes.length}</span>
             </header>
             {!panelCollapsed ? (
-                <>
-                    <div className="stash-create">
-                        <input
-                            type="text"
-                            value={message}
-                            placeholder="Stash message (optional)"
-                            onChange={(event) => setMessage(event.currentTarget.value)}
+                <div className="stash-list">
+                    {stashes.map((stash) => (
+                        <StashItem
+                            key={stash.index}
+                            stash={stash}
+                            expanded={expandedIndexes.includes(stash.index)}
+                            files={filesByIndex[stash.index]}
+                            onToggle={onToggleStash}
+                            onAction={onStashAction}
+                            onFileDiff={onStashFileDiff}
                         />
-                        <div className="stash-create-actions">
-                            <IconButton
-                                icon="archive"
-                                title="Stash all changes"
-                                className={!canStashAll ? 'icon-button-disabled' : ''}
-                                onClick={() => createStash(CreateStashKind.All)}
-                            />
-                            <IconButton
-                                icon="diff-added"
-                                title="Stash staged changes only"
-                                className={!canStashStaged ? 'icon-button-disabled' : ''}
-                                onClick={() => createStash(CreateStashKind.Staged)}
-                            />
-                        </div>
-                    </div>
-                    <div className="stash-list">
-                        {stashes.length === 0
-                            ? <p className="stash-placeholder">No stashes</p>
-                            : stashes.map((stash) => (
-                                <StashItem
-                                    key={stash.index}
-                                    stash={stash}
-                                    expanded={expandedIndexes.includes(stash.index)}
-                                    files={filesByIndex[stash.index]}
-                                    onToggle={onToggleStash}
-                                    onAction={onStashAction}
-                                    onFileDiff={onStashFileDiff}
-                                />
-                            ))}
-                    </div>
-                </>
+                    ))}
+                </div>
             ) : null}
         </section>
     );

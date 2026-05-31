@@ -357,6 +357,8 @@ h1 {
     display: flex;
     align-items: center;
     gap: 6px;
+    min-height: 28px;
+    padding: 0 8px;
 }
 
 .stash-panel-header h2 {
@@ -480,7 +482,7 @@ h1 {
 
 .stash-files {
     display: grid;
-    padding: 0 0 4px 18px;
+    padding: 0 8px 4px 18px;
 }
 
 .stash-file-row {
@@ -488,7 +490,7 @@ h1 {
     align-items: center;
     gap: 6px;
     min-height: 22px;
-    padding: 2px 8px 2px 4px;
+    padding: 2px 0;
 }
 
 .stash-file-row:hover {
@@ -590,6 +592,33 @@ h1 {
     text-transform: uppercase;
 }
 
+.stash-prompt {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border, #3c3c3c));
+    background: var(--vscode-sideBar-background, transparent);
+}
+
+.stash-prompt input {
+    flex: 1;
+    min-width: 0;
+    min-height: 22px;
+    border: 1px solid var(--vscode-focusBorder, #007fd4);
+    border-radius: 2px;
+    padding: 0 6px;
+    color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
+    background: var(--vscode-input-background, transparent);
+    font: inherit;
+    font-size: 0.88em;
+    outline: none;
+}
+
+.stash-prompt .icon-button {
+    opacity: 1;
+}
+
 .change-section-header span {
     min-width: 1.6em;
     padding: 2px 5px;
@@ -603,6 +632,7 @@ h1 {
 
 .change-list {
     display: grid;
+    padding-left: 10px;
 }
 
 .show-more-changes {

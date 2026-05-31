@@ -8,7 +8,7 @@ import { CommitComposer } from './CommitComposer';
 import { EmptyState } from './EmptyState';
 import { OperationBanner } from './OperationBanner';
 import { StashList } from './StashList';
-import { buildChangeSections, type ChangeListItem, type ChangeSectionId } from './changeTree';
+import { buildChangeSections, ChangeSectionId, type ChangeListItem } from './changeTree';
 import {
     getChangeCount,
     type ChangeSelectionMode,
@@ -16,7 +16,7 @@ import {
 } from './changesState';
 import { filterAndSortSections, flattenedItems } from './changeViewModel';
 import type { ActiveConflictState, OperationAction } from './operationCommands';
-import type { CreateStashKind, StashEntryAction } from './stashCommands';
+import { CreateStashKind, type StashEntryAction } from './stashCommands';
 
 interface ChangesAppProps {
     readonly state: ChangesState;
@@ -87,17 +87,17 @@ export function ChangesApp({
                         onSelectItem={(item, mode) => onSelectItem(item, mode, visibleItemIds)}
                         onRowAction={onRowAction}
                         onBulkAction={onBulkAction}
+                        onStash={section.id === ChangeSectionId.Unstaged
+                            ? (message) => onCreateStash(CreateStashKind.All, message)
+                            : undefined}
                     />
                 )) : null}
-                {!state.loading && hasRepository ? (
+                {!state.loading && hasRepository && state.status.stashes.length > 0 ? (
                     <StashList
                         stashes={state.status.stashes}
-                        changeCount={changeCount}
-                        stagedCount={state.status.staged.length}
                         expandedIndexes={state.expandedStashIndexes}
                         filesByIndex={state.stashFilesByIndex}
                         onToggleStash={onToggleStash}
-                        onCreateStash={onCreateStash}
                         onStashAction={onStashAction}
                         onStashFileDiff={onStashFileDiff}
                     />
