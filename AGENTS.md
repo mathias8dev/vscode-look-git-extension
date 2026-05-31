@@ -364,10 +364,6 @@ useEffect(() => {
 }, [msg]);
 ```
 
-### Worktrees and submodules — webview only
-
-Worktrees and submodules are rendered **exclusively inside the graph webview** (branch pane and a submodules section). No `TreeDataProvider` is registered for them. The graph webview owns the full sidebar experience for these features.
-
 ---
 
 ## Worktree Rules
