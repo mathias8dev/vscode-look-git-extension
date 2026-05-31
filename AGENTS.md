@@ -22,7 +22,7 @@ src/
 ├── core/         Pure domain logic — no VS Code, no React, no git exec, no I/O
 ├── extension/    VS Code host — git processes, commands, view providers, lifecycle
 ├── protocol/     Typed message contracts, one slice per feature
-└── webview/      React UI — one Zustand store per feature slice
+└── webview/      React UI — feature-local reducers/stores
 ```
 
 ### Strict dependency rule
@@ -228,71 +228,98 @@ Multiple React apps (one per webview). No shared runtime state between them.
 
 ```
 src/webview/
-├── graph/
-│   ├── main.tsx              Entry point for graph webview
-│   ├── store.ts              Zustand store (graph state)
-│   ├── GraphView.tsx
-│   ├── BranchPane.tsx
-│   ├── CommitTable.tsx
-│   ├── CommitRow.tsx
-│   ├── DetailsPane.tsx
-│   └── WorktreeBadge.tsx
 ├── changes/
 │   ├── main.tsx              Entry point for changes webview
-│   ├── store.ts              Zustand store (changes state)
-│   ├── ChangesView.tsx
-│   ├── FileRow.tsx
-│   ├── SubmoduleRow.tsx      Different actions: no diff, stage/unstage + Open
-│   └── ConflictRow.tsx
+│   └── ChangesWebview.tsx    Wires vscodeHost, reducer/state, and feature app
+├── features/
+│   ├── changes/
+│   │   ├── ChangesApp.tsx
+│   │   ├── ChangeRow.tsx
+│   │   ├── ChangeSectionView.tsx
+│   │   ├── FileTypeIcon.tsx
+│   │   ├── FolderIcon.tsx
+│   │   ├── *Commands.ts      UI action → protocol message mapping
+│   │   ├── *Model.ts         Pure UI derivation helpers
+│   │   └── changesState.ts   Reducer/state for the feature slice
+│   └── graph/
+│       └── layout/
+├── graph/
+│   └── main.tsx              Entry point for graph webview
+├── history/
+│   └── main.tsx              Entry point for history webview
+├── platform/
+│   └── vscodeHost.ts         acquireVsCodeApi() wrapper — call once, export
 └── shared/
-    ├── platform.ts           acquireVsCodeApi() wrapper — call once, export
-    ├── useRequest.ts         Hook: send request, await correlated response
-    ├── icons.tsx             All SVG icons
-    └── theme.css             VS Code CSS variables
+    ├── Codicon.tsx           Typed codicon wrapper
+    ├── IconButton.tsx        Toolbar/action icon button
+    ├── IconifySvg.tsx        Bundled Iconify SVG renderer
+    └── ErrorNotice.tsx
 ```
 
-### Zustand store pattern
+### UI ownership rules
+
+The extension sends semantic facts. The webview owns rendering decisions.
+
+The protocol may send:
+- file paths, original paths, status codes, staged flags, conflict state, submodule flags
+- stash indexes/messages/files
+- repository availability and operation errors
+
+The protocol must not send:
+- icon names, colors, CSS classes, indentation, section labels, button labels, or tree grouping
+
+Rules:
+- One React component per file for feature UI components.
+- Keep component files focused on rendering and event wiring.
+- Put pure UI derivation in feature-local model files (`fileIconModel.ts`, `folderIconModel.ts`, `changeViewModel.ts`, etc.).
+- Put UI action → protocol message conversion in feature-local command files (`changeCommands.ts`, `stashCommands.ts`, etc.).
+- Components never call `vscode.postMessage` directly — route through the feature webview shell or dedicated action hooks.
+- Disclosure controls (section, stash, folder collapse/expand) must be visible by default. Do not hide them behind hover-only opacity.
+- Headers, rows, and icon controls should keep compact padding so controls are easy to target without turning the sidebar into a roomy dashboard.
+
+### Icon rules
+
+- Use `@vscode/codicons` through `Codicon` / `IconButton` for commands, toolbar actions, empty states, and VS Code UI metaphors.
+- Use `@iconify/icons-vscode-icons` through `FileTypeIcon` / `FolderIcon` for file and folder icons in the Changes UI.
+- Do not use emoji, text hacks, or hand-drawn fallback SVGs for file/folder type icons.
+- `IconifySvg` may use `dangerouslySetInnerHTML` only for static SVG bodies imported from the bundled `@iconify/icons-vscode-icons` package. Never pass user, git, protocol, or repository data into `dangerouslySetInnerHTML`.
+- File/folder icon choice belongs to the webview model layer, not the extension or protocol.
+
+### Webview state pattern
 
 ```typescript
-// src/webview/graph/store.ts
-interface GraphStore {
-  repoId: string | null;
-  rows: GraphRow[];
-  hasMore: boolean;
-  filters: GraphFilters;
-  selectedHash: string | null;
-  setData(data: GraphData): void;
-  setFilters(f: Partial<GraphFilters>): void;
-  selectCommit(hash: string): void;
+// src/webview/features/changes/changesState.ts
+interface ChangesState {
+  readonly status: StatusData;
+  readonly loading: boolean;
+  readonly error: ProtocolError | undefined;
+  readonly selectedItemIds: readonly string[];
 }
 
-export const useGraphStore = create<GraphStore>((set) => ({
-  repoId: null,
-  rows: [],
-  hasMore: false,
-  filters: defaultFilters,
-  selectedHash: null,
-  setData: (data) => set({ rows: data.rows, hasMore: data.hasMore }),
-  setFilters: (f) => set((s) => ({ filters: { ...s.filters, ...f } })),
-  selectCommit: (hash) => set({ selectedHash: hash }),
-}));
-```
+type ChangesAction =
+  | { readonly type: 'message'; readonly message: ChangesExtensionToWebviewMessage }
+  | { readonly type: 'selectChange'; readonly itemId: string }
+  | { readonly type: 'clearSelection' };
 
-### `useRequest` hook — correlated request/response
-
-```typescript
-// usage in a component
-const { send, isPending } = useRequest<GraphDataResponse>('graph/dataResponse');
-
-const loadPage = (page: GraphPage) =>
-  send({ type: 'graph/dataRequest', requestId: nanoid(), repoId, filters, page });
+export function reduceChangesState(state: ChangesState, action: ChangesAction): ChangesState {
+  switch (action.type) {
+    case 'message':
+      return reduceMessage(state, action.message);
+    case 'selectChange':
+      return selectChange(state, action.itemId);
+    case 'clearSelection':
+      return { ...state, selectedItemIds: [] };
+  }
+}
 ```
 
 Rules:
-- Components call `useGraphStore(selector)` — never receive store slices as props from `App`
-- Components never call `vscode.postMessage` directly — use `useRequest` or dedicated action hooks
-- `platform.ts` calls `acquireVsCodeApi()` exactly once at module load — all other files import from it
-- No module-level mutable variables — Zustand is the only allowed mutable state
+- Feature state transitions live in pure reducers or a feature-local store; do not mix state mutation into components.
+- Reducers must be deterministic and testable with plain input/output.
+- Components may keep short-lived local UI state (`expanded`, draft input text, pagination limit) with React state.
+- Components never call `vscode.postMessage` directly — send messages through the webview shell or dedicated action hooks.
+- `vscodeHost.ts` calls `acquireVsCodeApi()` exactly once at module load — all other files import from it.
+- No module-level mutable variables for feature state. Use reducer/store state only.
 
 ---
 
@@ -319,7 +346,7 @@ Lifecycle (managed by `RepoRegistry`):
 
 ### Inter-webview coordination
 
-Webviews cannot share React state (separate iframes). When the active repo changes, the extension pushes `repo/contextChanged` to **all open webviews**. Each webview resets its Zustand store and requests fresh data.
+Webviews cannot share React state (separate iframes). When the active repo changes, the extension pushes `repo/contextChanged` to **all open webviews**. Each webview resets its feature state and requests fresh data.
 
 ```typescript
 // Extension side — pushed on active repo change
@@ -386,13 +413,15 @@ Worktrees and submodules are rendered **exclusively inside the graph webview** (
 | Use-cases | vitest | `tests/core/usecases/` | Mock `GitRepository` interface only |
 | GitProcessRepository | vitest | `tests/extension/git/` | Real temp git repos via helpers |
 | Message routers | vitest | `tests/extension/messaging/` | Mock webview + mock repo |
-| React components | vitest + RTL | `tests/webview/` | jsdom, no vscode mock needed |
-| Zustand stores | vitest | `tests/webview/stores/` | Import store, call actions, assert state |
+| React components | vitest + RTL or React server rendering | `tests/webview/` | No VS Code runtime; prefer pure rendering tests for icon wrappers |
+| Feature reducers/stores | vitest | `tests/webview/` | Import reducer/store, dispatch actions, assert state |
 | E2E | WebdriverIO | `tests/e2e/` | Real VS Code instance |
 
 Rules:
 - Every parsing function tests: empty output, null-byte separators, special path chars, unicode
 - No `any` in test assertions — use `satisfies` or explicit cast with justification
+- Test UI model helpers directly when the behavior is pure derivation.
+- Test bundled icon wrappers with static rendering when DOM interaction is not needed.
 - E2E: always `scrollIntoView` before clicking (content-visibility: auto hides off-screen rows)
 - Windows CI: skip tests creating files with `>`, `?`, `\n` using `it.skipIf(process.platform === 'win32')`
 - `AbortSignal` tests: verify that aborting an in-flight request does not post a response
@@ -408,9 +437,10 @@ Rules:
 - **No magic strings** — all message `type` literals come from the protocol types
 - **File names**: `kebab-case.ts` / `.tsx`, **Types**: `PascalCase`, **Functions/variables**: `camelCase`
 - **One primary export per file** for domain types and use-cases; utility files may export multiple
-- Font sizes in CSS: `em` or `inherit` only — never hardcoded `px`
-- Colors: `var(--vscode-*)` only — never hardcoded hex or rgba
-- SVG icons: `fill="currentColor"`, `24×24` for activity bar, `16×16` for inline/toolbar
+- Text font sizes in CSS: `em` or `inherit` only. Fixed icon glyph sizes and compact VS Code-like hit targets may use px.
+- Colors: use `var(--vscode-*)`; hardcoded colors are allowed only as fallbacks inside a VS Code variable expression.
+- SVG icons: `24×24` for activity bar, `16×16` for inline/file/folder/toolbar icons.
+- Hover can add affordance, but core actions and disclosure state must remain discoverable without hover.
 
 ---
 
@@ -418,16 +448,17 @@ Rules:
 
 - **Do not** put git parsing logic in `extension/` — it belongs in `core/parsing/`
 - **Do not** import `vscode` in `core/` or `webview/`
-- **Do not** store mutable state in module-level variables in the webview — Zustand only
-- **Do not** call `acquireVsCodeApi()` more than once — import from `shared/platform.ts`
+- **Do not** store mutable feature state in module-level variables in the webview — use feature reducer/store state
+- **Do not** call `acquireVsCodeApi()` more than once — import from `platform/vscodeHost.ts`
 - **Do not** call `innerHTML` with unsanitized data — always `escapeHtml()` or React JSX
+- **Do not** pass repository/protocol/user data to `dangerouslySetInnerHTML`; the only permitted use is bundled static Iconify SVG bodies.
 - **Do not** hardcode `'origin'` as the remote name — resolve via `git remote`
 - **Do not** assume a single repo — every operation takes a `RepoContext`
 - **Do not** swallow errors — every `catch` either re-throws or sends an error message to the webview
 - **Do not** add a git command without a test against a real temp repo in `tests/extension/git/`
 - **Do not** send unbounded arrays over the protocol — always paginate
 - **Do not** start a git operation without threading an `AbortSignal` through to `child_process`
-- **Do not** call `postMessage` directly from a React component — use `useRequest` or an action hook
+- **Do not** call `postMessage` directly from a React component — route messages through the webview shell or an action hook
 - **Do not** share React state between the graph webview and the changes webview — they are separate iframes
 
 ---
