@@ -1,6 +1,6 @@
 import type { StatusEntry } from '../../../protocol/changes/types';
 import { IconButton } from '../../shared/IconButton';
-import { ChangeRowAction, rowActionsFor } from './changeCommands';
+import { ChangeRowAction, rowActionsFor, type ChangeActionDescriptor } from './changeCommands';
 import type { ChangeListItem } from './changeTree';
 import { ChangeSelectionMode } from './changesState';
 import { FileTypeIcon } from './FileTypeIcon';
@@ -13,11 +13,12 @@ interface ChangeRowProps {
     readonly selected: boolean;
     readonly onSelect: (item: ChangeListItem, mode: ChangeSelectionMode) => void;
     readonly onAction: (item: ChangeListItem, action: ChangeRowAction) => void;
+    readonly actions?: readonly ChangeActionDescriptor<ChangeRowAction>[];
 }
 
-export function ChangeRow({ item, depth, selected, onSelect, onAction }: ChangeRowProps) {
+export function ChangeRow({ item, depth, selected, onSelect, onAction, actions: actionOverride }: ChangeRowProps) {
     const entry = item.entry;
-    const actions = rowActionsFor(item);
+    const actions = actionOverride ?? rowActionsFor(item);
     return (
         <article
             className="change-row"

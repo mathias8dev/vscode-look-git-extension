@@ -1,6 +1,6 @@
 import type { RequestId, ErrorMessage, ProtocolError } from '../shared/base';
 import type { SerializedRepoContext } from '../shared/repo';
-import type { StatusData, CommitMode, StashFileEntry, ConflictState } from './types';
+import type { StatusData, CommitMode, StashFileEntry, ConflictState, SubmoduleStatusData } from './types';
 
 // ── Extension → Webview (push) ──────────────────────────────────────────────
 
@@ -21,9 +21,32 @@ export interface CommitResultPush {
     readonly error?: ProtocolError;
 }
 
+export interface SubmoduleCommitResultPush {
+    readonly type: 'changes/submoduleCommitResult';
+    readonly path: string;
+    readonly success: boolean;
+    readonly message?: string;
+    readonly error?: ProtocolError;
+}
+
 export interface StashFilesResponse {
     readonly type: 'changes/stashFiles';
     readonly requestId: RequestId;
+    readonly index: number;
+    readonly files: readonly StashFileEntry[];
+}
+
+export interface SubmoduleStatusResponse {
+    readonly type: 'changes/submoduleStatusData';
+    readonly requestId: RequestId;
+    readonly path: string;
+    readonly data: SubmoduleStatusData;
+}
+
+export interface SubmoduleStashFilesResponse {
+    readonly type: 'changes/submoduleStashFiles';
+    readonly requestId: RequestId;
+    readonly path: string;
     readonly index: number;
     readonly files: readonly StashFileEntry[];
 }
@@ -62,6 +85,13 @@ export interface CommitMessage {
     readonly mode: CommitMode;
 }
 
+export interface SubmoduleCommitMessage {
+    readonly type: 'changes/submoduleCommit';
+    readonly submodulePath: string;
+    readonly message: string;
+    readonly mode: CommitMode;
+}
+
 export interface OpenFileMessage     { readonly type: 'changes/openFile'; readonly filePath: string; }
 export interface OpenSubmoduleMessage { readonly type: 'changes/openSubmodule'; readonly filePath: string; }
 export interface OpenMergeEditorMessage { readonly type: 'changes/openMergeEditor'; readonly filePath: string; }
@@ -73,6 +103,39 @@ export interface OpenDiffMessage {
     readonly isStaged: boolean;
     readonly indexStatus: string;
     readonly workTreeStatus: string;
+}
+
+export interface OpenSubmoduleDiffMessage {
+    readonly type: 'changes/openSubmoduleDiff';
+    readonly submodulePath: string;
+    readonly filePath: string;
+    readonly origPath?: string;
+    readonly isStaged: boolean;
+    readonly indexStatus: string;
+    readonly workTreeStatus: string;
+}
+
+export interface SubmoduleFileMessage {
+    readonly type:
+        | 'changes/submoduleOpenFile'
+        | 'changes/submoduleStageFile'
+        | 'changes/submoduleUnstageFile'
+        | 'changes/submoduleDiscardFile'
+        | 'changes/submoduleOpenMergeEditor'
+        | 'changes/submoduleMarkResolved'
+        | 'changes/submoduleAcceptOurs'
+        | 'changes/submoduleAcceptTheirs';
+    readonly submodulePath: string;
+    readonly filePath: string;
+}
+
+export interface SubmoduleBulkMessage {
+    readonly type:
+        | 'changes/submoduleStageAll'
+        | 'changes/submoduleUnstageAll'
+        | 'changes/submoduleDiscardAll'
+        | 'changes/submoduleAcceptAllTheirs';
+    readonly submodulePath: string;
 }
 
 export interface StashMessage         { readonly type: 'changes/stash'; readonly message?: string; }
@@ -95,8 +158,35 @@ export interface OpenStashDiffMessage {
     readonly status: string;
 }
 
+export interface SubmoduleStashMessage       { readonly type: 'changes/submoduleStash'; readonly submodulePath: string; readonly message?: string; }
+export interface SubmoduleStashPopMessage    { readonly type: 'changes/submoduleStashPop'; readonly submodulePath: string; readonly index: number; }
+export interface SubmoduleStashApplyMessage  { readonly type: 'changes/submoduleStashApply'; readonly submodulePath: string; readonly index: number; }
+export interface SubmoduleStashDropMessage   { readonly type: 'changes/submoduleStashDrop'; readonly submodulePath: string; readonly index: number; }
+export interface GetSubmoduleStashFilesRequest {
+    readonly type: 'changes/getSubmoduleStashFiles';
+    readonly requestId: RequestId;
+    readonly submodulePath: string;
+    readonly index: number;
+}
+export interface OpenSubmoduleStashDiffMessage {
+    readonly type: 'changes/openSubmoduleStashDiff';
+    readonly submodulePath: string;
+    readonly filePath: string;
+    readonly origPath?: string;
+    readonly index: number;
+    readonly status: string;
+}
+
 export interface ContinueOpMessage { readonly type: 'changes/continueOp'; readonly conflictState: ConflictState; }
 export interface AbortOpMessage    { readonly type: 'changes/abortOp'; readonly conflictState: ConflictState; }
+
+export interface SubmoduleUpdateMessage    { readonly type: 'changes/submoduleUpdate'; readonly path: string; }
+export interface SubmoduleUpdateAllMessage { readonly type: 'changes/submoduleUpdateAll'; }
+export interface GetSubmoduleStatusRequest {
+    readonly type: 'changes/getSubmoduleStatus';
+    readonly requestId: RequestId;
+    readonly path: string;
+}
 
 // ── Union types ─────────────────────────────────────────────────────────────
 
@@ -104,7 +194,10 @@ export type ChangesExtensionToWebviewMessage =
     | RepoContextChangedPush
     | StatusDataPush
     | CommitResultPush
+    | SubmoduleCommitResultPush
     | StashFilesResponse
+    | SubmoduleStatusResponse
+    | SubmoduleStashFilesResponse
     | ChangesErrorPush
     | ErrorMessage;
 
@@ -114,7 +207,11 @@ export type ChangesWebviewToExtensionMessage =
     | DiscardFileMessage | DiscardFilesMessage | DiscardAllMessage
     | MarkResolvedMessage | MarkResolvedFilesMessage
     | AcceptOursMessage | AcceptTheirsMessage | AcceptOursFilesMessage | AcceptTheirsFilesMessage | AcceptAllTheirsMessage
-    | CommitMessage | OpenFileMessage | OpenSubmoduleMessage | OpenMergeEditorMessage | OpenDiffMessage
+    | CommitMessage | SubmoduleCommitMessage | OpenFileMessage | OpenSubmoduleMessage | OpenMergeEditorMessage | OpenDiffMessage | OpenSubmoduleDiffMessage
+    | SubmoduleFileMessage | SubmoduleBulkMessage
     | StashMessage | StashStagedMessage | StashPopMessage | StashApplyMessage | StashDropMessage
     | GetStashFilesRequest | OpenStashDiffMessage
-    | ContinueOpMessage | AbortOpMessage;
+    | SubmoduleStashMessage | SubmoduleStashPopMessage | SubmoduleStashApplyMessage | SubmoduleStashDropMessage
+    | GetSubmoduleStashFilesRequest | OpenSubmoduleStashDiffMessage
+    | ContinueOpMessage | AbortOpMessage
+    | SubmoduleUpdateMessage | SubmoduleUpdateAllMessage | GetSubmoduleStatusRequest;

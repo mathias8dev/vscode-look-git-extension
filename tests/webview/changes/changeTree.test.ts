@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildChangeSections, buildChangeTree, statusLabel } from '../../../src/webview/features/changes/changeTree';
 import { ConflictState } from '../../../src/protocol/changes/types';
+import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 
 describe('changeTree', () => {
     it('builds semantic sections in display order', () => {
@@ -10,6 +11,7 @@ describe('changeTree', () => {
             unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'README.md' }],
             conflictState: ConflictState.Merge,
             stashes: [],
+            submodules: [],
         });
 
         expect(sections.map((section) => section.id)).toEqual(['conflicts', 'staged', 'unstaged']);
@@ -26,6 +28,7 @@ describe('changeTree', () => {
             ],
             conflictState: ConflictState.None,
             stashes: [],
+            submodules: [],
         });
         const tree = buildChangeTree(sections[2]?.items ?? []);
 
@@ -45,7 +48,7 @@ describe('changeTree', () => {
             workTreeStatus: ' ',
             filePath: 'module',
             isSubmodule: true,
-            submoduleStatus: 'dirty',
+            submoduleStatus: SubmoduleStatus.Dirty,
         })).toBe('Submodule dirty');
     });
 });

@@ -2,6 +2,7 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { getFixtureRepoPath, gitFixtureOutput } from '../../helpers/fixtureRepo';
 import { runTestCases } from '../../helpers/testRunner';
 
 export function run(): Promise<void> {
@@ -15,6 +16,35 @@ export function run(): Promise<void> {
                 const commands = await vscode.commands.getCommands(true);
                 assert.ok(commands.includes('lookGit.changesView.focus'));
                 assert.ok(commands.includes('lookGit.commitHistory.focus'));
+            },
+        },
+        {
+            name: 'finds the fixture repository used for submodule E2E coverage',
+            run: async () => {
+                const fixturePath = getFixtureRepoPath();
+                if (!fixturePath) {
+                    console.log('  skip fixture workspace assertion: fixture repo is absent');
+                    return;
+                }
+                assert.ok(fs.existsSync(path.join(fixturePath, '.git')));
+            },
+        },
+        {
+            name: 'focuses Changes against the dirty fixture repository with submodules',
+            run: async () => {
+                const fixturePath = getFixtureRepoPath();
+                if (!fixturePath) {
+                    console.log('  skip dirty fixture assertion: fixture repo is absent');
+                    return;
+                }
+                await vscode.commands.executeCommand('workbench.view.extension.look-git');
+                await vscode.commands.executeCommand('lookGit.changesView.focus');
+
+                const status = gitFixtureOutput(['status', '--short']);
+                assert.match(status, /^M  src\/graphFilter\.ts/m);
+                assert.match(status, /^ m modules\/auth-kit/m);
+                assert.match(status, /^ m modules\/billing-core/m);
+                assert.match(status, /^ m modules\/analytics-adapter/m);
             },
         },
         {
@@ -38,6 +68,8 @@ export function run(): Promise<void> {
                 assert.match(styles, /@font-face\{font-family:codicon/);
                 assert.match(styles, /url\(\.\/codicon\.ttf\?/);
                 assert.doesNotMatch(styles, /url\(\/codicon\.ttf/);
+                assert.match(styles, /\.submodule-panel/);
+                assert.match(styles, /\.submodule-badge-dirty/);
             },
         },
     ]);

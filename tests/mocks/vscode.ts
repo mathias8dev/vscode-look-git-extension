@@ -147,6 +147,10 @@ export function setInputBoxValue(value: string | undefined): void {
     window.inputBoxValue = value;
 }
 
+export function setQuickPickValue(value: string | undefined): void {
+    window.quickPickValue = value;
+}
+
 export function getWarningMessages(): readonly WarningMessage[] {
     return window.warningMessages;
 }

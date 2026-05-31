@@ -2,7 +2,8 @@
 import type { GitGraphCommit } from '../../core/git/domain/GitCommit';
 import type { GitBranch } from '../../core/git/domain/GitStatus';
 import type { GitWorktree, GitSubmodule } from '../../core/git/domain/GitWorktree';
-import type { BranchInfo, GraphCommit, WorktreeInfo, SubmoduleInfo, SubmoduleStatus } from '../../protocol/graph/types';
+import type { BranchInfo, GraphCommit, WorktreeInfo, SubmoduleInfo } from '../../protocol/graph/types';
+import { SubmoduleStatus } from '../../protocol/shared/repo';
 
 export function toProtocolGraphCommit(commit: GitGraphCommit): GraphCommit {
     return {
@@ -43,10 +44,10 @@ export function toProtocolWorktree(w: GitWorktree): WorktreeInfo {
 /** Maps raw git submodule status char to human-readable protocol status. */
 export function toProtocolSubmoduleStatus(status: GitSubmodule['status']): SubmoduleStatus {
     const statusMap: Record<GitSubmodule['status'], SubmoduleStatus> = {
-        ' ': 'clean',
-        '+': 'out-of-sync',
-        '-': 'not-initialized',
-        'U': 'dirty',
+        ' ': SubmoduleStatus.Clean,
+        '+': SubmoduleStatus.OutOfSync,
+        '-': SubmoduleStatus.NotInitialized,
+        'U': SubmoduleStatus.Dirty,
     };
     return statusMap[status];
 }

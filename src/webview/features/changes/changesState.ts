@@ -1,6 +1,6 @@
 import type { ChangesExtensionToWebviewMessage } from '../../../protocol/changes/messages';
 import { ConflictState, RepositoryState } from '../../../protocol/changes/types';
-import type { StashFileEntry, StatusData } from '../../../protocol/changes/types';
+import type { StashFileEntry, StatusData, SubmoduleStatusData } from '../../../protocol/changes/types';
 import type { ProtocolError } from '../../../protocol/shared/base';
 import { readProtocolError } from '../../shared/useProtocolError';
 import { ChangeSectionId } from './changeTree';
@@ -32,11 +32,16 @@ export interface ChangesState {
     readonly loading: boolean;
     readonly error: ProtocolError | undefined;
     readonly commitFeedback: CommitFeedback | undefined;
+    readonly submoduleCommitFeedbackByPath: Readonly<Record<string, CommitFeedback>>;
     readonly collapsedSectionIds: readonly ChangeSectionId[];
     readonly selectedItemIds: readonly string[];
     readonly selectionAnchorId: string | undefined;
     readonly expandedStashIndexes: readonly number[];
     readonly stashFilesByIndex: Readonly<Record<number, readonly StashFileEntry[]>>;
+    readonly expandedSubmodulePaths: readonly string[];
+    readonly submoduleStatusByPath: Readonly<Record<string, SubmoduleStatusData>>;
+    readonly expandedSubmoduleStashKeys: readonly string[];
+    readonly submoduleStashFilesByKey: Readonly<Record<string, readonly StashFileEntry[]>>;
 }
 
 export interface ChangesStatePreferences {
@@ -68,7 +73,9 @@ export type ChangesAction =
     | { readonly type: 'selectChange'; readonly selection: SelectChangeInput }
     | { readonly type: 'clearSelection' }
     | { readonly type: 'toggleStash'; readonly index: number }
-    | { readonly type: 'clearError' };
+    | { readonly type: 'clearError' }
+    | { readonly type: 'toggleSubmodule'; readonly path: string }
+    | { readonly type: 'toggleSubmoduleStash'; readonly key: string };
 
 export function createInitialChangesState(preferences: ChangesStatePreferences = {}): ChangesState {
     return {
@@ -80,11 +87,16 @@ export function createInitialChangesState(preferences: ChangesStatePreferences =
         loading: true,
         error: undefined,
         commitFeedback: undefined,
+        submoduleCommitFeedbackByPath: {},
         collapsedSectionIds: preferences.collapsedSectionIds ?? [],
         selectedItemIds: [],
         selectionAnchorId: undefined,
         expandedStashIndexes: [],
         stashFilesByIndex: {},
+        expandedSubmodulePaths: [],
+        submoduleStatusByPath: {},
+        expandedSubmoduleStashKeys: [],
+        submoduleStashFilesByKey: {},
     };
 }
 
@@ -108,6 +120,10 @@ export function reduceChangesState(state: ChangesState, action: ChangesAction): 
             return { ...state, selectedItemIds: [], selectionAnchorId: undefined };
         case 'toggleStash':
             return { ...state, expandedStashIndexes: toggledIndex(state.expandedStashIndexes, action.index) };
+        case 'toggleSubmodule':
+            return { ...state, expandedSubmodulePaths: toggledPath(state.expandedSubmodulePaths, action.path) };
+        case 'toggleSubmoduleStash':
+            return { ...state, expandedSubmoduleStashKeys: toggledPath(state.expandedSubmoduleStashKeys, action.key) };
         case 'clearError':
             return { ...state, error: undefined };
     }
@@ -129,6 +145,11 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 selectionAnchorId: undefined,
                 expandedStashIndexes: [],
                 stashFilesByIndex: {},
+                expandedSubmodulePaths: [],
+                submoduleStatusByPath: {},
+                expandedSubmoduleStashKeys: [],
+                submoduleStashFilesByKey: {},
+                submoduleCommitFeedbackByPath: {},
             };
         case 'changes/error':
         case 'error':
@@ -137,6 +158,18 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
             return message.success
                 ? { ...state, error: undefined, commitFeedback: { success: true, message: undefined } }
                 : { ...state, error: message.error, commitFeedback: { success: false, message: message.message } };
+        case 'changes/submoduleCommitResult':
+            return {
+                ...state,
+                error: message.success ? undefined : message.error,
+                submoduleCommitFeedbackByPath: {
+                    ...state.submoduleCommitFeedbackByPath,
+                    [message.path]: {
+                        success: message.success,
+                        message: message.message,
+                    },
+                },
+            };
         case 'changes/stashFiles':
             return {
                 ...state,
@@ -147,13 +180,39 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                     [message.index]: message.files,
                 },
             };
+        case 'changes/submoduleStatusData':
+            return {
+                ...state,
+                submoduleStatusByPath: {
+                    ...state.submoduleStatusByPath,
+                    [message.path]: message.data,
+                },
+            };
+        case 'changes/submoduleStashFiles':
+            return {
+                ...state,
+                loading: false,
+                error: undefined,
+                submoduleStashFilesByKey: {
+                    ...state.submoduleStashFilesByKey,
+                    [submoduleStashKey(message.path, message.index)]: message.files,
+                },
+            };
         case 'repo/contextChanged':
             return state;
     }
 }
 
+export function submoduleStashKey(submodulePath: string, index: number): string {
+    return `${submodulePath}\0${index}`;
+}
+
 function toggledIndex(indexes: readonly number[], index: number): readonly number[] {
     return indexes.includes(index) ? indexes.filter((entry) => entry !== index) : [...indexes, index];
+}
+
+function toggledPath(paths: readonly string[], path: string): readonly string[] {
+    return paths.includes(path) ? paths.filter((entry) => entry !== path) : [...paths, path];
 }
 
 function toggledSection(sectionIds: readonly ChangeSectionId[], sectionId: ChangeSectionId): readonly ChangeSectionId[] {
@@ -210,5 +269,6 @@ function emptyStatusData(): StatusData {
         conflicts: [],
         conflictState: ConflictState.None,
         stashes: [],
+        submodules: [],
     };
 }

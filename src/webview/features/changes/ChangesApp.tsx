@@ -8,6 +8,7 @@ import { CommitComposer } from './CommitComposer';
 import { EmptyState } from './EmptyState';
 import { OperationBanner } from './OperationBanner';
 import { StashList } from './StashList';
+import { SubmoduleSection } from './SubmoduleSection';
 import { buildChangeSections, ChangeSectionId, type ChangeListItem } from './changeTree';
 import {
     getChangeCount,
@@ -17,6 +18,7 @@ import {
 import { filterAndSortSections, flattenedItems } from './changeViewModel';
 import type { ActiveConflictState, OperationAction } from './operationCommands';
 import { CreateStashKind, type StashEntryAction } from './stashCommands';
+import { SubmoduleAction } from './submoduleCommands';
 
 interface ChangesAppProps {
     readonly state: ChangesState;
@@ -30,6 +32,15 @@ interface ChangesAppProps {
     readonly onToggleStash: (index: number) => void;
     readonly onStashAction: (index: number, action: StashEntryAction) => void;
     readonly onStashFileDiff: (index: number, file: StashFileEntry) => void;
+    readonly onSubmoduleAction: (path: string, action: SubmoduleAction) => void;
+    readonly onToggleSubmodule: (path: string) => void;
+    readonly onSubmoduleRowAction: (submodulePath: string, item: ChangeListItem, action: ChangeRowAction) => void;
+    readonly onSubmoduleBulkAction: (submodulePath: string, action: ChangeBulkAction) => void;
+    readonly onSubmoduleCommit: (submodulePath: string, message: string, mode: CommitMode) => void;
+    readonly onSubmoduleCreateStash: (submodulePath: string, message: string) => void;
+    readonly onToggleSubmoduleStash: (submodulePath: string, index: number) => void;
+    readonly onSubmoduleStashAction: (submodulePath: string, index: number, action: StashEntryAction) => void;
+    readonly onSubmoduleStashFileDiff: (submodulePath: string, index: number, file: StashFileEntry) => void;
 }
 
 export function ChangesApp({
@@ -44,6 +55,15 @@ export function ChangesApp({
     onToggleStash,
     onStashAction,
     onStashFileDiff,
+    onSubmoduleAction,
+    onToggleSubmodule,
+    onSubmoduleRowAction,
+    onSubmoduleBulkAction,
+    onSubmoduleCommit,
+    onSubmoduleCreateStash,
+    onToggleSubmoduleStash,
+    onSubmoduleStashAction,
+    onSubmoduleStashFileDiff,
 }: ChangesAppProps) {
     const rawSections = useMemo(() => buildChangeSections(state.status), [state.status]);
     const sections = useMemo(
@@ -92,6 +112,26 @@ export function ChangesApp({
                             : undefined}
                     />
                 )) : null}
+                {!state.loading && hasRepository && state.status.submodules.length > 0 ? (
+                    <SubmoduleSection
+                        submodules={state.status.submodules}
+                        expandedPaths={state.expandedSubmodulePaths}
+                        statusByPath={state.submoduleStatusByPath}
+                        expandedStashKeys={state.expandedSubmoduleStashKeys}
+                        stashFilesByKey={state.submoduleStashFilesByKey}
+                        commitFeedbackByPath={state.submoduleCommitFeedbackByPath}
+                        onToggle={onToggleSubmodule}
+                        onAction={onSubmoduleAction}
+                        onUpdateAll={() => onSubmoduleAction('', SubmoduleAction.UpdateAll)}
+                        onRowAction={onSubmoduleRowAction}
+                        onBulkAction={onSubmoduleBulkAction}
+                        onCommit={onSubmoduleCommit}
+                        onCreateStash={onSubmoduleCreateStash}
+                        onToggleStash={onToggleSubmoduleStash}
+                        onStashAction={onSubmoduleStashAction}
+                        onStashFileDiff={onSubmoduleStashFileDiff}
+                    />
+                ) : null}
                 {!state.loading && hasRepository && state.status.stashes.length > 0 ? (
                     <StashList
                         stashes={state.status.stashes}

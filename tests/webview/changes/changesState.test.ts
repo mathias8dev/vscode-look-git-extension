@@ -41,6 +41,7 @@ describe('changesState', () => {
                     conflicts: [],
                     conflictState: ConflictState.None,
                     stashes: [],
+                    submodules: [],
                 },
             },
         });

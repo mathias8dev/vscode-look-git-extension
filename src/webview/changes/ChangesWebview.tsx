@@ -7,6 +7,7 @@ import { ChangesApp } from '../features/changes/ChangesApp';
 import {
     createInitialChangesState,
     reduceChangesState,
+    submoduleStashKey,
     type ChangeSelectionMode,
 } from '../features/changes/changesState';
 import { changesStateToPersisted, readChangesStatePreferences } from '../features/changes/changesPersistence';
@@ -18,6 +19,18 @@ import {
     StashEntryAction,
     type CreateStashKind,
 } from '../features/changes/stashCommands';
+import {
+    messageForSubmoduleAction,
+    messageForSubmoduleBulkAction,
+    messageForSubmoduleCommit,
+    messageForSubmoduleRowAction,
+    messageForSubmoduleStash,
+    messageForSubmoduleStashAction,
+    messageForSubmoduleStashFileDiff,
+    messageForGetSubmoduleStatus,
+    submoduleStatusRequestId,
+    SubmoduleAction,
+} from '../features/changes/submoduleCommands';
 import { vscodeApi } from '../platform/vscodeHost';
 
 export function ChangesWebview() {
@@ -49,6 +62,25 @@ export function ChangesWebview() {
         }
     };
 
+    const toggleSubmodule = (submodulePath: string) => {
+        const isExpanded = state.expandedSubmodulePaths.includes(submodulePath);
+        const hasStatus = Object.prototype.hasOwnProperty.call(state.submoduleStatusByPath, submodulePath);
+        dispatch({ type: 'toggleSubmodule', path: submodulePath });
+        if (!isExpanded && !hasStatus) {
+            postToExtension(messageForGetSubmoduleStatus(submodulePath, submoduleStatusRequestId(submodulePath)));
+        }
+    };
+
+    const toggleSubmoduleStash = (submodulePath: string, index: number) => {
+        const key = submoduleStashKey(submodulePath, index);
+        const isExpanded = state.expandedSubmoduleStashKeys.includes(key);
+        const hasFiles = Object.prototype.hasOwnProperty.call(state.submoduleStashFilesByKey, key);
+        dispatch({ type: 'toggleSubmoduleStash', key });
+        if (!isExpanded && !hasFiles) {
+            postToExtension(messageForSubmoduleStashAction(submodulePath, index, StashEntryAction.LoadFiles));
+        }
+    };
+
     return (
         <ChangesApp
             state={state}
@@ -69,6 +101,23 @@ export function ChangesWebview() {
             onToggleStash={toggleStash}
             onStashAction={(index: number, action: StashEntryAction) => postToExtension(messageForStashAction(index, action))}
             onStashFileDiff={(index: number, file: StashFileEntry) => postToExtension(messageForStashFileDiff(index, file))}
+            onToggleSubmodule={toggleSubmodule}
+            onSubmoduleAction={(path: string, action: SubmoduleAction) => postToExtension(messageForSubmoduleAction(path, action))}
+            onSubmoduleRowAction={(submodulePath: string, item: ChangeListItem, action: ChangeRowAction) =>
+                postToExtension(messageForSubmoduleRowAction(submodulePath, item.entry, item.isStaged, action))}
+            onSubmoduleBulkAction={(submodulePath: string, action: ChangeBulkAction) =>
+                postToExtension(messageForSubmoduleBulkAction(submodulePath, action))}
+            onSubmoduleCommit={(submodulePath: string, message: string, mode: CommitMode) => {
+                dispatch({ type: 'rememberCommitMessage', message });
+                postToExtension(messageForSubmoduleCommit(submodulePath, message, mode));
+            }}
+            onSubmoduleCreateStash={(submodulePath: string, message: string) =>
+                postToExtension(messageForSubmoduleStash(submodulePath, message))}
+            onToggleSubmoduleStash={toggleSubmoduleStash}
+            onSubmoduleStashAction={(submodulePath: string, index: number, action: StashEntryAction) =>
+                postToExtension(messageForSubmoduleStashAction(submodulePath, index, action))}
+            onSubmoduleStashFileDiff={(submodulePath: string, index: number, file: StashFileEntry) =>
+                postToExtension(messageForSubmoduleStashFileDiff(submodulePath, index, file))}
         />
     );
 }

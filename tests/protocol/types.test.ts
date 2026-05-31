@@ -42,7 +42,10 @@ describe('protocol discriminated unions', () => {
                 case 'repo/contextChanged': return msg.context.id satisfies string;
                 case 'changes/statusData': return msg.data.staged satisfies readonly unknown[];
                 case 'changes/commitResult': return msg.success satisfies boolean;
+                case 'changes/submoduleCommitResult': return msg.path satisfies string;
                 case 'changes/stashFiles': return msg.files satisfies readonly unknown[];
+                case 'changes/submoduleStatusData': return msg.data.unstaged satisfies readonly unknown[];
+                case 'changes/submoduleStashFiles': return msg.path satisfies string;
                 case 'changes/error': return msg.error.recoverable satisfies boolean;
                 case 'error': return msg.error.message satisfies string;
             }
@@ -84,10 +87,24 @@ describe('protocol discriminated unions', () => {
                 case 'changes/acceptTheirsFiles': return msg.filePaths satisfies readonly string[];
                 case 'changes/acceptAllTheirs': return;
                 case 'changes/commit': return msg.mode satisfies string;
+                case 'changes/submoduleCommit': return msg.submodulePath satisfies string;
                 case 'changes/openFile': return msg.filePath satisfies string;
                 case 'changes/openSubmodule': return msg.filePath satisfies string;
                 case 'changes/openMergeEditor': return msg.filePath satisfies string;
                 case 'changes/openDiff': return msg.indexStatus satisfies string;
+                case 'changes/openSubmoduleDiff': return msg.submodulePath satisfies string;
+                case 'changes/submoduleOpenFile': return msg.filePath satisfies string;
+                case 'changes/submoduleStageFile': return msg.submodulePath satisfies string;
+                case 'changes/submoduleUnstageFile': return msg.submodulePath satisfies string;
+                case 'changes/submoduleDiscardFile': return msg.submodulePath satisfies string;
+                case 'changes/submoduleOpenMergeEditor': return msg.submodulePath satisfies string;
+                case 'changes/submoduleMarkResolved': return msg.submodulePath satisfies string;
+                case 'changes/submoduleAcceptOurs': return msg.submodulePath satisfies string;
+                case 'changes/submoduleAcceptTheirs': return msg.submodulePath satisfies string;
+                case 'changes/submoduleStageAll': return msg.submodulePath satisfies string;
+                case 'changes/submoduleUnstageAll': return msg.submodulePath satisfies string;
+                case 'changes/submoduleDiscardAll': return msg.submodulePath satisfies string;
+                case 'changes/submoduleAcceptAllTheirs': return msg.submodulePath satisfies string;
                 case 'changes/stash': return msg.message satisfies string | undefined;
                 case 'changes/stashStaged': return msg.message satisfies string | undefined;
                 case 'changes/stashPop': return msg.index satisfies number;
@@ -95,8 +112,17 @@ describe('protocol discriminated unions', () => {
                 case 'changes/stashDrop': return msg.index satisfies number;
                 case 'changes/getStashFiles': return msg.requestId satisfies string;
                 case 'changes/openStashDiff': return msg.filePath satisfies string;
+                case 'changes/submoduleStash': return msg.submodulePath satisfies string;
+                case 'changes/submoduleStashPop': return msg.index satisfies number;
+                case 'changes/submoduleStashApply': return msg.index satisfies number;
+                case 'changes/submoduleStashDrop': return msg.index satisfies number;
+                case 'changes/getSubmoduleStashFiles': return msg.requestId satisfies string;
+                case 'changes/openSubmoduleStashDiff': return msg.submodulePath satisfies string;
                 case 'changes/continueOp': return msg.conflictState satisfies string;
                 case 'changes/abortOp': return msg.conflictState satisfies string;
+                case 'changes/submoduleUpdate': return msg.path satisfies string;
+                case 'changes/submoduleUpdateAll': return;
+                case 'changes/getSubmoduleStatus': return msg.requestId satisfies string;
             }
         };
         void handle;

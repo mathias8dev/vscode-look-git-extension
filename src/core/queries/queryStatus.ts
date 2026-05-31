@@ -52,7 +52,7 @@ export async function queryStashFiles(
     signal?: AbortSignal,
 ): Promise<GitFileChange[]> {
     const output = await execRawReadonly(
-        ['stash', 'show', '--name-status', '-M', '-z', `stash@{${index}}`],
+        ['stash', 'show', '--include-untracked', '--name-status', '-M', '-z', `stash@{${index}}`],
         signal,
     );
     return output ? parseNameStatusZ(output) : [];

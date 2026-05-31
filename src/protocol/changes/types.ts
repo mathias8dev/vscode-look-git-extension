@@ -1,5 +1,18 @@
 import type { SubmoduleStatus } from '../shared/repo';
 
+export interface SubmoduleEntry {
+    readonly path: string;
+    readonly name: string;
+    readonly status: SubmoduleStatus;
+}
+
+export interface SubmoduleStatusData {
+    readonly staged: readonly StatusEntry[];
+    readonly unstaged: readonly StatusEntry[];
+    readonly conflicts: readonly StatusEntry[];
+    readonly stashes: readonly StashEntry[];
+}
+
 export interface StatusEntry {
     readonly indexStatus: string;
     readonly workTreeStatus: string;
@@ -38,6 +51,7 @@ export interface StatusData {
     readonly conflicts: readonly StatusEntry[];
     readonly conflictState: ConflictState;
     readonly stashes: readonly StashEntry[];
+    readonly submodules: readonly SubmoduleEntry[];
 }
 
 export enum CommitMode {

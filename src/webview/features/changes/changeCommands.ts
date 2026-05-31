@@ -30,6 +30,12 @@ export interface ChangeActionDescriptor<TAction extends string> {
 
 export function rowActionsFor(item: ChangeListItem): readonly ChangeActionDescriptor<ChangeRowAction>[] {
     if (item.section === ChangeSectionId.Staged) {
+        if (item.entry.isSubmodule) {
+            return [
+                { action: ChangeRowAction.Unstage, icon: 'remove', label: 'Unstage', title: 'Unstage submodule gitlink' },
+                { action: ChangeRowAction.Open, icon: 'folder-opened', label: 'Open', title: 'Open submodule' },
+            ];
+        }
         return [
             { action: ChangeRowAction.Diff, icon: 'diff', label: 'Diff', title: 'Open diff' },
             { action: ChangeRowAction.Unstage, icon: 'remove', label: 'Unstage', title: 'Unstage file' },

@@ -4,7 +4,7 @@ import { ChangesViewProvider } from '../../../src/extension/views/ChangesViewPro
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import type { GitRepository } from '../../../src/core/git/GitRepository';
 import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
-import { getCommandCalls, getInputBoxOptions, getWarningMessages, setInputBoxValue, setWarningChoice } from '../../mocks/vscode';
+import { getCommandCalls, getInputBoxOptions, getWarningMessages, setInputBoxValue, setQuickPickValue, setWarningChoice } from '../../mocks/vscode';
 
 function makeRepo(overrides: Partial<GitRepository> = {}): GitRepository {
     return {
@@ -231,6 +231,7 @@ describe('ChangesViewProvider', () => {
                 conflicts: [],
                 conflictState: 'none',
                 stashes: [],
+                submodules: [],
             },
         }));
         expect(view.badge?.value).toBe(0);
@@ -468,6 +469,34 @@ describe('ChangesViewProvider', () => {
         await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({ type: 'changes/commitResult', success: true })));
     });
 
+    it('commits staged changes inside a submodule', async () => {
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({
+            type: 'changes/submoduleCommit',
+            submodulePath: 'modules/lib',
+            message: 'feat: inner',
+            mode: 'commit',
+        });
+
+        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith([
+            '-C',
+            '/workspace/modules/lib',
+            'commit',
+            '-m',
+            'feat: inner',
+        ]));
+        await vi.waitFor(() => expect(view.messages).toContainEqual({
+            type: 'changes/submoduleCommitResult',
+            path: 'modules/lib',
+            success: true,
+        }));
+    });
+
     it('commit with empty message posts commitResult failure without calling git', async () => {
         const repo = makeRepo();
         const provider = makeProvider(repo);
@@ -524,6 +553,69 @@ describe('ChangesViewProvider', () => {
         })));
     });
 
+    it('loads submodule status with raw porcelain output', async () => {
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+            execRaw: vi.fn(async () => ' M index.ts\0?? LOCAL_NOTES.md\0'),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'changes/getSubmoduleStatus', requestId: 'sub-1', path: 'modules/lib' });
+
+        await vi.waitFor(() => expect(repo.execRaw).toHaveBeenCalledWith(
+            ['-C', '/workspace/modules/lib', 'status', '--porcelain', '-z', '--untracked-files=all'],
+        ));
+        await vi.waitFor(() => expect(view.messages).toContainEqual({
+            type: 'changes/submoduleStatusData',
+            requestId: 'sub-1',
+            path: 'modules/lib',
+            data: {
+                staged: [],
+                unstaged: [
+                    expect.objectContaining({ filePath: 'index.ts', indexStatus: ' ', workTreeStatus: 'M' }),
+                    expect.objectContaining({ filePath: 'LOCAL_NOTES.md', indexStatus: '?', workTreeStatus: '?' }),
+                ],
+                conflicts: [],
+                stashes: [],
+            },
+        }));
+        expect(repo.exec).not.toHaveBeenCalledWith(['-C', '/workspace/modules/lib', 'status', '--porcelain', '-z', '--untracked-files=all']);
+    });
+
+    it('rejects submodule status requests for unknown paths', async () => {
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'changes/getSubmoduleStatus', requestId: 'sub-escape', path: '../outside' });
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/error',
+            requestId: 'sub-escape',
+            message: 'Unknown submodule path: ../outside',
+        })));
+        expect(repo.execRaw).not.toHaveBeenCalled();
+    });
+
+    it('requires confirmation before updating all submodules', async () => {
+        setWarningChoice(undefined);
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'changes/submoduleUpdateAll' });
+
+        await vi.waitFor(() => expect(getWarningMessages().length).toBeGreaterThan(0));
+        expect(repo.updateAllSubmodules).not.toHaveBeenCalled();
+
+        setWarningChoice('Update All');
+        view.messageHandler?.({ type: 'changes/submoduleUpdateAll' });
+        await vi.waitFor(() => expect(repo.updateAllSubmodules).toHaveBeenCalled());
+    });
+
     it('opens unstaged rename diffs against the original index path', async () => {
         const repo = makeRepo();
         const provider = makeProvider(repo);
@@ -564,8 +656,11 @@ describe('ChangesViewProvider', () => {
         expect(gitUriQuery(call?.args[1])).toEqual({ path: '/workspace/src/new-name.ts', ref: 'stash@{2}' });
     });
 
-    it('openSubmodule executes vscode.openFolder', async () => {
-        const repo = makeRepo();
+    it('opens submodule folders with an explicit window choice', async () => {
+        setQuickPickValue('Open in New Window');
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/child'])),
+        });
         const provider = makeProvider(repo);
         const view = makeWebviewView();
         provider.resolveWebviewView(view);
@@ -575,7 +670,30 @@ describe('ChangesViewProvider', () => {
             expect(call).toBeDefined();
             const uri = call?.args[0];
             assertUriWithPath(uri, 'modules/child');
+            expect(call?.args[1]).toBe(true);
         });
+    });
+
+    it('opens submodule diffs from the submodule working tree', async () => {
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/child'])),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({
+            type: 'changes/openSubmoduleDiff',
+            submodulePath: 'modules/child',
+            filePath: 'src/inner.ts',
+            isStaged: false,
+            indexStatus: ' ',
+            workTreeStatus: 'M',
+        });
+
+        await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === 'vscode.diff')).toBe(true));
+        const call = getCommandCalls().find((entry) => entry.command === 'vscode.diff');
+        expect(gitUriQuery(call?.args[0])).toEqual({ path: '/workspace/modules/child/src/inner.ts', ref: '~' });
+        assertUriWithPath(call?.args[1], 'modules/child/src/inner.ts');
     });
 
     it('badge updates to change count after refresh', async () => {

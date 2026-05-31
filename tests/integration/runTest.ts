@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import { runTests } from '@vscode/test-electron';
+import { fixtureRepoLaunchArgs } from '../helpers/fixtureRepo';
 import { sanitizeVsCodeTestEnvironment } from '../helpers/vscodeTestEnvironment';
 
 async function main(): Promise<void> {
@@ -11,6 +12,7 @@ async function main(): Promise<void> {
     await runTests({
         extensionDevelopmentPath,
         extensionTestsPath,
+        launchArgs: [...fixtureRepoLaunchArgs()],
         version: '1.85.2',
     });
 }

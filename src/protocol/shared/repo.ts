@@ -1,5 +1,10 @@
 export type RepoKind = 'main' | 'worktree' | 'submodule';
-export type SubmoduleStatus = 'clean' | 'dirty' | 'out-of-sync' | 'not-initialized';
+export enum SubmoduleStatus {
+    Clean          = 'clean',
+    Dirty          = 'dirty',
+    OutOfSync      = 'out-of-sync',
+    NotInitialized = 'not-initialized',
+}
 
 export interface SerializedRepoContext {
     readonly id: string;

@@ -11,6 +11,8 @@ interface StashListProps {
     readonly onToggleStash: (index: number) => void;
     readonly onStashAction: (index: number, action: StashEntryAction) => void;
     readonly onStashFileDiff: (index: number, file: StashFileEntry) => void;
+    readonly title?: string;
+    readonly showWhenEmpty?: boolean;
 }
 
 export function StashList({
@@ -20,8 +22,12 @@ export function StashList({
     onToggleStash,
     onStashAction,
     onStashFileDiff,
+    title = 'Stashes',
+    showWhenEmpty = false,
 }: StashListProps) {
     const [panelCollapsed, setPanelCollapsed] = useState(false);
+
+    if (stashes.length === 0 && !showWhenEmpty) { return null; }
 
     return (
         <section className="stash-panel" aria-label="Stashes">
@@ -35,7 +41,7 @@ export function StashList({
                 >
                     <Codicon name={panelCollapsed ? 'chevron-right' : 'chevron-down'} />
                 </button>
-                <h2>Stashes</h2>
+                <h2>{title}</h2>
                 <span>{stashes.length}</span>
             </header>
             {!panelCollapsed ? (

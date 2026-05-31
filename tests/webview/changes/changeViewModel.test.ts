@@ -16,6 +16,7 @@ const sections = buildChangeSections({
     ],
     conflictState: ConflictState.None,
     stashes: [],
+    submodules: [],
 });
 
 describe('changeViewModel', () => {
@@ -29,6 +30,7 @@ describe('changeViewModel', () => {
             ],
             conflictState: ConflictState.None,
             stashes: [],
+            submodules: [],
         }), 'legacy', ChangesSortMode.Path);
 
         expect(flattenedItems(filtered).map((item) => item.entry.filePath)).toEqual(['src/new-name.ts']);

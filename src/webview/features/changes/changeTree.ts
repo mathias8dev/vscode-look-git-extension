@@ -1,4 +1,5 @@
 import type { StatusData, StatusEntry } from '../../../protocol/changes/types';
+import { SubmoduleStatus } from '../../../protocol/shared/repo';
 
 export enum ChangeSectionId {
     Conflicts = 'conflicts',
@@ -101,14 +102,14 @@ export function statusLabel(entry: StatusEntry): string {
 
 function submoduleLabel(status: StatusEntry['submoduleStatus']): string {
     switch (status) {
-        case 'dirty':
+        case SubmoduleStatus.Dirty:
             return 'Submodule dirty';
-        case 'out-of-sync':
+        case SubmoduleStatus.OutOfSync:
             return 'Submodule out-of-sync';
-        case 'not-initialized':
+        case SubmoduleStatus.NotInitialized:
             return 'Submodule not initialized';
-        case 'clean':
-        case undefined:
+        case SubmoduleStatus.Clean:
+        default:
             return 'Submodule';
     }
 }

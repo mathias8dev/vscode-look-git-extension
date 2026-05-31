@@ -17,6 +17,7 @@ interface ChangeSectionViewProps {
     readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onBulkAction: (action: ChangeBulkAction) => void;
     readonly onStash?: (message: string) => void;
+    readonly showWhenEmpty?: boolean;
 }
 
 export function ChangeSectionView({
@@ -29,6 +30,7 @@ export function ChangeSectionView({
     onRowAction,
     onBulkAction,
     onStash,
+    showWhenEmpty = false,
 }: ChangeSectionViewProps) {
     const [visibleLimit, setVisibleLimit] = useState(CHANGE_SECTION_PAGE_SIZE);
     const [showStashPrompt, setShowStashPrompt] = useState(false);
@@ -41,7 +43,7 @@ export function ChangeSectionView({
         }
     }, [showStashPrompt]);
 
-    if (section.items.length === 0) { return null; }
+    if (section.items.length === 0 && !showWhenEmpty) { return null; }
 
     const visible = visibleChangeItems(section.items, visibleLimit);
     const tree = buildChangeTree(visible.items);
