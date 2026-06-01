@@ -4,7 +4,7 @@ import type { GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, Gr
 import type { GraphData, GraphFilters } from '../../protocol/graph/types';
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
-import { toProtocolSubmodule, toProtocolBranch, toProtocolGraphCommit, toProtocolWorktree } from '../mapping/toProtocol';
+import { toProtocolBranch, toProtocolGraphCommit, toProtocolWorktree } from '../mapping/toProtocol';
 import { showModalWarningMessage } from '../utils/confirmation';
 import { createErrorPayload, isAbortError } from './errorSerialization';
 
@@ -64,7 +64,7 @@ export class GraphMessageRouter {
                 const ctrl = new AbortController();
                 this.pending.set(key, ctrl);
                 try {
-                    const data = await this.buildGraphData(msg.filters, msg.page.offset, msg.page.limit, ctrl.signal);
+                    const data = await this.buildGraphData(msg.filters, 0, msg.page.offset + msg.page.limit, ctrl.signal);
                     const response: GraphDataResponse = { type: 'graph/dataResponse', requestId: msg.requestId, data };
                     this.postMessage(response);
                 } finally {
@@ -89,7 +89,6 @@ export class GraphMessageRouter {
                         filePath: f.filePath,
                         origPath: f.origPath,
                         parentHash: f.parentHash,
-                        isSubmodule: f.isSubmodule,
                     })),
                 };
                 this.postMessage(response);
@@ -102,10 +101,6 @@ export class GraphMessageRouter {
 
             case 'graph/worktreeCommand':
                 await this.handleWorktreeCommand(msg.command, msg.path);
-                break;
-
-            case 'graph/submoduleCommand':
-                await this.handleSubmoduleCommand(msg.command, msg.path);
                 break;
 
             case 'graph/openDiff': {
@@ -149,7 +144,7 @@ export class GraphMessageRouter {
     ): Promise<GraphData> {
         const repo = this.repositories.requireRepository();
         const maxCount = offset + limit + 1;
-        const [rawCommits, branches, tags, currentUser, remotesResult, worktreesResult, submodulesResult] = await Promise.all([
+        const [rawCommits, branches, tags, currentUser, remotesResult, worktreesResult] = await Promise.all([
             repo.getGraphLog(maxCount, filters.branches, filters.path, {
                 search: filters.search,
                 authors: filters.authors,
@@ -161,11 +156,9 @@ export class GraphMessageRouter {
             repo.getUserName(signal),
             settleOptional(repo.getRemotes(signal)),
             settleOptional(repo.listWorktrees(signal)),
-            settleOptional(repo.getSubmoduleStatus(signal)),
         ]);
         const remotes = this.optionalResultOrEmpty(remotesResult, 'graph/listRemotes');
         const worktrees = this.optionalResultOrEmpty(worktreesResult, 'graph/listWorktrees');
-        const submodules = this.optionalResultOrEmpty(submodulesResult, 'graph/listSubmodules');
 
         const sliced = rawCommits.slice(offset, offset + limit);
         const hasMore = rawCommits.length > offset + limit;
@@ -182,7 +175,6 @@ export class GraphMessageRouter {
             totalCount: rawCommits.length,
             hasRemotes: remotes.length > 0,
             worktrees: worktrees.map(toProtocolWorktree),
-            submodules: submodules.map(toProtocolSubmodule),
         };
     }
 
@@ -264,28 +256,6 @@ export class GraphMessageRouter {
         }
     }
 
-    private async handleSubmoduleCommand(command: string, subPath?: string): Promise<void> {
-        const repo = this.repositories.requireRepository();
-        switch (command) {
-            case 'open':
-                if (subPath) {
-                    await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(path.join(repo.cwd, subPath)));
-                }
-                break;
-            case 'initialize':
-            case 'update':
-                if (subPath) { await repo.updateSubmodule(subPath); }
-                break;
-            case 'fetch':
-                if (subPath) { await repo.exec(['-C', subPath, 'fetch', '--all']); }
-                break;
-            case 'updateAll':
-                await repo.updateAllSubmodules();
-                break;
-        }
-        await this.pushGraphData(undefined, undefined);
-    }
-
     private postGraphError(
         error: unknown,
         options: { readonly requestId?: RequestId; readonly operation: string; readonly code: ErrorCode },
@@ -344,6 +314,5 @@ function emptyGraphData(): GraphData {
         totalCount: 0,
         hasRemotes: false,
         worktrees: [],
-        submodules: [],
     };
 }

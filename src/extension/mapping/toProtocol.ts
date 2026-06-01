@@ -2,7 +2,7 @@
 import type { GitGraphCommit } from '../../core/git/domain/GitCommit';
 import type { GitBranch } from '../../core/git/domain/GitStatus';
 import type { GitWorktree, GitSubmodule } from '../../core/git/domain/GitWorktree';
-import type { BranchInfo, GraphCommit, WorktreeInfo, SubmoduleInfo } from '../../protocol/graph/types';
+import type { BranchInfo, GraphCommit, WorktreeInfo } from '../../protocol/graph/types';
 import { SubmoduleStatus } from '../../protocol/shared/repo';
 
 export function toProtocolGraphCommit(commit: GitGraphCommit): GraphCommit {
@@ -41,7 +41,6 @@ export function toProtocolWorktree(w: GitWorktree): WorktreeInfo {
     };
 }
 
-/** Maps raw git submodule status char to human-readable protocol status. */
 export function toProtocolSubmoduleStatus(status: GitSubmodule['status']): SubmoduleStatus {
     const statusMap: Record<GitSubmodule['status'], SubmoduleStatus> = {
         ' ': SubmoduleStatus.Clean,
@@ -50,15 +49,4 @@ export function toProtocolSubmoduleStatus(status: GitSubmodule['status']): Submo
         'U': SubmoduleStatus.Dirty,
     };
     return statusMap[status];
-}
-
-/** Maps raw git submodule status char to human-readable protocol status. */
-export function toProtocolSubmodule(s: GitSubmodule): SubmoduleInfo {
-    return {
-        path: s.path,
-        name: s.path.split('/').pop() ?? s.path,
-        url: '',           // populated by the caller from .gitmodules if needed
-        registeredHash: '', // populated by the caller via git ls-files -s
-        status: toProtocolSubmoduleStatus(s.status),
-    };
 }

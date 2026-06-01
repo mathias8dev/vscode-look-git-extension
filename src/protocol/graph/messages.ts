@@ -85,14 +85,6 @@ export interface WorktreeCommandRequest {
     readonly path?: string;
 }
 
-export type SubmoduleCommand = 'open' | 'initialize' | 'update' | 'fetch' | 'updateAll';
-
-export interface SubmoduleCommandRequest {
-    readonly type: 'graph/submoduleCommand';
-    readonly command: SubmoduleCommand;
-    readonly path?: string;
-}
-
 export interface OpenDiffRequest {
     readonly type: 'graph/openDiff';
     readonly filePath: string;
@@ -128,5 +120,4 @@ export type GraphWebviewToExtensionMessage =
     | CommitDetailsRequest
     | BranchCommandRequest
     | WorktreeCommandRequest
-    | SubmoduleCommandRequest
     | OpenDiffRequest;

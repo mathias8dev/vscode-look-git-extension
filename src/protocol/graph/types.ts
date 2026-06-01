@@ -1,7 +1,4 @@
 import type { Pagination } from '../shared/base';
-import type { SubmoduleStatus } from '../shared/repo';
-
-export type { SubmoduleStatus } from '../shared/repo';
 
 export interface GraphFilters {
     readonly search?: string;
@@ -49,15 +46,6 @@ export interface WorktreeInfo {
     readonly isDetached: boolean;
 }
 
-export interface SubmoduleInfo {
-    readonly path: string;
-    readonly name: string;
-    readonly url: string;
-    readonly registeredHash: string;
-    readonly headHash?: string;
-    readonly status: SubmoduleStatus;
-}
-
 export interface GraphData {
     readonly branches: readonly BranchInfo[];
     readonly tags: readonly TagInfo[];
@@ -70,7 +58,6 @@ export interface GraphData {
     readonly hasRemotes: boolean;
     readonly repositoryWebUrl?: string;
     readonly worktrees: readonly WorktreeInfo[];
-    readonly submodules: readonly SubmoduleInfo[];
     readonly currentBranchCommitHashes?: readonly string[];
 }
 
@@ -79,5 +66,4 @@ export interface CommitFileChange {
     readonly filePath: string;
     readonly origPath?: string;
     readonly parentHash?: string;
-    readonly isSubmodule?: boolean;
 }

@@ -24,11 +24,63 @@ describe('assignGraphLanes', () => {
         expect(expectItem(rows, 0).laneData.lines).toContainEqual(expect.objectContaining({ fromLane: 0, toLane: 0, type: 'straight' }));
     });
 
+    it('starts tip edges at the commit dot and ends root edges at the commit dot', () => {
+        const rows = assignLanes([commit('tip', ['root']), commit('root')]);
+        expect(expectItem(rows, 0).laneData.lines).toContainEqual(expect.objectContaining({
+            fromLane: 0,
+            toLane: 0,
+            type: 'straight',
+            startY: 'center',
+            endY: 'bottom',
+        }));
+        expect(expectItem(rows, 1).laneData.lines).toContainEqual(expect.objectContaining({
+            fromLane: 0,
+            toLane: 0,
+            type: 'straight',
+            startY: 'top',
+            endY: 'center',
+        }));
+    });
+
     it('allocates additional lanes for independent branch tips', () => {
         const rows = assignLanes([commit('feature', ['base']), commit('main', ['base']), commit('base')]);
         expect(expectItem(rows, 0).laneData.lane).toBe(0);
         expect(expectItem(rows, 1).laneData.lane).toBe(1);
         expect(getMaxLane(rows)).toBe(1);
+    });
+
+    it('places the longest visible lane before shorter overlapping lanes', () => {
+        const rows = assignLanes([
+            commit('short', ['root']),
+            commit('long-3', ['long-2']),
+            commit('long-2', ['long-1']),
+            commit('long-1', ['root']),
+            commit('root'),
+        ]);
+
+        expect(expectItem(rows, 0).laneData.lane).toBe(1);
+        expect(expectItem(rows, 1).laneData.lane).toBe(0);
+        expect(expectItem(rows, 2).laneData.lane).toBe(0);
+        expect(expectItem(rows, 3).laneData.lane).toBe(0);
+    });
+
+    it('preserves locked lanes when appending older commits', () => {
+        const firstPage = assignLanes([
+            commit('short', ['root']),
+            commit('long-3', ['long-2']),
+        ]);
+        const lockedLanes = new Map(firstPage.map((row) => [row.commit.hash, row.laneData.lane]));
+
+        const expanded = assignLanes([
+            commit('short', ['root']),
+            commit('long-3', ['long-2']),
+            commit('long-2', ['long-1']),
+            commit('long-1', ['root']),
+            commit('root'),
+        ], { lockedLanes });
+
+        expect(expectItem(expanded, 0).laneData.lane).toBe(expectItem(firstPage, 0).laneData.lane);
+        expect(expectItem(expanded, 1).laneData.lane).toBe(expectItem(firstPage, 1).laneData.lane);
     });
 
     it('draws a merge/fork line for merge commits', () => {
@@ -77,7 +129,33 @@ describe('assignGraphLanes', () => {
 
     it('generates a fork-right line for the second parent', () => {
         const rows = assignLanes([commit('merge', ['main', 'feature']), commit('main', ['base']), commit('feature', ['base']), commit('base')]);
-        expect(expectItem(rows, 0).laneData.lines).toContainEqual(expect.objectContaining({ fromLane: 0, toLane: 1, type: 'fork-right' }));
+        expect(expectItem(rows, 0).laneData.lines).toContainEqual(expect.objectContaining({
+            fromLane: 0,
+            toLane: 1,
+            type: 'fork-right',
+            startY: 'center',
+            endY: 'bottom',
+        }));
+    });
+
+    it('keeps parallel corridors open until the shared parent row', () => {
+        const rows = assignLanes([commit('feature', ['base']), commit('main', ['base']), commit('base')]);
+        expect(expectItem(rows, 1).laneData.lines).toContainEqual(expect.objectContaining({
+            fromLane: 1,
+            toLane: 1,
+            type: 'straight',
+            role: 'first-parent',
+            startY: 'center',
+            endY: 'bottom',
+        }));
+        expect(expectItem(rows, 2).laneData.lines).toContainEqual(expect.objectContaining({
+            fromLane: 1,
+            toLane: 0,
+            type: 'merge-left',
+            role: 'pass-through',
+            startY: 'top',
+            endY: 'center',
+        }));
     });
 
     it('allocates one lane per additional parent in octopus merge', () => {

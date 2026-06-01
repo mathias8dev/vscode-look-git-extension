@@ -4,7 +4,6 @@ import type { GitBranch } from '../../../src/core/git/domain/GitStatus';
 import {
     toProtocolBranch,
     toProtocolGraphCommit,
-    toProtocolSubmodule,
     toProtocolSubmoduleStatus,
 } from '../../../src/extension/mapping/toProtocol';
 
@@ -55,12 +54,5 @@ describe('toProtocol mapping', () => {
         expect(toProtocolSubmoduleStatus('+')).toBe('out-of-sync');
         expect(toProtocolSubmoduleStatus('-')).toBe('not-initialized');
         expect(toProtocolSubmoduleStatus('U')).toBe('dirty');
-        expect(toProtocolSubmodule({ path: 'packages/lib', status: '+' })).toEqual({
-            path: 'packages/lib',
-            name: 'lib',
-            url: '',
-            registeredHash: '',
-            status: 'out-of-sync',
-        });
     });
 });

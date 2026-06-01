@@ -29,7 +29,6 @@ describe('protocol discriminated unions', () => {
                 case 'graph/commitDetailsRequest': return msg.hash satisfies string;
                 case 'graph/branchCommand': return msg.command satisfies string;
                 case 'graph/worktreeCommand': return msg.command satisfies string;
-                case 'graph/submoduleCommand': return msg.command satisfies string;
                 case 'graph/openDiff': return msg.filePath satisfies string;
             }
         };
