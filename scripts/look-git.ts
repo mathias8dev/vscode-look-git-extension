@@ -38,6 +38,8 @@ const scenarios = new Map<string, ScenarioSetup>([
     ['merge-conflics', setupMergeConflicts],
     ['rebase-conflicts', setupRebaseConflicts],
     ['submodules', setupSubmodules],
+    ['worktree', setupWorktrees],
+    ['worktrees', setupWorktrees],
 ]);
 
 let commitIndex = 0;
@@ -111,6 +113,7 @@ function printHelp(): void {
         '  ./lookGit setup merge-conflicts',
         '  ./lookGit setup merge-conflics',
         '  ./lookGit setup rebase-conflicts --output /tmp/look-git-fixtures',
+        '  ./lookGit setup worktrees',
         '  ./lookGit setup all',
     ].join('\n'));
 }
@@ -122,17 +125,22 @@ function printScenarios(): void {
 function printSummary(name: string, target: string): void {
     const branchCount = git(target, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']).split('\n').filter(Boolean).length;
     const commitCount = git(target, ['rev-list', '--all', '--count']).trim();
+    const worktreeCount = git(target, ['worktree', 'list', '--porcelain']).split('\n').filter((line) => line.startsWith('worktree ')).length;
     console.log(`Created ${name}: ${target}`);
     console.log(`  branches: ${branchCount}`);
     console.log(`  commits: ${commitCount}`);
+    if (worktreeCount > 1) {
+        console.log(`  worktrees: ${worktreeCount}`);
+    }
     console.log(`  code ${target}`);
 }
 
 function uniqueScenarios(): readonly string[] {
-    return ['basics', 'merge-conflicts', 'rebase-conflicts', 'submodules'];
+    return ['basics', 'merge-conflicts', 'rebase-conflicts', 'submodules', 'worktrees'];
 }
 
 function canonicalScenarioName(name: string): string {
+    if (name === 'worktree') { return 'worktrees'; }
     return name === 'merge-conflics' ? 'merge-conflicts' : name;
 }
 
@@ -356,6 +364,63 @@ function setupSubmodules(target: string, outputRoot: string): void {
     }
 }
 
+function setupWorktrees(target: string, outputRoot: string): void {
+    const worktreeRoot = path.join(outputRoot, '.worktrees');
+    fs.rmSync(worktreeRoot, { recursive: true, force: true });
+    fs.mkdirSync(worktreeRoot, { recursive: true });
+
+    initRepo(target);
+    write(target, 'README.md', '# Worktree fixture\n\nLinked worktrees with clean, committed, and dirty states.\n');
+    commit(target, 'docs(worktrees): add fixture overview');
+    write(target, 'src/core/app.ts', 'export const app = "look-git";\n');
+    commit(target, 'feat(core): add application shell');
+    write(target, 'src/worktrees/registry.ts', 'export const registry = new Map<string, string>();\n');
+    commit(target, 'feat(worktrees): add registry baseline');
+    const sharedBase = git(target, ['rev-parse', 'HEAD']).trim();
+    write(target, 'src/graph/main.ts', 'export const graph = "main";\n');
+    commit(target, 'feat(graph): add main graph surface');
+    write(target, 'src/changes/main.ts', 'export const changes = "main";\n');
+    commit(target, 'feat(changes): add main changes surface');
+
+    const cleanReview = addBranchWorktree(target, worktreeRoot, 'feature-review-clean', 'feature/review-clean', sharedBase);
+    write(cleanReview, 'src/review/queue.ts', 'export const queue = ["pending", "approved"];\n');
+    commit(cleanReview, 'feat(worktrees): add review queue', { author: nextAuthor() });
+    write(cleanReview, 'tests/review-queue.test.ts', 'export const reviewQueueCovered = true;\n');
+    commit(cleanReview, 'test(worktrees): cover review queue', { author: nextAuthor() });
+
+    const releasePrep = addBranchWorktree(target, worktreeRoot, 'release-prep-clean', 'release/1.0-worktree', 'main');
+    write(releasePrep, 'CHANGELOG.md', '# Changelog\n\n## 1.0.0\n\nWorktree fixture release.\n');
+    commit(releasePrep, 'docs(release): add worktree release notes', { author: nextAuthor() });
+    write(releasePrep, 'VERSION', '1.0.0-worktree\n');
+    commit(releasePrep, 'chore(release): bump worktree fixture version', { author: nextAuthor() });
+
+    const dirtyStatus = addBranchWorktree(target, worktreeRoot, 'fix-status-dirty', 'fix/status-worktree', sharedBase);
+    write(dirtyStatus, 'src/status/model.ts', 'export const statusModel = "committed";\n');
+    commit(dirtyStatus, 'fix(worktrees): add status model baseline', { author: nextAuthor() });
+    write(dirtyStatus, 'src/status/staged.ts', 'export const stagedStatus = true;\n');
+    git(dirtyStatus, ['add', 'src/status/staged.ts']);
+    write(dirtyStatus, 'src/status/model.ts', 'export const statusModel = "dirty";\n');
+    write(dirtyStatus, 'notes/status-local.md', 'Local status investigation.\n');
+    write(dirtyStatus, 'stash/status-scratch.md', 'Temporary status scratchpad.\n');
+    git(dirtyStatus, ['stash', 'push', '-u', '-m', 'wip(worktrees): stash status scratchpad', '--', 'stash/status-scratch.md']);
+
+    const uncommittedDraft = addBranchWorktree(target, worktreeRoot, 'feature-uncommitted-draft', 'feat/uncommitted-worktree', sharedBase);
+    write(uncommittedDraft, 'src/draft/staged.ts', 'export const stagedDraft = true;\n');
+    git(uncommittedDraft, ['add', 'src/draft/staged.ts']);
+    write(uncommittedDraft, 'src/draft/local.ts', 'export const localDraft = true;\n');
+    write(uncommittedDraft, 'notes/draft-plan.md', 'Draft worktree plan.\n');
+
+    const detachedAudit = addDetachedWorktree(target, worktreeRoot, 'detached-audit', sharedBase);
+    write(detachedAudit, 'audit/staged-audit.md', '# Staged audit\n');
+    git(detachedAudit, ['add', 'audit/staged-audit.md']);
+    write(detachedAudit, 'audit/local-audit.md', '# Local audit\n');
+
+    git(target, ['checkout', '-q', 'main']);
+    write(target, 'src/main-staged.ts', 'export const mainStaged = true;\n');
+    git(target, ['add', 'src/main-staged.ts']);
+    write(target, 'src/main-local.ts', 'export const mainLocal = true;\n');
+}
+
 function setupSubmoduleSource(source: string, moduleName: string): void {
     initRepo(source);
     write(source, 'README.md', `# ${moduleName}\n`);
@@ -380,6 +445,18 @@ function setupDirtySubmodule(submodulePath: string, moduleName: string): void {
     git(submodulePath, ['add', `staged-${moduleName}.ts`]);
     write(submodulePath, 'module.ts', `export const moduleName = "${moduleName}-dirty";\n`);
     write(submodulePath, `untracked-${moduleName}.md`, `${moduleName} untracked\n`);
+}
+
+function addBranchWorktree(parent: string, worktreeRoot: string, directoryName: string, branch: string, startPoint: string): string {
+    const worktreePath = path.join(worktreeRoot, directoryName);
+    git(parent, ['worktree', 'add', '-q', '-b', branch, worktreePath, startPoint]);
+    return worktreePath;
+}
+
+function addDetachedWorktree(parent: string, worktreeRoot: string, directoryName: string, startPoint: string): string {
+    const worktreePath = path.join(worktreeRoot, directoryName);
+    git(parent, ['worktree', 'add', '-q', '--detach', worktreePath, startPoint]);
+    return worktreePath;
 }
 
 function initRepo(cwd: string): void {
