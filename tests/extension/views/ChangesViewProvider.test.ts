@@ -11,6 +11,7 @@ function makeRepo(overrides: Partial<GitRepository> = {}): GitRepository {
         cwd: '/workspace',
         exec: vi.fn(async () => ''),
         execRaw: vi.fn(async () => ''),
+        execWithEnv: vi.fn(async () => ''),
         getGitDir: vi.fn(async () => '/workspace/.git'),
         getStatus: vi.fn(async () => ({ staged: [], unstaged: [], conflicts: [], conflictState: 'none' as const })),
         stashList: vi.fn(async () => []),

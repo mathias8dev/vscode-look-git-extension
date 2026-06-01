@@ -1247,6 +1247,59 @@ h1 {
     outline-offset: -1px;
 }
 
+.commit-context-menu {
+    position: fixed;
+    z-index: 200;
+    min-width: 336px;
+    padding: 4px 0;
+    border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border, #454545));
+    background: var(--vscode-menu-background, var(--vscode-editor-background, #252526));
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.commit-context-item {
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    align-items: center;
+    width: 100%;
+    min-height: 26px;
+    padding: 0 12px;
+    border: none;
+    background: transparent;
+    color: var(--vscode-menu-foreground, var(--vscode-foreground, #cccccc));
+    font: inherit;
+    font-size: 0.86em;
+    text-align: left;
+}
+
+.commit-context-item:hover:not(:disabled),
+.commit-context-item:focus:not(:disabled) {
+    background: var(--vscode-menu-selectionBackground, var(--vscode-list-activeSelectionBackground, rgba(14, 99, 156, 0.4)));
+    color: var(--vscode-menu-selectionForeground, var(--vscode-list-activeSelectionForeground, #ffffff));
+}
+
+.commit-context-item:disabled {
+    color: var(--vscode-disabledForeground, rgba(204, 204, 204, 0.45));
+}
+
+.commit-context-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: inherit;
+}
+
+.commit-context-accelerator {
+    margin-left: 24px;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+.commit-context-separator {
+    height: 1px;
+    margin: 4px 10px;
+    background: var(--vscode-menu-separatorBackground, var(--vscode-panel-border, #3c3c3c));
+}
+
 .graph-lane-cell {
     overflow: hidden;
     flex-shrink: 0;

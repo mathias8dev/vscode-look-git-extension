@@ -23,6 +23,8 @@ export interface GraphState {
     readonly loading: boolean;
     readonly error: ProtocolError | undefined;
     readonly selectedHash: string | undefined;
+    readonly selectedHashes: readonly string[];
+    readonly selectionAnchorHash: string | undefined;
     readonly commitDetails: CommitDetails | undefined;
     readonly detailsLoading: boolean;
     readonly repoId: string | undefined;
@@ -35,6 +37,8 @@ export type GraphAction =
     | { readonly type: 'setFilters'; readonly filters: Partial<GraphFilters> }
     | { readonly type: 'setBranchFilter'; readonly branch: string | undefined }
     | { readonly type: 'selectCommit'; readonly hash: string }
+    | { readonly type: 'toggleCommitSelection'; readonly hash: string }
+    | { readonly type: 'selectCommitRange'; readonly hashes: readonly string[]; readonly focusHash: string }
     | { readonly type: 'clearSelection' }
     | { readonly type: 'clearError' }
     | { readonly type: 'startLoadMore' };
@@ -54,6 +58,8 @@ export function createInitialGraphState(): GraphState {
         loading: true,
         error: undefined,
         selectedHash: undefined,
+        selectedHashes: [],
+        selectionAnchorHash: undefined,
         commitDetails: undefined,
         detailsLoading: false,
         repoId: undefined,
@@ -87,9 +93,13 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
                 loadedCount: 0,
             };
         case 'selectCommit':
-            return { ...state, selectedHash: action.hash, detailsLoading: true, commitDetails: undefined };
+            return selectCommit(state, action.hash, [action.hash], action.hash);
+        case 'toggleCommitSelection':
+            return toggleCommitSelection(state, action.hash);
+        case 'selectCommitRange':
+            return selectCommit(state, action.focusHash, action.hashes, state.selectionAnchorHash ?? action.focusHash);
         case 'clearSelection':
-            return { ...state, selectedHash: undefined, commitDetails: undefined, detailsLoading: false };
+            return { ...state, selectedHash: undefined, selectedHashes: [], selectionAnchorHash: undefined, commitDetails: undefined, detailsLoading: false };
         case 'clearError':
             return { ...state, error: undefined };
         case 'startLoadMore':
@@ -97,6 +107,33 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
                 ? { ...state, loadingMore: true }
                 : state;
     }
+}
+
+function selectCommit(state: GraphState, hash: string, hashes: readonly string[], anchorHash: string): GraphState {
+    const nextHashes = Array.from(new Set(hashes));
+    return {
+        ...state,
+        selectedHash: hash,
+        selectedHashes: nextHashes,
+        selectionAnchorHash: anchorHash,
+        detailsLoading: hash !== state.selectedHash || state.commitDetails === undefined,
+        commitDetails: hash === state.selectedHash ? state.commitDetails : undefined,
+    };
+}
+
+function toggleCommitSelection(state: GraphState, hash: string): GraphState {
+    const selected = new Set(state.selectedHashes);
+    if (selected.has(hash)) {
+        selected.delete(hash);
+    } else {
+        selected.add(hash);
+    }
+    const selectedHashes = Array.from(selected);
+    const selectedHash = selected.has(hash) ? hash : selectedHashes.at(-1);
+    if (!selectedHash) {
+        return { ...state, selectedHash: undefined, selectedHashes, selectionAnchorHash: undefined, commitDetails: undefined, detailsLoading: false };
+    }
+    return selectCommit(state, selectedHash, selectedHashes, hash);
 }
 
 function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessage): GraphState {

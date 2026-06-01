@@ -7,6 +7,7 @@ export function makeRepositoryMock(overrides: Partial<GitRepository> = {}): GitR
         cwd: '/workspace',
         exec: vi.fn(async () => ''),
         execRaw: vi.fn(async () => ''),
+        execWithEnv: vi.fn(async () => ''),
         getGitDir: vi.fn(async () => '/workspace/.git'),
         getStatus: vi.fn(async () => ({ staged: [], unstaged: [], conflicts: [], conflictState: 'none' as const })),
         getSubmodulePaths: vi.fn(async () => new Set<string>()),

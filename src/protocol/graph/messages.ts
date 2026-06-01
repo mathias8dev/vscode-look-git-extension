@@ -85,6 +85,32 @@ export interface WorktreeCommandRequest {
     readonly path?: string;
 }
 
+export type CommitCommand =
+    | 'copyRevisionNumber'
+    | 'createPatch'
+    | 'cherryPick'
+    | 'checkoutRevision'
+    | 'showRepositoryAtRevision'
+    | 'compareWithLocal'
+    | 'resetCurrentBranchToHere'
+    | 'revertCommit'
+    | 'undoCommit'
+    | 'editCommitMessage'
+    | 'fixup'
+    | 'squashInto'
+    | 'dropCommit'
+    | 'interactiveRebaseFromHere'
+    | 'pushAllUpToHere'
+    | 'newBranch'
+    | 'newTag';
+
+export interface CommitCommandRequest {
+    readonly type: 'graph/commitCommand';
+    readonly command: CommitCommand;
+    readonly hash: string;
+    readonly hashes: readonly string[];
+}
+
 export interface OpenDiffRequest {
     readonly type: 'graph/openDiff';
     readonly filePath: string;
@@ -120,4 +146,5 @@ export type GraphWebviewToExtensionMessage =
     | CommitDetailsRequest
     | BranchCommandRequest
     | WorktreeCommandRequest
+    | CommitCommandRequest
     | OpenDiffRequest;

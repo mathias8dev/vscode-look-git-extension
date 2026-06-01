@@ -2,9 +2,10 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
-import type { GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse, OpenDiffRequest } from '../../protocol/graph/messages';
+import type { CommitCommand, GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse, OpenDiffRequest } from '../../protocol/graph/messages';
 import type { GraphData, GraphFilters } from '../../protocol/graph/types';
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
+import type { GitRepository } from '../../core/git/GitRepository';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import { toProtocolBranch, toProtocolGraphCommit, toProtocolWorktree } from '../mapping/toProtocol';
 import { showModalWarningMessage } from '../utils/confirmation';
@@ -103,6 +104,10 @@ export class GraphMessageRouter {
 
             case 'graph/worktreeCommand':
                 await this.handleWorktreeCommand(msg.command, msg.path);
+                break;
+
+            case 'graph/commitCommand':
+                await this.handleCommitCommand(msg.command, msg.hash, msg.hashes);
                 break;
 
             case 'graph/openDiff': {
@@ -252,6 +257,67 @@ export class GraphMessageRouter {
         }
     }
 
+    private async handleCommitCommand(command: CommitCommand, hash: string, hashes: readonly string[]): Promise<void> {
+        const repo = this.repositories.requireRepository();
+        const selected = normalizeSelectedHashes(hash, hashes);
+        switch (command) {
+            case 'copyRevisionNumber':
+                await vscode.env.clipboard.writeText(hash);
+                return;
+            case 'createPatch':
+                await createPatchFile(repo, await orderSelectedCommits(repo, selected, 'oldestFirst'));
+                return;
+            case 'cherryPick':
+                await assertNoUnmergedFiles(repo, 'cherry-picking commits');
+                await repo.exec(['cherry-pick', ...(await orderSelectedCommits(repo, selected, 'oldestFirst'))]);
+                break;
+            case 'checkoutRevision':
+                await repo.checkout(hash);
+                break;
+            case 'showRepositoryAtRevision':
+                await showRepositoryAtRevision(hash, repo.exec.bind(repo));
+                return;
+            case 'compareWithLocal':
+                await openDiffDocument(`Diff ${hash.substring(0, 7)}..local`, await repo.execRaw(['diff', hash, '--']));
+                return;
+            case 'resetCurrentBranchToHere':
+                await resetCurrentBranchToHere(repo, hash);
+                break;
+            case 'revertCommit':
+                await assertNoUnmergedFiles(repo, 'reverting commits');
+                await repo.exec(['revert', '--no-edit', ...(await orderSelectedCommits(repo, selected, 'newestFirst'))]);
+                break;
+            case 'undoCommit':
+                await undoHeadCommit(repo, hash);
+                break;
+            case 'editCommitMessage':
+                await editCommitMessage(repo, hash);
+                break;
+            case 'fixup':
+                await autosquashStagedChanges(repo, hash, 'fixup');
+                break;
+            case 'squashInto':
+                await autosquashStagedChanges(repo, hash, 'squash');
+                break;
+            case 'dropCommit':
+                await dropCommits(repo, await orderSelectedCommits(repo, selected, 'newestFirst'));
+                break;
+            case 'interactiveRebaseFromHere':
+                openGitTerminal(repo.cwd, `git rebase --autostash -i ${shellQuote(hash)}`);
+                return;
+            case 'pushAllUpToHere':
+                await pushAllUpToHere(repo, hash);
+                break;
+            case 'newBranch':
+                await createBranchAtCommit(repo, hash);
+                break;
+            case 'newTag':
+                await createTagAtCommit(repo, hash);
+                break;
+        }
+        await this.pushGraphData(undefined, undefined);
+    }
+
     private postGraphError(
         error: unknown,
         options: { readonly requestId?: RequestId; readonly operation: string; readonly code: ErrorCode },
@@ -283,6 +349,239 @@ async function settleOptional<T>(promise: Promise<readonly T[]>): Promise<Promis
         (value) => ({ status: 'fulfilled', value }) as const,
         (reason: unknown) => ({ status: 'rejected', reason }) as const,
     );
+}
+
+function normalizeSelectedHashes(hash: string, hashes: readonly string[]): string[] {
+    const selected = hashes.length > 0 ? hashes : [hash];
+    return Array.from(new Set(selected.includes(hash) ? selected : [hash, ...selected]));
+}
+
+async function createPatchFile(repo: GitRepository, hashes: readonly string[]): Promise<void> {
+    const defaultUri = vscode.Uri.file(path.join(repo.cwd, `${hashes[0]?.substring(0, 7) ?? 'commit'}.patch`));
+    const uri = await vscode.window.showSaveDialog({
+        defaultUri,
+        filters: { Patches: ['patch', 'diff'] },
+    });
+    if (!uri) { return; }
+    const chunks = await Promise.all(hashes.map((hash) => repo.execRaw(['format-patch', '-1', '--stdout', hash])));
+    await fs.writeFile(uri.fsPath, chunks.join('\n'));
+}
+
+async function showRepositoryAtRevision(
+    hash: string,
+    exec: (args: readonly string[]) => Promise<string>,
+): Promise<void> {
+    const parentPath = await fs.mkdtemp(path.join(os.tmpdir(), 'look-git-revision-'));
+    const worktreePath = path.join(parentPath, hash.substring(0, 7));
+    await exec(['worktree', 'add', '--detach', worktreePath, hash]);
+    await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(worktreePath), { forceNewWindow: true });
+}
+
+async function openDiffDocument(title: string, content: string): Promise<void> {
+    const document = await vscode.workspace.openTextDocument({ content: content || `${title}\n`, language: 'diff' });
+    await vscode.window.showTextDocument(document, { preview: false });
+}
+
+async function resetCurrentBranchToHere(repo: GitRepository, hash: string): Promise<void> {
+    const mode = await vscode.window.showQuickPick(['Soft reset', 'Mixed reset', 'Hard reset', 'Keep reset'], { placeHolder: 'Reset current branch to selected revision' });
+    if (!mode) { return; }
+    if (mode === 'Hard reset') {
+        const choice = await showModalWarningMessage('Hard reset current branch and discard working tree changes?', 'Hard Reset');
+        if (choice !== 'Hard Reset') { return; }
+    }
+    const flag = mode === 'Soft reset'
+        ? '--soft'
+        : mode === 'Hard reset'
+            ? '--hard'
+            : mode === 'Keep reset'
+                ? '--keep'
+                : '--mixed';
+    await repo.exec(['reset', flag, hash]);
+}
+
+async function undoHeadCommit(repo: GitRepository, hash: string): Promise<void> {
+    const head = await repo.exec(['rev-parse', 'HEAD']);
+    if (head !== hash) { throw new Error('Only the current HEAD commit can be undone.'); }
+    const choice = await showModalWarningMessage('Undo the current HEAD commit and keep its changes staged?', 'Undo Commit');
+    if (choice !== 'Undo Commit') { return; }
+    await repo.exec(['reset', '--soft', 'HEAD~1']);
+}
+
+async function editCommitMessage(repo: GitRepository, hash: string): Promise<void> {
+    const current = await repo.getCommitMessage(hash);
+    const message = await vscode.window.showInputBox({ prompt: 'New commit message:', value: current });
+    if (!message?.trim()) { return; }
+    const messageFile = await writeCommitMessageFile(message);
+    try {
+        await rewriteCommitMessage(repo, hash, messageFile);
+    } finally {
+        await fs.rm(path.dirname(messageFile), { recursive: true, force: true });
+    }
+}
+
+async function rewriteCommitMessage(repo: GitRepository, hash: string, messageFile: string): Promise<void> {
+    await assertNoUnmergedFiles(repo, 'editing commit messages');
+    const parents = (await repo.exec(['show', '-s', '--format=%P', hash])).split(/\s+/).filter(Boolean);
+    if (parents.length > 1) { throw new Error('Editing merge commit messages is not supported yet.'); }
+    const currentBranch = await repo.getCurrentBranch();
+    const branches = await localBranchesContaining(repo, hash);
+    const head = await repo.exec(['rev-parse', 'HEAD']);
+    if (branches.length === 0 && head !== hash) {
+        throw new Error('Edit Commit Message requires a local branch that contains the selected commit.');
+    }
+    const [authorName, authorEmail, authorDate] = (await repo.exec(['show', '-s', '--format=%an%x00%ae%x00%aI', hash])).split('\0');
+    if (!authorName || !authorEmail || !authorDate) { throw new Error('Could not read commit author metadata.'); }
+    const tree = await repo.exec(['show', '-s', '--format=%T', hash]);
+    const parentArgs = parents[0] ? ['-p', parents[0]] : [];
+    const rewritten = await repo.execWithEnv(
+        ['commit-tree', tree, ...parentArgs, '-F', messageFile],
+        {
+            GIT_AUTHOR_NAME: authorName,
+            GIT_AUTHOR_EMAIL: authorEmail,
+            GIT_AUTHOR_DATE: authorDate,
+        },
+    );
+    if (branches.length === 0) {
+        await repo.exec(['reset', '--soft', rewritten]);
+        return;
+    }
+
+    try {
+        for (const branch of orderBranchesForRewrite(branches, currentBranch)) {
+            await rewriteBranchContainingCommit(repo, branch, hash, rewritten, parents[0]);
+        }
+    } finally {
+        if (currentBranch !== 'HEAD' && await repo.getCurrentBranch().catch(() => 'HEAD') !== currentBranch) {
+            await repo.checkout(currentBranch);
+        }
+    }
+}
+
+async function localBranchesContaining(repo: GitRepository, hash: string): Promise<readonly string[]> {
+    const output = await repo.execRaw(['for-each-ref', '--format=%(refname:short)', '--contains', hash, 'refs/heads']);
+    return output.split('\n').map((line) => line.trim()).filter(Boolean);
+}
+
+function orderBranchesForRewrite(branches: readonly string[], currentBranch: string): readonly string[] {
+    if (currentBranch === 'HEAD' || !branches.includes(currentBranch)) { return branches; }
+    return [...branches.filter((branch) => branch !== currentBranch), currentBranch];
+}
+
+async function rewriteBranchContainingCommit(
+    repo: GitRepository,
+    branch: string,
+    hash: string,
+    rewritten: string,
+    parentHash: string | undefined,
+): Promise<void> {
+    const branchTip = await repo.exec(['rev-parse', branch]);
+    const currentBranch = await repo.getCurrentBranch();
+    if (branchTip === hash) {
+        if (branch === currentBranch) {
+            await repo.exec(['reset', '--soft', rewritten]);
+        } else {
+            await repo.exec(['update-ref', `refs/heads/${branch}`, rewritten, hash]);
+        }
+        return;
+    }
+    const rebaseArgs = parentHash
+        ? ['rebase', '--autostash', '--onto', rewritten, hash, branch]
+        : ['rebase', '--autostash', '--onto', rewritten, '--root', branch];
+    await repo.exec(rebaseArgs);
+}
+
+async function writeCommitMessageFile(message: string): Promise<string> {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'look-git-message-'));
+    const filePath = path.join(dir, 'COMMIT_EDITMSG');
+    await fs.writeFile(filePath, message);
+    return filePath;
+}
+
+async function autosquashStagedChanges(repo: GitRepository, hash: string, mode: 'fixup' | 'squash'): Promise<void> {
+    await assertNoUnmergedFiles(repo, mode === 'fixup' ? 'fixing up commits' : 'squashing commits');
+    const stagedFiles = await repo.execRaw(['diff', '--cached', '--name-only']);
+    if (!stagedFiles.trim()) { throw new Error('Stage changes before using Fixup or Squash Into.'); }
+    const dirtyUnstaged = await repo.execRaw(['diff', '--name-only']);
+    if (dirtyUnstaged.trim()) { throw new Error('Fixup and Squash Into require a clean unstaged working tree.'); }
+    const parents = (await repo.exec(['show', '-s', '--format=%P', hash])).split(/\s+/).filter(Boolean);
+    if (parents.length > 1) { throw new Error('Fixup and Squash Into are not supported for merge commits.'); }
+
+    if (mode === 'fixup') {
+        await repo.exec(['commit', '--fixup', hash, '--no-edit']);
+    } else {
+        const message = await vscode.window.showInputBox({ prompt: 'Squash commit message:' });
+        if (!message?.trim()) { return; }
+        await repo.exec(['commit', '--squash', hash, '-m', message]);
+    }
+
+    const branch = await repo.getCurrentBranch();
+    const rebaseArgs = parents[0]
+        ? ['rebase', '--autosquash', '--autostash', parents[0], branch]
+        : ['rebase', '--autosquash', '--autostash', '--root', branch];
+    await repo.execWithEnv(rebaseArgs, { GIT_SEQUENCE_EDITOR: 'true', GIT_EDITOR: 'true' });
+}
+
+async function dropCommits(repo: GitRepository, hashes: readonly string[]): Promise<void> {
+    await assertNoUnmergedFiles(repo, 'dropping commits');
+    const choice = await showModalWarningMessage(`Drop ${hashes.length === 1 ? 'this commit' : `${hashes.length} commits`}?`, 'Drop');
+    if (choice !== 'Drop') { return; }
+    for (const hash of hashes) {
+        await repo.exec(['rebase', '--autostash', '--onto', `${hash}^`, hash]);
+    }
+}
+
+async function assertNoUnmergedFiles(repo: GitRepository, operation: string): Promise<void> {
+    const unmerged = await repo.execRaw(['diff', '--name-only', '--diff-filter=U']);
+    if (unmerged.trim()) {
+        throw new Error(`Resolve existing merge/rebase conflicts before ${operation}.`);
+    }
+}
+
+async function orderSelectedCommits(repo: GitRepository, hashes: readonly string[], direction: 'newestFirst' | 'oldestFirst'): Promise<readonly string[]> {
+    const unique = Array.from(new Set(hashes));
+    if (unique.length <= 1) { return unique; }
+    const selected = new Set(unique);
+    const orderedNewestFirst = (await repo.exec(['rev-list', '--topo-order', ...unique]))
+        .split(/\s+/)
+        .filter((candidate) => selected.has(candidate));
+    const orderedSet = new Set(orderedNewestFirst);
+    const ordered = [
+        ...orderedNewestFirst,
+        ...unique.filter((candidate) => !orderedSet.has(candidate)),
+    ];
+    return direction === 'newestFirst' ? ordered : ordered.slice().reverse();
+}
+
+function openGitTerminal(cwd: string, command: string): void {
+    const terminal = vscode.window.createTerminal({ name: 'Look Git', cwd });
+    terminal.show();
+    terminal.sendText(command);
+}
+
+async function pushAllUpToHere(repo: GitRepository, hash: string): Promise<void> {
+    const remotes = await repo.getRemotes();
+    const remote = remotes[0];
+    if (!remote) { throw new Error('No Git remote configured.'); }
+    const branch = await repo.getCurrentBranch();
+    const choice = await showModalWarningMessage(`Push ${hash.substring(0, 7)} to ${remote}/${branch}?`, 'Push');
+    if (choice !== 'Push') { return; }
+    await repo.exec(['push', remote, `${hash}:refs/heads/${branch}`]);
+}
+
+async function createBranchAtCommit(repo: GitRepository, hash: string): Promise<void> {
+    const name = await vscode.window.showInputBox({ prompt: 'New branch name:' });
+    if (!name?.trim()) { return; }
+    await repo.exec(['branch', name, hash]);
+}
+
+async function createTagAtCommit(repo: GitRepository, hash: string): Promise<void> {
+    const name = await vscode.window.showInputBox({ prompt: 'New tag name:' });
+    if (!name?.trim()) { return; }
+    await repo.exec(['tag', name, hash]);
+}
+
+function shellQuote(value: string): string {
+    return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 function requestIdOf(msg: GraphWebviewToExtensionMessage): RequestId | undefined {

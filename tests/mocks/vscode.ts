@@ -95,6 +95,14 @@ export const commands = {
 
 export type CommandCall = typeof commands.calls[number];
 
+export const env = {
+    clipboard: {
+        value: '',
+        writeText(value: string) { this.value = value; return Promise.resolve(); },
+        reset() { this.value = ''; },
+    },
+};
+
 export const window = {
     errorMessages: [] as string[],
     infoMessages: [] as string[],
@@ -105,6 +113,8 @@ export const window = {
     saveDialogValue: undefined as TestUri | undefined,
     saveDialogOptions: [] as unknown[],
     warningChoice: undefined as string | undefined,
+    shownDocuments: [] as unknown[],
+    terminals: [] as Array<{ name: string; cwd: string | undefined; texts: string[]; visible: boolean }>,
     showErrorMessage(message: string) { this.errorMessages.push(message); return Promise.resolve(undefined); },
     showInformationMessage(message: string) { this.infoMessages.push(message); return Promise.resolve(undefined); },
     showWarningMessage(message: string, _opts?: unknown, ...items: string[]) {
@@ -117,6 +127,19 @@ export const window = {
     },
     showQuickPick() { return Promise.resolve(this.quickPickValue); },
     showSaveDialog(options: unknown) { this.saveDialogOptions.push(options); return Promise.resolve(this.saveDialogValue); },
+    showTextDocument(document: unknown) { this.shownDocuments.push(document); return Promise.resolve(undefined); },
+    createTerminal(options: { name: string; cwd?: string }) {
+        const terminal = {
+            name: options.name,
+            cwd: options.cwd,
+            texts: [] as string[],
+            visible: false,
+            show() { this.visible = true; },
+            sendText(text: string) { this.texts.push(text); },
+        };
+        this.terminals.push(terminal);
+        return terminal;
+    },
     withProgress(_opts: unknown, task: () => unknown) { return Promise.resolve(task()); },
     reset() {
         this.errorMessages = [];
@@ -128,6 +151,8 @@ export const window = {
         this.saveDialogValue = undefined;
         this.saveDialogOptions = [];
         this.warningChoice = undefined;
+        this.shownDocuments = [];
+        this.terminals = [];
     },
 };
 
@@ -135,6 +160,7 @@ export type WarningMessage = typeof window.warningMessages[number];
 
 export function resetMockVscode(): void {
     commands.reset();
+    env.clipboard.reset();
     window.reset();
     workspace.reset();
 }
@@ -165,6 +191,7 @@ export function getCommandCalls(): readonly CommandCall[] {
 
 export const workspace = {
     values: new Map<string, unknown>(),
+    documents: [] as Array<{ content: string; language?: string }>,
     fs: {
         writes: [] as Array<{ uri: unknown; content: Uint8Array }>,
         writeFile(uri: unknown, content: Uint8Array) { this.writes.push({ uri, content }); return Promise.resolve(); },
@@ -183,5 +210,9 @@ export const workspace = {
             },
         };
     },
-    reset() { this.values = new Map(); this.fs.reset(); },
+    openTextDocument(options: { content: string; language?: string }) {
+        this.documents.push(options);
+        return Promise.resolve(options);
+    },
+    reset() { this.values = new Map(); this.documents = []; this.fs.reset(); },
 };

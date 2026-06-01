@@ -1,10 +1,12 @@
 import type { CSSProperties } from 'react';
-import type { BranchInfo } from '../../../protocol/graph/types';
+import type { BranchInfo, GraphCommit } from '../../../protocol/graph/types';
 import type { GraphRow } from './layout/assignGraphLanes';
 import { GraphLaneCell, LANE_WIDTH } from './GraphLaneCell';
 import { RefBadge } from './RefBadge';
 import { parseRefs } from './refModel';
 import { messageForBranchCheckout } from './graphCommands';
+
+export type CommitSelectMode = 'replace' | 'toggle' | 'range';
 
 interface GraphRowProps {
     readonly row: GraphRow;
@@ -12,11 +14,12 @@ interface GraphRowProps {
     readonly maxLane: number;
     readonly selected: boolean;
     readonly style: CSSProperties;
-    readonly onSelect: (hash: string) => void;
+    readonly onSelect: (hash: string, mode: CommitSelectMode) => void;
+    readonly onOpenContextMenu: (commit: GraphCommit, x: number, y: number) => void;
     readonly onPostMessage: (msg: unknown) => void;
 }
 
-export function GraphCommitRow({ row, branches, maxLane, selected, style, onSelect, onPostMessage }: GraphRowProps) {
+export function GraphCommitRow({ row, branches, maxLane, selected, style, onSelect, onOpenContextMenu, onPostMessage }: GraphRowProps) {
     const { commit, laneData } = row;
     const refs = parseRefs(commit.refs, branches);
     const colWidth = (maxLane + 1) * LANE_WIDTH + 4;
@@ -32,11 +35,18 @@ export function GraphCommitRow({ row, branches, maxLane, selected, style, onSele
             aria-selected={selected}
             tabIndex={0}
             title={commit.message}
-            onClick={() => onSelect(commit.hash)}
+            onClick={(event) => {
+                const mode = event.shiftKey ? 'range' : event.metaKey || event.ctrlKey ? 'toggle' : 'replace';
+                onSelect(commit.hash, mode);
+            }}
+            onContextMenu={(event) => {
+                event.preventDefault();
+                onOpenContextMenu(commit, event.clientX, event.clientY);
+            }}
             onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    onSelect(commit.hash);
+                    onSelect(commit.hash, e.shiftKey ? 'range' : 'replace');
                 }
             }}
         >

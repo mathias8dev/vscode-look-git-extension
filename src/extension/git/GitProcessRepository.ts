@@ -45,6 +45,10 @@ export class GitProcessRepository implements GitRepository {
         return this.run(args, undefined, signal);
     }
 
+    async execWithEnv(args: readonly string[], env: Record<string, string>, signal?: AbortSignal): Promise<string> {
+        return (await this.run(args, env, signal)).trim();
+    }
+
     private async execReadonly(args: readonly string[], signal?: AbortSignal): Promise<string> {
         return (await this.run(args, { GIT_OPTIONAL_LOCKS: '0' }, signal)).trim();
     }

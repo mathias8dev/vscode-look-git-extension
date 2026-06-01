@@ -16,6 +16,7 @@ export interface GitRepository {
 
     exec(args: readonly string[], signal?: AbortSignal): Promise<string>;
     execRaw(args: readonly string[], signal?: AbortSignal): Promise<string>;
+    execWithEnv(args: readonly string[], env: Record<string, string>, signal?: AbortSignal): Promise<string>;
     getGitDir(): Promise<string>;
 
     // Status

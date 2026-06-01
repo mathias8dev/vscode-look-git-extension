@@ -1,19 +1,21 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { BranchInfo } from '../../../protocol/graph/types';
+import type { CommitCommand } from '../../../protocol/graph/messages';
 import type { GraphRow } from './layout/assignGraphLanes';
-import { GraphCommitRow } from './GraphRow';
+import { GraphCommitRow, type CommitSelectMode } from './GraphRow';
 import { ROW_HEIGHT, LANE_WIDTH } from './GraphLaneCell';
-
-const OVERSCAN = 8;
+import { CommitContextMenu, type CommitContextMenuState } from './CommitContextMenu';
+import { getVisibleGraphRowRange } from './graphVirtualization';
 
 interface GraphTableProps {
     readonly rows: readonly GraphRow[];
     readonly branches: readonly BranchInfo[];
     readonly maxLane: number;
-    readonly selectedHash: string | undefined;
+    readonly selectedHashes: readonly string[];
     readonly hasMore: boolean;
     readonly loadingMore: boolean;
-    readonly onSelectCommit: (hash: string) => void;
+    readonly onSelectCommit: (hash: string, mode: CommitSelectMode) => void;
+    readonly onCommitCommand: (command: CommitCommand, hash: string, hashes: readonly string[]) => void;
     readonly onLoadMore: () => void;
     readonly onPostMessage: (msg: unknown) => void;
 }
@@ -22,14 +24,16 @@ export function GraphTable({
     rows,
     branches,
     maxLane,
-    selectedHash,
+    selectedHashes,
     hasMore,
     loadingMore,
     onSelectCommit,
+    onCommitCommand,
     onLoadMore,
     onPostMessage,
 }: GraphTableProps) {
     const wrapperRef = useRef<HTMLDivElement>(null);
+    const [contextMenu, setContextMenu] = useState<CommitContextMenuState | undefined>(undefined);
     const [scrollTop, setScrollTop] = useState(0);
     const [viewportHeight, setViewportHeight] = useState(400);
     const colWidth = (maxLane + 1) * LANE_WIDTH + 4;
@@ -38,16 +42,31 @@ export function GraphTable({
         '--graph-col-width': `${colWidth}px`,
     };
 
+    const measureViewport = useCallback(() => {
+        const el = wrapperRef.current;
+        if (!el) { return; }
+        setViewportHeight(el.clientHeight);
+        setScrollTop(el.scrollTop);
+    }, []);
+
+    useLayoutEffect(() => {
+        measureViewport();
+    });
+
     useEffect(() => {
         const el = wrapperRef.current;
         if (!el) { return; }
         const observer = new ResizeObserver(() => {
-            setViewportHeight(el.clientHeight);
+            measureViewport();
         });
         observer.observe(el);
-        setViewportHeight(el.clientHeight);
-        return () => observer.disconnect();
-    }, []);
+        window.addEventListener('resize', measureViewport);
+        measureViewport();
+        return () => {
+            observer.disconnect();
+            window.removeEventListener('resize', measureViewport);
+        };
+    }, [measureViewport]);
 
     const handleScroll = useCallback(() => {
         if (wrapperRef.current) {
@@ -61,13 +80,29 @@ export function GraphTable({
         if (nearBottom) { onLoadMore(); }
     }, [scrollTop, viewportHeight, totalHeight, hasMore, loadingMore, onLoadMore]);
 
-    const firstVisible = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
-    const lastVisible = Math.min(
-        rows.length - 1,
-        Math.ceil((scrollTop + viewportHeight) / ROW_HEIGHT) + OVERSCAN,
-    );
+    const { firstVisible, lastVisible } = getVisibleGraphRowRange(rows.length, scrollTop, viewportHeight);
 
     const visibleRows = rows.slice(firstVisible, lastVisible + 1);
+    const selectedHashSet = useMemo(() => new Set(selectedHashes), [selectedHashes]);
+    const selectedRows = rows.filter((row) => selectedHashSet.has(row.commit.hash));
+
+    const handleOpenContextMenu = useCallback((hash: string, x: number, y: number) => {
+        const hashes = selectedHashSet.has(hash) ? selectedHashes : [hash];
+        if (!selectedHashSet.has(hash)) { onSelectCommit(hash, 'replace'); }
+        setContextMenu({
+            hash,
+            hashes,
+            x,
+            y,
+            canGoToChild: childHash(rows, hash) !== undefined,
+            canGoToParent: parentHash(rows, hash) !== undefined,
+            canUndoCommit: rows[0]?.commit.hash === hash,
+        });
+    }, [onSelectCommit, rows, selectedHashSet, selectedHashes]);
+
+    const goToHash = useCallback((hash: string | undefined) => {
+        if (hash) { onSelectCommit(hash, 'replace'); }
+    }, [onSelectCommit]);
 
     return (
         <div className="graph-table-wrapper">
@@ -92,7 +127,7 @@ export function GraphTable({
                             row={row}
                             branches={branches}
                             maxLane={maxLane}
-                            selected={row.commit.hash === selectedHash}
+                            selected={selectedHashSet.has(row.commit.hash)}
                             style={{
                                 position: 'absolute',
                                 top: (firstVisible + i) * ROW_HEIGHT,
@@ -100,6 +135,7 @@ export function GraphTable({
                                 right: 0,
                             }}
                             onSelect={onSelectCommit}
+                            onOpenContextMenu={(commit, x, y) => handleOpenContextMenu(commit.hash, x, y)}
                             onPostMessage={onPostMessage}
                         />
                     ))}
@@ -121,6 +157,23 @@ export function GraphTable({
                     )}
                 </div>
             </div>
+            {contextMenu ? (
+                <CommitContextMenu
+                    state={contextMenu}
+                    onClose={() => setContextMenu(undefined)}
+                    onCommand={(command, hash, hashes) => onCommitCommand(command, hash, hashes)}
+                    onGoToChild={(hash) => goToHash(childHash(selectedRows.length > 0 ? selectedRows : rows, hash) ?? childHash(rows, hash))}
+                    onGoToParent={(hash) => goToHash(parentHash(rows, hash))}
+                />
+            ) : null}
         </div>
     );
+}
+
+function parentHash(rows: readonly GraphRow[], hash: string): string | undefined {
+    return rows.find((row) => row.commit.hash === hash)?.commit.parentHashes[0];
+}
+
+function childHash(rows: readonly GraphRow[], hash: string): string | undefined {
+    return rows.find((row) => row.commit.parentHashes.includes(hash))?.commit.hash;
 }

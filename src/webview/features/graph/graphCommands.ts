@@ -1,5 +1,5 @@
 import type { GraphFilters, GraphPage } from '../../../protocol/graph/types';
-import type { GraphWebviewToExtensionMessage, WorktreeCommand } from '../../../protocol/graph/messages';
+import type { CommitCommand, GraphWebviewToExtensionMessage, WorktreeCommand } from '../../../protocol/graph/messages';
 
 let requestCounter = 0;
 function nextRequestId(): string {
@@ -56,6 +56,15 @@ export function messageForWorktreeCommand(command: WorktreeCommand, path?: strin
         type: 'graph/worktreeCommand',
         command,
         path,
+    };
+}
+
+export function messageForCommitCommand(command: CommitCommand, hash: string, hashes: readonly string[] = [hash]): GraphWebviewToExtensionMessage {
+    return {
+        type: 'graph/commitCommand',
+        command,
+        hash,
+        hashes,
     };
 }
 

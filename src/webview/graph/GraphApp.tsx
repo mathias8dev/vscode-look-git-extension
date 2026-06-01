@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer } from 'react';
-import type { GraphExtensionToWebviewMessage } from '../../protocol/graph/messages';
+import type { CommitCommand, GraphExtensionToWebviewMessage } from '../../protocol/graph/messages';
 import type { CommitFileChange } from '../../protocol/graph/types';
 import { BranchPanel } from '../features/graph/BranchPanel';
 import { CommitDetailsPanel } from '../features/graph/CommitDetailsPanel';
@@ -11,6 +11,7 @@ import {
 } from '../features/graph/graphState';
 import {
     messageForCommitDetails,
+    messageForCommitCommand,
     messageForGraphDataRequest,
     messageForLoadMore,
     messageForOpenDiff,
@@ -20,6 +21,7 @@ import { ErrorNotice } from '../shared/ErrorNotice';
 import { vscodeApi } from '../platform/vscodeHost';
 
 const PAGE_LIMIT = 300;
+const ERROR_NOTICE_TIMEOUT_MS = 8000;
 
 export function GraphApp() {
     const [state, dispatch] = useReducer(reduceGraphState, undefined, createInitialGraphState);
@@ -48,6 +50,12 @@ export function GraphApp() {
         ));
     }, [state.filters, state.loading, state.repoId]);
 
+    useEffect(() => {
+        if (!state.error) { return; }
+        const timeout = window.setTimeout(() => dispatch({ type: 'clearError' }), ERROR_NOTICE_TIMEOUT_MS);
+        return () => window.clearTimeout(timeout);
+    }, [state.error]);
+
     const handleLoadMore = useCallback(() => {
         if (!state.hasMore || state.loading || state.loadingMore) { return; }
         dispatch({ type: 'startLoadMore' });
@@ -69,6 +77,22 @@ export function GraphApp() {
             file.parentHash,
         ));
     }, [state.selectedHash]);
+
+    const handleSelectCommit = useCallback((hash: string, mode: 'replace' | 'toggle' | 'range') => {
+        if (mode === 'toggle') {
+            dispatch({ type: 'toggleCommitSelection', hash });
+            return;
+        }
+        if (mode === 'range') {
+            dispatch({ type: 'selectCommitRange', focusHash: hash, hashes: selectedRangeHashes(state.rows.map((row) => row.commit.hash), state.selectionAnchorHash ?? hash, hash) });
+            return;
+        }
+        dispatch({ type: 'selectCommit', hash });
+    }, [state.rows, state.selectionAnchorHash]);
+
+    const handleCommitCommand = useCallback((command: CommitCommand, hash: string, hashes: readonly string[]) => {
+        vscodeApi.postMessage(messageForCommitCommand(command, hash, hashes));
+    }, []);
 
     return (
         <div className="graph-shell">
@@ -105,10 +129,11 @@ export function GraphApp() {
                     rows={state.rows}
                     branches={state.branches}
                     maxLane={state.maxLane}
-                    selectedHash={state.selectedHash}
+                    selectedHashes={state.selectedHashes}
                     hasMore={state.hasMore}
                     loadingMore={state.loadingMore}
-                    onSelectCommit={(hash) => dispatch({ type: 'selectCommit', hash })}
+                    onSelectCommit={handleSelectCommit}
+                    onCommitCommand={handleCommitCommand}
                     onLoadMore={handleLoadMore}
                     onPostMessage={(msg) => vscodeApi.postMessage(msg)}
                 />
@@ -124,4 +149,13 @@ export function GraphApp() {
             ) : null}
         </div>
     );
+}
+
+function selectedRangeHashes(hashes: readonly string[], anchorHash: string, focusHash: string): readonly string[] {
+    const anchorIndex = hashes.indexOf(anchorHash);
+    const focusIndex = hashes.indexOf(focusHash);
+    if (anchorIndex === -1 || focusIndex === -1) { return [focusHash]; }
+    const start = Math.min(anchorIndex, focusIndex);
+    const end = Math.max(anchorIndex, focusIndex);
+    return hashes.slice(start, end + 1);
 }
