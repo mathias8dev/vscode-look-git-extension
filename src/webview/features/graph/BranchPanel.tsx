@@ -3,6 +3,7 @@ import type { BranchInfo, WorktreeInfo } from '../../../protocol/graph/types';
 import { buildBranchTree, buildRemoteBranchTree } from './graphBranchTree';
 import { BranchTreeNode } from './BranchTreeNode';
 import { IconButton } from '../../shared/IconButton';
+import { selectBranchFilter } from './graphBranchSelection';
 
 interface BranchPanelProps {
     readonly branches: readonly BranchInfo[];
@@ -38,7 +39,7 @@ export function BranchPanel({
     const remoteTree = buildRemoteBranchTree(remoteBranches);
 
     const handleSelect = (fullName: string) => {
-        onSelectBranch(fullName === selectedBranchFilter ? undefined : fullName);
+        onSelectBranch(selectBranchFilter(fullName, selectedBranchFilter));
     };
 
     return (
