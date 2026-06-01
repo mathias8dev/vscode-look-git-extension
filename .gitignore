@@ -14,6 +14,7 @@ out/
 .wdio-vscode/
 artifacts/
 coverage/
+.look-git-fixtures/
 
 # Logs
 *.log
@@ -25,3 +26,5 @@ pnpm-debug.log*
 # Local editor and OS noise
 .DS_Store
 Thumbs.db
+
+.look-git-fixtures
