@@ -35,11 +35,13 @@ export interface LineDef {
 }
 
 export function assignLanes(commits: readonly GraphCommit[], options: AssignLaneOptions = {}): GraphRow[] {
-    const layout = buildPermanentLayout(commits, options);
+    const visibleHashes = new Set(commits.map((commit) => commit.hash));
+    const commitByHash = new Map(commits.map((commit) => [commit.hash, commit]));
     const lanes: (string | null)[] = [];
     const result: GraphRow[] = [];
-    const pendingReservedHashes = new Set(layout.reservedLaneByHash.keys());
-    let primarySeen = false;
+    const primaryHash = commits.find((commit) => isPrimaryTip(commit, options))?.hash;
+    const primaryLane = primaryHash ? options.lockedLanes?.get(primaryHash) ?? 0 : 0;
+    const primaryChain = primaryHash ? firstParentChain(primaryHash, commitByHash) : new Set<string>();
 
     function findLane(hash: string): number {
         for (let i = 0; i < lanes.length; i++) { if (lanes[i] === hash) { return i; } }
@@ -57,9 +59,7 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
     function chooseIncomingLane(hash: string, incomingLanes: readonly number[]): number {
         const lockedLane = options.lockedLanes?.get(hash);
         if (lockedLane !== undefined && incomingLanes.includes(lockedLane)) { return lockedLane; }
-        const reservedLane = layout.reservedLaneByHash.get(hash);
-        if (reservedLane !== undefined && incomingLanes.includes(reservedLane)) { return reservedLane; }
-        return incomingLanes[0] ?? takeLaneFor(hash);
+        return Math.min(...incomingLanes);
     }
 
     function findFreeLane(): number {
@@ -68,16 +68,18 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
         }
     }
 
-    function takeLaneFor(hash: string): number {
-        const reservedLane = layout.reservedLaneByHash.get(hash);
-        if (reservedLane !== undefined && pendingReservedHashes.has(hash)) {
-            ensureLane(reservedLane);
-            if (lanes[reservedLane] === null) {
-                pendingReservedHashes.delete(hash);
-                return reservedLane;
-            }
+    function takeLaneFor(hash: string, preferredLane?: number): number {
+        const freeLane = findFreeLane();
+        if (preferredLane !== undefined && preferredLane <= freeLane) {
+            ensureLane(preferredLane);
+            if (lanes[preferredLane] === null) { return preferredLane; }
         }
-        return findFreeLane();
+        const lockedLane = options.lockedLanes?.get(hash);
+        if (lockedLane !== undefined && lockedLane <= freeLane) {
+            ensureLane(lockedLane);
+            if (lanes[lockedLane] === null) { return lockedLane; }
+        }
+        return freeLane;
     }
 
     function ensureLane(lane: number): void {
@@ -90,18 +92,16 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
 
     for (const commit of commits) {
         const lines: LineDef[] = [];
-        const isPrimaryStartCommit = layout.primaryHash === commit.hash;
+        const isPrimaryStartCommit = primaryHash === commit.hash;
         const incomingLanes = isPrimaryStartCommit ? [] : findLanes(commit.hash);
         const hasIncoming = incomingLanes.length > 0;
         let lane = hasIncoming ? chooseIncomingLane(commit.hash, incomingLanes) : -1;
 
-        if (lane === -1) { lane = takeLaneFor(commit.hash); ensureLane(lane); }
+        if (lane === -1) { lane = takeLaneFor(commit.hash, isPrimaryStartCommit ? primaryLane : undefined); ensureLane(lane); }
         else { ensureLane(lane); }
 
-        if (isPrimaryStartCommit) { primarySeen = true; ensureLane(lane); }
-
         const color = laneColor(lane);
-        const isPrimaryLane = layout.primaryHash !== undefined && primarySeen && lane === layout.primaryLane;
+        const isPrimaryLane = primaryChain.has(commit.hash);
 
         for (const incoming of incomingLanes) {
             lanes[incoming] = null;
@@ -130,16 +130,33 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
         }
 
         if (parents.length > 0 && firstParent) {
-            lanes[lane] = firstParent;
-            lines.push({
-                fromLane: lane, toLane: lane, color, type: 'straight',
-                targetHash: firstParent, role: 'first-parent',
-                startY: hasIncoming ? 'top' : 'center', endY: 'bottom',
-            });
+            const firstParentLane = visibleHashes.has(firstParent) ? findLane(firstParent) : -1;
+            if (firstParentLane !== -1 && firstParentLane !== lane) {
+                lines.push({
+                    fromLane: lane, toLane: firstParentLane, color,
+                    type: firstParentLane < lane ? 'merge-left' : 'merge-right',
+                    targetHash: firstParent, role: 'first-parent',
+                    startY: hasIncoming ? 'top' : 'center', endY: 'bottom',
+                });
+            } else if (visibleHashes.has(firstParent)) {
+                lanes[lane] = firstParent;
+                lines.push({
+                    fromLane: lane, toLane: lane, color, type: 'straight',
+                    targetHash: firstParent, role: 'first-parent',
+                    startY: hasIncoming ? 'top' : 'center', endY: 'bottom',
+                });
+            } else {
+                lines.push({
+                    fromLane: lane, toLane: lane, color, type: 'straight',
+                    targetHash: firstParent, role: 'first-parent',
+                    startY: hasIncoming ? 'top' : 'center', endY: 'bottom',
+                });
+            }
 
             for (let p = 1; p < parents.length; p++) {
                 const parentHash = parents[p];
                 if (!parentHash) { continue; }
+                if (!visibleHashes.has(parentHash)) { continue; }
                 const parentLane = findLane(parentHash);
                 if (parentLane !== -1) {
                     lines.push({
@@ -175,134 +192,6 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
     return result;
 }
 
-interface PermanentLayout {
-    readonly reservedLaneByHash: ReadonlyMap<string, number>;
-    readonly primaryHash: string | undefined;
-    readonly primaryLane: number;
-}
-
-interface LayoutInterval {
-    readonly hash: string;
-    readonly startIndex: number;
-    readonly endIndex: number;
-    readonly firstParentLength: number;
-}
-
-function buildPermanentLayout(commits: readonly GraphCommit[], options: AssignLaneOptions): PermanentLayout {
-    const byHash = new Map<string, GraphCommit>();
-    const indexByHash = new Map<string, number>();
-    const visibleChildCount = new Map<string, number>();
-    const candidateStartByHash = new Map<string, number>();
-
-    commits.forEach((commit, index) => {
-        byHash.set(commit.hash, commit);
-        indexByHash.set(commit.hash, index);
-        visibleChildCount.set(commit.hash, 0);
-    });
-
-    commits.forEach((commit, index) => {
-        commit.parentHashes.forEach((parentHash, parentIndex) => {
-            if (!byHash.has(parentHash)) { return; }
-            visibleChildCount.set(parentHash, (visibleChildCount.get(parentHash) ?? 0) + 1);
-            if (parentIndex > 0) {
-                const previous = candidateStartByHash.get(parentHash);
-                candidateStartByHash.set(parentHash, previous === undefined ? index : Math.min(previous, index));
-            }
-        });
-    });
-
-    for (const commit of commits) {
-        if ((visibleChildCount.get(commit.hash) ?? 0) === 0) {
-            candidateStartByHash.set(commit.hash, indexByHash.get(commit.hash) ?? 0);
-        }
-    }
-
-    const primaryHash = commits.find((commit) => isPrimaryTip(commit, options))?.hash;
-    if (primaryHash) { candidateStartByHash.set(primaryHash, indexByHash.get(primaryHash) ?? 0); }
-
-    const lengthMemo = new Map<string, number>();
-    const firstParentLength = (hash: string): number => {
-        const memoized = lengthMemo.get(hash);
-        if (memoized !== undefined) { return memoized; }
-        const commit = byHash.get(hash);
-        const firstParent = commit?.parentHashes[0];
-        const length = firstParent && byHash.has(firstParent)
-            ? 1 + firstParentLength(firstParent)
-            : 1;
-        lengthMemo.set(hash, length);
-        return length;
-    };
-
-    const endIndexMemo = new Map<string, number>();
-    const firstParentEndIndex = (hash: string): number => {
-        const memoized = endIndexMemo.get(hash);
-        if (memoized !== undefined) { return memoized; }
-        const commit = byHash.get(hash);
-        const firstParent = commit?.parentHashes[0];
-        const ownIndex = indexByHash.get(hash) ?? 0;
-        const endIndex = firstParent && byHash.has(firstParent)
-            ? Math.max(ownIndex, firstParentEndIndex(firstParent))
-            : ownIndex;
-        endIndexMemo.set(hash, endIndex);
-        return endIndex;
-    };
-
-    const candidates: LayoutInterval[] = [...candidateStartByHash.entries()].map(([hash, startIndex]) => ({
-        hash,
-        startIndex,
-        endIndex: firstParentEndIndex(hash),
-        firstParentLength: firstParentLength(hash),
-    })).sort((a, b) => {
-        if (a.hash === primaryHash) { return -1; }
-        if (b.hash === primaryHash) { return 1; }
-        const aLocked = options.lockedLanes?.has(a.hash) ?? false;
-        const bLocked = options.lockedLanes?.has(b.hash) ?? false;
-        if (aLocked !== bLocked) { return aLocked ? -1 : 1; }
-        const lengthDiff = b.firstParentLength - a.firstParentLength;
-        if (lengthDiff !== 0) { return lengthDiff; }
-        return a.startIndex - b.startIndex;
-    });
-
-    const reservedLaneByHash = new Map<string, number>();
-    const intervalsByLane: LayoutInterval[][] = [];
-    for (const candidate of candidates) {
-        const lockedLane = options.lockedLanes?.get(candidate.hash);
-        const lane = lockedLane !== undefined && intervalLaneAvailable(intervalsByLane, lockedLane, candidate)
-            ? lockedLane
-            : firstAvailableIntervalLane(intervalsByLane, candidate);
-        const laneIntervals = intervalsByLane[lane] ?? [];
-        laneIntervals.push(candidate);
-        intervalsByLane[lane] = laneIntervals;
-        reservedLaneByHash.set(candidate.hash, lane);
-    }
-
-    return {
-        reservedLaneByHash,
-        primaryHash,
-        primaryLane: primaryHash ? reservedLaneByHash.get(primaryHash) ?? 0 : 0,
-    };
-}
-
-function intervalLaneAvailable(
-    intervalsByLane: readonly (readonly LayoutInterval[])[],
-    lane: number,
-    candidate: LayoutInterval,
-): boolean {
-    const intervals = intervalsByLane[lane] ?? [];
-    return !intervals.some((interval) => intervalsOverlap(interval, candidate));
-}
-
-function firstAvailableIntervalLane(intervalsByLane: readonly (readonly LayoutInterval[])[], candidate: LayoutInterval): number {
-    for (let lane = 0; lane < intervalsByLane.length; lane++) {
-        if (intervalLaneAvailable(intervalsByLane, lane, candidate)) { return lane; }
-    }
-    return intervalsByLane.length;
-}
-
-function intervalsOverlap(a: LayoutInterval, b: LayoutInterval): boolean {
-    return a.startIndex <= b.endIndex && b.startIndex <= a.endIndex;
-}
-
 export function getMaxLane(rows: readonly GraphRow[]): number {
     let max = 0;
     for (const row of rows) {
@@ -322,6 +211,16 @@ function isPrimaryTip(commit: GraphCommit, options: AssignLaneOptions): boolean 
     }
     if (!options.primaryBranch) { return false; }
     return commit.refs.some((ref) => normalizeRef(ref) === options.primaryBranch);
+}
+
+function firstParentChain(primaryHash: string, commitByHash: ReadonlyMap<string, GraphCommit>): ReadonlySet<string> {
+    const chain = new Set<string>();
+    let hash: string | undefined = primaryHash;
+    while (hash && !chain.has(hash)) {
+        chain.add(hash);
+        hash = commitByHash.get(hash)?.parentHashes[0];
+    }
+    return chain;
 }
 
 function normalizeRef(ref: string): string {
