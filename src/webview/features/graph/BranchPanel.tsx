@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import type { BranchCommand } from '../../../protocol/graph/messages';
 import type { BranchInfo, WorktreeInfo } from '../../../protocol/graph/types';
 import { buildBranchTree, buildRemoteBranchTree } from './graphBranchTree';
 import { BranchTreeNode } from './BranchTreeNode';
+import { BranchContextMenu, type BranchContextMenuState } from './BranchContextMenu';
 import { IconButton } from '../../shared/IconButton';
 import { selectBranchFilter } from './graphBranchSelection';
 
@@ -11,6 +13,7 @@ interface BranchPanelProps {
     readonly currentBranch: string;
     readonly selectedBranchFilter: string | undefined;
     readonly onSelectBranch: (branch: string | undefined) => void;
+    readonly onBranchCommand: (command: BranchCommand, branch: string, isRemote: boolean) => void;
     readonly onOpenWorktree: (path: string) => void;
     readonly onAddWorktree: () => void;
 }
@@ -21,6 +24,7 @@ export function BranchPanel({
     currentBranch,
     selectedBranchFilter,
     onSelectBranch,
+    onBranchCommand,
     onOpenWorktree,
     onAddWorktree,
 }: BranchPanelProps) {
@@ -28,6 +32,7 @@ export function BranchPanel({
     const [localCollapsed, setLocalCollapsed] = useState(false);
     const [remoteCollapsed, setRemoteCollapsed] = useState(false);
     const [worktreesCollapsed, setWorktreesCollapsed] = useState(false);
+    const [contextMenu, setContextMenu] = useState<BranchContextMenuState | undefined>(undefined);
 
     const filtered = search
         ? branches.filter((b) => b.name.toLowerCase().includes(search.toLowerCase()))
@@ -40,6 +45,17 @@ export function BranchPanel({
 
     const handleSelect = (fullName: string) => {
         onSelectBranch(selectBranchFilter(fullName, selectedBranchFilter));
+    };
+
+    const handleOpenContextMenu = (branch: BranchInfo, x: number, y: number) => {
+        setContextMenu({
+            branch: branch.name,
+            isRemote: branch.isRemote,
+            isCurrent: branch.isCurrent,
+            currentBranch,
+            x,
+            y,
+        });
     };
 
     return (
@@ -86,6 +102,7 @@ export function BranchPanel({
                                         depth={1}
                                         selectedBranch={selectedBranchFilter}
                                         onSelect={handleSelect}
+                                        onOpenContextMenu={handleOpenContextMenu}
                                     />
                                 ))}
                             </>
@@ -113,6 +130,7 @@ export function BranchPanel({
                                 depth={1}
                                 selectedBranch={selectedBranchFilter}
                                 onSelect={handleSelect}
+                                onOpenContextMenu={handleOpenContextMenu}
                             />
                         ))}
                     </div>
@@ -157,6 +175,13 @@ export function BranchPanel({
                 </div>
 
             </div>
+            {contextMenu ? (
+                <BranchContextMenu
+                    state={contextMenu}
+                    onClose={() => setContextMenu(undefined)}
+                    onCommand={onBranchCommand}
+                />
+            ) : null}
         </div>
     );
 }

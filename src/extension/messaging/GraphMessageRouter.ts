@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
-import type { CommitCommand, GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse, OpenDiffRequest } from '../../protocol/graph/messages';
+import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse, OpenDiffRequest } from '../../protocol/graph/messages';
 import type { GraphData, GraphFilters } from '../../protocol/graph/types';
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import type { GitRepository } from '../../core/git/GitRepository';
@@ -179,26 +179,37 @@ export class GraphMessageRouter {
         };
     }
 
-    private async handleBranchCommand(command: string, branch: string, isRemote: boolean): Promise<void> {
+    private async handleBranchCommand(command: BranchCommand, branch: string, isRemote: boolean): Promise<void> {
         const repo = this.repositories.requireRepository();
         const currentBranch = await repo.getCurrentBranch();
         switch (command) {
-            case 'checkout':    await repo.checkout(branch); break;
+            case 'checkout':
+                await checkoutBranch(repo, branch, isRemote);
+                break;
             case 'newBranchFrom': {
                 const name = await vscode.window.showInputBox({ prompt: `New branch from "${branch}":` });
                 if (!name) { return; }
                 await repo.checkoutNewBranch(name, branch);
                 break;
             }
+            case 'checkoutRebaseOnto':
+                await assertNoUnmergedFiles(repo, 'checking out and rebasing branches');
+                await checkoutBranch(repo, branch, isRemote);
+                await repo.exec(['rebase', currentBranch]);
+                break;
+            case 'compareWithCurrent':
+                await openDiffDocument(`Diff ${currentBranch}...${branch}`, await repo.execRaw(['diff', `${currentBranch}...${branch}`, '--']));
+                return;
+            case 'showDiffWithWorkingTree':
+                await openDiffDocument(`Diff ${branch}..working tree`, await repo.execRaw(['diff', branch, '--']));
+                return;
             case 'delete': {
                 const label = `Delete${isRemote ? ' Remote' : ''}`;
                 const choice = await showModalWarningMessage(`Delete branch "${branch}"?`, label);
                 if (choice !== label) { return; }
                 if (isRemote) {
-                    const slashIdx = branch.indexOf('/');
-                    const remote = slashIdx === -1 ? 'origin' : branch.substring(0, slashIdx);
-                    const remoteBranch = slashIdx === -1 ? branch : branch.substring(slashIdx + 1);
-                    await repo.deleteRemoteBranch(remote, remoteBranch);
+                    const { remote, branchName } = await resolveRemoteBranch(repo, branch);
+                    await repo.deleteRemoteBranch(remote, branchName);
                 } else {
                     await repo.deleteBranch(branch);
                 }
@@ -210,13 +221,22 @@ export class GraphMessageRouter {
                 await repo.renameBranch(branch, name);
                 break;
             }
-            case 'push':         await repo.pushBranch('origin', branch); break;
-            case 'update':       await repo.fetchBranch('origin', branch); break;
-            case 'rebaseOnto':   await repo.rebase(branch); break;
-            case 'mergeInto':    await repo.merge(branch); break;
-            case 'checkoutRebaseOnto':
-                await repo.checkout(branch);
-                await repo.rebase(currentBranch);
+            case 'push':
+                if (isRemote) { throw new Error('Push is only available for local branches.'); }
+                await pushBranch(repo, branch);
+                break;
+            case 'update': {
+                const { remote, branchName } = await resolveRemoteBranch(repo, branch);
+                await repo.fetchBranch(remote, branchName);
+                break;
+            }
+            case 'rebaseOnto':
+                await assertNoUnmergedFiles(repo, 'rebasing branches');
+                await repo.rebase(branch);
+                break;
+            case 'mergeInto':
+                await assertNoUnmergedFiles(repo, 'merging branches');
+                await repo.merge(branch);
                 break;
         }
         await this.pushGraphData(undefined, undefined);
@@ -365,6 +385,43 @@ async function createPatchFile(repo: GitRepository, hashes: readonly string[]): 
     if (!uri) { return; }
     const chunks = await Promise.all(hashes.map((hash) => repo.execRaw(['format-patch', '-1', '--stdout', hash])));
     await fs.writeFile(uri.fsPath, chunks.join('\n'));
+}
+
+async function checkoutBranch(repo: GitRepository, branch: string, isRemote: boolean): Promise<void> {
+    if (!isRemote) {
+        await repo.checkout(branch);
+        return;
+    }
+    await repo.exec(['checkout', '--track', branch]);
+}
+
+async function pushBranch(repo: GitRepository, branch: string): Promise<void> {
+    const upstream = (await repo.execRaw(['for-each-ref', '--format=%(upstream:short)', `refs/heads/${branch}`])).trim();
+    if (upstream) {
+        const { remote, branchName } = await resolveRemoteBranch(repo, upstream);
+        await repo.exec(['push', remote, `${branch}:refs/heads/${branchName}`]);
+        return;
+    }
+    const remote = await defaultRemote(repo);
+    await repo.exec(['push', '-u', remote, branch]);
+}
+
+async function defaultRemote(repo: GitRepository): Promise<string> {
+    const remotes = await repo.getRemotes();
+    const remote = remotes[0];
+    if (!remote) { throw new Error('No Git remote configured.'); }
+    return remote;
+}
+
+async function resolveRemoteBranch(repo: GitRepository, branch: string): Promise<{ readonly remote: string; readonly branchName: string }> {
+    const slashIdx = branch.indexOf('/');
+    if (slashIdx === -1) {
+        return { remote: await defaultRemote(repo), branchName: branch };
+    }
+    return {
+        remote: branch.substring(0, slashIdx),
+        branchName: branch.substring(slashIdx + 1),
+    };
 }
 
 async function showRepositoryAtRevision(

@@ -17,6 +17,7 @@ describe('BranchPanel', () => {
                 currentBranch="main"
                 selectedBranchFilter={undefined}
                 onSelectBranch={() => undefined}
+                onBranchCommand={() => undefined}
                 onOpenWorktree={() => undefined}
                 onAddWorktree={() => undefined}
             />,

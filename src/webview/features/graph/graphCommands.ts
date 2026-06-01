@@ -1,5 +1,5 @@
 import type { GraphFilters, GraphPage } from '../../../protocol/graph/types';
-import type { CommitCommand, GraphWebviewToExtensionMessage, WorktreeCommand } from '../../../protocol/graph/messages';
+import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, WorktreeCommand } from '../../../protocol/graph/messages';
 
 let requestCounter = 0;
 function nextRequestId(): string {
@@ -43,9 +43,13 @@ export function messageForCommitDetails(hash: string): GraphWebviewToExtensionMe
 }
 
 export function messageForBranchCheckout(branch: string, isRemote: boolean): GraphWebviewToExtensionMessage {
+    return messageForBranchCommand('checkout', branch, isRemote);
+}
+
+export function messageForBranchCommand(command: BranchCommand, branch: string, isRemote: boolean): GraphWebviewToExtensionMessage {
     return {
         type: 'graph/branchCommand',
-        command: 'checkout',
+        command,
         branch,
         isRemote,
     };

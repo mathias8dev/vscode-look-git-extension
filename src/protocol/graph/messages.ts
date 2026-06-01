@@ -67,6 +67,7 @@ export interface CommitDetailsRequest {
 
 export type BranchCommand =
     | 'checkout' | 'newBranchFrom' | 'checkoutRebaseOnto'
+    | 'compareWithCurrent' | 'showDiffWithWorkingTree'
     | 'delete' | 'rename' | 'push' | 'update'
     | 'rebaseOnto' | 'mergeInto';
 

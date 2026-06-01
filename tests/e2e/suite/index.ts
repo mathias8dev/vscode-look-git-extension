@@ -194,6 +194,12 @@ export function run(): Promise<void> {
             },
         },
         {
+            name: 'runs branch context actions end to end',
+            run: async () => {
+                await runBranchContextActionsE2E();
+            },
+        },
+        {
             name: 'runs history-editing commit context actions end to end',
             run: async () => {
                 await runResetActionE2E();
@@ -231,6 +237,110 @@ export function run(): Promise<void> {
             },
         },
     ]);
+}
+
+async function runBranchContextActionsE2E(): Promise<void> {
+    await runBranchCheckoutCreateRenameDeleteE2E();
+    await runBranchRebaseMergeAndDiffE2E();
+    await runBranchPushAndRemoteDeleteE2E();
+}
+
+async function runBranchCheckoutCreateRenameDeleteE2E(): Promise<void> {
+    const fixture = createTempGitRepo();
+    const messages: GraphExtensionToWebviewMessage[] = [];
+    try {
+        fixture.commitFile('base.txt', 'base\n', 'feat: base');
+        fixture.git(['checkout', '-q', '-b', 'chore/ci-matrix']);
+        const source = fixture.commitFile('ci.txt', 'ci\n', 'chore(ci): add matrix');
+        fixture.git(['checkout', '-q', 'main']);
+        const router = routerFor(fixture.cwd, messages);
+
+        await router.handle({ type: 'graph/branchCommand', command: 'checkout', branch: 'chore/ci-matrix', isRemote: false });
+        assert.equal(git(fixture.cwd, ['branch', '--show-current']), 'chore/ci-matrix');
+        fixture.git(['checkout', '-q', 'main']);
+
+        await withPatchedVscode({ inputBoxValues: ['feature/from-ci', 'feature/renamed-ci'], warningChoices: ['Delete'] }, async () => {
+            await router.handle({ type: 'graph/branchCommand', command: 'newBranchFrom', branch: 'chore/ci-matrix', isRemote: false });
+            await router.handle({ type: 'graph/branchCommand', command: 'rename', branch: 'feature/from-ci', isRemote: false });
+            fixture.git(['checkout', '-q', 'main']);
+            await router.handle({ type: 'graph/branchCommand', command: 'delete', branch: 'feature/renamed-ci', isRemote: false });
+        });
+
+        assert.equal(git(fixture.cwd, ['rev-parse', 'chore/ci-matrix']), source);
+        assert.equal(git(fixture.cwd, ['branch', '--list', 'feature/renamed-ci']), '');
+        assertNoGraphError(messages);
+    } finally {
+        fixture.cleanup();
+    }
+}
+
+async function runBranchRebaseMergeAndDiffE2E(): Promise<void> {
+    const fixture = createTempGitRepo();
+    const messages: GraphExtensionToWebviewMessage[] = [];
+    try {
+        const base = fixture.commitFile('base.txt', 'base\n', 'feat: base');
+        fixture.git(['checkout', '-q', '-b', 'feature/topic', base]);
+        fixture.commitFile('feature.txt', 'feature\n', 'feat: feature');
+        fixture.git(['checkout', '-q', 'main']);
+        const main = fixture.commitFile('main.txt', 'main\n', 'feat: main');
+        const router = routerFor(fixture.cwd, messages);
+
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        await router.handle({ type: 'graph/branchCommand', command: 'compareWithCurrent', branch: 'feature/topic', isRemote: false });
+        await waitForActiveEditorText('feature.txt');
+
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        fixture.write('base.txt', 'working tree\n');
+        await router.handle({ type: 'graph/branchCommand', command: 'showDiffWithWorkingTree', branch: 'feature/topic', isRemote: false });
+        await waitForActiveEditorText('working tree');
+        fixture.git(['checkout', '--', 'base.txt']);
+
+        await router.handle({ type: 'graph/branchCommand', command: 'checkoutRebaseOnto', branch: 'feature/topic', isRemote: false });
+        assert.equal(git(fixture.cwd, ['branch', '--show-current']), 'feature/topic');
+        assert.equal(git(fixture.cwd, ['merge-base', 'HEAD', 'main']), main);
+
+        fixture.git(['checkout', '-q', 'main']);
+        fixture.git(['checkout', '-q', '-b', 'feature/merge-target', base]);
+        fixture.commitFile('merge-target.txt', 'merge target\n', 'feat: merge target');
+        fixture.git(['checkout', '-q', 'main']);
+        await router.handle({ type: 'graph/branchCommand', command: 'mergeInto', branch: 'feature/merge-target', isRemote: false });
+        assert.equal(git(fixture.cwd, ['show', 'HEAD:merge-target.txt']), 'merge target');
+
+        fixture.git(['checkout', '-q', '-b', 'feature/rebase-base', base]);
+        const selected = fixture.commitFile('selected.txt', 'selected\n', 'feat: selected');
+        fixture.git(['checkout', '-q', 'main']);
+        await router.handle({ type: 'graph/branchCommand', command: 'rebaseOnto', branch: 'feature/rebase-base', isRemote: false });
+        assert.equal(git(fixture.cwd, ['merge-base', 'HEAD', 'feature/rebase-base']), selected);
+        assertNoGraphError(messages);
+    } finally {
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        fixture.cleanup();
+    }
+}
+
+async function runBranchPushAndRemoteDeleteE2E(): Promise<void> {
+    const fixture = createTempGitRepo();
+    const remote = createBareGitRepo();
+    const messages: GraphExtensionToWebviewMessage[] = [];
+    try {
+        fixture.commitFile('base.txt', 'base\n', 'feat: base');
+        fixture.git(['remote', 'add', 'origin', remote.cwd]);
+        fixture.git(['push', '-u', 'origin', 'main']);
+        fixture.git(['checkout', '-q', '-b', 'feature/push']);
+        fixture.commitFile('feature.txt', 'feature\n', 'feat: feature');
+        const router = routerFor(fixture.cwd, messages);
+
+        await withPatchedVscode({ warningChoices: ['Delete Remote'] }, async () => {
+            await router.handle({ type: 'graph/branchCommand', command: 'push', branch: 'feature/push', isRemote: false });
+            await router.handle({ type: 'graph/branchCommand', command: 'delete', branch: 'origin/feature/push', isRemote: true });
+        });
+
+        assert.equal(remote.gitTrim(['branch', '--list', 'feature/push']), '');
+        assertNoGraphError(messages);
+    } finally {
+        fixture.cleanup();
+        remote.cleanup();
+    }
 }
 
 async function runResetActionE2E(): Promise<void> {

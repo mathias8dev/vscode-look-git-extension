@@ -105,3 +105,64 @@ describe('GraphMessageRouter commit commands', () => {
         expect(commands.calls).toEqual([]);
     });
 });
+
+describe('GraphMessageRouter branch commands', () => {
+    beforeEach(resetMockVscode);
+
+    it('checks out and rebases the selected branch onto the current branch', async () => {
+        const repo = makeRepositoryMock();
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        await router.handle({ type: 'graph/branchCommand', command: 'checkoutRebaseOnto', branch: 'feature/ui', isRemote: false });
+
+        expect(vi.mocked(repo.checkout)).toHaveBeenCalledWith('feature/ui');
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['rebase', 'main']);
+    });
+
+    it('compares the selected branch with the current branch', async () => {
+        const repo = makeRepositoryMock({
+            execRaw: vi.fn(async (args) => args[0] === 'diff' ? 'diff --git a/file b/file\n' : ''),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        await router.handle({ type: 'graph/branchCommand', command: 'compareWithCurrent', branch: 'feature/ui', isRemote: false });
+
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['diff', 'main...feature/ui', '--']);
+        expect(workspace.documents).toEqual([{ content: 'diff --git a/file b/file\n', language: 'diff' }]);
+    });
+
+    it('shows the selected branch diff against the working tree', async () => {
+        const repo = makeRepositoryMock({
+            execRaw: vi.fn(async (args) => args[0] === 'diff' ? 'diff --git a/local b/local\n' : ''),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        await router.handle({ type: 'graph/branchCommand', command: 'showDiffWithWorkingTree', branch: 'feature/ui', isRemote: false });
+
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['diff', 'feature/ui', '--']);
+        expect(workspace.documents).toEqual([{ content: 'diff --git a/local b/local\n', language: 'diff' }]);
+    });
+
+    it('pushes to the configured upstream branch', async () => {
+        const repo = makeRepositoryMock({
+            execRaw: vi.fn(async () => 'origin/review/topic\n'),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        await router.handle({ type: 'graph/branchCommand', command: 'push', branch: 'topic', isRemote: false });
+
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['push', 'origin', 'topic:refs/heads/review/topic']);
+    });
+
+    it('pushes a new local branch to the first remote with upstream tracking', async () => {
+        const repo = makeRepositoryMock({
+            execRaw: vi.fn(async () => ''),
+            getRemotes: vi.fn(async () => ['upstream']),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        await router.handle({ type: 'graph/branchCommand', command: 'push', branch: 'topic', isRemote: false });
+
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['push', '-u', 'upstream', 'topic']);
+    });
+});

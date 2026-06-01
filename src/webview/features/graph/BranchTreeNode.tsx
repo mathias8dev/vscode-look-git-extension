@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { BranchInfo } from '../../../protocol/graph/types';
 import type { BranchNode } from './graphBranchTree';
 
 interface BranchTreeNodeProps {
@@ -6,9 +7,10 @@ interface BranchTreeNodeProps {
     readonly depth: number;
     readonly selectedBranch: string | undefined;
     readonly onSelect: (fullName: string) => void;
+    readonly onOpenContextMenu: (branch: BranchInfo, x: number, y: number) => void;
 }
 
-export function BranchTreeNode({ node, depth, selectedBranch, onSelect }: BranchTreeNodeProps) {
+export function BranchTreeNode({ node, depth, selectedBranch, onSelect, onOpenContextMenu }: BranchTreeNodeProps) {
     const [collapsed, setCollapsed] = useState(false);
 
     if (node.isFolder || node.children.length > 0) {
@@ -34,6 +36,7 @@ export function BranchTreeNode({ node, depth, selectedBranch, onSelect }: Branch
                         depth={depth + 1}
                         selectedBranch={selectedBranch}
                         onSelect={onSelect}
+                        onOpenContextMenu={onOpenContextMenu}
                     />
                 ))}
             </div>
@@ -51,6 +54,11 @@ export function BranchTreeNode({ node, depth, selectedBranch, onSelect }: Branch
             style={{ paddingLeft: `${8 + depth * 12}px` }}
             title={node.fullName}
             onClick={() => onSelect(node.fullName)}
+            onContextMenu={(event) => {
+                if (!branch) { return; }
+                event.preventDefault();
+                onOpenContextMenu(branch, event.clientX, event.clientY);
+            }}
         >
             <i
                 className={`codicon ${isCurrent ? 'codicon-star-full' : 'codicon-git-branch'} branch-leaf-icon`}
