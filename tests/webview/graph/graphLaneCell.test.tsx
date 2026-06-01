@@ -20,8 +20,9 @@ describe('GraphLaneCell', () => {
             }],
         };
 
-        const markup = renderToStaticMarkup(<GraphLaneCell laneData={laneData} maxLane={0} />);
+        const markup = renderToStaticMarkup(<GraphLaneCell laneData={laneData} />);
 
+        expect(markup).toContain('width="16"');
         expect(markup).toContain('y1="12"');
         expect(markup).toContain('y2="24"');
     });
@@ -42,8 +43,9 @@ describe('GraphLaneCell', () => {
             }],
         };
 
-        const markup = renderToStaticMarkup(<GraphLaneCell laneData={laneData} maxLane={1} />);
+        const markup = renderToStaticMarkup(<GraphLaneCell laneData={laneData} />);
 
+        expect(markup).toContain('width="32"');
         expect(markup).toContain('M 8 12');
         expect(markup).toContain('24 24');
     });

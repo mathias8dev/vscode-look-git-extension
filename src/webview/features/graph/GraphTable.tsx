@@ -1,16 +1,15 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { BranchInfo } from '../../../protocol/graph/types';
 import type { CommitCommand } from '../../../protocol/graph/messages';
 import type { GraphRow } from './layout/assignGraphLanes';
 import { GraphCommitRow, type CommitSelectMode } from './GraphRow';
-import { ROW_HEIGHT, LANE_WIDTH } from './GraphLaneCell';
+import { ROW_HEIGHT } from './GraphLaneCell';
 import { CommitContextMenu, type CommitContextMenuState } from './CommitContextMenu';
 import { getVisibleGraphRowRange } from './graphVirtualization';
 
 interface GraphTableProps {
     readonly rows: readonly GraphRow[];
     readonly branches: readonly BranchInfo[];
-    readonly maxLane: number;
     readonly selectedHashes: readonly string[];
     readonly hasMore: boolean;
     readonly loadingMore: boolean;
@@ -23,7 +22,6 @@ interface GraphTableProps {
 export function GraphTable({
     rows,
     branches,
-    maxLane,
     selectedHashes,
     hasMore,
     loadingMore,
@@ -36,11 +34,7 @@ export function GraphTable({
     const [contextMenu, setContextMenu] = useState<CommitContextMenuState | undefined>(undefined);
     const [scrollTop, setScrollTop] = useState(0);
     const [viewportHeight, setViewportHeight] = useState(400);
-    const colWidth = (maxLane + 1) * LANE_WIDTH + 4;
     const totalHeight = rows.length * ROW_HEIGHT + (hasMore ? ROW_HEIGHT : 0);
-    const graphColumnStyle: CSSProperties & { readonly '--graph-col-width': string } = {
-        '--graph-col-width': `${colWidth}px`,
-    };
 
     const measureViewport = useCallback(() => {
         const el = wrapperRef.current;
@@ -108,9 +102,7 @@ export function GraphTable({
         <div className="graph-table-wrapper">
             <header
                 className="graph-table-header"
-                style={graphColumnStyle}
             >
-                <div className="graph-header-lane" />
                 <div className="graph-header-message">Message</div>
                 <div className="graph-header-author">Author</div>
                 <div className="graph-header-date">Date</div>
@@ -126,7 +118,6 @@ export function GraphTable({
                             key={row.commit.hash}
                             row={row}
                             branches={branches}
-                            maxLane={maxLane}
                             selected={selectedHashSet.has(row.commit.hash)}
                             style={{
                                 position: 'absolute',

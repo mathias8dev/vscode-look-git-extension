@@ -23,10 +23,15 @@ describe('queryGraphLog', () => {
         expect(args.slice(separatorIndex + 1)).toEqual(['src/app.ts']);
     });
 
-    it('queries all refs by default', async () => {
+    it('queries branch, tag, remote refs and HEAD by default without stash internals', async () => {
         const calls: string[][] = [];
         await queryGraphLog(recordingExec(calls), 50);
 
-        expect(expectItem(calls, 0)).toContain('--all');
+        const args = expectItem(calls, 0);
+        expect(args).toContain('HEAD');
+        expect(args).toContain('--branches');
+        expect(args).toContain('--tags');
+        expect(args).toContain('--remotes');
+        expect(args).not.toContain('--all');
     });
 });

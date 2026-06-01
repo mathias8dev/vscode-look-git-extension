@@ -134,7 +134,6 @@ export function GraphApp() {
                 <GraphTable
                     rows={state.rows}
                     branches={state.branches}
-                    maxLane={state.maxLane}
                     selectedHashes={state.selectedHashes}
                     hasMore={state.hasMore}
                     loadingMore={state.loadingMore}

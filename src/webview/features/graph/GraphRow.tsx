@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { BranchInfo, GraphCommit } from '../../../protocol/graph/types';
-import type { GraphRow } from './layout/assignGraphLanes';
+import { getLaneDataMaxLane, type GraphRow } from './layout/assignGraphLanes';
 import { GraphLaneCell, LANE_WIDTH } from './GraphLaneCell';
 import { RefBadge } from './RefBadge';
 import { parseRefs } from './refModel';
@@ -11,7 +11,6 @@ export type CommitSelectMode = 'replace' | 'toggle' | 'range';
 interface GraphRowProps {
     readonly row: GraphRow;
     readonly branches: readonly BranchInfo[];
-    readonly maxLane: number;
     readonly selected: boolean;
     readonly style: CSSProperties;
     readonly onSelect: (hash: string, mode: CommitSelectMode) => void;
@@ -19,13 +18,13 @@ interface GraphRowProps {
     readonly onPostMessage: (msg: unknown) => void;
 }
 
-export function GraphCommitRow({ row, branches, maxLane, selected, style, onSelect, onOpenContextMenu, onPostMessage }: GraphRowProps) {
+export function GraphCommitRow({ row, branches, selected, style, onSelect, onOpenContextMenu, onPostMessage }: GraphRowProps) {
     const { commit, laneData } = row;
     const refs = parseRefs(commit.refs, branches);
-    const colWidth = (maxLane + 1) * LANE_WIDTH + 4;
-    const rowStyle: CSSProperties & { readonly '--graph-col-width': string } = {
+    const messageOffset = (getLaneDataMaxLane(laneData) + 1) * LANE_WIDTH + 4;
+    const rowStyle: CSSProperties & { readonly '--graph-row-message-offset': string } = {
         ...style,
-        '--graph-col-width': `${colWidth}px`,
+        '--graph-row-message-offset': `${messageOffset}px`,
     };
 
     return (
@@ -51,7 +50,7 @@ export function GraphCommitRow({ row, branches, maxLane, selected, style, onSele
             }}
         >
             <div className="graph-lane-cell">
-                <GraphLaneCell laneData={laneData} maxLane={maxLane} />
+                <GraphLaneCell laneData={laneData} />
             </div>
             <div className="graph-message-cell">
                 {refs.map((ref) => (

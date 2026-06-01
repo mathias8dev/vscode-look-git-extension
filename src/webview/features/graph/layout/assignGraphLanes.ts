@@ -93,7 +93,7 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
     for (const commit of commits) {
         const lines: LineDef[] = [];
         const isPrimaryStartCommit = primaryHash === commit.hash;
-        const incomingLanes = isPrimaryStartCommit ? [] : findLanes(commit.hash);
+        const incomingLanes = findLanes(commit.hash);
         const hasIncoming = incomingLanes.length > 0;
         let lane = hasIncoming ? chooseIncomingLane(commit.hash, incomingLanes) : -1;
 
@@ -118,6 +118,17 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
 
         const parents = commit.parentHashes;
         const firstParent = parents[0];
+        let selectedLaneIncomingCovered = false;
+
+        function coverSelectedLaneIncoming(): void {
+            if (!hasIncoming || selectedLaneIncomingCovered || !incomingLanes.includes(lane)) { return; }
+            selectedLaneIncomingCovered = true;
+            lines.push({
+                fromLane: lane, toLane: lane, color, type: 'straight',
+                targetHash: commit.hash, role: 'pass-through',
+                startY: 'top', endY: 'center',
+            });
+        }
 
         for (let i = 0; i < lanes.length; i++) {
             if (lanes[i] !== null && i !== lane) {
@@ -132,11 +143,12 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
         if (parents.length > 0 && firstParent) {
             const firstParentLane = visibleHashes.has(firstParent) ? findLane(firstParent) : -1;
             if (firstParentLane !== -1 && firstParentLane !== lane) {
+                coverSelectedLaneIncoming();
                 lines.push({
                     fromLane: lane, toLane: firstParentLane, color,
                     type: firstParentLane < lane ? 'merge-left' : 'merge-right',
                     targetHash: firstParent, role: 'first-parent',
-                    startY: hasIncoming ? 'top' : 'center', endY: 'bottom',
+                    startY: 'center', endY: 'bottom',
                 });
             } else if (visibleHashes.has(firstParent)) {
                 lanes[lane] = firstParent;
@@ -195,11 +207,17 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
 export function getMaxLane(rows: readonly GraphRow[]): number {
     let max = 0;
     for (const row of rows) {
-        if (row.laneData.lane > max) { max = row.laneData.lane; }
-        for (const line of row.laneData.lines) {
-            if (line.fromLane > max) { max = line.fromLane; }
-            if (line.toLane > max) { max = line.toLane; }
-        }
+        const rowMax = getLaneDataMaxLane(row.laneData);
+        if (rowMax > max) { max = rowMax; }
+    }
+    return max;
+}
+
+export function getLaneDataMaxLane(laneData: LaneData): number {
+    let max = laneData.lane;
+    for (const line of laneData.lines) {
+        if (line.fromLane > max) { max = line.fromLane; }
+        if (line.toLane > max) { max = line.toLane; }
     }
     return max;
 }

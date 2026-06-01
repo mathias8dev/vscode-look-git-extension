@@ -1,7 +1,7 @@
 import type { GraphExtensionToWebviewMessage } from '../../../protocol/graph/messages';
 import type { BranchInfo, CommitFileChange, GraphData, GraphFilters, TagInfo, WorktreeInfo } from '../../../protocol/graph/types';
 import type { ProtocolError } from '../../../protocol/shared/base';
-import { assignLanes, getMaxLane, type GraphRow } from './layout/assignGraphLanes';
+import { assignLanes, type GraphRow } from './layout/assignGraphLanes';
 
 export interface CommitDetails {
     readonly hash: string;
@@ -28,7 +28,6 @@ export interface GraphState {
     readonly commitDetails: CommitDetails | undefined;
     readonly detailsLoading: boolean;
     readonly repoId: string | undefined;
-    readonly maxLane: number;
     readonly loadingMore: boolean;
 }
 
@@ -63,7 +62,6 @@ export function createInitialGraphState(): GraphState {
         commitDetails: undefined,
         detailsLoading: false,
         repoId: undefined,
-        maxLane: 0,
         loadingMore: false,
     };
 }
@@ -167,11 +165,9 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
         primaryBranch: currentBranch,
         lockedLanes: state.loadingMore ? lockedLanesForRows(state.rows) : undefined,
     });
-    const maxLane = getMaxLane(rows);
     return {
         ...state,
         rows,
-        maxLane,
         branches: data.branches,
         tags: data.tags,
         worktrees: data.worktrees,

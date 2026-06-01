@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { GraphCommit } from '../../../src/protocol/graph/types';
 import { assignLanes, getMaxLane } from '../../../src/webview/features/graph/layout/assignGraphLanes';
 import { expectItem } from '../../helpers/assertions';
+import { findFloatingNodeIssues, findLaneContinuityIssues } from '../../helpers/graphLayoutAssertions';
 
 function commit(hash: string, parents: string[] = [], refs: string[] = []): GraphCommit {
     return {
@@ -203,6 +204,73 @@ describe('assignGraphLanes', () => {
         }));
     });
 
+    it('connects a node when an incoming lane joins an already-active first-parent lane', () => {
+        const rows = assignLanes([
+            commit('topic-child', ['topic-parent']),
+            commit('main-child', ['base']),
+            commit('topic-parent', ['base']),
+            commit('base'),
+        ]);
+
+        const topicParent = expectItem(rows, 2);
+        expect(topicParent.laneData.lines).toContainEqual(expect.objectContaining({
+            fromLane: 0,
+            toLane: 0,
+            type: 'straight',
+            role: 'pass-through',
+            startY: 'top',
+            endY: 'center',
+        }));
+        expect(topicParent.laneData.lines).toContainEqual(expect.objectContaining({
+            fromLane: 0,
+            toLane: 1,
+            role: 'first-parent',
+            startY: 'center',
+            endY: 'bottom',
+        }));
+        expect(findFloatingNodeIssues(rows)).toEqual([]);
+        expect(findLaneContinuityIssues(rows)).toEqual([]);
+    });
+
+    it('does not produce floating nodes in a dense criss-cross topology', () => {
+        const rows = assignLanes([
+            commit('feature-b-tip', ['feature-b-mid']),
+            commit('feature-a-tip', ['join-a'], ['feature/a']),
+            commit('main-2', ['main-1'], ['HEAD -> main']),
+            commit('feature-b-mid', ['join-a']),
+            commit('main-1', ['base']),
+            commit('join-a', ['base']),
+            commit('side-2', ['side-1']),
+            commit('side-1', ['base']),
+            commit('base'),
+        ], { primaryBranch: 'main' });
+
+        expect(findFloatingNodeIssues(rows)).toEqual([]);
+        expect(findLaneContinuityIssues(rows)).toEqual([]);
+    });
+
+    it('keeps row-to-row lane continuity in a wide generated topology', () => {
+        const commits = [
+            commit('topic-a3', ['topic-a2']),
+            commit('topic-b2', ['join-1']),
+            commit('main-4', ['main-3'], ['HEAD -> main']),
+            commit('topic-c2', ['join-2']),
+            commit('topic-a2', ['join-1']),
+            commit('main-3', ['main-2']),
+            commit('topic-d2', ['topic-d1']),
+            commit('join-2', ['join-1']),
+            commit('topic-d1', ['base']),
+            commit('main-2', ['base']),
+            commit('join-1', ['base']),
+            commit('base'),
+        ];
+
+        const rows = assignLanes(commits, { primaryBranch: 'main' });
+
+        expect(findFloatingNodeIssues(rows)).toEqual([]);
+        expect(findLaneContinuityIssues(rows)).toEqual([]);
+    });
+
     it('allocates one lane per additional parent in octopus merge', () => {
         const rows = assignLanes([
             commit('merge', ['main', 'feature-a', 'feature-b']),
@@ -229,6 +297,29 @@ describe('assignGraphLanes', () => {
         expect(expectItem(rows, 1).laneData.isPrimary).toBe(true);
         expect(expectItem(rows, 2).laneData.isPrimary).toBe(true);
         expect(expectItem(rows, 3).laneData.isPrimary).toBe(true);
+    });
+
+    it('consumes incoming lanes for the primary branch tip', () => {
+        const rows = assignLanes([
+            commit('feature-tip', ['main-tip'], ['feature/ui']),
+            commit('main-tip', ['base'], ['HEAD -> main']),
+            commit('base'),
+        ], { primaryBranch: 'main' });
+
+        expect(expectItem(rows, 1).laneData.lane).toBe(0);
+        expect(expectItem(rows, 1).laneData.lines).toContainEqual(expect.objectContaining({
+            fromLane: 0,
+            toLane: 0,
+            targetHash: 'base',
+            role: 'first-parent',
+        }));
+        expect(expectItem(rows, 2).laneData.lines).not.toContainEqual(expect.objectContaining({
+            targetHash: 'main-tip',
+            role: 'pass-through',
+        }));
+        expect(findFloatingNodeIssues(rows)).toEqual([]);
+        expect(findLaneContinuityIssues(rows)).toEqual([]);
+        expect(getMaxLane(rows)).toBe(0);
     });
 
     it('uses hash to mark the primary branch when refs are missing', () => {

@@ -122,6 +122,19 @@ describe('GitProcessRepository', () => {
         expect(expectItem(log, 1).message).toBe('first');
     });
 
+    it('getGraphLog excludes stash implementation commits', async () => {
+        const r = repo();
+        r.write('base.txt', 'base\n');
+        r.commit('feat(graph): base');
+        r.write('wip.txt', 'wip\n');
+        r.git(['stash', 'push', '-u', '-m', 'wip(graph): stash graph fixture', '--', 'wip.txt']);
+
+        const git = new GitProcessRepository(r.cwd);
+        const graph = await git.getGraphLog(20);
+
+        expect(graph.map((commit) => commit.message)).toEqual(['feat(graph): base']);
+    });
+
     // ── Worktrees ─────────────────────────────────────────────────────────
 
     it('listWorktrees returns main worktree with isMain:true', async () => {

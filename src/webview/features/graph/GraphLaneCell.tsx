@@ -1,4 +1,4 @@
-import type { LaneData, LineDef } from './layout/assignGraphLanes';
+import { getLaneDataMaxLane, type LaneData, type LineDef } from './layout/assignGraphLanes';
 
 export const LANE_WIDTH = 16;
 export const ROW_HEIGHT = 24;
@@ -7,11 +7,10 @@ const LINE_WIDTH = 2;
 
 interface GraphLaneCellProps {
     readonly laneData: LaneData;
-    readonly maxLane: number;
 }
 
-export function GraphLaneCell({ laneData, maxLane }: GraphLaneCellProps) {
-    const width = (maxLane + 1) * LANE_WIDTH;
+export function GraphLaneCell({ laneData }: GraphLaneCellProps) {
+    const width = (getLaneDataMaxLane(laneData) + 1) * LANE_WIDTH;
     const cx = (laneData.lane + 0.5) * LANE_WIDTH;
     const cy = ROW_HEIGHT / 2;
 

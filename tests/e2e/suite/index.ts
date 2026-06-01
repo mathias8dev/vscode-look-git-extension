@@ -9,9 +9,11 @@ import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessag
 import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
 import type { ChangesExtensionToWebviewMessage } from '../../../src/protocol/changes/messages';
 import { ConflictState } from '../../../src/protocol/changes/types';
-import type { GraphExtensionToWebviewMessage } from '../../../src/protocol/graph/messages';
-import { createBareGitRepo, createTempGitRepo, type TempGitRepo } from '../../helpers/gitRepo';
+import type { GraphDataResponse, GraphExtensionToWebviewMessage } from '../../../src/protocol/graph/messages';
+import { createInitialGraphState, reduceGraphState } from '../../../src/webview/features/graph/graphState';
+import { createBareGitRepo, createTempGitRepo, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
 import { getFixtureRepoPath, gitFixtureOutput } from '../../helpers/fixtureRepo';
+import { findFloatingNodeIssues, findLaneContinuityIssues } from '../../helpers/graphLayoutAssertions';
 import { runTestCases } from '../../helpers/testRunner';
 
 export function run(): Promise<void> {
@@ -62,6 +64,12 @@ export function run(): Promise<void> {
                 await vscode.commands.executeCommand('lookGit.graphView.focus');
                 const commands = await vscode.commands.getCommands(true);
                 assert.ok(commands.includes('lookGit.graphView.focus'));
+            },
+        },
+        {
+            name: 'lays out crossing graph lanes without floating commit nodes',
+            run: async () => {
+                await runFloatingGraphNodeLayoutE2E();
             },
         },
         {
@@ -237,6 +245,45 @@ export function run(): Promise<void> {
             },
         },
     ]);
+}
+
+async function runFloatingGraphNodeLayoutE2E(): Promise<void> {
+    const fixture = createTempGitRepo();
+    const messages: GraphExtensionToWebviewMessage[] = [];
+    try {
+        createFloatingNodeGraphFixture(fixture);
+        const router = routerFor(fixture.cwd, messages);
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'floating-layout',
+            repoId: 'floating-layout',
+            filters: {},
+            page: { offset: 0, limit: 50 },
+        });
+
+        assertNoGraphError(messages);
+        const response = graphDataResponse(messages, 'floating-layout');
+        assert.equal(response.data.commits.some((commit) => commit.refs.includes('refs/stash')), false);
+        assert.equal(response.data.commits.some((commit) => commit.message.includes('stash graph fixture')), false);
+        const state = reduceGraphState(createInitialGraphState(), { type: 'message', message: response });
+        const issues = findFloatingNodeIssues(state.rows);
+        assert.deepEqual(issues, [], `Expected all visible graph nodes to be connected. Issues: ${JSON.stringify(issues)}`);
+        const continuityIssues = findLaneContinuityIssues(state.rows);
+        assert.deepEqual(continuityIssues, [], `Expected graph lanes to stay continuous. Issues: ${JSON.stringify(continuityIssues)}`);
+    } finally {
+        fixture.cleanup();
+    }
+}
+
+function createFloatingNodeGraphFixture(fixture: TempGitRepo): void {
+    const base = fixture.commitFile('graph/base.txt', 'base\n', 'feat(graph): add shared base', FIXTURE_AUTHORS[0], '2024-01-01T00:00:00Z');
+    fixture.git(['checkout', '-q', '-b', 'feature/floating-topic', base]);
+    fixture.commitFile('graph/topic-parent.txt', 'topic parent\n', 'feat(graph): add topic parent', FIXTURE_AUTHORS[1], '2024-01-02T00:00:00Z');
+    fixture.commitFile('graph/topic-child.txt', 'topic child\n', 'feat(graph): add topic child', FIXTURE_AUTHORS[2], '2024-01-04T00:00:00Z');
+    fixture.git(['checkout', '-q', 'main']);
+    fixture.commitFile('graph/main-child.txt', 'main child\n', 'feat(graph): add main child', FIXTURE_AUTHORS[3], '2024-01-03T00:00:00Z');
+    fixture.write('graph/stash-wip.txt', 'stash wip\n');
+    fixture.git(['stash', 'push', '-u', '-m', 'wip(graph): stash graph fixture', '--', 'graph/stash-wip.txt']);
 }
 
 async function runBranchContextActionsE2E(): Promise<void> {
@@ -758,6 +805,14 @@ async function sleep(ms: number): Promise<void> {
 function assertNoGraphError(messages: readonly GraphExtensionToWebviewMessage[]): void {
     const error = messages.find((message) => message.type === 'graph/error');
     assert.equal(error, undefined, error?.message);
+}
+
+function graphDataResponse(messages: readonly GraphExtensionToWebviewMessage[], requestId: string): GraphDataResponse {
+    const response = messages.find((message): message is GraphDataResponse => (
+        message.type === 'graph/dataResponse' && message.requestId === requestId
+    ));
+    assert.ok(response, `Expected graph/dataResponse for ${requestId}.`);
+    return response;
 }
 
 function assertNoChangesError(messages: readonly ChangesExtensionToWebviewMessage[]): void {
