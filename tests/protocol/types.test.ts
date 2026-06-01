@@ -12,6 +12,7 @@ describe('protocol discriminated unions', () => {
                 case 'graph/dataPush': return msg.data.commits satisfies readonly unknown[];
                 case 'graph/dataResponse': return msg.requestId satisfies string;
                 case 'graph/commitDetailsResponse': return msg.files satisfies readonly unknown[];
+                case 'graph/worktreeDetailsResponse': return msg.path satisfies string;
                 case 'graph/error': return msg.error.recoverable satisfies boolean;
                 case 'error': return msg.error.message satisfies string;
             }
@@ -27,10 +28,12 @@ describe('protocol discriminated unions', () => {
                 case 'graph/dataRequest': return msg.requestId satisfies string;
                 case 'graph/loadMore': return msg.page satisfies { offset: number; limit: number };
                 case 'graph/commitDetailsRequest': return msg.hash satisfies string;
+                case 'graph/worktreeDetailsRequest': return msg.path satisfies string;
                 case 'graph/branchCommand': return msg.command satisfies string;
                 case 'graph/worktreeCommand': return msg.command satisfies string;
                 case 'graph/commitCommand': return msg.hashes satisfies readonly string[];
                 case 'graph/openDiff': return msg.filePath satisfies string;
+                case 'graph/openWorktreeDiff': return msg.worktreePath satisfies string;
             }
         };
         void handle;

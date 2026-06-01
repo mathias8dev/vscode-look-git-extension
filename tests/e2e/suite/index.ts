@@ -12,7 +12,7 @@ import type { ChangesExtensionToWebviewMessage } from '../../../src/protocol/cha
 import { ConflictState } from '../../../src/protocol/changes/types';
 import type { GraphDataResponse, GraphExtensionToWebviewMessage, WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
 import { createInitialGraphState, reduceGraphState } from '../../../src/webview/features/graph/graphState';
-import { createBareGitRepo, createTempGitRepo, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
+import { addLinkedWorktree, createBareGitRepo, createTempGitRepo, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
 import { getFixtureRepoPath, gitFixtureOutput } from '../../helpers/fixtureRepo';
 import { findFloatingNodeIssues, findLaneContinuityIssues } from '../../helpers/graphLayoutAssertions';
 import { runTestCases } from '../../helpers/testRunner';
@@ -77,6 +77,12 @@ export function run(): Promise<void> {
             name: 'loads dirty worktree WIP rows from the lookGit fixture',
             run: async () => {
                 await runWorktreeWipRowsE2E();
+            },
+        },
+        {
+            name: 'runs worktree context actions end to end',
+            run: async () => {
+                await runWorktreeContextActionsE2E();
             },
         },
         {
@@ -367,6 +373,100 @@ async function runWorktreeWipRowsE2E(): Promise<void> {
     } finally {
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
         fs.rmSync(outputRoot, { recursive: true, force: true });
+    }
+}
+
+async function runWorktreeContextActionsE2E(): Promise<void> {
+    const fixture = createTempGitRepo();
+    const remote = createBareGitRepo();
+    let linked: ReturnType<typeof addLinkedWorktree> | undefined;
+    let forceLinked: ReturnType<typeof addLinkedWorktree> | undefined;
+    const messages: GraphExtensionToWebviewMessage[] = [];
+    try {
+        fixture.commitFile('base.txt', 'base\n', 'feat: base');
+        fixture.git(['remote', 'add', 'origin', remote.cwd]);
+        fixture.git(['push', '-u', 'origin', 'main']);
+        linked = addLinkedWorktree(fixture, 'feature/worktree-context');
+        const worktreePath = linked.worktreePath;
+        git(worktreePath, ['push', '-u', 'origin', 'feature/worktree-context']);
+        fixture.git(['branch', 'feature/checkout-target']);
+        const router = routerFor(fixture.cwd, messages);
+
+        const openCapture = await withPatchedVscode({ quickPickValues: ['Open in Current Window'], interceptOpenFolder: true }, async (capture) => {
+            await router.handle({ type: 'graph/worktreeCommand', command: 'open', path: worktreePath });
+            await router.handle({ type: 'graph/worktreeCommand', command: 'openInNewWindow', path: worktreePath });
+            return capture;
+        });
+        assert.deepEqual(openCapture.commandCalls
+            .filter((call) => call.command === 'vscode.openFolder')
+            .map((call) => Boolean((call.args[1] as { forceNewWindow?: boolean } | undefined)?.forceNewWindow)), [false, true]);
+
+        await router.handle({ type: 'graph/worktreeCommand', command: 'fetch', path: worktreePath });
+        await router.handle({ type: 'graph/worktreeCommand', command: 'pull', path: worktreePath });
+
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        fs.writeFileSync(path.join(worktreePath, 'base.txt'), 'base from worktree\n');
+        fs.writeFileSync(path.join(worktreePath, 'untracked-diff.txt'), 'untracked diff\n');
+        await router.handle({ type: 'graph/worktreeCommand', command: 'showDiffWithHead', path: worktreePath });
+        await waitForActiveEditorText('base from worktree');
+        await waitForActiveEditorText('untracked-diff.txt');
+
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        await router.handle({ type: 'graph/worktreeCommand', command: 'showDiffWithMainWorktree', path: worktreePath });
+        await waitForActiveEditorText('base from worktree');
+        await waitForActiveEditorText('untracked-diff.txt');
+
+        fs.writeFileSync(path.join(worktreePath, 'committed.txt'), 'committed\n');
+        await withPatchedVscode({ warningChoices: ['Stage All and Commit'], inputBoxValues: ['feat(worktrees): commit from context action'] }, async () => {
+            await router.handle({ type: 'graph/worktreeCommand', command: 'commit', path: worktreePath });
+        });
+        assert.equal(git(worktreePath, ['log', '-1', '--format=%s']), 'feat(worktrees): commit from context action');
+        assert.equal(gitStatus(worktreePath), '');
+
+        await router.handle({ type: 'graph/worktreeCommand', command: 'push', path: worktreePath });
+        assert.equal(git(remote.cwd, ['rev-parse', 'feature/worktree-context']), git(worktreePath, ['rev-parse', 'HEAD']));
+
+        fs.writeFileSync(path.join(worktreePath, 'stashed.txt'), 'stashed\n');
+        await withPatchedVscode({ inputBoxValues: ['wip(worktrees): context stash'] }, async () => {
+            await router.handle({ type: 'graph/worktreeCommand', command: 'stash', path: worktreePath });
+        });
+        assert.equal(gitStatus(worktreePath), '');
+        assert.match(git(worktreePath, ['stash', 'list']), /wip\(worktrees\): context stash/);
+
+        await withPatchedVscode({ inputBoxValues: ['feature/from-worktree-head'] }, async () => {
+            await router.handle({ type: 'graph/worktreeCommand', command: 'newBranch', path: worktreePath });
+        });
+        assert.equal(git(worktreePath, ['branch', '--show-current']), 'feature/from-worktree-head');
+
+        await withPatchedVscode({ quickPickValues: ['feature/checkout-target'] }, async () => {
+            await router.handle({ type: 'graph/worktreeCommand', command: 'checkoutBranch', path: worktreePath });
+        });
+        assert.equal(git(worktreePath, ['branch', '--show-current']), 'feature/checkout-target');
+
+        await router.handle({ type: 'graph/worktreeCommand', command: 'lock', path: worktreePath });
+        assert.match(git(fixture.cwd, ['worktree', 'list', '--porcelain']), /locked/);
+        await router.handle({ type: 'graph/worktreeCommand', command: 'unlock', path: worktreePath });
+        assert.doesNotMatch(git(fixture.cwd, ['worktree', 'list', '--porcelain']), /locked/);
+
+        forceLinked = addLinkedWorktree(fixture, 'feature/worktree-force-remove');
+        const forceWorktreePath = forceLinked.worktreePath;
+        fs.writeFileSync(path.join(forceWorktreePath, 'discarded.txt'), 'discarded\n');
+        await withPatchedVscode({ warningChoices: ['Force Remove', 'Discard Changes and Remove'] }, async () => {
+            await router.handle({ type: 'graph/worktreeCommand', command: 'removeForce', path: forceWorktreePath });
+        });
+        assert.equal(fs.existsSync(forceWorktreePath), false);
+
+        await withPatchedVscode({ warningChoices: ['Remove'] }, async () => {
+            await router.handle({ type: 'graph/worktreeCommand', command: 'remove', path: worktreePath });
+        });
+        assert.equal(fs.existsSync(worktreePath), false);
+        assertNoGraphError(messages);
+    } finally {
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        forceLinked?.cleanup();
+        linked?.cleanup();
+        fixture.cleanup();
+        remote.cleanup();
     }
 }
 

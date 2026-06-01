@@ -4,7 +4,7 @@ import type { GitWorktree } from '../../../src/core/git/domain/GitWorktree';
 import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessageRouter';
 import type { GraphDataResponse, GraphExtensionToWebviewMessage, WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
-import { commands, env, resetMockVscode, setInputBoxValue, setQuickPickValue, setWarningChoice, Uri, window, workspace } from '../../mocks/vscode';
+import { commands, env, resetMockVscode, setInputBoxValue, setQuickPickValue, setWarningChoice, setWarningChoices, Uri, window, workspace } from '../../mocks/vscode';
 
 describe('GraphMessageRouter graph data', () => {
     beforeEach(resetMockVscode);
@@ -139,6 +139,169 @@ describe('GraphMessageRouter graph data', () => {
         expect(call?.args[2]).toBe('dirty.ts (a)');
         expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'show', 'HEAD:src/dirty.ts']);
     });
+
+    it('runs worktree window and reveal commands', async () => {
+        const repo = makeRepositoryMock();
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        setQuickPickValue('Open in Current Window');
+        await router.handle({ type: 'graph/worktreeCommand', command: 'open', path: '/repo/.worktrees/a' });
+        await router.handle({ type: 'graph/worktreeCommand', command: 'openInNewWindow', path: '/repo/.worktrees/a' });
+        await router.handle({ type: 'graph/worktreeCommand', command: 'reveal', path: '/repo/.worktrees/a' });
+
+        expect(commands.calls).toEqual([
+            { command: 'vscode.openFolder', args: [Uri.file('/repo/.worktrees/a'), { forceNewWindow: false }] },
+            { command: 'vscode.openFolder', args: [Uri.file('/repo/.worktrees/a'), { forceNewWindow: true }] },
+            { command: 'revealFileInOS', args: [Uri.file('/repo/.worktrees/a')] },
+        ]);
+    });
+
+    it('opens worktree diff documents', async () => {
+        const repo = makeRepositoryMock({
+            listWorktrees: vi.fn(async () => [
+                { ...worktree('/repo', 'main-head', 'main'), isMain: true },
+                worktree('/repo/.worktrees/a', 'topic-head', 'feature/a'),
+            ]),
+            execRaw: vi.fn(async (args) => {
+                if (args[2] === 'diff' && args[3] === 'HEAD') { return 'head diff\n'; }
+                if (args[2] === 'diff' && args[3] === 'main-head') { return 'main diff\n'; }
+                if (args[2] === 'ls-files') { return ''; }
+                return '';
+            }),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        await router.handle({ type: 'graph/worktreeCommand', command: 'showDiffWithHead', path: '/repo/.worktrees/a' });
+        await router.handle({ type: 'graph/worktreeCommand', command: 'showDiffWithMainWorktree', path: '/repo/.worktrees/a' });
+
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', 'HEAD', '--']);
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'ls-files', '--others', '--exclude-standard', '-z']);
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', 'main-head', '--']);
+        expect(workspace.documents.map((document) => document.content)).toEqual(['head diff', 'main diff']);
+    });
+
+    it('runs worktree git commands in the selected worktree', async () => {
+        const repo = makeRepositoryMock({
+            execRaw: vi.fn(async (args) => args[2] === 'status' ? 'A  committed.txt\0' : ''),
+            getAllBranches: vi.fn(async () => [
+                { name: 'main', isRemote: false, isCurrent: true, hash: 'main-head', ahead: 0, behind: 0 },
+                { name: 'feature/a', isRemote: false, isCurrent: false, hash: 'topic-head', ahead: 0, behind: 0 },
+            ]),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        await router.handle({ type: 'graph/worktreeCommand', command: 'fetch', path: '/repo/.worktrees/a' });
+        await router.handle({ type: 'graph/worktreeCommand', command: 'pull', path: '/repo/.worktrees/a' });
+        await router.handle({ type: 'graph/worktreeCommand', command: 'push', path: '/repo/.worktrees/a' });
+        setInputBoxValue('feat: worktree commit');
+        await router.handle({ type: 'graph/worktreeCommand', command: 'commit', path: '/repo/.worktrees/a' });
+        setInputBoxValue('wip: worktree stash');
+        await router.handle({ type: 'graph/worktreeCommand', command: 'stash', path: '/repo/.worktrees/a' });
+        setInputBoxValue('feature/new');
+        await router.handle({ type: 'graph/worktreeCommand', command: 'newBranch', path: '/repo/.worktrees/a' });
+        setQuickPickValue('feature/a');
+        await router.handle({ type: 'graph/worktreeCommand', command: 'checkoutBranch', path: '/repo/.worktrees/a' });
+        await router.handle({ type: 'graph/worktreeCommand', command: 'lock', path: '/repo/.worktrees/a' });
+        await router.handle({ type: 'graph/worktreeCommand', command: 'unlock', path: '/repo/.worktrees/a' });
+
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'fetch']);
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'pull']);
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'push']);
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'status', '--porcelain=v1', '-z', '-u']);
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'commit', '-m', 'feat: worktree commit']);
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'stash', 'push', '-u', '-m', 'wip: worktree stash']);
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'checkout', '-b', 'feature/new']);
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'checkout', 'feature/a']);
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['worktree', 'lock', '/repo/.worktrees/a']);
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['worktree', 'unlock', '/repo/.worktrees/a']);
+    });
+
+    it('stages all worktree changes before committing when no files are staged', async () => {
+        const repo = makeRepositoryMock({
+            execRaw: vi.fn(async (args) => args[2] === 'status' ? ' M dirty.txt\0?? new.txt\0' : ''),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        setWarningChoice('Stage All and Commit');
+        setInputBoxValue('feat(worktrees): commit dirty worktree');
+        await router.handle({ type: 'graph/worktreeCommand', command: 'commit', path: '/repo/.worktrees/a' });
+
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'add', '-A']);
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'commit', '-m', 'feat(worktrees): commit dirty worktree']);
+    });
+
+    it('can commit only staged worktree changes when unstaged files also exist', async () => {
+        const repo = makeRepositoryMock({
+            execRaw: vi.fn(async (args) => args[2] === 'status' ? 'M  staged.txt\0 M dirty.txt\0' : ''),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        setQuickPickValue('Commit Staged Changes');
+        setInputBoxValue('feat(worktrees): commit staged worktree files');
+        await router.handle({ type: 'graph/worktreeCommand', command: 'commit', path: '/repo/.worktrees/a' });
+
+        expect(vi.mocked(repo.exec)).not.toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'add', '-A']);
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'commit', '-m', 'feat(worktrees): commit staged worktree files']);
+    });
+
+    it('confirms worktree removal and blocks removing the main worktree', async () => {
+        const repo = makeRepositoryMock({
+            listWorktrees: vi.fn(async () => [
+                { ...worktree('/repo', 'main-head', 'main'), isMain: true },
+                worktree('/repo/.worktrees/a', 'topic-head', 'feature/a'),
+            ]),
+        });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+
+        setWarningChoice('Remove');
+        await router.handle({ type: 'graph/worktreeCommand', command: 'remove', path: '/repo/.worktrees/a' });
+        await router.handle({ type: 'graph/worktreeCommand', command: 'removeForce', path: '/repo' });
+
+        expect(vi.mocked(repo.removeWorktree)).toHaveBeenCalledWith('/repo/.worktrees/a', false);
+        const error = messages.find((message) => message.type === 'graph/error');
+        expect(error?.message).toContain('main worktree cannot be removed');
+    });
+
+    it('requires two confirmations before force removing a worktree', async () => {
+        const repo = makeRepositoryMock({
+            listWorktrees: vi.fn(async () => [
+                { ...worktree('/repo', 'main-head', 'main'), isMain: true },
+                worktree('/repo/.worktrees/a', 'topic-head', 'feature/a'),
+            ]),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        setWarningChoices(['Force Remove']);
+        await router.handle({ type: 'graph/worktreeCommand', command: 'removeForce', path: '/repo/.worktrees/a' });
+        expect(vi.mocked(repo.removeWorktree)).not.toHaveBeenCalled();
+
+        setWarningChoices(['Force Remove', 'Discard Changes and Remove']);
+        await router.handle({ type: 'graph/worktreeCommand', command: 'removeForce', path: '/repo/.worktrees/a' });
+
+        expect(vi.mocked(repo.removeWorktree)).toHaveBeenCalledWith('/repo/.worktrees/a', true);
+    });
+
+    it('blocks locking and unlocking the main worktree', async () => {
+        const repo = makeRepositoryMock({
+            listWorktrees: vi.fn(async () => [
+                { ...worktree('/repo', 'main-head', 'main'), isMain: true },
+            ]),
+        });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+
+        await router.handle({ type: 'graph/worktreeCommand', command: 'lock', path: '/repo' });
+        await router.handle({ type: 'graph/worktreeCommand', command: 'unlock', path: '/repo' });
+
+        expect(vi.mocked(repo.exec)).not.toHaveBeenCalledWith(['worktree', 'lock', '/repo']);
+        expect(vi.mocked(repo.exec)).not.toHaveBeenCalledWith(['worktree', 'unlock', '/repo']);
+        const errors = messages.filter((message): message is Extract<GraphExtensionToWebviewMessage, { readonly type: 'graph/error' }> => message.type === 'graph/error');
+        expect(errors.map((message) => message.message)).toEqual([
+            'The main worktree cannot be locked.',
+            'The main worktree cannot be unlocked.',
+        ]);
+    });
 });
 
 describe('GraphMessageRouter commit commands', () => {
@@ -264,6 +427,7 @@ function worktree(path: string, head: string, branch: string): GitWorktree {
         branch,
         isMain: false,
         isDetached: false,
+        isLocked: false,
     };
 }
 

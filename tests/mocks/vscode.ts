@@ -113,13 +113,14 @@ export const window = {
     saveDialogValue: undefined as TestUri | undefined,
     saveDialogOptions: [] as unknown[],
     warningChoice: undefined as string | undefined,
+    warningChoices: [] as string[],
     shownDocuments: [] as unknown[],
     terminals: [] as Array<{ name: string; cwd: string | undefined; texts: string[]; visible: boolean }>,
     showErrorMessage(message: string) { this.errorMessages.push(message); return Promise.resolve(undefined); },
     showInformationMessage(message: string) { this.infoMessages.push(message); return Promise.resolve(undefined); },
     showWarningMessage(message: string, _opts?: unknown, ...items: string[]) {
         this.warningMessages.push({ message, items });
-        return Promise.resolve(this.warningChoice);
+        return Promise.resolve(this.warningChoices.shift() ?? this.warningChoice);
     },
     showInputBox(options?: unknown) {
         this.inputBoxOptions.push(options);
@@ -151,6 +152,7 @@ export const window = {
         this.saveDialogValue = undefined;
         this.saveDialogOptions = [];
         this.warningChoice = undefined;
+        this.warningChoices = [];
         this.shownDocuments = [];
         this.terminals = [];
     },
@@ -167,6 +169,10 @@ export function resetMockVscode(): void {
 
 export function setWarningChoice(choice: string | undefined): void {
     window.warningChoice = choice;
+}
+
+export function setWarningChoices(choices: readonly string[]): void {
+    window.warningChoices = [...choices];
 }
 
 export function setInputBoxValue(value: string | undefined): void {

@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import type { BranchCommand } from '../../../protocol/graph/messages';
+import type { BranchCommand, WorktreeCommand } from '../../../protocol/graph/messages';
 import type { BranchInfo, WorktreeInfo } from '../../../protocol/graph/types';
 import { buildBranchTree, buildRemoteBranchTree } from './graphBranchTree';
 import { BranchTreeNode } from './BranchTreeNode';
 import { BranchContextMenu, type BranchContextMenuState } from './BranchContextMenu';
+import { WorktreeContextMenu, type WorktreeContextMenuState } from './WorktreeContextMenu';
 import { IconButton } from '../../shared/IconButton';
 import { selectBranchFilter } from './graphBranchSelection';
 
@@ -17,6 +18,7 @@ interface BranchPanelProps {
     readonly onBranchCommand: (command: BranchCommand, branch: string, isRemote: boolean) => void;
     readonly onSelectWorktree: (path: string) => void;
     readonly onOpenWorktree: (path: string) => void;
+    readonly onWorktreeCommand: (command: WorktreeCommand, path: string) => void;
     readonly onAddWorktree: () => void;
 }
 
@@ -30,6 +32,7 @@ export function BranchPanel({
     onBranchCommand,
     onSelectWorktree,
     onOpenWorktree,
+    onWorktreeCommand,
     onAddWorktree,
 }: BranchPanelProps) {
     const [search, setSearch] = useState('');
@@ -37,6 +40,7 @@ export function BranchPanel({
     const [remoteCollapsed, setRemoteCollapsed] = useState(false);
     const [worktreesCollapsed, setWorktreesCollapsed] = useState(false);
     const [contextMenu, setContextMenu] = useState<BranchContextMenuState | undefined>(undefined);
+    const [worktreeContextMenu, setWorktreeContextMenu] = useState<WorktreeContextMenuState | undefined>(undefined);
 
     const filtered = search
         ? branches.filter((b) => b.name.toLowerCase().includes(search.toLowerCase()))
@@ -52,6 +56,7 @@ export function BranchPanel({
     };
 
     const handleOpenContextMenu = (branch: BranchInfo, x: number, y: number) => {
+        setWorktreeContextMenu(undefined);
         setContextMenu({
             branch: branch.name,
             isRemote: branch.isRemote,
@@ -60,6 +65,12 @@ export function BranchPanel({
             x,
             y,
         });
+    };
+
+    const handleOpenWorktreeContextMenu = (worktree: WorktreeInfo, x: number, y: number) => {
+        setContextMenu(undefined);
+        onSelectWorktree(worktree.path);
+        setWorktreeContextMenu({ worktree, x, y });
     };
 
     return (
@@ -169,6 +180,10 @@ export function BranchPanel({
                             tabIndex={0}
                             aria-selected={worktree.path === selectedWorktreePath}
                             onClick={() => onSelectWorktree(worktree.path)}
+                            onContextMenu={(e) => {
+                                e.preventDefault();
+                                handleOpenWorktreeContextMenu(worktree, e.clientX, e.clientY);
+                            }}
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' || e.key === ' ') {
                                     e.preventDefault();
@@ -181,6 +196,7 @@ export function BranchPanel({
                                 {worktree.branch ?? `detached ${worktree.head.substring(0, 7)}`}
                             </span>
                             {worktree.isMain ? <span className="graph-resource-badge">main</span> : null}
+                            {worktree.isLocked ? <span className="graph-resource-badge" title={worktree.lockReason}>locked</span> : null}
                             <IconButton
                                 icon="go-to-file"
                                 title="Open worktree"
@@ -197,6 +213,14 @@ export function BranchPanel({
                     state={contextMenu}
                     onClose={() => setContextMenu(undefined)}
                     onCommand={onBranchCommand}
+                />
+            ) : null}
+            {worktreeContextMenu ? (
+                <WorktreeContextMenu
+                    state={worktreeContextMenu}
+                    onClose={() => setWorktreeContextMenu(undefined)}
+                    onCommand={onWorktreeCommand}
+                    onShowDetails={onSelectWorktree}
                 />
             ) : null}
         </div>

@@ -44,6 +44,8 @@ export interface WorktreeInfo {
     readonly branch: string | undefined;
     readonly isMain: boolean;
     readonly isDetached: boolean;
+    readonly isLocked: boolean;
+    readonly lockReason?: string;
 }
 
 export interface WorktreeWip {

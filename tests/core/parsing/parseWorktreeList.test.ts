@@ -17,6 +17,7 @@ describe('parseWorktreeList', () => {
         const main = expectItem(result, 0);
         expect(main.isMain).toBe(true);
         expect(main.isDetached).toBe(false);
+        expect(main.isLocked).toBe(false);
         expect(main.path).toBe('/repo');
         expect(main.head).toBe('abc1234567890abcdef');
         expect(main.branch).toBe('refs/heads/main');
@@ -49,6 +50,15 @@ describe('parseWorktreeList', () => {
         const result = parseWorktreeList(output);
         expect(result).toHaveLength(3);
         expect(result.filter((w) => w.isMain)).toHaveLength(1);
+    });
+
+    it('parses locked worktrees with a reason', () => {
+        const output = MAIN_STANZA + '\n\nworktree /wt/locked\nHEAD def456\nbranch refs/heads/locked\nlocked needs review\n\n';
+        const result = parseWorktreeList(output);
+        const locked = expectItem(result, 1);
+
+        expect(locked.isLocked).toBe(true);
+        expect(locked.lockReason).toBe('needs review');
     });
 
     it('skips empty stanzas', () => {

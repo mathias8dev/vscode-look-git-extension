@@ -38,6 +38,8 @@ export function toProtocolWorktree(w: GitWorktree): WorktreeInfo {
         branch: w.branch,
         isMain: w.isMain,
         isDetached: w.isDetached,
+        isLocked: w.isLocked,
+        lockReason: w.lockReason,
     };
 }
 

@@ -93,7 +93,24 @@ export interface BranchCommandRequest {
     readonly isRemote: boolean;
 }
 
-export type WorktreeCommand = 'open' | 'add' | 'remove' | 'removeForce';
+export type WorktreeCommand =
+    | 'open'
+    | 'openInNewWindow'
+    | 'reveal'
+    | 'showDiffWithHead'
+    | 'showDiffWithMainWorktree'
+    | 'fetch'
+    | 'pull'
+    | 'push'
+    | 'commit'
+    | 'stash'
+    | 'newBranch'
+    | 'checkoutBranch'
+    | 'lock'
+    | 'unlock'
+    | 'add'
+    | 'remove'
+    | 'removeForce';
 
 export interface WorktreeCommandRequest {
     readonly type: 'graph/worktreeCommand';

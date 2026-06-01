@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
-import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse, WorktreeDetailsResponse, OpenDiffRequest, OpenWorktreeDiffRequest } from '../../protocol/graph/messages';
+import type { BranchCommand, CommitCommand, WorktreeCommand, GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse, WorktreeDetailsResponse, OpenDiffRequest, OpenWorktreeDiffRequest } from '../../protocol/graph/messages';
 import type { CommitFileChange, GraphData, GraphFilters, WorktreeWip } from '../../protocol/graph/types';
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import type { GitRepository } from '../../core/git/GitRepository';
@@ -288,13 +288,65 @@ export class GraphMessageRouter {
         await this.pushGraphData(undefined, undefined);
     }
 
-    private async handleWorktreeCommand(command: string, wtPath?: string): Promise<void> {
+    private async handleWorktreeCommand(command: WorktreeCommand, wtPath?: string): Promise<void> {
         const repo = this.repositories.requireRepository();
         switch (command) {
-            case 'open':
-                if (wtPath) {
-                    await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(wtPath), { forceNewWindow: true });
-                }
+            case 'open': {
+                const pathValue = requireWorktreePath(wtPath);
+                const choice = await vscode.window.showQuickPick(['Open in New Window', 'Open in Current Window'], { placeHolder: 'Open worktree' });
+                if (!choice) { return; }
+                await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(pathValue), { forceNewWindow: choice === 'Open in New Window' });
+                return;
+            }
+            case 'openInNewWindow':
+                await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(requireWorktreePath(wtPath)), { forceNewWindow: true });
+                return;
+            case 'reveal':
+                await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(requireWorktreePath(wtPath)));
+                return;
+            case 'showDiffWithHead': {
+                const pathValue = requireWorktreePath(wtPath);
+                await openDiffDocument(`Diff ${path.basename(pathValue)} with HEAD`, await worktreeDiffFromBase(repo, pathValue, 'HEAD'));
+                return;
+            }
+            case 'showDiffWithMainWorktree':
+                await showDiffWithMainWorktree(repo, requireWorktreePath(wtPath));
+                return;
+            case 'fetch':
+                await repo.exec(['-C', requireWorktreePath(wtPath), 'fetch']);
+                break;
+            case 'pull':
+                await repo.exec(['-C', requireWorktreePath(wtPath), 'pull']);
+                break;
+            case 'push':
+                await repo.exec(['-C', requireWorktreePath(wtPath), 'push']);
+                break;
+            case 'commit':
+                if (!await commitWorktree(repo, requireWorktreePath(wtPath))) { return; }
+                break;
+            case 'stash':
+                if (!await stashWorktree(repo, requireWorktreePath(wtPath))) { return; }
+                break;
+            case 'newBranch': {
+                const branch = await vscode.window.showInputBox({ prompt: 'New branch from worktree HEAD:' });
+                if (!branch?.trim()) { return; }
+                await repo.exec(['-C', requireWorktreePath(wtPath), 'checkout', '-b', branch]);
+                break;
+            }
+            case 'checkoutBranch': {
+                const branches = (await repo.getAllBranches()).filter((branch) => !branch.isRemote).map((branch) => branch.name);
+                const branch = await vscode.window.showQuickPick(branches, { placeHolder: 'Checkout branch in worktree' });
+                if (!branch) { return; }
+                await repo.exec(['-C', requireWorktreePath(wtPath), 'checkout', branch]);
+                break;
+            }
+            case 'lock':
+                await assertNotMainWorktree(repo, requireWorktreePath(wtPath), 'locked');
+                await repo.exec(['worktree', 'lock', requireWorktreePath(wtPath)]);
+                break;
+            case 'unlock':
+                await assertNotMainWorktree(repo, requireWorktreePath(wtPath), 'unlocked');
+                await repo.exec(['worktree', 'unlock', requireWorktreePath(wtPath)]);
                 break;
             case 'add': {
                 const p = await vscode.window.showInputBox({ prompt: 'Worktree path (absolute):' });
@@ -304,23 +356,27 @@ export class GraphMessageRouter {
                 const branches = await repo.getAllBranches();
                 const createNew = !branches.some((br) => br.name === b);
                 await repo.addWorktree(p, b, createNew);
-                await this.pushGraphData(undefined, undefined);
                 break;
             }
             case 'remove':
             case 'removeForce': {
-                if (!wtPath) { return; }
+                const pathValue = requireWorktreePath(wtPath);
+                await assertNotMainWorktree(repo, pathValue, 'removed');
                 const force = command === 'removeForce';
-                const label = force ? 'Remove (Force)' : 'Remove';
-                const choice = await showModalWarningMessage(
-                    `Remove worktree at "${wtPath}"?${force ? ' Uncommitted changes will be lost.' : ''}`, label,
-                );
-                if (choice !== label) { return; }
-                await repo.removeWorktree(wtPath, force);
-                await this.pushGraphData(undefined, undefined);
+                if (force) {
+                    const choice = await showModalWarningMessage(`Force remove worktree at "${pathValue}"?`, 'Force Remove');
+                    if (choice !== 'Force Remove') { return; }
+                    const destructiveChoice = await showModalWarningMessage('Uncommitted changes in this worktree will be permanently lost.', 'Discard Changes and Remove');
+                    if (destructiveChoice !== 'Discard Changes and Remove') { return; }
+                } else {
+                    const choice = await showModalWarningMessage(`Remove worktree at "${pathValue}"?`, 'Remove');
+                    if (choice !== 'Remove') { return; }
+                }
+                await repo.removeWorktree(pathValue, force);
                 break;
             }
         }
+        await this.pushGraphData(undefined, undefined);
     }
 
     private async handleCommitCommand(command: CommitCommand, hash: string, hashes: readonly string[]): Promise<void> {
@@ -415,6 +471,103 @@ async function settleOptional<T>(promise: Promise<readonly T[]>): Promise<Promis
         (value) => ({ status: 'fulfilled', value }) as const,
         (reason: unknown) => ({ status: 'rejected', reason }) as const,
     );
+}
+
+function requireWorktreePath(wtPath: string | undefined): string {
+    if (!wtPath) { throw new Error('Worktree path is required.'); }
+    return wtPath;
+}
+
+async function assertNotMainWorktree(repo: GitRepository, wtPath: string, operation: 'locked' | 'unlocked' | 'removed'): Promise<void> {
+    const worktree = (await repo.listWorktrees()).find((candidate) => candidate.path === wtPath);
+    if (worktree?.isMain) { throw new Error(`The main worktree cannot be ${operation}.`); }
+}
+
+async function showDiffWithMainWorktree(repo: GitRepository, wtPath: string): Promise<void> {
+    const worktrees = await repo.listWorktrees();
+    const main = worktrees.find((worktree) => worktree.isMain);
+    const selected = worktrees.find((worktree) => worktree.path === wtPath);
+    if (!main) { throw new Error('Main worktree not found.'); }
+    if (!selected) { throw new Error(`Unknown worktree: ${wtPath}`); }
+    if (selected.isMain) { throw new Error('Cannot compare the main worktree with itself.'); }
+    const diff = await worktreeDiffFromBase(repo, wtPath, main.head);
+    await openDiffDocument(`Diff ${path.basename(wtPath)} with ${path.basename(main.path)}`, diff);
+}
+
+async function worktreeDiffFromBase(repo: GitRepository, wtPath: string, baseRef: string): Promise<string> {
+    const trackedDiff = await repo.execRaw(['-C', wtPath, 'diff', baseRef, '--']);
+    const untrackedDiff = await worktreeUntrackedDiff(repo, wtPath);
+    const diff = [trackedDiff.trimEnd(), untrackedDiff.trimEnd()].filter(Boolean).join('\n\n');
+    return diff || 'No changes.\n';
+}
+
+async function worktreeUntrackedDiff(repo: GitRepository, wtPath: string): Promise<string> {
+    const output = await repo.execRaw(['-C', wtPath, 'ls-files', '--others', '--exclude-standard', '-z']);
+    const files = output.split('\0').filter(Boolean);
+    const patches = await Promise.all(files.map((filePath) => untrackedFilePatch(wtPath, filePath)));
+    return patches.join('\n');
+}
+
+async function untrackedFilePatch(wtPath: string, filePath: string): Promise<string> {
+    const content = await fs.readFile(path.join(wtPath, filePath));
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    if (content.includes(0)) {
+        return [
+            `diff --git a/${normalizedPath} b/${normalizedPath}`,
+            'new file mode 100644',
+            `Binary files /dev/null and b/${normalizedPath} differ`,
+            '',
+        ].join('\n');
+    }
+
+    const text = content.toString('utf8');
+    const hasTrailingNewline = text.endsWith('\n');
+    const lines = hasTrailingNewline ? text.slice(0, -1).split('\n') : text.split('\n');
+    const body = lines.length === 1 && lines[0] === '' ? [] : lines.map((line) => `+${line}`);
+    const noNewlineMarker = !hasTrailingNewline && body.length > 0 ? ['\\ No newline at end of file'] : [];
+    return [
+        `diff --git a/${normalizedPath} b/${normalizedPath}`,
+        'new file mode 100644',
+        '--- /dev/null',
+        `+++ b/${normalizedPath}`,
+        `@@ -0,0 +1,${body.length} @@`,
+        ...body,
+        ...noNewlineMarker,
+        '',
+    ].join('\n');
+}
+
+async function commitWorktree(repo: GitRepository, wtPath: string): Promise<boolean> {
+    const raw = await repo.execRaw(['-C', wtPath, 'status', '--porcelain=v1', '-z', '-u']);
+    const status = parsePorcelainStatus(raw);
+    if (status.conflicts.length > 0) { throw new Error('Resolve conflicts before committing this worktree.'); }
+    if (status.staged.length === 0 && status.unstaged.length === 0) { throw new Error('No changes to commit in this worktree.'); }
+
+    if (status.staged.length === 0) {
+        const choice = await showModalWarningMessage('No staged changes in this worktree. Stage all changes and commit?', 'Stage All and Commit');
+        if (choice !== 'Stage All and Commit') { return false; }
+        await repo.exec(['-C', wtPath, 'add', '-A']);
+    } else if (status.unstaged.length > 0) {
+        const choice = await vscode.window.showQuickPick(['Commit Staged Changes', 'Stage All and Commit'], { placeHolder: 'This worktree also has unstaged changes.' });
+        if (!choice) { return false; }
+        if (choice === 'Stage All and Commit') {
+            await repo.exec(['-C', wtPath, 'add', '-A']);
+        }
+    }
+
+    const message = await vscode.window.showInputBox({ prompt: 'Commit message:' });
+    if (!message?.trim()) { return false; }
+    await repo.exec(['-C', wtPath, 'commit', '-m', message]);
+    return true;
+}
+
+async function stashWorktree(repo: GitRepository, wtPath: string): Promise<boolean> {
+    const message = await vscode.window.showInputBox({ prompt: 'Stash message:', placeHolder: 'Optional' });
+    if (message === undefined) { return false; }
+    const args = ['-C', wtPath, 'stash', 'push', '-u'];
+    if (message.trim()) { args.push('-m', message.trim()); }
+    await repo.exec(args);
+    return true;
 }
 
 function porcelainStatusFiles(raw: string): readonly CommitFileChange[] {

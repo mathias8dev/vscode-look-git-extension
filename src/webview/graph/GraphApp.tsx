@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer } from 'react';
-import type { BranchCommand, CommitCommand, GraphExtensionToWebviewMessage } from '../../protocol/graph/messages';
+import type { BranchCommand, CommitCommand, WorktreeCommand, GraphExtensionToWebviewMessage } from '../../protocol/graph/messages';
 import type { CommitFileChange } from '../../protocol/graph/types';
 import { BranchPanel } from '../features/graph/BranchPanel';
 import { CommitDetailsPanel } from '../features/graph/CommitDetailsPanel';
@@ -119,6 +119,10 @@ export function GraphApp() {
         vscodeApi.postMessage(messageForBranchCommand(command, branch, isRemote));
     }, []);
 
+    const handleWorktreeCommand = useCallback((command: WorktreeCommand, path: string) => {
+        vscodeApi.postMessage(messageForWorktreeCommand(command, path));
+    }, []);
+
     return (
         <div className="graph-shell">
             <BranchPanel
@@ -130,7 +134,8 @@ export function GraphApp() {
                 onSelectBranch={(branch) => dispatch({ type: 'setBranchFilter', branch })}
                 onBranchCommand={handleBranchCommand}
                 onSelectWorktree={handleSelectWorktree}
-                onOpenWorktree={(path) => vscodeApi.postMessage(messageForWorktreeCommand('open', path))}
+                onOpenWorktree={(path) => vscodeApi.postMessage(messageForWorktreeCommand('openInNewWindow', path))}
+                onWorktreeCommand={handleWorktreeCommand}
                 onAddWorktree={() => vscodeApi.postMessage(messageForWorktreeCommand('add'))}
             />
 

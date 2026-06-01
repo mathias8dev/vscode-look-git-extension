@@ -13,6 +13,7 @@ describe('BranchPanel', () => {
                     branch: 'release/1.0',
                     isMain: false,
                     isDetached: false,
+                    isLocked: false,
                 }]}
                 currentBranch="main"
                 selectedBranchFilter={undefined}
@@ -21,6 +22,7 @@ describe('BranchPanel', () => {
                 onBranchCommand={() => undefined}
                 onSelectWorktree={() => undefined}
                 onOpenWorktree={() => undefined}
+                onWorktreeCommand={() => undefined}
                 onAddWorktree={() => undefined}
             />,
         );
