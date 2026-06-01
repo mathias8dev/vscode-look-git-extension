@@ -12,8 +12,10 @@ interface BranchPanelProps {
     readonly worktrees: readonly WorktreeInfo[];
     readonly currentBranch: string;
     readonly selectedBranchFilter: string | undefined;
+    readonly selectedWorktreePath: string | undefined;
     readonly onSelectBranch: (branch: string | undefined) => void;
     readonly onBranchCommand: (command: BranchCommand, branch: string, isRemote: boolean) => void;
+    readonly onSelectWorktree: (path: string) => void;
     readonly onOpenWorktree: (path: string) => void;
     readonly onAddWorktree: () => void;
 }
@@ -23,8 +25,10 @@ export function BranchPanel({
     worktrees,
     currentBranch,
     selectedBranchFilter,
+    selectedWorktreePath,
     onSelectBranch,
     onBranchCommand,
+    onSelectWorktree,
     onOpenWorktree,
     onAddWorktree,
 }: BranchPanelProps) {
@@ -158,7 +162,20 @@ export function BranchPanel({
                         />
                     </div>
                     {!worktreesCollapsed && worktrees.map((worktree) => (
-                        <div className="graph-resource-row" key={worktree.path}>
+                        <div
+                            className="graph-resource-row graph-resource-row-clickable"
+                            key={worktree.path}
+                            role="button"
+                            tabIndex={0}
+                            aria-selected={worktree.path === selectedWorktreePath}
+                            onClick={() => onSelectWorktree(worktree.path)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    onSelectWorktree(worktree.path);
+                                }
+                            }}
+                        >
                             <i className="codicon codicon-repo branch-leaf-icon" aria-hidden="true" />
                             <span className="branch-node-name" title={worktree.path}>
                                 {worktree.branch ?? `detached ${worktree.head.substring(0, 7)}`}
@@ -168,7 +185,7 @@ export function BranchPanel({
                                 icon="go-to-file"
                                 title="Open worktree"
                                 className="graph-resource-action"
-                                onClick={() => onOpenWorktree(worktree.path)}
+                                onClick={(e) => { e.stopPropagation(); onOpenWorktree(worktree.path); }}
                             />
                         </div>
                     ))}

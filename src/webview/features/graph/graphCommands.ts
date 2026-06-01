@@ -42,6 +42,14 @@ export function messageForCommitDetails(hash: string): GraphWebviewToExtensionMe
     };
 }
 
+export function messageForWorktreeDetails(path: string): GraphWebviewToExtensionMessage {
+    return {
+        type: 'graph/worktreeDetailsRequest',
+        requestId: nextRequestId(),
+        path,
+    };
+}
+
 export function messageForBranchCheckout(branch: string, isRemote: boolean): GraphWebviewToExtensionMessage {
     return messageForBranchCommand('checkout', branch, isRemote);
 }
@@ -86,5 +94,20 @@ export function messageForOpenDiff(
         status,
         origPath,
         parentHash,
+    };
+}
+
+export function messageForOpenWorktreeDiff(
+    worktreePath: string,
+    filePath: string,
+    status: string,
+    origPath?: string,
+): GraphWebviewToExtensionMessage {
+    return {
+        type: 'graph/openWorktreeDiff',
+        worktreePath,
+        filePath,
+        status,
+        origPath,
     };
 }

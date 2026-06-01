@@ -38,6 +38,15 @@ export interface CommitDetailsResponse {
     readonly files: readonly CommitFileChange[];
 }
 
+export interface WorktreeDetailsResponse {
+    readonly type: 'graph/worktreeDetailsResponse';
+    readonly requestId: RequestId;
+    readonly path: string;
+    readonly head: string;
+    readonly branch: string | undefined;
+    readonly files: readonly CommitFileChange[];
+}
+
 // ── Webview → Extension (requests — carry requestId) ───────────────────────
 
 export interface GraphDataRequest {
@@ -61,6 +70,12 @@ export interface CommitDetailsRequest {
     readonly requestId: RequestId;
     readonly hash: string;
     readonly selectedHashes?: readonly string[];
+}
+
+export interface WorktreeDetailsRequest {
+    readonly type: 'graph/worktreeDetailsRequest';
+    readonly requestId: RequestId;
+    readonly path: string;
 }
 
 // ── Webview → Extension (commands — no response expected) ──────────────────
@@ -121,6 +136,14 @@ export interface OpenDiffRequest {
     readonly parentHash?: string;
 }
 
+export interface OpenWorktreeDiffRequest {
+    readonly type: 'graph/openWorktreeDiff';
+    readonly worktreePath: string;
+    readonly filePath: string;
+    readonly status: string;
+    readonly origPath?: string;
+}
+
 export interface GraphReadyMessage {
     readonly type: 'graph/ready';
 }
@@ -136,6 +159,7 @@ export type GraphExtensionToWebviewMessage =
     | GraphDataPush
     | GraphDataResponse
     | CommitDetailsResponse
+    | WorktreeDetailsResponse
     | GraphErrorPush
     | ErrorMessage;
 
@@ -145,7 +169,9 @@ export type GraphWebviewToExtensionMessage =
     | GraphDataRequest
     | LoadMoreGraphRequest
     | CommitDetailsRequest
+    | WorktreeDetailsRequest
     | BranchCommandRequest
     | WorktreeCommandRequest
     | CommitCommandRequest
-    | OpenDiffRequest;
+    | OpenDiffRequest
+    | OpenWorktreeDiffRequest;

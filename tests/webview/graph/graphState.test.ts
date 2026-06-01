@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { GraphCommit, GraphData } from '../../../src/protocol/graph/types';
-import { createInitialGraphState, reduceGraphState } from '../../../src/webview/features/graph/graphState';
+import type { GraphCommit, GraphData, WorktreeWip } from '../../../src/protocol/graph/types';
+import { buildDisplayRows, createInitialGraphState, reduceGraphState } from '../../../src/webview/features/graph/graphState';
+import type { GraphRow, LaneData } from '../../../src/webview/features/graph/layout/assignGraphLanes';
 
 function commit(hash: string, parents: readonly string[] = []): GraphCommit {
     return {
@@ -27,6 +28,32 @@ function graphData(commits: readonly GraphCommit[], loadedCount: number, hasMore
         totalCount: commits.length,
         hasRemotes: false,
         worktrees: [],
+        worktreeWips: [],
+    };
+}
+
+function wip(path: string, head: string): WorktreeWip {
+    return {
+        path,
+        head,
+        branch: undefined,
+        staged: 1,
+        unstaged: 0,
+        untracked: 0,
+        conflicts: 0,
+    };
+}
+
+function row(hash: string, laneData: LaneData): GraphRow {
+    return { commit: commit(hash), laneData };
+}
+
+function laneData(lines: LaneData['lines'] = []): LaneData {
+    return {
+        lane: 1,
+        color: '#79b8ff',
+        isPrimary: false,
+        lines,
     };
 }
 
@@ -77,6 +104,45 @@ describe('graphState', () => {
         expect(stale.detailsLoading).toBe(true);
     });
 
+    it('loads worktree details independently from commit selection', () => {
+        const selected = reduceGraphState(createInitialGraphState(), { type: 'selectWorktree', path: '/repo/.worktrees/topic' });
+        const stale = reduceGraphState(selected, {
+            type: 'message',
+            message: {
+                type: 'graph/worktreeDetailsResponse',
+                requestId: 'details-1',
+                path: '/repo/.worktrees/other',
+                head: 'other',
+                branch: 'feature/other',
+                files: [],
+            },
+        });
+        const loaded = reduceGraphState(stale, {
+            type: 'message',
+            message: {
+                type: 'graph/worktreeDetailsResponse',
+                requestId: 'details-2',
+                path: '/repo/.worktrees/topic',
+                head: 'head',
+                branch: 'feature/topic',
+                files: [{ status: '?', filePath: 'src/new.ts' }],
+            },
+        });
+
+        expect(selected.selectedHash).toBeUndefined();
+        expect(selected.selectedWorktreePath).toBe('/repo/.worktrees/topic');
+        expect(selected.detailsLoading).toBe(true);
+        expect(stale.commitDetails).toBeUndefined();
+        expect(loaded.commitDetails).toEqual({
+            kind: 'worktree',
+            hash: 'head',
+            fullMessage: 'feature/topic',
+            files: [{ status: '?', filePath: 'src/new.ts' }],
+            path: '/repo/.worktrees/topic',
+            branch: 'feature/topic',
+        });
+    });
+
     it('tracks multiple selected commits', () => {
         const first = reduceGraphState(createInitialGraphState(), { type: 'selectCommit', hash: 'a' });
         const added = reduceGraphState(first, { type: 'toggleCommitSelection', hash: 'b' });
@@ -116,5 +182,55 @@ describe('graphState', () => {
 
         expect(failed.error?.message).toBe('Graph failed');
         expect(cleared.error).toBeUndefined();
+    });
+
+    it('keeps multiple worktree WIP rows that point at the same commit', () => {
+        const rows = [row('head', laneData())];
+        const displayRows = buildDisplayRows(rows, [
+            wip('/repo/worktrees/a', 'head'),
+            wip('/repo/worktrees/b', 'head'),
+        ]);
+
+        expect(displayRows.map((displayRow) => displayRow.kind)).toEqual(['wip', 'wip', 'commit']);
+        expect(displayRows.filter((displayRow) => displayRow.kind === 'wip').map((displayRow) => displayRow.wip.path)).toEqual([
+            '/repo/worktrees/a',
+            '/repo/worktrees/b',
+        ]);
+    });
+
+    it('uses synthetic lane lines for WIP rows and connects the real commit below them', () => {
+        const parentLine = {
+            fromLane: 1,
+            toLane: 2,
+            color: '#79b8ff',
+            type: 'fork-right',
+            role: 'first-parent',
+            startY: 'center',
+            endY: 'bottom',
+        } satisfies LaneData['lines'][number];
+        const displayRows = buildDisplayRows([row('head', laneData([parentLine]))], [wip('/repo/wt', 'head')]);
+        const wipRow = displayRows[0];
+        const commitRow = displayRows[1];
+
+        expect(wipRow?.kind).toBe('wip');
+        if (wipRow?.kind !== 'wip') { throw new Error('Expected WIP row.'); }
+        expect(wipRow.laneData.lines).toEqual([expect.objectContaining({
+            fromLane: 1,
+            toLane: 1,
+            type: 'straight',
+            startY: 'center',
+            endY: 'bottom',
+        })]);
+
+        expect(commitRow?.kind).toBe('commit');
+        if (commitRow?.kind !== 'commit') { throw new Error('Expected commit row.'); }
+        expect(commitRow.row.laneData.lines).toContainEqual(expect.objectContaining({
+            fromLane: 1,
+            toLane: 1,
+            type: 'straight',
+            startY: 'top',
+            endY: 'center',
+        }));
+        expect(commitRow.row.laneData.lines).toContain(parentLine);
     });
 });

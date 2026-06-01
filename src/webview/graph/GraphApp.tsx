@@ -16,7 +16,9 @@ import {
     messageForGraphDataRequest,
     messageForLoadMore,
     messageForOpenDiff,
+    messageForOpenWorktreeDiff,
     messageForWorktreeCommand,
+    messageForWorktreeDetails,
 } from '../features/graph/graphCommands';
 import { ErrorNotice } from '../shared/ErrorNotice';
 import { vscodeApi } from '../platform/vscodeHost';
@@ -40,6 +42,11 @@ export function GraphApp() {
         if (!state.selectedHash) { return; }
         vscodeApi.postMessage(messageForCommitDetails(state.selectedHash));
     }, [state.selectedHash]);
+
+    useEffect(() => {
+        if (!state.selectedWorktreePath) { return; }
+        vscodeApi.postMessage(messageForWorktreeDetails(state.selectedWorktreePath));
+    }, [state.selectedWorktreePath]);
 
     useEffect(() => {
         if (!state.loading) { return; }
@@ -69,6 +76,15 @@ export function GraphApp() {
     }, [state.hasMore, state.loading, state.loadingMore, state.repoId, state.filters, state.loadedCount]);
 
     const handleDiff = useCallback((file: CommitFileChange) => {
+        if (state.commitDetails?.kind === 'worktree' && state.commitDetails.path) {
+            vscodeApi.postMessage(messageForOpenWorktreeDiff(
+                state.commitDetails.path,
+                file.filePath,
+                file.status,
+                file.origPath,
+            ));
+            return;
+        }
         if (!state.selectedHash) { return; }
         vscodeApi.postMessage(messageForOpenDiff(
             file.filePath,
@@ -77,7 +93,7 @@ export function GraphApp() {
             file.origPath,
             file.parentHash,
         ));
-    }, [state.selectedHash]);
+    }, [state.commitDetails, state.selectedHash]);
 
     const handleSelectCommit = useCallback((hash: string, mode: 'replace' | 'toggle' | 'range') => {
         if (mode === 'toggle') {
@@ -90,6 +106,10 @@ export function GraphApp() {
         }
         dispatch({ type: 'selectCommit', hash });
     }, [state.rows, state.selectionAnchorHash]);
+
+    const handleSelectWorktree = useCallback((path: string) => {
+        dispatch({ type: 'selectWorktree', path });
+    }, []);
 
     const handleCommitCommand = useCallback((command: CommitCommand, hash: string, hashes: readonly string[]) => {
         vscodeApi.postMessage(messageForCommitCommand(command, hash, hashes));
@@ -106,8 +126,10 @@ export function GraphApp() {
                 worktrees={state.worktrees}
                 currentBranch={state.currentBranch}
                 selectedBranchFilter={state.selectedBranchFilter}
+                selectedWorktreePath={state.selectedWorktreePath}
                 onSelectBranch={(branch) => dispatch({ type: 'setBranchFilter', branch })}
                 onBranchCommand={handleBranchCommand}
+                onSelectWorktree={handleSelectWorktree}
                 onOpenWorktree={(path) => vscodeApi.postMessage(messageForWorktreeCommand('open', path))}
                 onAddWorktree={() => vscodeApi.postMessage(messageForWorktreeCommand('add'))}
             />
@@ -133,18 +155,21 @@ export function GraphApp() {
 
                 <GraphTable
                     rows={state.rows}
+                    displayRows={state.displayRows}
                     branches={state.branches}
                     selectedHashes={state.selectedHashes}
+                    selectedWorktreePath={state.selectedWorktreePath}
                     hasMore={state.hasMore}
                     loadingMore={state.loadingMore}
                     onSelectCommit={handleSelectCommit}
+                    onSelectWorktree={handleSelectWorktree}
                     onCommitCommand={handleCommitCommand}
                     onLoadMore={handleLoadMore}
                     onPostMessage={(msg) => vscodeApi.postMessage(msg)}
                 />
             </div>
 
-            {state.selectedHash ? (
+            {state.selectedHash || state.selectedWorktreePath ? (
                 <CommitDetailsPanel
                     details={state.commitDetails}
                     loading={state.detailsLoading}

@@ -22,6 +22,30 @@ describe('commitFileTree', () => {
         expect(markup).toContain('Open diff');
     });
 
+    it('can render file rows without diff actions', () => {
+        const node = expectItem(buildFileTree([{ status: '?', filePath: 'src/app.ts' }]), 0);
+        const child = expectItem(node.children, 0);
+        const markup = renderToStaticMarkup(<FileTreeNodeView node={child} depth={1} onDiff={() => undefined} diffable={false} />);
+
+        expect(markup).not.toContain('Open diff');
+        expect(markup).toContain('status-letter-untracked');
+    });
+
+    it('renders the selected file row with the visual selection state', () => {
+        const node = expectItem(buildFileTree([{ status: 'M', filePath: 'src/app.ts' }]), 0);
+        const child = expectItem(node.children, 0);
+        const markup = renderToStaticMarkup(
+            <FileTreeNodeView
+                node={child}
+                depth={1}
+                onDiff={() => undefined}
+                selectedFileId={child.id}
+            />,
+        );
+
+        expect(markup).toContain('aria-selected="true"');
+    });
+
     it('renders module-like paths as ordinary file paths', () => {
         const node = expectItem(buildFileTree([{ status: 'M', filePath: 'modules/auth-kit' }]), 0);
         const markup = renderToStaticMarkup(<FileTreeNodeView node={node} depth={0} onDiff={() => undefined} />);

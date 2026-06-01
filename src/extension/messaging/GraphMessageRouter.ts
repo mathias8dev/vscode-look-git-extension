@@ -2,10 +2,12 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
-import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse, OpenDiffRequest } from '../../protocol/graph/messages';
-import type { GraphData, GraphFilters } from '../../protocol/graph/types';
+import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse, WorktreeDetailsResponse, OpenDiffRequest, OpenWorktreeDiffRequest } from '../../protocol/graph/messages';
+import type { CommitFileChange, GraphData, GraphFilters, WorktreeWip } from '../../protocol/graph/types';
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import type { GitRepository } from '../../core/git/GitRepository';
+import type { GitStatusEntry } from '../../core/git/domain/GitStatus';
+import { parsePorcelainStatus, summarizePorcelainStatus } from '../../core/parsing/parseStatus';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import { toProtocolBranch, toProtocolGraphCommit, toProtocolWorktree } from '../mapping/toProtocol';
 import { showModalWarningMessage } from '../utils/confirmation';
@@ -98,6 +100,23 @@ export class GraphMessageRouter {
                 break;
             }
 
+            case 'graph/worktreeDetailsRequest': {
+                const repo = this.repositories.requireRepository();
+                const worktree = (await repo.listWorktrees()).find((wt) => wt.path === msg.path);
+                if (!worktree) { throw new Error(`Unknown worktree: ${msg.path}`); }
+                const raw = await repo.execRaw(['-C', worktree.path, 'status', '--porcelain=v1', '-z', '-u']);
+                const response: WorktreeDetailsResponse = {
+                    type: 'graph/worktreeDetailsResponse',
+                    requestId: msg.requestId,
+                    path: worktree.path,
+                    head: worktree.head,
+                    branch: worktree.branch,
+                    files: porcelainStatusFiles(raw),
+                };
+                this.postMessage(response);
+                break;
+            }
+
             case 'graph/branchCommand':
                 await this.handleBranchCommand(msg.command, msg.branch, msg.isRemote);
                 break;
@@ -114,6 +133,13 @@ export class GraphMessageRouter {
                 const repo = this.repositories.requireRepository();
                 const { left, right } = await createDiffUris(repo.cwd, msg);
                 await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(msg.filePath)} (${msg.commitHash.substring(0, 7)})`);
+                break;
+            }
+
+            case 'graph/openWorktreeDiff': {
+                const repo = this.repositories.requireRepository();
+                const { left, right } = await createWorktreeDiffUris(repo, msg);
+                await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(msg.filePath)} (${path.basename(msg.worktreePath)})`);
                 break;
             }
 
@@ -161,6 +187,25 @@ export class GraphMessageRouter {
         const remotes = this.optionalResultOrEmpty(remotesResult, 'graph/listRemotes');
         const worktrees = this.optionalResultOrEmpty(worktreesResult, 'graph/listWorktrees');
 
+        const wipResults = await Promise.all(worktrees.map(async (wt): Promise<WorktreeWip | undefined> => {
+            try {
+                const raw = await repo.execRaw(['-C', wt.path, 'status', '--porcelain=v1', '-z', '-u'], signal);
+                const counts = summarizePorcelainStatus(raw);
+                return {
+                    path: wt.path,
+                    head: wt.head,
+                    branch: wt.branch,
+                    ...counts,
+                };
+            } catch (error) {
+                if (isAbortError(error)) { throw error; }
+                this.postGraphError(error, { operation: 'graph/worktreeWipStatus', code: 'optionalDataUnavailable' });
+                return undefined;
+            }
+        }));
+        const worktreeWips = wipResults
+            .filter((wip): wip is WorktreeWip => wip !== undefined && wip.staged + wip.unstaged + wip.untracked + wip.conflicts > 0);
+
         const sliced = rawCommits.slice(offset, offset + limit);
         const hasMore = rawCommits.length > offset + limit;
         const currentBranch = branches.find((b) => b.isCurrent)?.name ?? 'HEAD';
@@ -176,6 +221,7 @@ export class GraphMessageRouter {
             totalCount: rawCommits.length,
             hasRemotes: remotes.length > 0,
             worktrees: worktrees.map(toProtocolWorktree),
+            worktreeWips,
         };
     }
 
@@ -369,6 +415,51 @@ async function settleOptional<T>(promise: Promise<readonly T[]>): Promise<Promis
         (value) => ({ status: 'fulfilled', value }) as const,
         (reason: unknown) => ({ status: 'rejected', reason }) as const,
     );
+}
+
+function porcelainStatusFiles(raw: string): readonly CommitFileChange[] {
+    const status = parsePorcelainStatus(raw);
+    const files = new Map<string, CommitFileChange>();
+
+    for (const entry of status.conflicts) {
+        files.set(statusFileKey(entry), statusEntryFile(entry, 'U'));
+    }
+    for (const entry of status.staged) {
+        mergeStatusFile(files, entry, statusCode(entry.indexStatus));
+    }
+    for (const entry of status.unstaged) {
+        mergeStatusFile(files, entry, statusCode(entry.indexStatus === '?' ? '?' : entry.workTreeStatus));
+    }
+
+    return [...files.values()].sort((a, b) => a.filePath.localeCompare(b.filePath));
+}
+
+function mergeStatusFile(files: Map<string, CommitFileChange>, entry: GitStatusEntry, status: string): void {
+    const key = statusFileKey(entry);
+    const existing = files.get(key);
+    if (!existing) {
+        files.set(key, statusEntryFile(entry, status));
+        return;
+    }
+    if (!existing.status.includes(status)) {
+        files.set(key, { ...existing, status: `${existing.status}${status}` });
+    }
+}
+
+function statusEntryFile(entry: GitStatusEntry, status: string): CommitFileChange {
+    return {
+        status,
+        filePath: entry.filePath,
+        origPath: entry.origPath,
+    };
+}
+
+function statusFileKey(entry: GitStatusEntry): string {
+    return `${entry.filePath}\0${entry.origPath ?? ''}`;
+}
+
+function statusCode(status: string): string {
+    return status === ' ' ? 'M' : status;
 }
 
 function normalizeSelectedHashes(hash: string, hashes: readonly string[]): string[] {
@@ -646,7 +737,7 @@ function requestIdOf(msg: GraphWebviewToExtensionMessage): RequestId | undefined
 }
 
 function errorCodeFor(msg: GraphWebviewToExtensionMessage): ErrorCode {
-    if (msg.type === 'graph/openDiff') { return 'vscodeCommandFailed'; }
+    if (msg.type === 'graph/openDiff' || msg.type === 'graph/openWorktreeDiff') { return 'vscodeCommandFailed'; }
     return 'gitOperationFailed';
 }
 
@@ -676,12 +767,46 @@ async function createDiffUris(cwd: string, msg: OpenDiffRequest): Promise<{ read
     };
 }
 
+async function createWorktreeDiffUris(repo: GitRepository, msg: OpenWorktreeDiffRequest): Promise<{ readonly left: vscode.Uri; readonly right: vscode.Uri }> {
+    const fileUri = vscode.Uri.file(path.join(msg.worktreePath, msg.filePath));
+    const origPath = msg.origPath ?? msg.filePath;
+    const status = msg.status.charAt(0);
+
+    if (status === '?' || status === 'A') {
+        return {
+            left: await emptyDiffUri('worktree', msg.filePath, 'head'),
+            right: fileUri,
+        };
+    }
+
+    if (status === 'D') {
+        return {
+            left: await worktreeHeadBlobUri(repo, msg.worktreePath, origPath),
+            right: await emptyDiffUri('worktree', msg.filePath, 'working-tree'),
+        };
+    }
+
+    return {
+        left: await worktreeHeadBlobUri(repo, msg.worktreePath, origPath),
+        right: fileUri,
+    };
+}
+
 async function emptyDiffUri(commitHash: string, filePath: string, side: string): Promise<vscode.Uri> {
+    return tempDiffUri(commitHash, filePath, side, '');
+}
+
+async function worktreeHeadBlobUri(repo: GitRepository, worktreePath: string, filePath: string): Promise<vscode.Uri> {
+    const content = await repo.execRaw(['-C', worktreePath, 'show', `HEAD:${filePath}`]);
+    return tempDiffUri('worktree-head', filePath, 'head', content);
+}
+
+async function tempDiffUri(namespace: string, filePath: string, side: string, content: string): Promise<vscode.Uri> {
     const dir = path.join(os.tmpdir(), 'look-git-empty-diffs');
-    const fileName = `${commitHash.substring(0, 12)}-${side}-${Buffer.from(filePath).toString('base64url')}`;
+    const fileName = `${namespace.substring(0, 12)}-${side}-${Buffer.from(filePath).toString('base64url')}`;
     const emptyPath = path.join(dir, fileName);
     await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(emptyPath, '');
+    await fs.writeFile(emptyPath, content);
     return vscode.Uri.file(emptyPath);
 }
 
@@ -701,5 +826,6 @@ function emptyGraphData(): GraphData {
         totalCount: 0,
         hasRemotes: false,
         worktrees: [],
+        worktreeWips: [],
     };
 }

@@ -1093,6 +1093,20 @@ h1 {
     background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
 }
 
+.graph-resource-row[aria-selected="true"] {
+    background: var(--vscode-list-activeSelectionBackground, rgba(14, 99, 156, 0.4));
+    color: var(--vscode-list-activeSelectionForeground, #ffffff);
+}
+
+.graph-resource-row-clickable {
+    cursor: pointer;
+}
+
+.graph-resource-row-clickable:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder, #007fd4);
+    outline-offset: -1px;
+}
+
 .graph-resource-count,
 .graph-resource-badge,
 .graph-submodule-status {
@@ -1446,6 +1460,10 @@ h1 {
     font-size: 0.82em;
     font-family: var(--vscode-editor-font-family, monospace);
     color: var(--vscode-descriptionForeground, #9d9d9d);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .graph-details-file-tree {
@@ -1529,6 +1547,11 @@ h1 {
     background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
 }
 
+.commit-file-leaf[aria-selected="true"] {
+    background: var(--vscode-list-activeSelectionBackground, rgba(14, 99, 156, 0.4));
+    color: var(--vscode-list-activeSelectionForeground, #ffffff);
+}
+
 .commit-file-leaf-clickable:focus-visible {
     outline: 1px solid var(--vscode-focusBorder, #007fd4);
     outline-offset: -1px;
@@ -1567,4 +1590,52 @@ h1 {
 
 .commit-file-node:hover .commit-file-actions {
     opacity: 1;
+}
+
+/* ── WIP Rows ────────────────────────────────────────────────────────────── */
+
+.graph-row-wip {
+    opacity: 0.88;
+    cursor: pointer;
+}
+
+.graph-row-wip:hover {
+    opacity: 1;
+    background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
+}
+
+.graph-wip-message {
+    font-style: italic;
+}
+
+.wip-label {
+    font-size: 0.72em;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
+    flex-shrink: 0;
+}
+
+.wip-stats {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.wip-staged    { color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b); font-size: 0.82em; }
+.wip-unstaged  { color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d); font-size: 0.82em; }
+.wip-untracked { color: var(--vscode-descriptionForeground, #9d9d9d); font-size: 0.82em; }
+.wip-conflict  { color: var(--vscode-gitDecoration-conflictingResourceForeground, #e4676b); font-size: 0.82em; }
+
+.graph-wip-path {
+    font-size: 0.78em;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-style: normal;
+}
+
+.wip-date-cell {
+    font-size: 0.74em;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-style: italic;
 }

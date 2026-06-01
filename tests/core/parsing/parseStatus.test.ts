@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parsePorcelainStatus, detectConflictStateFromFiles } from '../../../src/core/parsing/parseStatus';
+import { parsePorcelainStatus, detectConflictStateFromFiles, summarizePorcelainStatus } from '../../../src/core/parsing/parseStatus';
 import { expectItem } from '../../helpers/assertions';
 
 describe('parsePorcelainStatus', () => {
@@ -56,6 +56,19 @@ describe('parsePorcelainStatus', () => {
         const renamed = expectItem(result.staged, 0);
         expect(renamed.filePath).toBe('new.ts');
         expect(renamed.origPath).toBe('old.ts');
+    });
+});
+
+describe('summarizePorcelainStatus', () => {
+    it('counts unstaged files without losing leading status spaces', () => {
+        const output = ' M dirty.ts\0M  staged.ts\0?? new.ts\0UU conflict.ts\0';
+
+        expect(summarizePorcelainStatus(output)).toEqual({
+            staged: 1,
+            unstaged: 1,
+            untracked: 1,
+            conflicts: 1,
+        });
     });
 });
 

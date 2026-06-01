@@ -9,9 +9,12 @@ interface FileTreeNodeViewProps {
     readonly node: FileTreeNode;
     readonly depth: number;
     readonly onDiff: (file: CommitFileChange) => void;
+    readonly diffable?: boolean;
+    readonly selectedFileId?: string;
+    readonly onSelectFile?: (fileId: string) => void;
 }
 
-export function FileTreeNodeView({ node, depth, onDiff }: FileTreeNodeViewProps) {
+export function FileTreeNodeView({ node, depth, onDiff, diffable = true, selectedFileId, onSelectFile }: FileTreeNodeViewProps) {
     const [collapsed, setCollapsed] = useState(false);
     const indent = depth * 12 + 8;
 
@@ -41,6 +44,9 @@ export function FileTreeNodeView({ node, depth, onDiff }: FileTreeNodeViewProps)
                         node={child}
                         depth={depth + 1}
                         onDiff={onDiff}
+                        diffable={diffable}
+                        selectedFileId={selectedFileId}
+                        onSelectFile={onSelectFile}
                     />
                 ))}
             </div>
@@ -51,29 +57,40 @@ export function FileTreeNodeView({ node, depth, onDiff }: FileTreeNodeViewProps)
     if (!file) { return null; }
     const statusKind = fileStatusKind(file.status);
     const kind = iconKindForCommitFile(file);
-    const openDiff = () => onDiff(file);
+    const openDiff = () => {
+        onSelectFile?.(node.id);
+        onDiff(file);
+    };
+    const classes = [
+        'commit-file-node',
+        'commit-file-leaf',
+        diffable ? 'commit-file-leaf-clickable' : undefined,
+    ].filter(Boolean).join(' ');
 
     return (
         <div
-            className="commit-file-node commit-file-leaf commit-file-leaf-clickable"
+            className={classes}
             style={{ paddingLeft: `${indent}px` }}
             title={file.filePath}
-            tabIndex={0}
-            role="button"
-            onClick={openDiff}
+            tabIndex={diffable ? 0 : undefined}
+            role={diffable ? 'button' : undefined}
+            aria-selected={selectedFileId === node.id}
+            onClick={diffable ? openDiff : undefined}
             onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDiff(); }
+                if (diffable && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDiff(); }
             }}
         >
             <GraphFileTypeIcon kind={kind} />
             <span className="commit-file-name">{node.name}</span>
-            <div className="commit-file-actions">
-                <IconButton
-                    icon="diff"
-                    title="Open diff"
-                    onClick={(e) => { e.stopPropagation(); openDiff(); }}
-                />
-            </div>
+            {diffable ? (
+                <div className="commit-file-actions">
+                    <IconButton
+                        icon="diff"
+                        title="Open diff"
+                        onClick={(e) => { e.stopPropagation(); openDiff(); }}
+                    />
+                </div>
+            ) : null}
             <span className={`status-letter status-letter-${statusKind}`} aria-hidden="true">
                 {file.status.charAt(0).toUpperCase()}
             </span>
@@ -89,6 +106,8 @@ function countFiles(node: FileTreeNode): number {
 function fileStatusKind(status: string): string {
     const s = status.charAt(0).toUpperCase();
     if (s === 'A') { return 'added'; }
+    if (s === '?') { return 'untracked'; }
+    if (s === 'U') { return 'conflict'; }
     if (s === 'D') { return 'deleted'; }
     if (s === 'R') { return 'renamed'; }
     return 'modified';

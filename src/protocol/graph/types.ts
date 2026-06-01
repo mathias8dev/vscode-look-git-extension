@@ -46,6 +46,16 @@ export interface WorktreeInfo {
     readonly isDetached: boolean;
 }
 
+export interface WorktreeWip {
+    readonly path: string;
+    readonly head: string;
+    readonly branch: string | undefined;
+    readonly staged: number;
+    readonly unstaged: number;
+    readonly untracked: number;
+    readonly conflicts: number;
+}
+
 export interface GraphData {
     readonly branches: readonly BranchInfo[];
     readonly tags: readonly TagInfo[];
@@ -58,6 +68,7 @@ export interface GraphData {
     readonly hasRemotes: boolean;
     readonly repositoryWebUrl?: string;
     readonly worktrees: readonly WorktreeInfo[];
+    readonly worktreeWips: readonly WorktreeWip[];
     readonly currentBranchCommitHashes?: readonly string[];
 }
 

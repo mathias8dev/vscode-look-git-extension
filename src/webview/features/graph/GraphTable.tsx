@@ -3,17 +3,22 @@ import type { BranchInfo } from '../../../protocol/graph/types';
 import type { CommitCommand } from '../../../protocol/graph/messages';
 import type { GraphRow } from './layout/assignGraphLanes';
 import { GraphCommitRow, type CommitSelectMode } from './GraphRow';
+import { GraphWIPRow } from './GraphWIPRow';
 import { ROW_HEIGHT } from './GraphLaneCell';
 import { CommitContextMenu, type CommitContextMenuState } from './CommitContextMenu';
 import { getVisibleGraphRowRange } from './graphVirtualization';
+import type { DisplayRow } from './graphState';
 
 interface GraphTableProps {
     readonly rows: readonly GraphRow[];
+    readonly displayRows: readonly DisplayRow[];
     readonly branches: readonly BranchInfo[];
     readonly selectedHashes: readonly string[];
+    readonly selectedWorktreePath: string | undefined;
     readonly hasMore: boolean;
     readonly loadingMore: boolean;
     readonly onSelectCommit: (hash: string, mode: CommitSelectMode) => void;
+    readonly onSelectWorktree: (path: string) => void;
     readonly onCommitCommand: (command: CommitCommand, hash: string, hashes: readonly string[]) => void;
     readonly onLoadMore: () => void;
     readonly onPostMessage: (msg: unknown) => void;
@@ -21,11 +26,14 @@ interface GraphTableProps {
 
 export function GraphTable({
     rows,
+    displayRows,
     branches,
     selectedHashes,
+    selectedWorktreePath,
     hasMore,
     loadingMore,
     onSelectCommit,
+    onSelectWorktree,
     onCommitCommand,
     onLoadMore,
     onPostMessage,
@@ -34,7 +42,7 @@ export function GraphTable({
     const [contextMenu, setContextMenu] = useState<CommitContextMenuState | undefined>(undefined);
     const [scrollTop, setScrollTop] = useState(0);
     const [viewportHeight, setViewportHeight] = useState(400);
-    const totalHeight = rows.length * ROW_HEIGHT + (hasMore ? ROW_HEIGHT : 0);
+    const totalHeight = displayRows.length * ROW_HEIGHT + (hasMore ? ROW_HEIGHT : 0);
 
     const measureViewport = useCallback(() => {
         const el = wrapperRef.current;
@@ -74,9 +82,9 @@ export function GraphTable({
         if (nearBottom) { onLoadMore(); }
     }, [scrollTop, viewportHeight, totalHeight, hasMore, loadingMore, onLoadMore]);
 
-    const { firstVisible, lastVisible } = getVisibleGraphRowRange(rows.length, scrollTop, viewportHeight);
+    const { firstVisible, lastVisible } = getVisibleGraphRowRange(displayRows.length, scrollTop, viewportHeight);
 
-    const visibleRows = rows.slice(firstVisible, lastVisible + 1);
+    const visibleDisplayRows = displayRows.slice(firstVisible, lastVisible + 1);
     const selectedHashSet = useMemo(() => new Set(selectedHashes), [selectedHashes]);
     const selectedRows = rows.filter((row) => selectedHashSet.has(row.commit.hash));
 
@@ -113,30 +121,42 @@ export function GraphTable({
                 onScroll={handleScroll}
             >
                 <div style={{ height: totalHeight, position: 'relative' }}>
-                    {visibleRows.map((row, i) => (
-                        <GraphCommitRow
-                            key={row.commit.hash}
-                            row={row}
-                            branches={branches}
-                            selected={selectedHashSet.has(row.commit.hash)}
-                            style={{
-                                position: 'absolute',
-                                top: (firstVisible + i) * ROW_HEIGHT,
-                                left: 0,
-                                right: 0,
-                            }}
-                            onSelect={onSelectCommit}
-                            onOpenContextMenu={(commit, x, y) => handleOpenContextMenu(commit.hash, x, y)}
-                            onPostMessage={onPostMessage}
-                        />
-                    ))}
+                    {visibleDisplayRows.map((displayRow, i) => {
+                        const top = (firstVisible + i) * ROW_HEIGHT;
+                        const rowStyle = { position: 'absolute' as const, top, left: 0, right: 0 };
+                        if (displayRow.kind === 'wip') {
+                            return (
+                                <GraphWIPRow
+                                    key={`wip:${displayRow.wip.path}`}
+                                    wip={displayRow.wip}
+                                    laneData={displayRow.laneData}
+                                    style={rowStyle}
+                                    selected={displayRow.wip.path === selectedWorktreePath}
+                                    onSelect={onSelectWorktree}
+                                />
+                            );
+                        }
+                        const { row } = displayRow;
+                        return (
+                            <GraphCommitRow
+                                key={row.commit.hash}
+                                row={row}
+                                branches={branches}
+                                selected={selectedHashSet.has(row.commit.hash)}
+                                style={rowStyle}
+                                onSelect={onSelectCommit}
+                                onOpenContextMenu={(commit, x, y) => handleOpenContextMenu(commit.hash, x, y)}
+                                onPostMessage={onPostMessage}
+                            />
+                        );
+                    })}
                     {hasMore && (
                         <button
                             type="button"
                             className="graph-load-more"
                             style={{
                                 position: 'absolute',
-                                top: rows.length * ROW_HEIGHT,
+                                top: displayRows.length * ROW_HEIGHT,
                                 left: 0,
                                 right: 0,
                             }}

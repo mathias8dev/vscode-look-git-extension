@@ -10,6 +10,10 @@ interface CommitDetailsPanelProps {
 }
 
 export function CommitDetailsPanel({ details, loading, onClose, onDiff }: CommitDetailsPanelProps) {
+    const title = details?.kind === 'worktree'
+        ? details.branch ?? worktreeName(details.path ?? details.hash)
+        : details?.hash.slice(0, 8);
+
     return (
         <div className="graph-details-panel">
             <header className="graph-details-header">
@@ -17,14 +21,14 @@ export function CommitDetailsPanel({ details, loading, onClose, onDiff }: Commit
                     type="button"
                     className="graph-details-close"
                     title="Close details"
-                    aria-label="Close commit details"
+                    aria-label="Close details"
                     onClick={onClose}
                 >
                     <i className="codicon codicon-close" aria-hidden="true" />
                 </button>
                 {details && (
-                    <span className="graph-details-hash" title={details.hash}>
-                        {details.hash.slice(0, 8)}
+                    <span className="graph-details-hash" title={details.path ?? details.hash}>
+                        {title}
                     </span>
                 )}
             </header>
@@ -55,4 +59,8 @@ export function CommitDetailsPanel({ details, loading, onClose, onDiff }: Commit
             )}
         </div>
     );
+}
+
+function worktreeName(path: string): string {
+    return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
 }

@@ -8,6 +8,13 @@ interface RawStatusResult {
     readonly conflicts: GitStatusEntry[];
 }
 
+export interface PorcelainStatusSummary {
+    readonly staged: number;
+    readonly unstaged: number;
+    readonly untracked: number;
+    readonly conflicts: number;
+}
+
 /** Parse porcelain v1 -z output into staged/unstaged/conflict buckets. */
 export function parsePorcelainStatus(output: string, submodulePaths: ReadonlySet<string> = new Set()): RawStatusResult {
     const staged: GitStatusEntry[] = [];
@@ -44,6 +51,27 @@ export function parsePorcelainStatus(output: string, submodulePaths: ReadonlySet
     }
 
     return { staged, unstaged, conflicts };
+}
+
+export function summarizePorcelainStatus(output: string): PorcelainStatusSummary {
+    const { staged, unstaged, conflicts } = parsePorcelainStatus(output);
+    let untracked = 0;
+    let trackedUnstaged = 0;
+
+    for (const entry of unstaged) {
+        if (entry.indexStatus === '?' && entry.workTreeStatus === '?') {
+            untracked++;
+        } else {
+            trackedUnstaged++;
+        }
+    }
+
+    return {
+        staged: staged.length,
+        unstaged: trackedUnstaged,
+        untracked,
+        conflicts: conflicts.length,
+    };
 }
 
 /** Detect merge/rebase state from a list of files in the .git directory. */

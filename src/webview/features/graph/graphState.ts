@@ -1,16 +1,83 @@
 import type { GraphExtensionToWebviewMessage } from '../../../protocol/graph/messages';
-import type { BranchInfo, CommitFileChange, GraphData, GraphFilters, TagInfo, WorktreeInfo } from '../../../protocol/graph/types';
+import type { BranchInfo, CommitFileChange, GraphData, GraphFilters, TagInfo, WorktreeInfo, WorktreeWip } from '../../../protocol/graph/types';
 import type { ProtocolError } from '../../../protocol/shared/base';
-import { assignLanes, type GraphRow } from './layout/assignGraphLanes';
+import { assignLanes, type GraphRow, type LaneData, type LineDef } from './layout/assignGraphLanes';
+
+export type DisplayRow =
+    | { readonly kind: 'commit'; readonly row: GraphRow }
+    | { readonly kind: 'wip'; readonly wip: WorktreeWip; readonly laneData: LaneData };
+
+export function buildDisplayRows(rows: readonly GraphRow[], wips: readonly WorktreeWip[]): readonly DisplayRow[] {
+    const wipsByHead = groupWipsByHead(wips);
+    const result: DisplayRow[] = [];
+    for (const row of rows) {
+        const rowWips = wipsByHead.get(row.commit.hash) ?? [];
+        rowWips.forEach((wip, index) => {
+            result.push({ kind: 'wip', wip, laneData: wipLaneData(row.laneData, index) });
+        });
+        if (rowWips.length > 0) {
+            result.push({ kind: 'commit', row: connectCommitFromWip(row) });
+        } else {
+            result.push({ kind: 'commit', row });
+        }
+    }
+    return result;
+}
+
+function groupWipsByHead(wips: readonly WorktreeWip[]): ReadonlyMap<string, readonly WorktreeWip[]> {
+    const groups = new Map<string, WorktreeWip[]>();
+    for (const wip of wips) {
+        const group = groups.get(wip.head) ?? [];
+        group.push(wip);
+        groups.set(wip.head, group);
+    }
+    return groups;
+}
+
+function wipLaneData(laneData: LaneData, index: number): LaneData {
+    const line: LineDef = {
+        fromLane: laneData.lane,
+        toLane: laneData.lane,
+        color: laneData.color,
+        type: 'straight',
+        role: 'pass-through',
+        startY: index === 0 ? 'center' : 'top',
+        endY: 'bottom',
+    };
+    return { ...laneData, lines: [line] };
+}
+
+function connectCommitFromWip(row: GraphRow): GraphRow {
+    const { laneData } = row;
+    if (laneData.lines.some((line) => line.fromLane === laneData.lane && line.toLane === laneData.lane && line.startY === 'top')) {
+        return row;
+    }
+
+    const line: LineDef = {
+        fromLane: laneData.lane,
+        toLane: laneData.lane,
+        color: laneData.color,
+        type: 'straight',
+        targetHash: row.commit.hash,
+        role: 'pass-through',
+        startY: 'top',
+        endY: 'center',
+    };
+    return { ...row, laneData: { ...laneData, lines: [line, ...laneData.lines] } };
+}
 
 export interface CommitDetails {
+    readonly kind: 'commit' | 'worktree';
     readonly hash: string;
     readonly fullMessage: string;
     readonly files: readonly CommitFileChange[];
+    readonly path?: string;
+    readonly branch?: string;
 }
 
 export interface GraphState {
     readonly rows: readonly GraphRow[];
+    readonly displayRows: readonly DisplayRow[];
     readonly branches: readonly BranchInfo[];
     readonly tags: readonly TagInfo[];
     readonly worktrees: readonly WorktreeInfo[];
@@ -23,6 +90,7 @@ export interface GraphState {
     readonly loading: boolean;
     readonly error: ProtocolError | undefined;
     readonly selectedHash: string | undefined;
+    readonly selectedWorktreePath: string | undefined;
     readonly selectedHashes: readonly string[];
     readonly selectionAnchorHash: string | undefined;
     readonly commitDetails: CommitDetails | undefined;
@@ -36,6 +104,7 @@ export type GraphAction =
     | { readonly type: 'setFilters'; readonly filters: Partial<GraphFilters> }
     | { readonly type: 'setBranchFilter'; readonly branch: string | undefined }
     | { readonly type: 'selectCommit'; readonly hash: string }
+    | { readonly type: 'selectWorktree'; readonly path: string }
     | { readonly type: 'toggleCommitSelection'; readonly hash: string }
     | { readonly type: 'selectCommitRange'; readonly hashes: readonly string[]; readonly focusHash: string }
     | { readonly type: 'clearSelection' }
@@ -45,6 +114,7 @@ export type GraphAction =
 export function createInitialGraphState(): GraphState {
     return {
         rows: [],
+        displayRows: [],
         branches: [],
         tags: [],
         worktrees: [],
@@ -57,6 +127,7 @@ export function createInitialGraphState(): GraphState {
         loading: true,
         error: undefined,
         selectedHash: undefined,
+        selectedWorktreePath: undefined,
         selectedHashes: [],
         selectionAnchorHash: undefined,
         commitDetails: undefined,
@@ -92,12 +163,14 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
             };
         case 'selectCommit':
             return selectCommit(state, action.hash, [action.hash], action.hash);
+        case 'selectWorktree':
+            return selectWorktree(state, action.path);
         case 'toggleCommitSelection':
             return toggleCommitSelection(state, action.hash);
         case 'selectCommitRange':
             return selectCommit(state, action.focusHash, action.hashes, state.selectionAnchorHash ?? action.focusHash);
         case 'clearSelection':
-            return { ...state, selectedHash: undefined, selectedHashes: [], selectionAnchorHash: undefined, commitDetails: undefined, detailsLoading: false };
+            return { ...state, selectedHash: undefined, selectedWorktreePath: undefined, selectedHashes: [], selectionAnchorHash: undefined, commitDetails: undefined, detailsLoading: false };
         case 'clearError':
             return { ...state, error: undefined };
         case 'startLoadMore':
@@ -112,10 +185,23 @@ function selectCommit(state: GraphState, hash: string, hashes: readonly string[]
     return {
         ...state,
         selectedHash: hash,
+        selectedWorktreePath: undefined,
         selectedHashes: nextHashes,
         selectionAnchorHash: anchorHash,
         detailsLoading: hash !== state.selectedHash || state.commitDetails === undefined,
         commitDetails: hash === state.selectedHash ? state.commitDetails : undefined,
+    };
+}
+
+function selectWorktree(state: GraphState, path: string): GraphState {
+    return {
+        ...state,
+        selectedHash: undefined,
+        selectedWorktreePath: path,
+        selectedHashes: [],
+        selectionAnchorHash: undefined,
+        detailsLoading: path !== state.selectedWorktreePath || state.commitDetails === undefined,
+        commitDetails: path === state.selectedWorktreePath ? state.commitDetails : undefined,
     };
 }
 
@@ -129,7 +215,7 @@ function toggleCommitSelection(state: GraphState, hash: string): GraphState {
     const selectedHashes = Array.from(selected);
     const selectedHash = selected.has(hash) ? hash : selectedHashes.at(-1);
     if (!selectedHash) {
-        return { ...state, selectedHash: undefined, selectedHashes, selectionAnchorHash: undefined, commitDetails: undefined, detailsLoading: false };
+        return { ...state, selectedHash: undefined, selectedWorktreePath: undefined, selectedHashes, selectionAnchorHash: undefined, commitDetails: undefined, detailsLoading: false };
     }
     return selectCommit(state, selectedHash, selectedHashes, hash);
 }
@@ -146,9 +232,24 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
                 ...state,
                 detailsLoading: false,
                 commitDetails: {
+                    kind: 'commit',
                     hash: message.hash,
                     fullMessage: message.fullMessage,
                     files: message.files,
+                },
+            };
+        case 'graph/worktreeDetailsResponse':
+            if (message.path !== state.selectedWorktreePath) { return state; }
+            return {
+                ...state,
+                detailsLoading: false,
+                commitDetails: {
+                    kind: 'worktree',
+                    hash: message.head,
+                    fullMessage: message.branch ?? message.path,
+                    files: message.files,
+                    path: message.path,
+                    branch: message.branch,
                 },
             };
         case 'graph/error':
@@ -165,9 +266,11 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
         primaryBranch: currentBranch,
         lockedLanes: state.loadingMore ? lockedLanesForRows(state.rows) : undefined,
     });
+    const displayRows = buildDisplayRows(rows, data.worktreeWips ?? []);
     return {
         ...state,
         rows,
+        displayRows,
         branches: data.branches,
         tags: data.tags,
         worktrees: data.worktrees,

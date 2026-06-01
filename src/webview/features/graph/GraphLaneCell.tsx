@@ -7,9 +7,10 @@ const LINE_WIDTH = 2;
 
 interface GraphLaneCellProps {
     readonly laneData: LaneData;
+    readonly wip?: boolean;
 }
 
-export function GraphLaneCell({ laneData }: GraphLaneCellProps) {
+export function GraphLaneCell({ laneData, wip = false }: GraphLaneCellProps) {
     const width = (getLaneDataMaxLane(laneData) + 1) * LANE_WIDTH;
     const cx = (laneData.lane + 0.5) * LANE_WIDTH;
     const cy = ROW_HEIGHT / 2;
@@ -25,14 +26,26 @@ export function GraphLaneCell({ laneData }: GraphLaneCellProps) {
             {laneData.lines.map((line, i) => (
                 <LaneLine key={i} line={line} />
             ))}
-            <circle
-                cx={cx}
-                cy={cy}
-                r={DOT_RADIUS}
-                fill={laneData.color}
-                stroke="var(--vscode-editor-background, #1e1e1e)"
-                strokeWidth={1.5}
-            />
+            {wip ? (
+                <circle
+                    cx={cx}
+                    cy={cy}
+                    r={DOT_RADIUS}
+                    fill="none"
+                    stroke={laneData.color}
+                    strokeWidth={1.5}
+                    strokeDasharray="3 2"
+                />
+            ) : (
+                <circle
+                    cx={cx}
+                    cy={cy}
+                    r={DOT_RADIUS}
+                    fill={laneData.color}
+                    stroke="var(--vscode-editor-background, #1e1e1e)"
+                    strokeWidth={1.5}
+                />
+            )}
         </svg>
     );
 }

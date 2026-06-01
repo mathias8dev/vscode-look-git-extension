@@ -1,7 +1,145 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import type { GitGraphCommit } from '../../../src/core/git/domain/GitCommit';
+import type { GitWorktree } from '../../../src/core/git/domain/GitWorktree';
 import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessageRouter';
+import type { GraphDataResponse, GraphExtensionToWebviewMessage, WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
 import { commands, env, resetMockVscode, setInputBoxValue, setQuickPickValue, setWarningChoice, Uri, window, workspace } from '../../mocks/vscode';
+
+describe('GraphMessageRouter graph data', () => {
+    beforeEach(resetMockVscode);
+
+    it('includes every dirty worktree WIP row even when they share a commit', async () => {
+        const head = '1234567890abcdef';
+        const execRaw = vi.fn(async (args: readonly string[]) => {
+            if (args[1] === '/repo/.worktrees/a') { return ' M dirty.ts\0M  staged.ts\0?? new.ts\0'; }
+            if (args[1] === '/repo/.worktrees/b') { return 'UU conflict.ts\0'; }
+            return '';
+        });
+        const repo = makeRepositoryMock({
+            getGraphLog: vi.fn(async () => [graphCommit(head)]),
+            listWorktrees: vi.fn(async () => [
+                worktree('/repo/.worktrees/a', head, 'feature/a'),
+                worktree('/repo/.worktrees/b', head, 'feature/b'),
+            ]),
+            execRaw,
+        });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph-worktrees',
+            repoId: 'repo',
+            filters: {},
+            page: { offset: 0, limit: 50 },
+        });
+
+        const response = graphDataResponse(messages, 'graph-worktrees');
+        expect(response.data.worktreeWips).toEqual([
+            {
+                path: '/repo/.worktrees/a',
+                head,
+                branch: 'feature/a',
+                staged: 1,
+                unstaged: 1,
+                untracked: 1,
+                conflicts: 0,
+            },
+            {
+                path: '/repo/.worktrees/b',
+                head,
+                branch: 'feature/b',
+                staged: 0,
+                unstaged: 0,
+                untracked: 0,
+                conflicts: 1,
+            },
+        ]);
+        expect(execRaw).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'status', '--porcelain=v1', '-z', '-u'], expect.any(AbortSignal));
+        expect(execRaw).toHaveBeenCalledWith(['-C', '/repo/.worktrees/b', 'status', '--porcelain=v1', '-z', '-u'], expect.any(AbortSignal));
+    });
+
+    it('reports optional worktree WIP status failures and still returns graph data', async () => {
+        const head = '1234567890abcdef';
+        const repo = makeRepositoryMock({
+            getGraphLog: vi.fn(async () => [graphCommit(head)]),
+            listWorktrees: vi.fn(async () => [worktree('/repo/.worktrees/a', head, 'feature/a')]),
+            execRaw: vi.fn(async () => { throw new Error('status failed'); }),
+        });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph-worktree-error',
+            repoId: 'repo',
+            filters: {},
+            page: { offset: 0, limit: 50 },
+        });
+
+        const error = messages.find((message) => message.type === 'graph/error');
+        expect(error?.error).toMatchObject({
+            code: 'optionalDataUnavailable',
+            operation: 'graph/worktreeWipStatus',
+            recoverable: true,
+        });
+        expect(graphDataResponse(messages, 'graph-worktree-error').data.worktreeWips).toEqual([]);
+    });
+
+    it('loads worktree detail files from porcelain status', async () => {
+        const head = '1234567890abcdef';
+        const repo = makeRepositoryMock({
+            listWorktrees: vi.fn(async () => [worktree('/repo/.worktrees/a', head, 'feature/a')]),
+            execRaw: vi.fn(async () => ' M dirty.ts\0M  staged.ts\0?? new.ts\0UU conflict.ts\0'),
+        });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+
+        await router.handle({
+            type: 'graph/worktreeDetailsRequest',
+            requestId: 'worktree-details',
+            path: '/repo/.worktrees/a',
+        });
+
+        const response = worktreeDetailsResponse(messages, 'worktree-details');
+        expect(response).toMatchObject({
+            path: '/repo/.worktrees/a',
+            head,
+            branch: 'feature/a',
+        });
+        expect(response.files).toEqual([
+            { status: 'U', filePath: 'conflict.ts', origPath: undefined },
+            { status: 'M', filePath: 'dirty.ts', origPath: undefined },
+            { status: '?', filePath: 'new.ts', origPath: undefined },
+            { status: 'M', filePath: 'staged.ts', origPath: undefined },
+        ]);
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'status', '--porcelain=v1', '-z', '-u']);
+    });
+
+    it('opens worktree file diffs against HEAD', async () => {
+        const repo = makeRepositoryMock({
+            execRaw: vi.fn(async () => 'head content\n'),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        await router.handle({
+            type: 'graph/openWorktreeDiff',
+            worktreePath: '/repo/.worktrees/a',
+            filePath: 'src/dirty.ts',
+            status: 'M',
+        });
+
+        expect(commands.calls).toHaveLength(1);
+        const call = commands.calls[0];
+        expect(call?.command).toBe('vscode.diff');
+        expect(String(call?.args[0])).toContain('look-git-empty-diffs');
+        expect(String(call?.args[0])).toContain('worktree-he');
+        expect(String(call?.args[1])).toBe('file:/repo/.worktrees/a/src/dirty.ts');
+        expect(call?.args[2]).toBe('dirty.ts (a)');
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'show', 'HEAD:src/dirty.ts']);
+    });
+});
 
 describe('GraphMessageRouter commit commands', () => {
     beforeEach(resetMockVscode);
@@ -105,6 +243,45 @@ describe('GraphMessageRouter commit commands', () => {
         expect(commands.calls).toEqual([]);
     });
 });
+
+function graphCommit(hash: string): GitGraphCommit {
+    return {
+        hash,
+        shortHash: hash.substring(0, 7),
+        message: 'feat(graph): add worktree graph',
+        authorName: 'Test User',
+        authorEmail: 'test@example.com',
+        authorDate: '2024-01-01T00:00:00Z',
+        parentHashes: [],
+        refs: [],
+    };
+}
+
+function worktree(path: string, head: string, branch: string): GitWorktree {
+    return {
+        path,
+        head,
+        branch,
+        isMain: false,
+        isDetached: false,
+    };
+}
+
+function graphDataResponse(messages: readonly GraphExtensionToWebviewMessage[], requestId: string): GraphDataResponse {
+    const response = messages.find((message): message is GraphDataResponse => (
+        message.type === 'graph/dataResponse' && message.requestId === requestId
+    ));
+    if (!response) { throw new Error(`Expected graph/dataResponse for ${requestId}.`); }
+    return response;
+}
+
+function worktreeDetailsResponse(messages: readonly GraphExtensionToWebviewMessage[], requestId: string): WorktreeDetailsResponse {
+    const response = messages.find((message): message is WorktreeDetailsResponse => (
+        message.type === 'graph/worktreeDetailsResponse' && message.requestId === requestId
+    ));
+    if (!response) { throw new Error(`Expected graph/worktreeDetailsResponse for ${requestId}.`); }
+    return response;
+}
 
 describe('GraphMessageRouter branch commands', () => {
     beforeEach(resetMockVscode);

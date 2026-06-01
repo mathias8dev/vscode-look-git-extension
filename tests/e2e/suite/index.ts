@@ -1,6 +1,7 @@
 import * as assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
@@ -9,7 +10,7 @@ import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessag
 import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
 import type { ChangesExtensionToWebviewMessage } from '../../../src/protocol/changes/messages';
 import { ConflictState } from '../../../src/protocol/changes/types';
-import type { GraphDataResponse, GraphExtensionToWebviewMessage } from '../../../src/protocol/graph/messages';
+import type { GraphDataResponse, GraphExtensionToWebviewMessage, WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
 import { createInitialGraphState, reduceGraphState } from '../../../src/webview/features/graph/graphState';
 import { createBareGitRepo, createTempGitRepo, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
 import { getFixtureRepoPath, gitFixtureOutput } from '../../helpers/fixtureRepo';
@@ -70,6 +71,12 @@ export function run(): Promise<void> {
             name: 'lays out crossing graph lanes without floating commit nodes',
             run: async () => {
                 await runFloatingGraphNodeLayoutE2E();
+            },
+        },
+        {
+            name: 'loads dirty worktree WIP rows from the lookGit fixture',
+            run: async () => {
+                await runWorktreeWipRowsE2E();
             },
         },
         {
@@ -272,6 +279,94 @@ async function runFloatingGraphNodeLayoutE2E(): Promise<void> {
         assert.deepEqual(continuityIssues, [], `Expected graph lanes to stay continuous. Issues: ${JSON.stringify(continuityIssues)}`);
     } finally {
         fixture.cleanup();
+    }
+}
+
+async function runWorktreeWipRowsE2E(): Promise<void> {
+    const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-worktrees-e2e-'));
+    try {
+        execFileSync('node', [
+            path.join(process.cwd(), 'scripts', 'look-git.ts'),
+            'setup',
+            'worktrees',
+            '--output',
+            outputRoot,
+        ], { cwd: process.cwd(), encoding: 'utf8' });
+        const repoPath = path.join(outputRoot, 'worktrees');
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = routerFor(repoPath, messages);
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'worktree-wips',
+            repoId: 'worktree-wips',
+            filters: {},
+            page: { offset: 0, limit: 120 },
+        });
+
+        assertNoGraphError(messages);
+        const response = graphDataResponse(messages, 'worktree-wips');
+        const wipsByName = new Map(response.data.worktreeWips.map((wip) => [path.basename(wip.path), wip]));
+
+        assert.equal(response.data.worktrees.length, 6);
+        assert.equal(response.data.worktreeWips.length, 4);
+        assert.deepEqual(
+            {
+                staged: wipsByName.get('worktrees')?.staged,
+                untracked: wipsByName.get('worktrees')?.untracked,
+            },
+            { staged: 1, untracked: 1 },
+        );
+        assert.deepEqual(
+            {
+                staged: wipsByName.get('feature-uncommitted-draft')?.staged,
+                untracked: wipsByName.get('feature-uncommitted-draft')?.untracked,
+            },
+            { staged: 1, untracked: 2 },
+        );
+        assert.deepEqual(
+            {
+                staged: wipsByName.get('fix-status-dirty')?.staged,
+                unstaged: wipsByName.get('fix-status-dirty')?.unstaged,
+                untracked: wipsByName.get('fix-status-dirty')?.untracked,
+            },
+            { staged: 1, unstaged: 1, untracked: 1 },
+        );
+
+        const heads = new Map<string, number>();
+        for (const wip of response.data.worktreeWips) {
+            heads.set(wip.head, (heads.get(wip.head) ?? 0) + 1);
+        }
+        assert.ok(Array.from(heads.values()).some((count) => count > 1), 'Expected multiple dirty worktrees to share one head.');
+
+        const state = reduceGraphState(createInitialGraphState(), { type: 'message', message: response });
+        assert.equal(state.displayRows.filter((row) => row.kind === 'wip').length, response.data.worktreeWips.length);
+
+        const dirtyWorktree = wipsByName.get('fix-status-dirty');
+        assert.ok(dirtyWorktree);
+        await router.handle({
+            type: 'graph/worktreeDetailsRequest',
+            requestId: 'worktree-details',
+            path: dirtyWorktree.path,
+        });
+        const details = worktreeDetailsResponse(messages, 'worktree-details');
+        assert.deepEqual(details.files.map((file) => `${file.status} ${file.filePath}`), [
+            '? notes/status-local.md',
+            'M src/status/model.ts',
+            'A src/status/staged.ts',
+        ]);
+
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        await router.handle({
+            type: 'graph/openWorktreeDiff',
+            worktreePath: dirtyWorktree.path,
+            filePath: 'src/status/model.ts',
+            status: 'M',
+        });
+        await waitForTabLabel('model.ts');
+    } finally {
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        fs.rmSync(outputRoot, { recursive: true, force: true });
     }
 }
 
@@ -812,6 +907,14 @@ function graphDataResponse(messages: readonly GraphExtensionToWebviewMessage[], 
         message.type === 'graph/dataResponse' && message.requestId === requestId
     ));
     assert.ok(response, `Expected graph/dataResponse for ${requestId}.`);
+    return response;
+}
+
+function worktreeDetailsResponse(messages: readonly GraphExtensionToWebviewMessage[], requestId: string): WorktreeDetailsResponse {
+    const response = messages.find((message): message is WorktreeDetailsResponse => (
+        message.type === 'graph/worktreeDetailsResponse' && message.requestId === requestId
+    ));
+    assert.ok(response, `Expected graph/worktreeDetailsResponse for ${requestId}.`);
     return response;
 }
 
