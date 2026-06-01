@@ -57,7 +57,239 @@
         }
       ]
     },
-    "commands": []
+    "commands": [
+      {
+        "command": "lookGit.history.copyRevisionNumber",
+        "title": "Copy Revision Number",
+        "category": "Look Git",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "lookGit.history.createPatch",
+        "title": "Create Patch...",
+        "category": "Look Git",
+        "icon": "$(diff-added)"
+      },
+      {
+        "command": "lookGit.history.cherryPick",
+        "title": "Cherry-Pick",
+        "category": "Look Git",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "lookGit.history.checkoutRevision",
+        "title": "Checkout Revision",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.history.showRepositoryAtRevision",
+        "title": "Show Repository at Revision",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.history.compareWithLocal",
+        "title": "Compare with Local",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.history.newWorktreeFromCommit",
+        "title": "New Branch + Worktree from Here...",
+        "category": "Look Git",
+        "icon": "$(repo-create)"
+      },
+      {
+        "command": "lookGit.history.compareCommitWithWorktree",
+        "title": "Compare Commit with Worktree...",
+        "category": "Look Git",
+        "icon": "$(compare-changes)"
+      },
+      {
+        "command": "lookGit.history.resetCurrentBranchToHere",
+        "title": "Reset Current Branch to Here...",
+        "category": "Look Git",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "lookGit.history.revertCommit",
+        "title": "Revert Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.history.undoCommit",
+        "title": "Undo Commit...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.history.editCommitMessage",
+        "title": "Edit Commit Message...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.history.fixup",
+        "title": "Fixup...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.history.squashInto",
+        "title": "Squash Into...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.history.dropCommit",
+        "title": "Drop Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.history.interactiveRebaseFromHere",
+        "title": "Interactively Rebase from Here...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.history.pushAllUpToHere",
+        "title": "Push All up to Here...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.history.newBranch",
+        "title": "New Branch...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.history.newTag",
+        "title": "New Tag...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.history.goToChildCommit",
+        "title": "Go to Child Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.history.goToParentCommit",
+        "title": "Go to Parent Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.history.openFileDiff",
+        "title": "Open Diff",
+        "category": "Look Git",
+        "icon": "$(diff)"
+      }
+    ],
+    "menus": {
+      "webview/context": [
+        {
+          "command": "lookGit.history.copyRevisionNumber",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "1_history_copy@1"
+        },
+        {
+          "command": "lookGit.history.createPatch",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "1_history_copy@2"
+        },
+        {
+          "command": "lookGit.history.cherryPick",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "1_history_copy@3"
+        },
+        {
+          "command": "lookGit.history.checkoutRevision",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "2_history_revision@1"
+        },
+        {
+          "command": "lookGit.history.showRepositoryAtRevision",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "2_history_revision@2"
+        },
+        {
+          "command": "lookGit.history.compareWithLocal",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "2_history_revision@3"
+        },
+        {
+          "command": "lookGit.history.newWorktreeFromCommit",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "2_history_revision@4"
+        },
+        {
+          "command": "lookGit.history.compareCommitWithWorktree",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "2_history_revision@5"
+        },
+        {
+          "command": "lookGit.history.resetCurrentBranchToHere",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "3_history_mutate@1"
+        },
+        {
+          "command": "lookGit.history.revertCommit",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "3_history_mutate@2"
+        },
+        {
+          "command": "lookGit.history.undoCommit",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && historyCanUndoCommit",
+          "group": "3_history_mutate@3"
+        },
+        {
+          "command": "lookGit.history.editCommitMessage",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "4_history_rewrite@1"
+        },
+        {
+          "command": "lookGit.history.fixup",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "4_history_rewrite@2"
+        },
+        {
+          "command": "lookGit.history.squashInto",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "4_history_rewrite@3"
+        },
+        {
+          "command": "lookGit.history.dropCommit",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "4_history_rewrite@4"
+        },
+        {
+          "command": "lookGit.history.interactiveRebaseFromHere",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "4_history_rewrite@5"
+        },
+        {
+          "command": "lookGit.history.pushAllUpToHere",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "4_history_rewrite@6"
+        },
+        {
+          "command": "lookGit.history.newBranch",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "5_history_refs@1"
+        },
+        {
+          "command": "lookGit.history.newTag",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "5_history_refs@2"
+        },
+        {
+          "command": "lookGit.history.goToChildCommit",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && historyCanGoToChild",
+          "group": "6_history_navigation@1"
+        },
+        {
+          "command": "lookGit.history.goToParentCommit",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && historyCanGoToParent",
+          "group": "6_history_navigation@2"
+        },
+        {
+          "command": "lookGit.history.openFileDiff",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyFile' && historyFileDiffable",
+          "group": "1_history_file@1"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

@@ -84,13 +84,20 @@ export const Uri = {
 export const commands = {
     calls: [] as Array<{ command: string; args: unknown[] }>,
     failures: new Map<string, Error>(),
+    registrations: new Map<string, (...args: unknown[]) => unknown>(),
     executeCommand(command: string, ...args: unknown[]) {
         this.calls.push({ command, args });
         const failure = this.failures.get(command);
-        return failure ? Promise.reject(failure) : Promise.resolve(undefined);
+        if (failure) { return Promise.reject(failure); }
+        const registration = this.registrations.get(command);
+        return Promise.resolve(registration?.(...args));
+    },
+    registerCommand(command: string, callback: (...args: unknown[]) => unknown) {
+        this.registrations.set(command, callback);
+        return { dispose: () => { this.registrations.delete(command); } };
     },
     failCommand(command: string, error: Error) { this.failures.set(command, error); },
-    reset() { this.calls = []; this.failures = new Map(); },
+    reset() { this.calls = []; this.failures = new Map(); this.registrations = new Map(); },
 };
 
 export type CommandCall = typeof commands.calls[number];

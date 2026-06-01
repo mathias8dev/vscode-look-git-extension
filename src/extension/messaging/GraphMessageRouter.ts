@@ -412,69 +412,8 @@ export class GraphMessageRouter {
 
     private async handleCommitCommand(command: CommitCommand, hash: string, hashes: readonly string[]): Promise<void> {
         const repo = this.repositories.requireRepository();
-        const selected = normalizeSelectedHashes(hash, hashes);
-        switch (command) {
-            case 'copyRevisionNumber':
-                await vscode.env.clipboard.writeText(hash);
-                return;
-            case 'createPatch':
-                await createPatchFile(repo, await orderSelectedCommits(repo, selected, 'oldestFirst'));
-                return;
-            case 'cherryPick':
-                await assertNoUnmergedFiles(repo, 'cherry-picking commits');
-                await repo.exec(['cherry-pick', ...(await orderSelectedCommits(repo, selected, 'oldestFirst'))]);
-                break;
-            case 'checkoutRevision':
-                await repo.checkout(hash);
-                break;
-            case 'showRepositoryAtRevision':
-                await showRepositoryAtRevision(hash, repo.exec.bind(repo));
-                return;
-            case 'compareWithLocal':
-                await openDiffDocument(`Diff ${hash.substring(0, 7)}..local`, await repo.execRaw(['diff', hash, '--']));
-                return;
-            case 'resetCurrentBranchToHere':
-                await resetCurrentBranchToHere(repo, hash);
-                break;
-            case 'revertCommit':
-                await assertNoUnmergedFiles(repo, 'reverting commits');
-                await repo.exec(['revert', '--no-edit', ...(await orderSelectedCommits(repo, selected, 'newestFirst'))]);
-                break;
-            case 'undoCommit':
-                await undoHeadCommit(repo, hash);
-                break;
-            case 'editCommitMessage':
-                await editCommitMessage(repo, hash);
-                break;
-            case 'fixup':
-                await autosquashStagedChanges(repo, hash, 'fixup');
-                break;
-            case 'squashInto':
-                await autosquashStagedChanges(repo, hash, 'squash');
-                break;
-            case 'dropCommit':
-                await dropCommits(repo, await orderSelectedCommits(repo, selected, 'newestFirst'));
-                break;
-            case 'interactiveRebaseFromHere':
-                openGitTerminal(repo.cwd, `git rebase --autostash -i ${shellQuote(hash)}`);
-                return;
-            case 'pushAllUpToHere':
-                await pushAllUpToHere(repo, hash);
-                break;
-            case 'newBranch':
-                await createBranchAtCommit(repo, hash);
-                break;
-            case 'newTag':
-                await createTagAtCommit(repo, hash);
-                break;
-            case 'newWorktreeFromCommit':
-                if (!await createWorktreeFromCommit(repo, hash)) { return; }
-                break;
-            case 'compareCommitWithWorktree':
-                await compareRefWithPickedWorktree(repo, hash, `Diff ${hash.substring(0, 7)}`);
-                return;
-        }
-        await this.pushGraphData(undefined, undefined);
+        const shouldRefresh = await runCommitCommand(repo, command, hash, hashes);
+        if (shouldRefresh) { await this.pushGraphData(undefined, undefined); }
     }
 
     private postGraphError(
@@ -500,6 +439,70 @@ export class GraphMessageRouter {
         if (isAbortError(result.reason)) { throw result.reason; }
         this.postGraphError(result.reason, { operation, code: 'optionalDataUnavailable' });
         return [];
+    }
+}
+
+export async function runCommitCommand(repo: GitRepository, command: CommitCommand, hash: string, hashes: readonly string[]): Promise<boolean> {
+    const selected = normalizeSelectedHashes(hash, hashes);
+    switch (command) {
+        case 'copyRevisionNumber':
+            await vscode.env.clipboard.writeText(hash);
+            return false;
+        case 'createPatch':
+            await createPatchFile(repo, await orderSelectedCommits(repo, selected, 'oldestFirst'));
+            return false;
+        case 'cherryPick':
+            await assertNoUnmergedFiles(repo, 'cherry-picking commits');
+            await repo.exec(['cherry-pick', ...(await orderSelectedCommits(repo, selected, 'oldestFirst'))]);
+            return true;
+        case 'checkoutRevision':
+            await repo.checkout(hash);
+            return true;
+        case 'showRepositoryAtRevision':
+            await showRepositoryAtRevision(hash, repo.exec.bind(repo));
+            return false;
+        case 'compareWithLocal':
+            await openDiffDocument(`Diff ${hash.substring(0, 7)}..local`, await repo.execRaw(['diff', hash, '--']));
+            return false;
+        case 'resetCurrentBranchToHere':
+            await resetCurrentBranchToHere(repo, hash);
+            return true;
+        case 'revertCommit':
+            await assertNoUnmergedFiles(repo, 'reverting commits');
+            await repo.exec(['revert', '--no-edit', ...(await orderSelectedCommits(repo, selected, 'newestFirst'))]);
+            return true;
+        case 'undoCommit':
+            await undoHeadCommit(repo, hash);
+            return true;
+        case 'editCommitMessage':
+            await editCommitMessage(repo, hash);
+            return true;
+        case 'fixup':
+            await autosquashStagedChanges(repo, hash, 'fixup');
+            return true;
+        case 'squashInto':
+            await autosquashStagedChanges(repo, hash, 'squash');
+            return true;
+        case 'dropCommit':
+            await dropCommits(repo, await orderSelectedCommits(repo, selected, 'newestFirst'));
+            return true;
+        case 'interactiveRebaseFromHere':
+            openGitTerminal(repo.cwd, `git rebase --autostash -i ${shellQuote(hash)}`);
+            return false;
+        case 'pushAllUpToHere':
+            await pushAllUpToHere(repo, hash);
+            return true;
+        case 'newBranch':
+            await createBranchAtCommit(repo, hash);
+            return true;
+        case 'newTag':
+            await createTagAtCommit(repo, hash);
+            return true;
+        case 'newWorktreeFromCommit':
+            return createWorktreeFromCommit(repo, hash);
+        case 'compareCommitWithWorktree':
+            await compareRefWithPickedWorktree(repo, hash, `Diff ${hash.substring(0, 7)}`);
+            return false;
     }
 }
 

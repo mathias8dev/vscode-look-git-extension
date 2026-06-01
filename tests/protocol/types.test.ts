@@ -1,7 +1,7 @@
 import { describe, it } from 'vitest';
 import type { GraphExtensionToWebviewMessage, GraphWebviewToExtensionMessage } from '../../src/protocol/graph/messages';
 import type { ChangesExtensionToWebviewMessage, ChangesWebviewToExtensionMessage } from '../../src/protocol/changes/messages';
-import type { HistoryExtensionToWebviewMessage } from '../../src/protocol/history/messages';
+import type { HistoryExtensionToWebviewMessage, HistoryWebviewToExtensionMessage } from '../../src/protocol/history/messages';
 
 // Type-level tests: if these compile, the discriminated unions are correct.
 describe('protocol discriminated unions', () => {
@@ -60,9 +60,26 @@ describe('protocol discriminated unions', () => {
         const handle = (msg: HistoryExtensionToWebviewMessage) => {
             switch (msg.type) {
                 case 'repo/contextChanged': return msg.context.id satisfies string;
-                case 'history/data': return msg.commits satisfies readonly unknown[];
+                case 'history/data': return msg.data.commits satisfies readonly unknown[];
+                case 'history/dataResponse': return msg.requestId satisfies string;
+                case 'history/commitDetailsResponse': return msg.details.files satisfies readonly unknown[];
+                case 'history/selectCommit': return msg.hash satisfies string;
                 case 'history/error': return msg.error.recoverable satisfies boolean;
                 case 'error': return msg.error.message satisfies string;
+            }
+        };
+        void handle;
+    });
+
+    it('history webview→extension union is exhaustive', () => {
+        const handle = (msg: HistoryWebviewToExtensionMessage) => {
+            switch (msg.type) {
+                case 'history/ready': return;
+                case 'history/dataRequest': return msg.page satisfies { offset: number; limit: number };
+                case 'history/refresh': return;
+                case 'history/commitDetailsRequest': return msg.hash satisfies string;
+                case 'history/openDiff': return msg.filePath satisfies string;
+                case 'history/contextTarget': return msg.target.kind satisfies string;
             }
         };
         void handle;
