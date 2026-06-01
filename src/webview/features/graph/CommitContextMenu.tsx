@@ -45,6 +45,8 @@ const MENU_ITEMS: readonly MenuItem[] = [
     { kind: 'command', label: 'Checkout Revision', command: 'checkoutRevision' },
     { kind: 'command', label: 'Show Repository at Revision', command: 'showRepositoryAtRevision' },
     { kind: 'command', label: 'Compare with Local', command: 'compareWithLocal' },
+    { kind: 'command', label: 'New Branch + Worktree from Here...', command: 'newWorktreeFromCommit', icon: 'repo-create' },
+    { kind: 'command', label: 'Compare Commit with Worktree...', command: 'compareCommitWithWorktree', icon: 'compare-changes' },
     { kind: 'separator' },
     { kind: 'command', label: 'Reset Current Branch to Here...', command: 'resetCurrentBranchToHere', icon: 'discard' },
     { kind: 'command', label: 'Revert Commit', command: 'revertCommit' },

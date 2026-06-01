@@ -86,6 +86,12 @@ export function run(): Promise<void> {
             },
         },
         {
+            name: 'runs worktree-aware commit and branch context actions end to end',
+            run: async () => {
+                await runWorktreeAwareCommitAndBranchMenusE2E();
+            },
+        },
+        {
             name: 'opens graph diffs for added and deleted committed files',
             run: async () => {
                 const repoPath = process.env.LOOK_GIT_DIFF_FIXTURE_REPO;
@@ -465,6 +471,105 @@ async function runWorktreeContextActionsE2E(): Promise<void> {
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
         forceLinked?.cleanup();
         linked?.cleanup();
+        fixture.cleanup();
+        remote.cleanup();
+    }
+}
+
+async function runWorktreeAwareCommitAndBranchMenusE2E(): Promise<void> {
+    const fixture = createTempGitRepo();
+    const remote = createBareGitRepo();
+    const messages: GraphExtensionToWebviewMessage[] = [];
+    const worktreePaths: string[] = [];
+    try {
+        const base = fixture.commitFile('base.txt', 'base\n', 'feat: base');
+        fixture.commitFile('main.txt', 'main\n', 'feat: main');
+        fixture.git(['remote', 'add', 'origin', remote.cwd]);
+        fixture.git(['push', '-u', 'origin', 'main']);
+        fixture.git(['branch', 'feature/menu-source', base]);
+        fixture.git(['push', '-u', 'origin', 'feature/menu-source']);
+        const router = routerFor(fixture.cwd, messages);
+
+        const branchWorktreePath = missingTempPath('look-git-menu-branch-');
+        worktreePaths.push(branchWorktreePath);
+        await withPatchedVscode({ inputBoxValues: [branchWorktreePath] }, async () => {
+            await router.handle({ type: 'graph/branchCommand', command: 'newWorktreeFromBranch', branch: 'feature/menu-source', isRemote: false });
+        });
+        assert.equal(git(branchWorktreePath, ['branch', '--show-current']), 'feature/menu-source');
+        assert.equal(git(branchWorktreePath, ['rev-parse', 'HEAD']), base);
+
+        const capture = await withPatchedVscode({
+            quickPickValues: ['Open in Current Window'],
+            interceptOpenFolder: true,
+            interceptReveal: true,
+        }, async (patched) => {
+            await router.handle({ type: 'graph/branchCommand', command: 'openBranchWorktree', branch: 'feature/menu-source', isRemote: false });
+            await router.handle({ type: 'graph/branchCommand', command: 'revealBranchWorktree', branch: 'feature/menu-source', isRemote: false });
+            return patched;
+        });
+        assert.deepEqual(capture.commandCalls.map((call) => call.command), ['vscode.openFolder', 'revealFileInOS']);
+        assert.equal(fsPathOf(capture.commandCalls[0]?.args[0]), branchWorktreePath);
+        assert.equal(fsPathOf(capture.commandCalls[1]?.args[0]), branchWorktreePath);
+
+        await router.handle({ type: 'graph/branchCommand', command: 'pullBranchWorktree', branch: 'feature/menu-source', isRemote: false });
+        await router.handle({ type: 'graph/branchCommand', command: 'pushBranchWorktree', branch: 'feature/menu-source', isRemote: false });
+        await router.handle({ type: 'graph/branchCommand', command: 'lockBranchWorktree', branch: 'feature/menu-source', isRemote: false });
+        assert.match(git(fixture.cwd, ['worktree', 'list', '--porcelain']), /locked/);
+        await router.handle({ type: 'graph/branchCommand', command: 'unlockBranchWorktree', branch: 'feature/menu-source', isRemote: false });
+        assert.doesNotMatch(git(fixture.cwd, ['worktree', 'list', '--porcelain']), /locked/);
+
+        fs.writeFileSync(path.join(branchWorktreePath, 'base.txt'), 'branch worktree dirty\n');
+        fs.writeFileSync(path.join(branchWorktreePath, 'branch-untracked.txt'), 'branch untracked\n');
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        await router.handle({ type: 'graph/branchCommand', command: 'showDiffWithBranchWorktree', branch: 'feature/menu-source', isRemote: false });
+        await waitForActiveEditorText('branch worktree dirty');
+        await waitForActiveEditorText('branch-untracked.txt');
+
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        await withPatchedVscode({ quickPickValues: [branchWorktreePath] }, async () => {
+            await router.handle({ type: 'graph/branchCommand', command: 'compareBranchWithWorktree', branch: 'feature/menu-source', isRemote: false });
+        });
+        await waitForActiveEditorText('branch worktree dirty');
+        await waitForActiveEditorText('branch-untracked.txt');
+
+        git(branchWorktreePath, ['checkout', '--', 'base.txt']);
+        fs.rmSync(path.join(branchWorktreePath, 'branch-untracked.txt'), { force: true });
+        await withPatchedVscode({ warningChoices: ['Remove'] }, async () => {
+            await router.handle({ type: 'graph/branchCommand', command: 'removeBranchWorktree', branch: 'feature/menu-source', isRemote: false });
+        });
+        assert.equal(fs.existsSync(branchWorktreePath), false);
+
+        const remoteBranchWorktreePath = missingTempPath('look-git-menu-remote-branch-');
+        worktreePaths.push(remoteBranchWorktreePath);
+        await withPatchedVscode({ inputBoxValues: [remoteBranchWorktreePath] }, async () => {
+            await router.handle({ type: 'graph/branchCommand', command: 'newWorktreeFromBranch', branch: 'origin/feature/menu-source', isRemote: true });
+        });
+        assert.equal(git(remoteBranchWorktreePath, ['branch', '--show-current']), 'feature/menu-source');
+        assert.equal(git(remoteBranchWorktreePath, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']), 'origin/feature/menu-source');
+
+        const commitWorktreePath = missingTempPath('look-git-menu-commit-');
+        worktreePaths.push(commitWorktreePath);
+        await withPatchedVscode({ inputBoxValues: [commitWorktreePath, 'feature/menu-commit'] }, async () => {
+            await router.handle({ type: 'graph/commitCommand', command: 'newWorktreeFromCommit', hash: base, hashes: [base] });
+        });
+        assert.equal(git(commitWorktreePath, ['branch', '--show-current']), 'feature/menu-commit');
+        assert.equal(git(commitWorktreePath, ['rev-parse', 'HEAD']), base);
+
+        fs.writeFileSync(path.join(commitWorktreePath, 'base.txt'), 'commit worktree dirty\n');
+        fs.writeFileSync(path.join(commitWorktreePath, 'commit-untracked.txt'), 'commit untracked\n');
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        await withPatchedVscode({ quickPickValues: [commitWorktreePath] }, async () => {
+            await router.handle({ type: 'graph/commitCommand', command: 'compareCommitWithWorktree', hash: base, hashes: [base] });
+        });
+        await waitForActiveEditorText('commit worktree dirty');
+        await waitForActiveEditorText('commit-untracked.txt');
+        assertNoGraphError(messages);
+    } finally {
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        for (const worktreePath of worktreePaths) {
+            try { fixture.git(['worktree', 'remove', '--force', worktreePath]); } catch {}
+            fs.rmSync(worktreePath, { recursive: true, force: true });
+        }
         fixture.cleanup();
         remote.cleanup();
     }
@@ -864,6 +969,7 @@ interface VscodePatchOptions {
     readonly warningChoices?: readonly string[];
     readonly saveDialogUri?: vscode.Uri;
     readonly interceptOpenFolder?: boolean;
+    readonly interceptReveal?: boolean;
     readonly interceptTerminal?: boolean;
 }
 
@@ -908,6 +1014,7 @@ async function withPatchedVscode<T>(
         value: async (command: string, ...args: unknown[]) => {
             capture.commandCalls.push({ command, args });
             if (options.interceptOpenFolder && command === 'vscode.openFolder') { return undefined; }
+            if (options.interceptReveal && command === 'revealFileInOS') { return undefined; }
             return originalExecuteCommand(command, ...args);
         },
     });
@@ -953,6 +1060,12 @@ function fsPathOf(value: unknown): string {
     assert.equal(typeof fsPath, 'string');
     if (typeof fsPath !== 'string') { throw new Error('Expected URI fsPath.'); }
     return fsPath;
+}
+
+function missingTempPath(prefix: string): string {
+    const tempPath = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    fs.rmSync(tempPath, { recursive: true, force: true });
+    return tempPath;
 }
 
 async function waitForGitFileContent(repoPath: string, filePath: string, ref: string, expected: string): Promise<void> {

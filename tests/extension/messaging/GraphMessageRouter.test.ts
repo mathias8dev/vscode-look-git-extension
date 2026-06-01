@@ -1,10 +1,13 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { GitGraphCommit } from '../../../src/core/git/domain/GitCommit';
 import type { GitWorktree } from '../../../src/core/git/domain/GitWorktree';
 import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessageRouter';
 import type { GraphDataResponse, GraphExtensionToWebviewMessage, WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
-import { commands, env, resetMockVscode, setInputBoxValue, setQuickPickValue, setWarningChoice, setWarningChoices, Uri, window, workspace } from '../../mocks/vscode';
+import { commands, env, resetMockVscode, setInputBoxValue, setInputBoxValues, setQuickPickValue, setWarningChoice, setWarningChoices, Uri, window, workspace } from '../../mocks/vscode';
 
 describe('GraphMessageRouter graph data', () => {
     beforeEach(resetMockVscode);
@@ -341,6 +344,37 @@ describe('GraphMessageRouter commit commands', () => {
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['tag', 'v1.2.3', 'abc123']);
     });
 
+    it('creates a new branch and worktree at the selected revision', async () => {
+        const repo = makeRepositoryMock();
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+        const worktreePath = missingPath('look-git-commit-wt-');
+
+        setInputBoxValues([worktreePath, 'feature/from-commit']);
+        await router.handle({ type: 'graph/commitCommand', command: 'newWorktreeFromCommit', hash: 'abc123', hashes: ['abc123'] });
+
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['worktree', 'add', '-b', 'feature/from-commit', worktreePath, 'abc123']);
+    });
+
+    it('compares a selected commit with a chosen worktree', async () => {
+        const repo = makeRepositoryMock({
+            listWorktrees: vi.fn(async () => [
+                worktree('/repo/.worktrees/a', 'topic-head', 'feature/a'),
+            ]),
+            execRaw: vi.fn(async (args) => {
+                if (args[2] === 'diff' && args[3] === 'abc123') { return 'commit diff\n'; }
+                if (args[2] === 'ls-files') { return ''; }
+                return '';
+            }),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        setQuickPickValue('/repo/.worktrees/a');
+        await router.handle({ type: 'graph/commitCommand', command: 'compareCommitWithWorktree', hash: 'abc123', hashes: ['abc123'] });
+
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', 'abc123', '--']);
+        expect(workspace.documents.map((document) => document.content)).toEqual(['commit diff']);
+    });
+
     it('opens compare-with-local output as a diff document', async () => {
         const repo = makeRepositoryMock({
             execRaw: vi.fn(async () => 'diff --git a/file b/file\n'),
@@ -447,6 +481,12 @@ function worktreeDetailsResponse(messages: readonly GraphExtensionToWebviewMessa
     return response;
 }
 
+function missingPath(prefix: string): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    fs.rmSync(dir, { recursive: true, force: true });
+    return dir;
+}
+
 describe('GraphMessageRouter branch commands', () => {
     beforeEach(resetMockVscode);
 
@@ -505,5 +545,129 @@ describe('GraphMessageRouter branch commands', () => {
         await router.handle({ type: 'graph/branchCommand', command: 'push', branch: 'topic', isRemote: false });
 
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['push', '-u', 'upstream', 'topic']);
+    });
+
+    it('creates a worktree from a branch that is not already checked out', async () => {
+        const repo = makeRepositoryMock({
+            listWorktrees: vi.fn(async () => [
+                { ...worktree('/repo', 'main-head', 'main'), isMain: true, branch: 'refs/heads/main' },
+            ]),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+        const worktreePath = missingPath('look-git-feature-wt-');
+
+        setInputBoxValue(worktreePath);
+        await router.handle({ type: 'graph/branchCommand', command: 'newWorktreeFromBranch', branch: 'feature/a', isRemote: false });
+
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['worktree', 'add', worktreePath, 'feature/a']);
+    });
+
+    it('creates a new branch when adding a worktree from an already checked out branch', async () => {
+        const repo = makeRepositoryMock({
+            listWorktrees: vi.fn(async () => [
+                { ...worktree('/repo', 'main-head', 'main'), isMain: true, branch: 'refs/heads/main' },
+                { ...worktree('/repo/.worktrees/a', 'topic-head', 'feature/a'), branch: 'refs/heads/feature/a' },
+            ]),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+        const worktreePath = missingPath('look-git-feature-copy-');
+
+        setInputBoxValues([worktreePath, 'feature/a-copy']);
+        await router.handle({ type: 'graph/branchCommand', command: 'newWorktreeFromBranch', branch: 'feature/a', isRemote: false });
+
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['worktree', 'add', '-b', 'feature/a-copy', worktreePath, 'feature/a']);
+    });
+
+    it('reuses an existing local branch when adding a worktree from its remote branch', async () => {
+        const repo = makeRepositoryMock({
+            listWorktrees: vi.fn(async () => [
+                { ...worktree('/repo', 'main-head', 'main'), isMain: true, branch: 'refs/heads/main' },
+            ]),
+            getAllBranches: vi.fn(async () => [
+                { name: 'feature/a', isRemote: false, isCurrent: false, hash: 'topic-head', ahead: 0, behind: 0, upstream: 'origin/feature/a' },
+                { name: 'origin/feature/a', isRemote: true, isCurrent: false, hash: 'topic-head', ahead: 0, behind: 0 },
+            ]),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+        const worktreePath = missingPath('look-git-remote-feature-wt-');
+
+        setInputBoxValue(worktreePath);
+        await router.handle({ type: 'graph/branchCommand', command: 'newWorktreeFromBranch', branch: 'origin/feature/a', isRemote: true });
+
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['worktree', 'add', worktreePath, 'feature/a']);
+    });
+
+    it('runs branch worktree actions against the worktree checked out for that branch', async () => {
+        const repo = makeRepositoryMock({
+            listWorktrees: vi.fn(async () => [
+                { ...worktree('/repo', 'main-head', 'main'), isMain: true, branch: 'refs/heads/main' },
+                { ...worktree('/repo/.worktrees/a', 'topic-head', 'feature/a'), branch: 'refs/heads/feature/a' },
+            ]),
+            execRaw: vi.fn(async (args) => {
+                if (args[2] === 'diff' && args[3] === 'feature/a') { return 'branch worktree diff\n'; }
+                if (args[2] === 'for-each-ref') { return ''; }
+                if (args[2] === 'ls-files') { return ''; }
+                return '';
+            }),
+            getRemotes: vi.fn(async () => ['origin']),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        setQuickPickValue('Open in Current Window');
+        await router.handle({ type: 'graph/branchCommand', command: 'openBranchWorktree', branch: 'feature/a', isRemote: false });
+        await router.handle({ type: 'graph/branchCommand', command: 'revealBranchWorktree', branch: 'feature/a', isRemote: false });
+        await router.handle({ type: 'graph/branchCommand', command: 'showDiffWithBranchWorktree', branch: 'feature/a', isRemote: false });
+        await router.handle({ type: 'graph/branchCommand', command: 'pullBranchWorktree', branch: 'feature/a', isRemote: false });
+        await router.handle({ type: 'graph/branchCommand', command: 'pushBranchWorktree', branch: 'feature/a', isRemote: false });
+        await router.handle({ type: 'graph/branchCommand', command: 'lockBranchWorktree', branch: 'feature/a', isRemote: false });
+        await router.handle({ type: 'graph/branchCommand', command: 'unlockBranchWorktree', branch: 'feature/a', isRemote: false });
+        setWarningChoice('Remove');
+        await router.handle({ type: 'graph/branchCommand', command: 'removeBranchWorktree', branch: 'feature/a', isRemote: false });
+
+        expect(commands.calls).toEqual([
+            { command: 'vscode.openFolder', args: [Uri.file('/repo/.worktrees/a'), { forceNewWindow: false }] },
+            { command: 'revealFileInOS', args: [Uri.file('/repo/.worktrees/a')] },
+        ]);
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', 'feature/a', '--']);
+        expect(workspace.documents.map((document) => document.content)).toEqual(['branch worktree diff']);
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'pull']);
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'push', '-u', 'origin', 'feature/a']);
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['worktree', 'lock', '/repo/.worktrees/a']);
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['worktree', 'unlock', '/repo/.worktrees/a']);
+        expect(vi.mocked(repo.removeWorktree)).toHaveBeenCalledWith('/repo/.worktrees/a', false);
+    });
+
+    it('pushes branch worktrees to their configured upstream branch', async () => {
+        const repo = makeRepositoryMock({
+            listWorktrees: vi.fn(async () => [
+                { ...worktree('/repo/.worktrees/a', 'topic-head', 'feature/a'), branch: 'refs/heads/feature/a' },
+            ]),
+            execRaw: vi.fn(async (args) => args[2] === 'for-each-ref' ? 'origin/review/a\n' : ''),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        await router.handle({ type: 'graph/branchCommand', command: 'pushBranchWorktree', branch: 'feature/a', isRemote: false });
+
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'push', 'origin', 'feature/a:refs/heads/review/a']);
+    });
+
+    it('compares a branch with a chosen worktree', async () => {
+        const repo = makeRepositoryMock({
+            listWorktrees: vi.fn(async () => [
+                worktree('/repo/.worktrees/a', 'topic-head', 'feature/a'),
+            ]),
+            execRaw: vi.fn(async (args) => {
+                if (args[2] === 'diff' && args[3] === 'feature/a') { return 'chosen worktree diff\n'; }
+                if (args[2] === 'ls-files') { return ''; }
+                return '';
+            }),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        setQuickPickValue('/repo/.worktrees/a');
+        await router.handle({ type: 'graph/branchCommand', command: 'compareBranchWithWorktree', branch: 'feature/a', isRemote: false });
+
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', 'feature/a', '--']);
+        expect(workspace.documents.map((document) => document.content)).toEqual(['chosen worktree diff']);
     });
 });

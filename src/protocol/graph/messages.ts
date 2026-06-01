@@ -84,7 +84,17 @@ export type BranchCommand =
     | 'checkout' | 'newBranchFrom' | 'checkoutRebaseOnto'
     | 'compareWithCurrent' | 'showDiffWithWorkingTree'
     | 'delete' | 'rename' | 'push' | 'update'
-    | 'rebaseOnto' | 'mergeInto';
+    | 'rebaseOnto' | 'mergeInto'
+    | 'newWorktreeFromBranch'
+    | 'openBranchWorktree'
+    | 'revealBranchWorktree'
+    | 'compareBranchWithWorktree'
+    | 'showDiffWithBranchWorktree'
+    | 'pullBranchWorktree'
+    | 'pushBranchWorktree'
+    | 'lockBranchWorktree'
+    | 'unlockBranchWorktree'
+    | 'removeBranchWorktree';
 
 export interface BranchCommandRequest {
     readonly type: 'graph/branchCommand';
@@ -135,7 +145,9 @@ export type CommitCommand =
     | 'interactiveRebaseFromHere'
     | 'pushAllUpToHere'
     | 'newBranch'
-    | 'newTag';
+    | 'newTag'
+    | 'newWorktreeFromCommit'
+    | 'compareCommitWithWorktree';
 
 export interface CommitCommandRequest {
     readonly type: 'graph/commitCommand';

@@ -7,6 +7,7 @@ import type { CommitFileChange, GraphData, GraphFilters, WorktreeWip } from '../
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import type { GitRepository } from '../../core/git/GitRepository';
 import type { GitStatusEntry } from '../../core/git/domain/GitStatus';
+import type { GitWorktree } from '../../core/git/domain/GitWorktree';
 import { parsePorcelainStatus, summarizePorcelainStatus } from '../../core/parsing/parseStatus';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import { toProtocolBranch, toProtocolGraphCommit, toProtocolWorktree } from '../mapping/toProtocol';
@@ -243,11 +244,26 @@ export class GraphMessageRouter {
                 await checkoutBranch(repo, branch, isRemote);
                 await repo.exec(['rebase', currentBranch]);
                 break;
+            case 'newWorktreeFromBranch':
+                if (!await createWorktreeFromBranch(repo, branch, isRemote)) { return; }
+                break;
+            case 'openBranchWorktree':
+                await openBranchWorktree(repo, branch, isRemote);
+                return;
+            case 'revealBranchWorktree':
+                await revealBranchWorktree(repo, branch, isRemote);
+                return;
             case 'compareWithCurrent':
                 await openDiffDocument(`Diff ${currentBranch}...${branch}`, await repo.execRaw(['diff', `${currentBranch}...${branch}`, '--']));
                 return;
             case 'showDiffWithWorkingTree':
                 await openDiffDocument(`Diff ${branch}..working tree`, await repo.execRaw(['diff', branch, '--']));
+                return;
+            case 'compareBranchWithWorktree':
+                await compareRefWithPickedWorktree(repo, branch, `Diff ${branch}`);
+                return;
+            case 'showDiffWithBranchWorktree':
+                await showDiffWithBranchWorktree(repo, branch, isRemote);
                 return;
             case 'delete': {
                 const label = `Delete${isRemote ? ' Remote' : ''}`;
@@ -270,6 +286,21 @@ export class GraphMessageRouter {
             case 'push':
                 if (isRemote) { throw new Error('Push is only available for local branches.'); }
                 await pushBranch(repo, branch);
+                break;
+            case 'pullBranchWorktree':
+                await branchWorktreeGit(repo, branch, isRemote, ['pull']);
+                break;
+            case 'pushBranchWorktree':
+                await pushBranchWorktree(repo, branch, isRemote);
+                break;
+            case 'lockBranchWorktree':
+                await lockBranchWorktree(repo, branch, isRemote);
+                break;
+            case 'unlockBranchWorktree':
+                await unlockBranchWorktree(repo, branch, isRemote);
+                break;
+            case 'removeBranchWorktree':
+                if (!await removeBranchWorktree(repo, branch, isRemote)) { return; }
                 break;
             case 'update': {
                 const { remote, branchName } = await resolveRemoteBranch(repo, branch);
@@ -436,6 +467,12 @@ export class GraphMessageRouter {
             case 'newTag':
                 await createTagAtCommit(repo, hash);
                 break;
+            case 'newWorktreeFromCommit':
+                if (!await createWorktreeFromCommit(repo, hash)) { return; }
+                break;
+            case 'compareCommitWithWorktree':
+                await compareRefWithPickedWorktree(repo, hash, `Diff ${hash.substring(0, 7)}`);
+                return;
         }
         await this.pushGraphData(undefined, undefined);
     }
@@ -492,6 +529,187 @@ async function showDiffWithMainWorktree(repo: GitRepository, wtPath: string): Pr
     if (selected.isMain) { throw new Error('Cannot compare the main worktree with itself.'); }
     const diff = await worktreeDiffFromBase(repo, wtPath, main.head);
     await openDiffDocument(`Diff ${path.basename(wtPath)} with ${path.basename(main.path)}`, diff);
+}
+
+async function createWorktreeFromBranch(repo: GitRepository, branch: string, isRemote: boolean): Promise<boolean> {
+    const worktreePath = await promptNewWorktreePath(repo, `Worktree path for "${branch}":`);
+    if (!worktreePath) { return false; }
+    const worktrees = await repo.listWorktrees();
+
+    if (isRemote) {
+        return createWorktreeFromRemoteBranch(repo, worktreePath, branch, worktrees);
+    }
+
+    if (worktreeForBranch(worktrees, branch)) {
+        const branchName = await vscode.window.showInputBox({
+            prompt: `Branch "${branch}" is already checked out. New branch name for worktree:`,
+            value: `${branch}-worktree`,
+        });
+        if (!branchName?.trim()) { return false; }
+        await repo.exec(['worktree', 'add', '-b', branchName.trim(), worktreePath, branch]);
+        return true;
+    }
+
+    await repo.exec(['worktree', 'add', worktreePath, branch]);
+    return true;
+}
+
+async function createWorktreeFromRemoteBranch(
+    repo: GitRepository,
+    worktreePath: string,
+    remoteBranch: string,
+    worktrees: readonly GitWorktree[],
+): Promise<boolean> {
+    const defaultLocalName = localNameForRemoteBranch(remoteBranch);
+    const localBranches = (await repo.getAllBranches()).filter((branch) => !branch.isRemote).map((branch) => branch.name);
+
+    if (localBranches.includes(defaultLocalName)) {
+        if (!worktreeForBranch(worktrees, defaultLocalName)) {
+            await repo.exec(['worktree', 'add', worktreePath, defaultLocalName]);
+            return true;
+        }
+        const branchName = await vscode.window.showInputBox({
+            prompt: `Branch "${defaultLocalName}" is already checked out. New branch name for worktree:`,
+            value: `${defaultLocalName}-worktree`,
+        });
+        if (!branchName?.trim()) { return false; }
+        await repo.exec(['worktree', 'add', '-b', branchName.trim(), worktreePath, remoteBranch]);
+        return true;
+    }
+
+    const branchName = await vscode.window.showInputBox({
+        prompt: `Local branch name for worktree from "${remoteBranch}":`,
+        value: defaultLocalName,
+    });
+    if (!branchName?.trim()) { return false; }
+    const trimmed = branchName.trim();
+    if (localBranches.includes(trimmed)) {
+        if (worktreeForBranch(worktrees, trimmed)) { throw new Error(`Branch "${trimmed}" is already checked out in another worktree.`); }
+        await repo.exec(['worktree', 'add', worktreePath, trimmed]);
+        return true;
+    }
+    await repo.exec(['worktree', 'add', '-b', trimmed, worktreePath, remoteBranch]);
+    return true;
+}
+
+async function createWorktreeFromCommit(repo: GitRepository, hash: string): Promise<boolean> {
+    const worktreePath = await promptNewWorktreePath(repo, `Worktree path for ${hash.substring(0, 7)}:`);
+    if (!worktreePath) { return false; }
+    const branchName = await vscode.window.showInputBox({
+        prompt: `New branch name from ${hash.substring(0, 7)}:`,
+    });
+    if (!branchName?.trim()) { return false; }
+    await repo.exec(['worktree', 'add', '-b', branchName.trim(), worktreePath, hash]);
+    return true;
+}
+
+async function promptNewWorktreePath(repo: GitRepository, prompt: string): Promise<string | undefined> {
+    const input = await vscode.window.showInputBox({ prompt, placeHolder: '/absolute/path/to/worktree' });
+    if (!input?.trim()) { return undefined; }
+    const worktreePath = input.trim();
+    if (!path.isAbsolute(worktreePath)) { throw new Error('Worktree path must be absolute.'); }
+    if (path.resolve(worktreePath) === path.resolve(repo.cwd)) { throw new Error('Worktree path already exists.'); }
+    if (await pathExists(worktreePath)) { throw new Error('Worktree path already exists.'); }
+    return worktreePath;
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+    try {
+        await fs.access(filePath);
+        return true;
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') { return false; }
+        throw error;
+    }
+}
+
+function localNameForRemoteBranch(branch: string): string {
+    const slashIdx = branch.indexOf('/');
+    return slashIdx === -1 ? branch : branch.substring(slashIdx + 1);
+}
+
+async function openBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean): Promise<void> {
+    const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
+    const choice = await vscode.window.showQuickPick(['Open in New Window', 'Open in Current Window'], { placeHolder: 'Open branch worktree' });
+    if (!choice) { return; }
+    await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(worktree.path), { forceNewWindow: choice === 'Open in New Window' });
+}
+
+async function revealBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean): Promise<void> {
+    const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
+    await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(worktree.path));
+}
+
+async function showDiffWithBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean): Promise<void> {
+    const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
+    await openDiffDocument(`Diff ${branch} with ${path.basename(worktree.path)}`, await worktreeDiffFromBase(repo, worktree.path, branch));
+}
+
+async function compareRefWithPickedWorktree(repo: GitRepository, ref: string, titlePrefix: string): Promise<boolean> {
+    const worktree = await pickWorktree(repo, 'Select worktree to compare');
+    if (!worktree) { return false; }
+    await openDiffDocument(`${titlePrefix} with ${path.basename(worktree.path)}`, await worktreeDiffFromBase(repo, worktree.path, ref));
+    return true;
+}
+
+async function branchWorktreeGit(repo: GitRepository, branch: string, isRemote: boolean, args: readonly string[]): Promise<void> {
+    const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
+    await repo.exec(['-C', worktree.path, ...args]);
+}
+
+async function pushBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean): Promise<void> {
+    const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
+    const upstream = (await repo.execRaw(['-C', worktree.path, 'for-each-ref', '--format=%(upstream:short)', `refs/heads/${branch}`])).trim();
+    if (upstream) {
+        const { remote, branchName } = await resolveRemoteBranch(repo, upstream);
+        await repo.exec(['-C', worktree.path, 'push', remote, `${branch}:refs/heads/${branchName}`]);
+        return;
+    }
+    const remote = await defaultRemote(repo);
+    await repo.exec(['-C', worktree.path, 'push', '-u', remote, branch]);
+}
+
+async function lockBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean): Promise<void> {
+    const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
+    if (worktree.isMain) { throw new Error('The main worktree cannot be locked.'); }
+    await repo.exec(['worktree', 'lock', worktree.path]);
+}
+
+async function unlockBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean): Promise<void> {
+    const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
+    if (worktree.isMain) { throw new Error('The main worktree cannot be unlocked.'); }
+    await repo.exec(['worktree', 'unlock', worktree.path]);
+}
+
+async function removeBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean): Promise<boolean> {
+    const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
+    if (worktree.isMain) { throw new Error('The main worktree cannot be removed.'); }
+    const choice = await showModalWarningMessage(`Remove worktree at "${worktree.path}"?`, 'Remove');
+    if (choice !== 'Remove') { return false; }
+    await repo.removeWorktree(worktree.path, false);
+    return true;
+}
+
+async function requireWorktreeForBranch(repo: GitRepository, branch: string, isRemote: boolean): Promise<GitWorktree> {
+    if (isRemote) { throw new Error('Remote branches do not have local worktrees.'); }
+    const worktree = worktreeForBranch(await repo.listWorktrees(), branch);
+    if (!worktree) { throw new Error(`No worktree is checked out for branch "${branch}".`); }
+    return worktree;
+}
+
+async function pickWorktree(repo: GitRepository, placeHolder: string): Promise<GitWorktree | undefined> {
+    const worktrees = await repo.listWorktrees();
+    const paths = worktrees.map((worktree) => worktree.path);
+    const selectedPath = await vscode.window.showQuickPick(paths, { placeHolder });
+    return selectedPath ? worktrees.find((worktree) => worktree.path === selectedPath) : undefined;
+}
+
+function shortWorktreeBranch(branch: string | undefined): string | undefined {
+    return branch?.replace(/^refs\/heads\//, '');
+}
+
+function worktreeForBranch(worktrees: readonly GitWorktree[], branch: string): GitWorktree | undefined {
+    return worktrees.find((candidate) => shortWorktreeBranch(candidate.branch) === branch);
 }
 
 async function worktreeDiffFromBase(repo: GitRepository, wtPath: string, baseRef: string): Promise<string> {

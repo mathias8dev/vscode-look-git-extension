@@ -6,6 +6,9 @@ export interface BranchContextMenuState {
     readonly isRemote: boolean;
     readonly isCurrent: boolean;
     readonly currentBranch: string;
+    readonly worktreePath?: string;
+    readonly worktreeIsMain?: boolean;
+    readonly worktreeIsLocked?: boolean;
     readonly x: number;
     readonly y: number;
 }
@@ -31,14 +34,25 @@ const MENU_ITEMS: readonly BranchMenuItem[] = [
     { kind: 'command', label: () => 'Checkout', command: 'checkout', icon: 'git-branch' },
     { kind: 'command', label: (state) => `New Branch from '${state.branch}'...`, command: 'newBranchFrom', icon: 'add' },
     { kind: 'command', label: (state) => `Checkout and Rebase onto '${state.currentBranch}'`, command: 'checkoutRebaseOnto', disabled: (state) => state.isCurrent },
+    { kind: 'command', label: () => 'New Worktree from Branch...', command: 'newWorktreeFromBranch', icon: 'repo-create' },
+    { kind: 'command', label: () => 'Open Branch Worktree', command: 'openBranchWorktree', icon: 'folder-opened', disabled: (state) => !state.worktreePath },
+    { kind: 'command', label: () => 'Reveal Branch Worktree in File Explorer', command: 'revealBranchWorktree', icon: 'folder', disabled: (state) => !state.worktreePath },
     { kind: 'separator' },
     { kind: 'command', label: (state) => `Compare with '${state.currentBranch}'`, command: 'compareWithCurrent', icon: 'compare-changes', disabled: (state) => state.isCurrent },
     { kind: 'command', label: () => 'Show Diff with Working Tree', command: 'showDiffWithWorkingTree', icon: 'diff' },
+    { kind: 'command', label: () => 'Compare Branch with Worktree...', command: 'compareBranchWithWorktree', icon: 'compare-changes' },
+    { kind: 'command', label: () => 'Show Diff with Branch Worktree', command: 'showDiffWithBranchWorktree', icon: 'diff', disabled: (state) => !state.worktreePath },
     { kind: 'separator' },
     { kind: 'command', label: (state) => `Rebase '${state.currentBranch}' onto '${state.branch}'`, command: 'rebaseOnto', disabled: (state) => state.isCurrent },
     { kind: 'command', label: (state) => `Merge '${state.branch}' into '${state.currentBranch}'`, command: 'mergeInto', disabled: (state) => state.isCurrent },
     { kind: 'separator' },
     { kind: 'command', label: () => 'Push...', command: 'push', icon: 'cloud-upload', disabled: (state) => state.isRemote },
+    { kind: 'command', label: () => 'Pull Branch Worktree', command: 'pullBranchWorktree', icon: 'git-pull-request', disabled: (state) => !state.worktreePath },
+    { kind: 'command', label: () => 'Push Branch Worktree', command: 'pushBranchWorktree', icon: 'cloud-upload', disabled: (state) => !state.worktreePath },
+    { kind: 'separator' },
+    { kind: 'command', label: () => 'Lock Branch Worktree', command: 'lockBranchWorktree', icon: 'lock', disabled: (state) => !state.worktreePath || state.worktreeIsMain === true || state.worktreeIsLocked === true },
+    { kind: 'command', label: () => 'Unlock Branch Worktree', command: 'unlockBranchWorktree', icon: 'unlock', disabled: (state) => !state.worktreePath || state.worktreeIsMain === true || state.worktreeIsLocked !== true },
+    { kind: 'command', label: () => 'Remove Branch Worktree...', command: 'removeBranchWorktree', icon: 'trash', disabled: (state) => !state.worktreePath || state.worktreeIsMain === true },
     { kind: 'separator' },
     { kind: 'command', label: () => 'Rename...', command: 'rename', accelerator: 'F2', disabled: (state) => state.isRemote },
     { kind: 'command', label: () => 'Delete', command: 'delete', icon: 'trash' },

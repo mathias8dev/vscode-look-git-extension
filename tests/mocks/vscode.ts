@@ -109,6 +109,7 @@ export const window = {
     warningMessages: [] as Array<{ message: string; items: string[] }>,
     inputBoxOptions: [] as unknown[],
     inputBoxValue: undefined as string | undefined,
+    inputBoxValues: [] as string[],
     quickPickValue: undefined as string | undefined,
     saveDialogValue: undefined as TestUri | undefined,
     saveDialogOptions: [] as unknown[],
@@ -124,7 +125,7 @@ export const window = {
     },
     showInputBox(options?: unknown) {
         this.inputBoxOptions.push(options);
-        return Promise.resolve(this.inputBoxValue);
+        return Promise.resolve(this.inputBoxValues.shift() ?? this.inputBoxValue);
     },
     showQuickPick() { return Promise.resolve(this.quickPickValue); },
     showSaveDialog(options: unknown) { this.saveDialogOptions.push(options); return Promise.resolve(this.saveDialogValue); },
@@ -148,6 +149,7 @@ export const window = {
         this.warningMessages = [];
         this.inputBoxOptions = [];
         this.inputBoxValue = undefined;
+        this.inputBoxValues = [];
         this.quickPickValue = undefined;
         this.saveDialogValue = undefined;
         this.saveDialogOptions = [];
@@ -177,6 +179,10 @@ export function setWarningChoices(choices: readonly string[]): void {
 
 export function setInputBoxValue(value: string | undefined): void {
     window.inputBoxValue = value;
+}
+
+export function setInputBoxValues(values: readonly string[]): void {
+    window.inputBoxValues = [...values];
 }
 
 export function setQuickPickValue(value: string | undefined): void {

@@ -56,12 +56,16 @@ export function BranchPanel({
     };
 
     const handleOpenContextMenu = (branch: BranchInfo, x: number, y: number) => {
+        const branchWorktree = branch.isRemote ? undefined : worktrees.find((worktree) => shortWorktreeBranch(worktree.branch) === branch.name);
         setWorktreeContextMenu(undefined);
         setContextMenu({
             branch: branch.name,
             isRemote: branch.isRemote,
             isCurrent: branch.isCurrent,
             currentBranch,
+            worktreePath: branchWorktree?.path,
+            worktreeIsMain: branchWorktree?.isMain,
+            worktreeIsLocked: branchWorktree?.isLocked,
             x,
             y,
         });
@@ -193,7 +197,7 @@ export function BranchPanel({
                         >
                             <i className="codicon codicon-repo branch-leaf-icon" aria-hidden="true" />
                             <span className="branch-node-name" title={worktree.path}>
-                                {worktree.branch ?? `detached ${worktree.head.substring(0, 7)}`}
+                                {shortWorktreeBranch(worktree.branch) ?? `detached ${worktree.head.substring(0, 7)}`}
                             </span>
                             {worktree.isMain ? <span className="graph-resource-badge">main</span> : null}
                             {worktree.isLocked ? <span className="graph-resource-badge" title={worktree.lockReason}>locked</span> : null}
@@ -225,4 +229,8 @@ export function BranchPanel({
             ) : null}
         </div>
     );
+}
+
+function shortWorktreeBranch(branch: string | undefined): string | undefined {
+    return branch?.replace(/^refs\/heads\//, '');
 }
