@@ -1,7 +1,12 @@
 import * as assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
+import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessageRouter';
+import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
+import type { GraphExtensionToWebviewMessage } from '../../../src/protocol/graph/messages';
 import { getFixtureRepoPath, gitFixtureOutput } from '../../helpers/fixtureRepo';
 import { runTestCases } from '../../helpers/testRunner';
 
@@ -56,6 +61,44 @@ export function run(): Promise<void> {
             },
         },
         {
+            name: 'opens graph diffs for added and deleted committed files',
+            run: async () => {
+                const repoPath = process.env.LOOK_GIT_DIFF_FIXTURE_REPO;
+                if (!repoPath) {
+                    console.log('  skip graph diff assertion: diff fixture repo is absent');
+                    return;
+                }
+
+                try {
+                    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+
+                    const repo = new GitProcessRepository(repoPath);
+                    const messages: GraphExtensionToWebviewMessage[] = [];
+                    const accessor: ActiveRepositoryAccessor = {
+                        currentRepository: repo,
+                        currentContext: undefined,
+                        requireRepository: () => repo,
+                    };
+                    const router = new GraphMessageRouter(accessor, (message) => { messages.push(message); });
+                    const commitHash = git(repoPath, ['rev-parse', 'HEAD']);
+                    await waitForGitFileContent(repoPath, 'added.txt', commitHash, 'added content\n');
+                    await waitForGitFileContent(repoPath, 'deleted.txt', `${commitHash}~1`, 'base content\n');
+
+                    await router.handle({ type: 'graph/openDiff', filePath: 'added.txt', commitHash, status: 'A' });
+                    await waitForTabLabel('added.txt');
+                    assertNoGraphError(messages);
+
+                    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+
+                    await router.handle({ type: 'graph/openDiff', filePath: 'deleted.txt', commitHash, status: 'D' });
+                    await waitForTabLabel('deleted.txt');
+                    assertNoGraphError(messages);
+                } finally {
+                    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+                }
+            },
+        },
+        {
             name: 'bundles official Codicons with a webview-safe relative font URL',
             run: async () => {
                 const extension = vscode.extensions.getExtension('mathias8dev.look-git');
@@ -73,4 +116,55 @@ export function run(): Promise<void> {
             },
         },
     ]);
+}
+
+function git(cwd: string, args: readonly string[]): string {
+    return execFileSync('git', [...args], { cwd, encoding: 'utf8' }).trim();
+}
+
+async function waitForGitFileContent(repoPath: string, filePath: string, ref: string, expected: string): Promise<void> {
+    const uri = gitObjectUri(repoPath, filePath, ref);
+    let lastError = '';
+
+    for (let attempt = 0; attempt < 40; attempt++) {
+        try {
+            const content = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+            if (content === expected) { return; }
+            lastError = `read "${content}"`;
+        } catch (error) {
+            lastError = error instanceof Error ? error.message : String(error);
+        }
+        await sleep(100);
+    }
+
+    assert.fail(`Expected Git file content for ${filePath} at ${ref}: ${lastError}`);
+}
+
+function gitObjectUri(repoPath: string, filePath: string, ref: string): vscode.Uri {
+    const uri = vscode.Uri.file(path.join(repoPath, filePath));
+    return uri.with({ scheme: 'git', query: JSON.stringify({ path: uri.path, ref }) });
+}
+
+async function waitForTabLabel(label: string): Promise<void> {
+    for (let attempt = 0; attempt < 40; attempt++) {
+        const tab = vscode.window.tabGroups.all
+            .flatMap((group) => group.tabs)
+            .find((candidate) => candidate.label.includes(label));
+        if (tab) { return; }
+        await sleep(100);
+    }
+
+    const openLabels = vscode.window.tabGroups.all
+        .flatMap((group) => group.tabs)
+        .map((tab) => tab.label);
+    assert.fail(`Expected an open diff tab containing "${label}". Open tabs: ${openLabels.join(', ')}`);
+}
+
+async function sleep(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function assertNoGraphError(messages: readonly GraphExtensionToWebviewMessage[]): void {
+    const error = messages.find((message) => message.type === 'graph/error');
+    assert.equal(error, undefined, error?.message);
 }

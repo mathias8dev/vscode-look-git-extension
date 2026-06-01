@@ -51,11 +51,19 @@ export function FileTreeNodeView({ node, depth, onDiff }: FileTreeNodeViewProps)
     if (!file) { return null; }
     const statusKind = fileStatusKind(file.status);
     const kind = iconKindForCommitFile(file);
+    const openDiff = () => onDiff(file);
 
     return (
         <div
-            className="commit-file-node commit-file-leaf"
+            className="commit-file-node commit-file-leaf commit-file-leaf-clickable"
             style={{ paddingLeft: `${indent}px` }}
+            title={file.filePath}
+            tabIndex={0}
+            role="button"
+            onClick={openDiff}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDiff(); }
+            }}
         >
             <GraphFileTypeIcon kind={kind} />
             <span className="commit-file-name">{node.name}</span>
@@ -63,7 +71,7 @@ export function FileTreeNodeView({ node, depth, onDiff }: FileTreeNodeViewProps)
                 <IconButton
                     icon="diff"
                     title="Open diff"
-                    onClick={() => onDiff(file)}
+                    onClick={(e) => { e.stopPropagation(); openDiff(); }}
                 />
             </div>
             <span className={`status-letter status-letter-${statusKind}`} aria-hidden="true">

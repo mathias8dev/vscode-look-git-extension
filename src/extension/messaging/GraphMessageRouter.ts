@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import type { GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse } from '../../protocol/graph/messages';
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import type { GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse, OpenDiffRequest } from '../../protocol/graph/messages';
 import type { GraphData, GraphFilters } from '../../protocol/graph/types';
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
@@ -105,14 +107,8 @@ export class GraphMessageRouter {
 
             case 'graph/openDiff': {
                 const repo = this.repositories.requireRepository();
-                const cwd = repo.cwd;
-                const fileUri = vscode.Uri.file(path.join(cwd, msg.filePath));
-                const origUri = msg.origPath ? vscode.Uri.file(path.join(cwd, msg.origPath)) : fileUri;
-                const commitHash = msg.commitHash;
-                const parentRef = msg.parentHash ?? `${commitHash}~1`;
-                const left = toGitUri(origUri, parentRef);
-                const right = toGitUri(fileUri, commitHash);
-                await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(msg.filePath)} (${commitHash.substring(0, 7)})`);
+                const { left, right } = await createDiffUris(repo.cwd, msg);
+                await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(msg.filePath)} (${msg.commitHash.substring(0, 7)})`);
                 break;
             }
 
@@ -296,6 +292,41 @@ function requestIdOf(msg: GraphWebviewToExtensionMessage): RequestId | undefined
 function errorCodeFor(msg: GraphWebviewToExtensionMessage): ErrorCode {
     if (msg.type === 'graph/openDiff') { return 'vscodeCommandFailed'; }
     return 'gitOperationFailed';
+}
+
+async function createDiffUris(cwd: string, msg: OpenDiffRequest): Promise<{ readonly left: vscode.Uri; readonly right: vscode.Uri }> {
+    const fileUri = vscode.Uri.file(path.join(cwd, msg.filePath));
+    const origUri = msg.origPath ? vscode.Uri.file(path.join(cwd, msg.origPath)) : fileUri;
+    const parentRef = msg.parentHash ?? `${msg.commitHash}~1`;
+    const status = msg.status.charAt(0);
+
+    if (status === 'A') {
+        return {
+            left: await emptyDiffUri(msg.commitHash, msg.filePath, 'parent'),
+            right: toGitUri(fileUri, msg.commitHash),
+        };
+    }
+
+    if (status === 'D') {
+        return {
+            left: toGitUri(origUri, parentRef),
+            right: await emptyDiffUri(msg.commitHash, msg.filePath, 'commit'),
+        };
+    }
+
+    return {
+        left: toGitUri(origUri, parentRef),
+        right: toGitUri(fileUri, msg.commitHash),
+    };
+}
+
+async function emptyDiffUri(commitHash: string, filePath: string, side: string): Promise<vscode.Uri> {
+    const dir = path.join(os.tmpdir(), 'look-git-empty-diffs');
+    const fileName = `${commitHash.substring(0, 12)}-${side}-${Buffer.from(filePath).toString('base64url')}`;
+    const emptyPath = path.join(dir, fileName);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(emptyPath, '');
+    return vscode.Uri.file(emptyPath);
 }
 
 function toGitUri(uri: vscode.Uri, ref: string): vscode.Uri {
