@@ -4,8 +4,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
+import { ChangesMessageRouter } from '../../../src/extension/messaging/ChangesMessageRouter';
 import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessageRouter';
 import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
+import type { ChangesExtensionToWebviewMessage } from '../../../src/protocol/changes/messages';
+import { ConflictState } from '../../../src/protocol/changes/types';
 import type { GraphExtensionToWebviewMessage } from '../../../src/protocol/graph/messages';
 import { createBareGitRepo, createTempGitRepo, type TempGitRepo } from '../../helpers/gitRepo';
 import { getFixtureRepoPath, gitFixtureOutput } from '../../helpers/fixtureRepo';
@@ -203,6 +206,14 @@ export function run(): Promise<void> {
             },
         },
         {
+            name: 'runs merge conflict resolve, continue, and abort flows end to end',
+            run: async () => {
+                await runMergeResolveContinueE2E();
+                await runMergeAbortE2E();
+                await runRebaseResolveContinueE2E();
+            },
+        },
+        {
             name: 'bundles official Codicons with a webview-safe relative font URL',
             run: async () => {
                 const extension = vscode.extensions.getExtension('mathias8dev.look-git');
@@ -350,6 +361,103 @@ async function runDropActionE2E(): Promise<void> {
     });
 }
 
+async function runMergeResolveContinueE2E(): Promise<void> {
+    const fixture = createTempGitRepo();
+    const messages: ChangesExtensionToWebviewMessage[] = [];
+    try {
+        createMergeConflict(fixture);
+        const router = changesRouterFor(fixture.cwd, messages);
+
+        await router.handle({ type: 'changes/acceptTheirs', filePath: 'conflict.txt' });
+        assert.equal(fs.readFileSync(path.join(fixture.cwd, 'conflict.txt'), 'utf8'), 'incoming\n');
+        assert.ok(fs.existsSync(path.join(fixture.cwd, '.git', 'MERGE_HEAD')), 'Accepting a side must not continue the merge automatically.');
+        assert.equal(git(fixture.cwd, ['log', '-1', '--format=%s']), 'feat: current');
+
+        await router.handle({ type: 'changes/continueOp', conflictState: ConflictState.Merge });
+
+        assert.equal(fs.existsSync(path.join(fixture.cwd, '.git', 'MERGE_HEAD')), false);
+        assert.equal(fs.readFileSync(path.join(fixture.cwd, 'conflict.txt'), 'utf8'), 'incoming\n');
+        assert.match(git(fixture.cwd, ['log', '-1', '--format=%s']), /^Merge branch 'incoming'/);
+        assertNoChangesError(messages);
+    } finally {
+        fixture.cleanup();
+    }
+}
+
+async function runMergeAbortE2E(): Promise<void> {
+    const fixture = createTempGitRepo();
+    const messages: ChangesExtensionToWebviewMessage[] = [];
+    try {
+        createMergeConflict(fixture);
+        const router = changesRouterFor(fixture.cwd, messages);
+
+        await withPatchedVscode({ warningChoices: ['Abort'] }, async () => {
+            await router.handle({ type: 'changes/abortOp', conflictState: ConflictState.Merge });
+        });
+
+        assert.equal(fs.existsSync(path.join(fixture.cwd, '.git', 'MERGE_HEAD')), false);
+        assert.equal(fs.readFileSync(path.join(fixture.cwd, 'conflict.txt'), 'utf8'), 'current\n');
+        assert.equal(gitStatus(fixture.cwd), '');
+        assertNoChangesError(messages);
+    } finally {
+        fixture.cleanup();
+    }
+}
+
+async function runRebaseResolveContinueE2E(): Promise<void> {
+    const fixture = createTempGitRepo();
+    const messages: ChangesExtensionToWebviewMessage[] = [];
+    try {
+        createRebaseConflict(fixture);
+        const router = changesRouterFor(fixture.cwd, messages);
+
+        await router.handle({ type: 'changes/acceptTheirs', filePath: 'conflict.txt' });
+        assert.equal(fs.readFileSync(path.join(fixture.cwd, 'conflict.txt'), 'utf8'), 'feature\n');
+        assert.ok(fs.existsSync(path.join(fixture.cwd, '.git', 'rebase-merge')), 'Accepting a side must not continue the rebase automatically.');
+
+        await router.handle({ type: 'changes/continueOp', conflictState: ConflictState.Rebase });
+
+        assert.equal(fs.existsSync(path.join(fixture.cwd, '.git', 'rebase-merge')), false);
+        assert.equal(git(fixture.cwd, ['branch', '--show-current']), 'feature');
+        assert.equal(fs.readFileSync(path.join(fixture.cwd, 'conflict.txt'), 'utf8'), 'feature\n');
+        assert.equal(git(fixture.cwd, ['log', '--format=%s', '--reverse']), 'feat: base\nfeat: current\nfeat: feature');
+        assertNoChangesError(messages);
+    } finally {
+        fixture.cleanup();
+    }
+}
+
+function createMergeConflict(fixture: TempGitRepo): void {
+    fixture.commitFile('conflict.txt', 'base\n', 'feat: base');
+    fixture.git(['checkout', '-q', '-b', 'incoming']);
+    fixture.commitFile('conflict.txt', 'incoming\n', 'feat: incoming');
+    fixture.git(['checkout', '-q', 'main']);
+    fixture.commitFile('conflict.txt', 'current\n', 'feat: current');
+    expectGitFailure(fixture, ['merge', 'incoming']);
+    assert.match(gitStatus(fixture.cwd), /^UU conflict\.txt/m);
+}
+
+function createRebaseConflict(fixture: TempGitRepo): void {
+    const base = fixture.commitFile('conflict.txt', 'base\n', 'feat: base');
+    fixture.git(['checkout', '-q', '-b', 'feature', base]);
+    fixture.commitFile('conflict.txt', 'feature\n', 'feat: feature');
+    fixture.git(['checkout', '-q', 'main']);
+    fixture.commitFile('conflict.txt', 'current\n', 'feat: current');
+    fixture.git(['checkout', '-q', 'feature']);
+    expectGitFailure(fixture, ['rebase', 'main']);
+    assert.match(gitStatus(fixture.cwd), /^UU conflict\.txt/m);
+}
+
+function expectGitFailure(fixture: TempGitRepo, args: readonly string[]): void {
+    let failed = false;
+    try {
+        fixture.git([...args]);
+    } catch {
+        failed = true;
+    }
+    assert.equal(failed, true, `Expected git ${args.join(' ')} to fail.`);
+}
+
 async function withTempCommitRepo(
     run: (context: {
         readonly fixture: TempGitRepo;
@@ -378,6 +486,16 @@ function routerFor(repoPath: string, messages: GraphExtensionToWebviewMessage[])
         requireRepository: () => repo,
     };
     return new GraphMessageRouter(accessor, (message) => { messages.push(message); });
+}
+
+function changesRouterFor(repoPath: string, messages: ChangesExtensionToWebviewMessage[]): ChangesMessageRouter {
+    const repo = new GitProcessRepository(repoPath);
+    const accessor: ActiveRepositoryAccessor = {
+        currentRepository: repo,
+        currentContext: undefined,
+        requireRepository: () => repo,
+    };
+    return new ChangesMessageRouter(accessor, (message) => { messages.push(message); }, async () => undefined);
 }
 
 function git(cwd: string, args: readonly string[]): string {
@@ -529,5 +647,10 @@ async function sleep(ms: number): Promise<void> {
 
 function assertNoGraphError(messages: readonly GraphExtensionToWebviewMessage[]): void {
     const error = messages.find((message) => message.type === 'graph/error');
+    assert.equal(error, undefined, error?.message);
+}
+
+function assertNoChangesError(messages: readonly ChangesExtensionToWebviewMessage[]): void {
+    const error = messages.find((message) => message.type === 'changes/error');
     assert.equal(error, undefined, error?.message);
 }
