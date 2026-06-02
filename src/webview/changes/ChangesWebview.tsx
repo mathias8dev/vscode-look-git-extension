@@ -54,13 +54,25 @@ export function ChangesWebview() {
     }, [state]);
 
     useEffect(() => {
+        const knownStashIndexes = new Set(state.status.stashes.map((stash) => stash.index));
+        for (const index of state.expandedStashIndexes) {
+            if (!knownStashIndexes.has(index)) { continue; }
+            if (Object.prototype.hasOwnProperty.call(state.stashFilesByIndex, index)) { continue; }
+            postToExtension(messageForStashAction(index, StashEntryAction.LoadFiles));
+        }
+    }, [state.expandedStashIndexes, state.status.stashes, state.stashFilesByIndex]);
+
+    useEffect(() => {
         const knownSubmodulePaths = new Set(state.status.submodules.map((submodule) => submodule.path));
         for (const submodulePath of state.expandedSubmodulePaths) {
             if (!knownSubmodulePaths.has(submodulePath)) { continue; }
-            if (Object.prototype.hasOwnProperty.call(state.submoduleStatusByPath, submodulePath)) { continue; }
+            if (
+                Object.prototype.hasOwnProperty.call(state.submoduleStatusByPath, submodulePath)
+                && !state.staleSubmoduleStatusPaths.includes(submodulePath)
+            ) { continue; }
             postToExtension(messageForGetSubmoduleStatus(submodulePath, submoduleStatusRequestId(submodulePath)));
         }
-    }, [state.expandedSubmodulePaths, state.status.submodules, state.submoduleStatusByPath]);
+    }, [state.expandedSubmodulePaths, state.status.submodules, state.staleSubmoduleStatusPaths, state.submoduleStatusByPath]);
 
     useEffect(() => {
         for (const [submodulePath, statusData] of Object.entries(state.submoduleStatusByPath)) {
@@ -74,12 +86,7 @@ export function ChangesWebview() {
     }, [state.expandedSubmoduleStashKeys, state.submoduleStatusByPath, state.submoduleStashFilesByKey]);
 
     const toggleStash = (index: number) => {
-        const isExpanded = state.expandedStashIndexes.includes(index);
-        const hasFiles = Object.prototype.hasOwnProperty.call(state.stashFilesByIndex, index);
         dispatch({ type: 'toggleStash', index });
-        if (!isExpanded && !hasFiles) {
-            postToExtension(messageForStashAction(index, StashEntryAction.LoadFiles));
-        }
     };
 
     const toggleSubmodule = (submodulePath: string) => {

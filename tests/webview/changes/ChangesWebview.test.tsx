@@ -73,6 +73,23 @@ describe('ChangesWebview', () => {
         await waitFor(() => expect(screen.getByRole('button', { name: 'Hide changes' })).toBeInTheDocument());
         await waitFor(() => expect(submoduleStatusRequests(api.messages).length).toBe(2));
     });
+
+    it('keeps expanded stashes open after status refreshes and reloads missing files', async () => {
+        const api = createMockVsCodeApi();
+        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+        render(<ChangesWebview />);
+        sendStatusData();
+
+        await waitFor(() => expect(screen.getByText('WIP')).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Show files' }));
+
+        await waitFor(() => expect(stashFilesRequests(api.messages).length).toBe(1));
+        sendStatusData();
+
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Hide files' })).toBeInTheDocument());
+        await waitFor(() => expect(stashFilesRequests(api.messages).length).toBe(2));
+    });
 });
 
 function sendStatusData(): void {
@@ -109,5 +126,12 @@ function submoduleStatusRequests(messages: readonly unknown[]): readonly unknown
     return messages.filter((message) => {
         if (!message || typeof message !== 'object') { return false; }
         return 'type' in message && message.type === 'changes/getSubmoduleStatus';
+    });
+}
+
+function stashFilesRequests(messages: readonly unknown[]): readonly unknown[] {
+    return messages.filter((message) => {
+        if (!message || typeof message !== 'object') { return false; }
+        return 'type' in message && message.type === 'changes/getStashFiles';
     });
 }

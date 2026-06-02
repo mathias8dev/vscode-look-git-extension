@@ -53,6 +53,68 @@ describe('changesState', () => {
         expect(state.expandedStashIndexes).toEqual([]);
     });
 
+    it('keeps expanded stashes across matching status refreshes', () => {
+        const initialStatus = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: statusDataMessage({
+                stashes: [
+                    { index: 0, message: 'On main: work' },
+                    { index: 1, message: 'On main: old work' },
+                ],
+            }),
+        });
+        const expandedFirst = reduceChangesState(initialStatus, { type: 'toggleStash', index: 0 });
+        const expandedSecond = reduceChangesState(expandedFirst, { type: 'toggleStash', index: 1 });
+        const withFiles = reduceChangesState(expandedSecond, {
+            type: 'message',
+            message: {
+                type: 'changes/stashFiles',
+                requestId: 'stash-0',
+                index: 0,
+                files: [{ status: 'M', filePath: 'src/app.ts' }],
+            },
+        });
+
+        const refreshed = reduceChangesState(withFiles, {
+            type: 'message',
+            message: statusDataMessage({
+                stashes: [{ index: 0, message: 'On main: work' }],
+            }),
+        });
+
+        expect(refreshed.expandedStashIndexes).toEqual([0]);
+        expect(refreshed.stashFilesByIndex[0]).toEqual([{ status: 'M', filePath: 'src/app.ts' }]);
+    });
+
+    it('drops expanded stashes when their index now refers to another stash', () => {
+        const initialStatus = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: statusDataMessage({
+                stashes: [{ index: 0, message: 'On main: work' }],
+            }),
+        });
+        const expanded = reduceChangesState(initialStatus, { type: 'toggleStash', index: 0 });
+        const withFiles = reduceChangesState(expanded, {
+            type: 'message',
+            message: {
+                type: 'changes/stashFiles',
+                requestId: 'stash-0',
+                index: 0,
+                files: [{ status: 'M', filePath: 'src/app.ts' }],
+            },
+        });
+
+        const refreshed = reduceChangesState(withFiles, {
+            type: 'message',
+            message: statusDataMessage({
+                stashes: [{ index: 0, message: 'On main: different work' }],
+            }),
+        });
+
+        expect(refreshed.expandedStashIndexes).toEqual([]);
+        expect(refreshed.stashFilesByIndex).toEqual({});
+    });
+
     it('stores protocol errors from extension messages', () => {
         const state = reduceChangesState(createInitialChangesState(), {
             type: 'message',
@@ -143,7 +205,13 @@ describe('changesState', () => {
     });
 
     it('stores stash files by stash index', () => {
-        const state = reduceChangesState(createInitialChangesState(), {
+        const withStatus = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: statusDataMessage({
+                stashes: [{ index: 0, message: 'On main: work' }],
+            }),
+        });
+        const state = reduceChangesState(withStatus, {
             type: 'message',
             message: {
                 type: 'changes/stashFiles',
@@ -157,7 +225,7 @@ describe('changesState', () => {
         expect(state.stashFilesByIndex[0]).toEqual([{ status: 'M', filePath: 'src/app.ts' }]);
     });
 
-    it('keeps expanded submodules across parent status refreshes and invalidates cached details', () => {
+    it('keeps expanded submodules mounted across parent status refreshes and marks details stale', () => {
         const initialStatus = reduceChangesState(createInitialChangesState(), {
             type: 'message',
             message: {
@@ -224,9 +292,73 @@ describe('changesState', () => {
         });
 
         expect(refreshed.expandedSubmodulePaths).toEqual(['modules/lib']);
-        expect(refreshed.submoduleStatusByPath).toEqual({});
+        expect(refreshed.submoduleStatusByPath['modules/lib']).toEqual(withDetails.submoduleStatusByPath['modules/lib']);
+        expect(refreshed.staleSubmoduleStatusPaths).toEqual(['modules/lib']);
         expect(refreshed.expandedSubmoduleStashKeys).toEqual([submoduleStashKey('modules/lib', 0)]);
-        expect(refreshed.submoduleStashFilesByKey).toEqual({});
+        expect(refreshed.submoduleStashFilesByKey[submoduleStashKey('modules/lib', 0)]).toEqual([{ status: 'M', filePath: 'src/stashed.ts' }]);
+    });
+
+    it('clears stale submodule status after fresh details arrive and prunes changed stashes', () => {
+        const withStatus = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: statusDataMessage({
+                submodules: [{ path: 'modules/lib', name: 'lib', status: SubmoduleStatus.Dirty }],
+            }),
+        });
+        const expanded = reduceChangesState(withStatus, { type: 'toggleSubmodule', path: 'modules/lib' });
+        const withDetails = reduceChangesState(expanded, {
+            type: 'message',
+            message: {
+                type: 'changes/submoduleStatusData',
+                requestId: 'sub-1',
+                path: 'modules/lib',
+                data: {
+                    staged: [],
+                    unstaged: [],
+                    conflicts: [],
+                    stashes: [{ index: 0, message: 'On main: work' }],
+                },
+            },
+        });
+        const withExpandedStash = reduceChangesState(withDetails, {
+            type: 'toggleSubmoduleStash',
+            key: submoduleStashKey('modules/lib', 0),
+        });
+        const withStashFiles = reduceChangesState(withExpandedStash, {
+            type: 'message',
+            message: {
+                type: 'changes/submoduleStashFiles',
+                requestId: 'stash-1',
+                path: 'modules/lib',
+                index: 0,
+                files: [{ status: 'M', filePath: 'src/stashed.ts' }],
+            },
+        });
+        const parentRefresh = reduceChangesState(withStashFiles, {
+            type: 'message',
+            message: statusDataMessage({
+                submodules: [{ path: 'modules/lib', name: 'lib', status: SubmoduleStatus.Dirty }],
+            }),
+        });
+
+        const freshDetails = reduceChangesState(parentRefresh, {
+            type: 'message',
+            message: {
+                type: 'changes/submoduleStatusData',
+                requestId: 'sub-2',
+                path: 'modules/lib',
+                data: {
+                    staged: [],
+                    unstaged: [],
+                    conflicts: [],
+                    stashes: [{ index: 0, message: 'On main: different work' }],
+                },
+            },
+        });
+
+        expect(freshDetails.staleSubmoduleStatusPaths).toEqual([]);
+        expect(freshDetails.expandedSubmoduleStashKeys).toEqual([]);
+        expect(freshDetails.submoduleStashFilesByKey).toEqual({});
     });
 
     it('ignores late submodule detail responses for unknown submodules and stale stashes', () => {
@@ -268,3 +400,24 @@ describe('changesState', () => {
         expect(staleFiles.submoduleStashFilesByKey).toEqual({});
     });
 });
+
+function statusDataMessage(overrides: Partial<Parameters<typeof createStatusData>[0]> = {}) {
+    return {
+        type: 'changes/statusData' as const,
+        data: createStatusData(overrides),
+    };
+}
+
+function createStatusData(overrides: {
+    readonly stashes?: readonly { readonly index: number; readonly message: string }[];
+    readonly submodules?: readonly { readonly path: string; readonly name: string; readonly status: SubmoduleStatus }[];
+} = {}) {
+    return {
+        staged: [],
+        unstaged: [],
+        conflicts: [],
+        conflictState: ConflictState.None,
+        stashes: overrides.stashes ?? [],
+        submodules: overrides.submodules ?? [],
+    };
+}

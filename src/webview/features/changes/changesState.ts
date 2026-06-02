@@ -42,6 +42,7 @@ export interface ChangesState {
     readonly stashFilesByIndex: Readonly<Record<number, readonly StashFileEntry[]>>;
     readonly expandedSubmodulePaths: readonly string[];
     readonly submoduleStatusByPath: Readonly<Record<string, SubmoduleStatusData>>;
+    readonly staleSubmoduleStatusPaths: readonly string[];
     readonly expandedSubmoduleStashKeys: readonly string[];
     readonly submoduleStashFilesByKey: Readonly<Record<string, readonly StashFileEntry[]>>;
 }
@@ -98,6 +99,7 @@ export function createInitialChangesState(preferences: ChangesStatePreferences =
         stashFilesByIndex: {},
         expandedSubmodulePaths: [],
         submoduleStatusByPath: {},
+        staleSubmoduleStatusPaths: [],
         expandedSubmoduleStashKeys: [],
         submoduleStashFilesByKey: {},
     };
@@ -140,6 +142,7 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
     switch (message.type) {
         case 'changes/statusData': {
             const submodulePaths = new Set(message.data.submodules.map((submodule) => submodule.path));
+            const expandedSubmodulePaths = keepKnownPaths(state.expandedSubmodulePaths, submodulePaths);
             return {
                 ...state,
                 status: message.data,
@@ -147,12 +150,16 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 error: undefined,
                 selectedItemIds: [],
                 selectionAnchorId: undefined,
-                expandedStashIndexes: [],
-                stashFilesByIndex: {},
-                expandedSubmodulePaths: keepKnownPaths(state.expandedSubmodulePaths, submodulePaths),
-                submoduleStatusByPath: {},
+                expandedStashIndexes: keepKnownStashIndexes(state.expandedStashIndexes, state.status.stashes, message.data.stashes),
+                stashFilesByIndex: keepKnownStashFilesByIndex(state.stashFilesByIndex, state.status.stashes, message.data.stashes),
+                expandedSubmodulePaths,
+                submoduleStatusByPath: keepKnownRecord(state.submoduleStatusByPath, submodulePaths),
+                staleSubmoduleStatusPaths: uniquePaths([
+                    ...keepKnownPaths(state.staleSubmoduleStatusPaths, submodulePaths),
+                    ...expandedSubmodulePaths,
+                ]),
                 expandedSubmoduleStashKeys: keepKnownSubmoduleStashKeys(state.expandedSubmoduleStashKeys, submodulePaths),
-                submoduleStashFilesByKey: {},
+                submoduleStashFilesByKey: keepKnownSubmoduleStashFilesByPath(state.submoduleStashFilesByKey, submodulePaths),
                 submoduleCommitFeedbackByPath: keepKnownRecord(state.submoduleCommitFeedbackByPath, submodulePaths),
             };
         }
@@ -176,6 +183,7 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 },
             };
         case 'changes/stashFiles':
+            if (!isKnownStashIndex(state.status.stashes, message.index)) { return state; }
             return {
                 ...state,
                 loading: false,
@@ -187,16 +195,26 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
             };
         case 'changes/submoduleStatusData': {
             if (!isKnownSubmodulePath(state.status, message.path)) { return state; }
-            const knownStashKeys = new Set(message.data.stashes.map((stash) => submoduleStashKey(message.path, stash.index)));
             return {
                 ...state,
                 error: undefined,
-                expandedSubmoduleStashKeys: keepKnownStashKeysForPath(state.expandedSubmoduleStashKeys, message.path, knownStashKeys),
+                staleSubmoduleStatusPaths: state.staleSubmoduleStatusPaths.filter((path) => path !== message.path),
+                expandedSubmoduleStashKeys: keepKnownStashKeysForPath(
+                    state.expandedSubmoduleStashKeys,
+                    message.path,
+                    state.submoduleStatusByPath[message.path]?.stashes ?? [],
+                    message.data.stashes,
+                ),
                 submoduleStatusByPath: {
                     ...state.submoduleStatusByPath,
                     [message.path]: message.data,
                 },
-                submoduleStashFilesByKey: keepKnownStashFilesForPath(state.submoduleStashFilesByKey, message.path, knownStashKeys),
+                submoduleStashFilesByKey: keepKnownStashFilesForPath(
+                    state.submoduleStashFilesByKey,
+                    message.path,
+                    state.submoduleStatusByPath[message.path]?.stashes ?? [],
+                    message.data.stashes,
+                ),
             };
         }
         case 'changes/submoduleStashFiles':
@@ -239,6 +257,29 @@ function keepKnownPaths(paths: readonly string[], knownPaths: ReadonlySet<string
     return paths.filter((path) => knownPaths.has(path));
 }
 
+function uniquePaths(paths: readonly string[]): readonly string[] {
+    return Array.from(new Set(paths));
+}
+
+function keepKnownStashIndexes(
+    indexes: readonly number[],
+    previousStashes: StatusData['stashes'],
+    nextStashes: StatusData['stashes'],
+): readonly number[] {
+    return indexes.filter((index) => isSameStashIndex(index, previousStashes, nextStashes));
+}
+
+function keepKnownStashFilesByIndex(
+    filesByIndex: Readonly<Record<number, readonly StashFileEntry[]>>,
+    previousStashes: StatusData['stashes'],
+    nextStashes: StatusData['stashes'],
+): Readonly<Record<number, readonly StashFileEntry[]>> {
+    return Object.fromEntries(
+        Object.entries(filesByIndex)
+            .filter(([index]) => isSameStashIndex(Number(index), previousStashes, nextStashes)),
+    );
+}
+
 function keepKnownSubmoduleStashKeys(keys: readonly string[], knownPaths: ReadonlySet<string>): readonly string[] {
     return keys.filter((key) => knownPaths.has(submodulePathFromStashKey(key)));
 }
@@ -247,17 +288,38 @@ function keepKnownRecord<T>(record: Readonly<Record<string, T>>, knownPaths: Rea
     return Object.fromEntries(Object.entries(record).filter(([path]) => knownPaths.has(path)));
 }
 
-function keepKnownStashKeysForPath(keys: readonly string[], path: string, knownStashKeys: ReadonlySet<string>): readonly string[] {
-    return keys.filter((key) => submodulePathFromStashKey(key) !== path || knownStashKeys.has(key));
+function keepKnownSubmoduleStashFilesByPath(
+    filesByKey: Readonly<Record<string, readonly StashFileEntry[]>>,
+    knownPaths: ReadonlySet<string>,
+): Readonly<Record<string, readonly StashFileEntry[]>> {
+    return Object.fromEntries(
+        Object.entries(filesByKey).filter(([key]) => knownPaths.has(submodulePathFromStashKey(key))),
+    );
+}
+
+function keepKnownStashKeysForPath(
+    keys: readonly string[],
+    path: string,
+    previousStashes: StatusData['stashes'],
+    nextStashes: StatusData['stashes'],
+): readonly string[] {
+    return keys.filter((key) => {
+        if (submodulePathFromStashKey(key) !== path) { return true; }
+        return isSameStashIndex(stashIndexFromSubmoduleKey(key), previousStashes, nextStashes);
+    });
 }
 
 function keepKnownStashFilesForPath(
     filesByKey: Readonly<Record<string, readonly StashFileEntry[]>>,
     path: string,
-    knownStashKeys: ReadonlySet<string>,
+    previousStashes: StatusData['stashes'],
+    nextStashes: StatusData['stashes'],
 ): Readonly<Record<string, readonly StashFileEntry[]>> {
     return Object.fromEntries(
-        Object.entries(filesByKey).filter(([key]) => submodulePathFromStashKey(key) !== path || knownStashKeys.has(key)),
+        Object.entries(filesByKey).filter(([key]) => {
+            if (submodulePathFromStashKey(key) !== path) { return true; }
+            return isSameStashIndex(stashIndexFromSubmoduleKey(key), previousStashes, nextStashes);
+        }),
     );
 }
 
@@ -267,6 +329,24 @@ function submodulePathFromStashKey(key: string): string {
 
 function isKnownSubmodulePath(status: StatusData, path: string): boolean {
     return status.submodules.some((submodule) => submodule.path === path);
+}
+
+function isKnownStashIndex(stashes: StatusData['stashes'], index: number): boolean {
+    return stashes.some((stash) => stash.index === index);
+}
+
+function isSameStashIndex(
+    index: number,
+    previousStashes: StatusData['stashes'],
+    nextStashes: StatusData['stashes'],
+): boolean {
+    const previous = previousStashes.find((stash) => stash.index === index);
+    const next = nextStashes.find((stash) => stash.index === index);
+    return Boolean(next && (!previous || previous.message === next.message));
+}
+
+function stashIndexFromSubmoduleKey(key: string): number {
+    return Number(key.split('\0')[1]);
 }
 
 function isKnownSubmoduleStash(

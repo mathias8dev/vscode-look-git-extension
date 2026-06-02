@@ -2,6 +2,15 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [0.1.1] - 2026-06-02
+
+### Fixed
+
+#### Changes Panel
+- Preserve expanded submodules after parent status refreshes and reload stale submodule details without collapsing the UI
+- Preserve expanded stash entries when the same stash still exists after refreshes, and reload missing stash file details automatically
+- Ignore stale submodule and stash detail responses after the underlying item disappears or changes identity
+
 ## [0.1.0] - 2026-06-02
 
 ### Added
