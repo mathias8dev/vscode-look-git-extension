@@ -16,6 +16,7 @@ describe('queryGraphLog', () => {
         await queryGraphLog(recordingExec(calls), 50, ['main', 'origin/dev'], 'src/app.ts');
 
         const args = expectItem(calls, 0);
+        expect(args).toContain('--parents');
         const separatorIndex = args.indexOf('--');
         expect(separatorIndex).toBeGreaterThan(0);
         expect(args.indexOf('main')).toBeLessThan(separatorIndex);

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { GraphCommit } from '../../../src/protocol/graph/types';
-import { assignLanes, getMaxLane } from '../../../src/webview/features/graph/layout/assignGraphLanes';
+import { assignLanes, getMaxLane, type GraphRow } from '../../../src/webview/features/graph/layout/assignGraphLanes';
 import { expectItem } from '../../helpers/assertions';
-import { findFloatingNodeIssues, findLaneContinuityIssues } from '../../helpers/graphLayoutAssertions';
+import { findAdjacentDisconnectedSameLaneIssues, findCommitLanePassThroughIssues, findFloatingNodeIssues, findLaneContinuityIssues, findNonVisibleLineTargetIssues } from '../../helpers/graphLayoutAssertions';
 
 function commit(hash: string, parents: string[] = [], refs: string[] = []): GraphCommit {
     return {
@@ -83,6 +83,31 @@ describe('assignGraphLanes', () => {
         expect(expectItem(expanded, 0).laneData.lane).toBe(expectItem(firstPage, 0).laneData.lane);
     });
 
+    it('preserves locked lanes when newly visible merge parents would otherwise take them', () => {
+        const firstPage = assignLanes([
+            commit('merge', ['base', 'topic-0', 'topic-1', 'topic-2', 'topic-3']),
+            commit('topic-3', ['base']),
+            commit('topic-2', ['base']),
+        ]);
+        const lockedLanes = new Map(firstPage.map((row) => [row.commit.hash, row.laneData.lane]));
+
+        const expanded = assignLanes([
+            commit('merge', ['base', 'topic-0', 'topic-1', 'topic-2', 'topic-3']),
+            commit('topic-3', ['base']),
+            commit('topic-2', ['base']),
+            commit('topic-1', ['base']),
+            commit('topic-0', ['base']),
+            commit('base'),
+        ], { lockedLanes });
+
+        for (const firstPageRow of firstPage) {
+            const expandedRow = expanded.find((row) => row.commit.hash === firstPageRow.commit.hash);
+            expect(expandedRow?.laneData.lane).toBe(firstPageRow.laneData.lane);
+        }
+        expect(findFloatingNodeIssues(expanded)).toEqual([]);
+        expect(findLaneContinuityIssues(expanded)).toEqual([]);
+    });
+
     it('draws a merge/fork line for merge commits', () => {
         const rows = assignLanes([commit('merge', ['main', 'feature']), commit('main', ['base']), commit('feature', ['base']), commit('base')]);
         expect(expectItem(rows, 0).laneData.lines.map((l) => l.type)).toContain('fork-right');
@@ -109,12 +134,14 @@ describe('assignGraphLanes', () => {
             commit('tip-c', ['hidden-c']),
         ]);
 
-        expect(rows.map((row) => row.laneData.lane)).toEqual([0, 0, 0]);
-        expect(getMaxLane(rows)).toBe(0);
+        expect(rows.map((row) => row.laneData.lane)).toEqual([0, 1, 0]);
+        expect(getMaxLane(rows)).toBe(1);
         expect(expectItem(rows, 1).laneData.lines).not.toContainEqual(expect.objectContaining({
             targetHash: 'hidden-a',
             role: 'pass-through',
         }));
+        expect(findNonVisibleLineTargetIssues(rows)).toEqual([]);
+        expect(findAdjacentDisconnectedSameLaneIssues(rows)).toEqual([]);
     });
 
     it('does not allocate lanes for hidden merge parents', () => {
@@ -123,11 +150,36 @@ describe('assignGraphLanes', () => {
             commit('next', ['hidden-next']),
         ]);
 
-        expect(rows.map((row) => row.laneData.lane)).toEqual([0, 0]);
-        expect(getMaxLane(rows)).toBe(0);
+        expect(rows.map((row) => row.laneData.lane)).toEqual([0, 1]);
+        expect(getMaxLane(rows)).toBe(1);
         expect(expectItem(rows, 0).laneData.lines).not.toContainEqual(expect.objectContaining({
             targetHash: 'hidden-feature',
         }));
+        expect(findNonVisibleLineTargetIssues(rows)).toEqual([]);
+        expect(findAdjacentDisconnectedSameLaneIssues(rows)).toEqual([]);
+    });
+
+    it('does not draw a dangling edge to a hidden first parent', () => {
+        const rows = assignLanes([
+            commit('visible-child', ['hidden-parent']),
+            commit('unrelated', ['unrelated-parent']),
+        ]);
+
+        expect(expectItem(rows, 0).laneData.lines).toEqual([]);
+        expect(expectItem(rows, 1).laneData.lines).toEqual([]);
+        expect(findNonVisibleLineTargetIssues(rows)).toEqual([]);
+        expect(findAdjacentDisconnectedSameLaneIssues(rows)).toEqual([]);
+    });
+
+    it('does not stack unrelated visible dots on the same lane with a visual gap', () => {
+        const rows = assignLanes([
+            commit('visible-a', ['hidden-a']),
+            commit('visible-b', ['hidden-b']),
+            commit('visible-c', ['hidden-c']),
+        ]);
+
+        expect(rows.map((row) => row.laneData.lane)).toEqual([0, 1, 0]);
+        expect(findAdjacentDisconnectedSameLaneIssues(rows)).toEqual([]);
     });
 
     it('opens lanes progressively for many branches sharing the same parent', () => {
@@ -139,13 +191,14 @@ describe('assignGraphLanes', () => {
             commit('base'),
         ]);
 
-        expect(rows.map((row) => row.laneData.lane)).toEqual([0, 1, 1, 1, 0]);
-        expect(getMaxLane(rows)).toBe(1);
+        expect(rows.map((row) => row.laneData.lane)).toEqual([0, 1, 2, 1, 0]);
+        expect(getMaxLane(rows)).toBe(2);
         expect(expectItem(rows, 3).laneData.lines).toContainEqual(expect.objectContaining({
             fromLane: 1,
             toLane: 0,
             role: 'first-parent',
         }));
+        expectSemanticLayout(rows);
     });
 
     it('draws pass-through straight lines for active lanes not touched by a commit', () => {
@@ -232,6 +285,22 @@ describe('assignGraphLanes', () => {
         expect(findLaneContinuityIssues(rows)).toEqual([]);
     });
 
+    it('compacts remaining lanes after a left lane is consumed', () => {
+        const rows = assignLanes([
+            commit('tip-a', ['root-a']),
+            commit('tip-b', ['root-b']),
+            commit('tip-c', ['root-c']),
+            commit('root-a'),
+            commit('root-b'),
+            commit('root-c'),
+        ]);
+
+        expect(rows.map((row) => row.laneData.lane)).toEqual([0, 1, 2, 0, 1, 0]);
+        expect(findFloatingNodeIssues(rows)).toEqual([]);
+        expect(findLaneContinuityIssues(rows)).toEqual([]);
+        expect(findAdjacentDisconnectedSameLaneIssues(rows)).toEqual([]);
+    });
+
     it('does not produce floating nodes in a dense criss-cross topology', () => {
         const rows = assignLanes([
             commit('feature-b-tip', ['feature-b-mid']),
@@ -271,6 +340,18 @@ describe('assignGraphLanes', () => {
         expect(findLaneContinuityIssues(rows)).toEqual([]);
     });
 
+    it('does not leave roots stranded on old far-right lanes in a large independent topology', () => {
+        const branchCount = 32;
+        const tips = Array.from({ length: branchCount }, (_, i) => commit(`tip-${i}`, [`root-${i}`]));
+        const roots = Array.from({ length: branchCount }, (_, i) => commit(`root-${i}`));
+        const rows = assignLanes([...tips, ...roots]);
+
+        expect(rows.slice(branchCount).map((row) => row.laneData.lane)).toEqual(Array.from({ length: branchCount }, (_, index) => index % 2));
+        expect(findFloatingNodeIssues(rows)).toEqual([]);
+        expect(findLaneContinuityIssues(rows)).toEqual([]);
+        expect(findAdjacentDisconnectedSameLaneIssues(rows)).toEqual([]);
+    });
+
     it('allocates one lane per additional parent in octopus merge', () => {
         const rows = assignLanes([
             commit('merge', ['main', 'feature-a', 'feature-b']),
@@ -283,7 +364,9 @@ describe('assignGraphLanes', () => {
 
     it('reuses a freed lane after a branch is consumed', () => {
         const rows = assignLanes([commit('a', ['ra']), commit('ra'), commit('b', ['rb']), commit('rb')]);
-        expect(rows.map((r) => r.laneData.lane)).toEqual([0, 0, 0, 0]);
+        expect(rows.map((r) => r.laneData.lane)).toEqual([0, 0, 1, 1]);
+        expect(getMaxLane(rows)).toBe(1);
+        expect(findAdjacentDisconnectedSameLaneIssues(rows)).toEqual([]);
     });
 
     it('marks the primary branch first-parent chain', () => {
@@ -341,4 +424,95 @@ describe('assignGraphLanes', () => {
         expect(expectItem(extendedRows, 0).laneData.lane).toBe(expectItem(firstRows, 0).laneData.lane);
         expect(expectItem(extendedRows, 0).laneData.isPrimary).toBe(true);
     });
+
+    it('keeps semantic layout invariants on generated merge-heavy histories', () => {
+        for (let seed = 1; seed <= 20; seed++) {
+            const rows = assignLanes(generatedDagCommits(seed, 220), { primaryBranch: 'main' });
+            expectSemanticLayout(rows);
+        }
+    });
+
+    it('keeps semantic layout invariants with sparse filters and pagination locks', () => {
+        for (let seed = 1; seed <= 20; seed++) {
+            const commits = sparseFilter(generatedDagCommits(seed, 260), seed);
+            const firstPageRows = assignLanes(commits.slice(0, 45), { primaryBranch: 'main' });
+            const lockedLanes = new Map(firstPageRows.map((row) => [row.commit.hash, row.laneData.lane]));
+            const expandedRows = assignLanes(commits.slice(0, 160), { primaryBranch: 'main', lockedLanes });
+
+            for (const firstPageRow of firstPageRows) {
+                const expandedRow = expandedRows.find((row) => row.commit.hash === firstPageRow.commit.hash);
+                if (expandedRow?.laneData.lane !== firstPageRow.laneData.lane) {
+                    throw new Error(`Expected locked lane for ${firstPageRow.commit.hash} in seed ${seed}: ${firstPageRow.laneData.lane}, received ${expandedRow?.laneData.lane}.`);
+                }
+            }
+            expectSemanticLayout(firstPageRows);
+            expectSemanticLayout(expandedRows);
+        }
+    });
+
+    it('keeps semantic layout invariants on a large generated repository graph', () => {
+        const commits = generatedDagCommits(97, 1200);
+        const rows = assignLanes(commits, { primaryBranch: 'main' });
+        expectSemanticLayout(rows);
+
+        const filteredCommits = sparseFilter(commits, 97);
+        const firstPageRows = assignLanes(filteredCommits.slice(0, 80), { primaryBranch: 'main' });
+        const lockedLanes = new Map(firstPageRows.map((row) => [row.commit.hash, row.laneData.lane]));
+        const expandedRows = assignLanes(filteredCommits.slice(0, 500), { primaryBranch: 'main', lockedLanes });
+
+        for (const firstPageRow of firstPageRows) {
+            const expandedRow = expandedRows.find((row) => row.commit.hash === firstPageRow.commit.hash);
+            if (expandedRow?.laneData.lane !== firstPageRow.laneData.lane) {
+                throw new Error(`Expected locked lane for ${firstPageRow.commit.hash}: ${firstPageRow.laneData.lane}, received ${expandedRow?.laneData.lane}.`);
+            }
+        }
+        expectSemanticLayout(firstPageRows);
+        expectSemanticLayout(expandedRows);
+    });
 });
+
+function expectSemanticLayout(rows: readonly GraphRow[]): void {
+    expect(findNonVisibleLineTargetIssues(rows)).toEqual([]);
+    expect(findCommitLanePassThroughIssues(rows)).toEqual([]);
+    expect(findAdjacentDisconnectedSameLaneIssues(rows)).toEqual([]);
+    expect(findFloatingNodeIssues(rows)).toEqual([]);
+    expect(findLaneContinuityIssues(rows)).toEqual([]);
+}
+
+function generatedDagCommits(seed: number, count: number): readonly GraphCommit[] {
+    const random = seededRandom(seed);
+    const oldestFirst: GraphCommit[] = [];
+    for (let i = 0; i < count; i++) {
+        const parents: string[] = [];
+        if (i > 0) {
+            const span = Math.min(i, 18);
+            parents.push(hashFor(seed, i - 1 - Math.floor(random() * span)));
+            if (i > 8 && random() < 0.34) {
+                parents.push(hashFor(seed, Math.floor(random() * i)));
+            }
+            if (i > 32 && random() < 0.12) {
+                parents.push(hashFor(seed, Math.floor(random() * i)));
+            }
+        }
+        const hash = hashFor(seed, i);
+        const refs = i === count - 1 ? ['HEAD -> main'] : [];
+        oldestFirst.push(commit(hash, Array.from(new Set(parents)), refs));
+    }
+    return oldestFirst.reverse();
+}
+
+function sparseFilter(commits: readonly GraphCommit[], seed: number): readonly GraphCommit[] {
+    return commits.filter((_, index) => index < 8 || index % 7 === seed % 7 || index % 19 === seed % 11);
+}
+
+function hashFor(seed: number, index: number): string {
+    return `s${seed}-c${index}`;
+}
+
+function seededRandom(seed: number): () => number {
+    let value = seed >>> 0;
+    return () => {
+        value = (value * 1664525 + 1013904223) >>> 0;
+        return value / 0x100000000;
+    };
+}

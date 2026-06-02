@@ -24,7 +24,7 @@ export async function queryGraphLog(
 ): Promise<GitGraphCommit[]> {
     const search = filters.search?.trim();
     const scanLimit = search ? Math.max(maxCount, Math.min(maxCount * 20, 5000)) : maxCount;
-    const args = ['log', `--format=${LOG_FORMAT}`, `--max-count=${scanLimit}`, '--topo-order'];
+    const args = ['log', '--parents', `--format=${LOG_FORMAT}`, `--max-count=${scanLimit}`, '--topo-order'];
 
     if (filters.dateFrom) { args.push(`--since=${filters.dateFrom}T00:00:00`); }
     if (filters.dateTo)   { args.push(`--until=${filters.dateTo}T23:59:59`); }

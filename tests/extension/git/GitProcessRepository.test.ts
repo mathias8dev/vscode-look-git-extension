@@ -135,6 +135,23 @@ describe('GitProcessRepository', () => {
         expect(graph.map((commit) => commit.message)).toEqual(['feat(graph): base']);
     });
 
+    it('getGraphLog uses rewritten parents for path-filtered histories', async () => {
+        const r = repo();
+        const a1 = r.commitFile('a.txt', 'a1\n', 'feat(graph): add first selected file change');
+        r.commitFile('b.txt', 'b1\n', 'feat(graph): add first unrelated file change');
+        const a2 = r.commitFile('a.txt', 'a2\n', 'feat(graph): add second selected file change');
+        r.commitFile('b.txt', 'b2\n', 'feat(graph): add second unrelated file change');
+        const a3 = r.commitFile('a.txt', 'a3\n', 'feat(graph): add third selected file change');
+
+        const git = new GitProcessRepository(r.cwd);
+        const graph = await git.getGraphLog(10, undefined, 'a.txt');
+
+        expect(graph.map((commit) => commit.hash)).toEqual([a3, a2, a1]);
+        expect(expectItem(graph, 0).parentHashes).toEqual([a2]);
+        expect(expectItem(graph, 1).parentHashes).toEqual([a1]);
+        expect(expectItem(graph, 2).parentHashes).toEqual([]);
+    });
+
     // ── Worktrees ─────────────────────────────────────────────────────────
 
     it('listWorktrees returns main worktree with isMain:true', async () => {

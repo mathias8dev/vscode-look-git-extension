@@ -14,6 +14,26 @@ export interface LaneContinuityIssue {
     readonly targetHash?: string;
 }
 
+export interface NonVisibleLineTargetIssue {
+    readonly rowIndex: number;
+    readonly hash: string;
+    readonly targetHash: string;
+}
+
+export interface CommitLanePassThroughIssue {
+    readonly rowIndex: number;
+    readonly hash: string;
+    readonly lane: number;
+    readonly targetHash?: string;
+}
+
+export interface AdjacentDisconnectedSameLaneIssue {
+    readonly rowIndex: number;
+    readonly hash: string;
+    readonly nextHash: string;
+    readonly lane: number;
+}
+
 export function findFloatingNodeIssues(rows: readonly GraphRow[]): readonly FloatingNodeIssue[] {
     const rowsByHash = new Map(rows.map((row) => [row.commit.hash, row]));
     const hashesWithVisibleChildren = new Set<string>();
@@ -93,6 +113,59 @@ export function findLaneContinuityIssues(rows: readonly GraphRow[]): readonly La
     });
 
     return issues;
+}
+
+export function findNonVisibleLineTargetIssues(rows: readonly GraphRow[]): readonly NonVisibleLineTargetIssue[] {
+    const visibleHashes = new Set(rows.map((row) => row.commit.hash));
+    const issues: NonVisibleLineTargetIssue[] = [];
+    rows.forEach((row, rowIndex) => {
+        for (const line of row.laneData.lines) {
+            if (!line.targetHash || visibleHashes.has(line.targetHash)) { continue; }
+            issues.push({ rowIndex, hash: row.commit.hash, targetHash: line.targetHash });
+        }
+    });
+    return issues;
+}
+
+export function findCommitLanePassThroughIssues(rows: readonly GraphRow[]): readonly CommitLanePassThroughIssue[] {
+    const issues: CommitLanePassThroughIssue[] = [];
+    rows.forEach((row, rowIndex) => {
+        const lane = row.laneData.lane;
+        for (const line of row.laneData.lines) {
+            if (line.startY !== 'top' || line.endY !== 'bottom' || line.fromLane !== lane || line.toLane !== lane) { continue; }
+            issues.push({ rowIndex, hash: row.commit.hash, lane, targetHash: line.targetHash });
+        }
+    });
+    return issues;
+}
+
+export function findAdjacentDisconnectedSameLaneIssues(rows: readonly GraphRow[]): readonly AdjacentDisconnectedSameLaneIssue[] {
+    const issues: AdjacentDisconnectedSameLaneIssue[] = [];
+    for (let rowIndex = 0; rowIndex < rows.length - 1; rowIndex++) {
+        const row = rows[rowIndex]!;
+        const nextRow = rows[rowIndex + 1]!;
+        const lane = row.laneData.lane;
+        if (lane !== nextRow.laneData.lane) { continue; }
+        if (hasBottomConnectionToNext(row, nextRow.commit.hash, lane) && hasTopConnectionFromPrevious(nextRow, lane)) { continue; }
+        issues.push({ rowIndex, hash: row.commit.hash, nextHash: nextRow.commit.hash, lane });
+    }
+    return issues;
+}
+
+function hasBottomConnectionToNext(row: GraphRow, nextHash: string, lane: number): boolean {
+    return row.laneData.lines.some((line) => line.startY === 'center'
+        && line.endY === 'bottom'
+        && line.fromLane === lane
+        && line.toLane === lane
+        && line.targetHash === nextHash);
+}
+
+function hasTopConnectionFromPrevious(row: GraphRow, lane: number): boolean {
+    return row.laneData.lines.some((line) => line.startY === 'top'
+        && line.endY === 'center'
+        && line.fromLane === lane
+        && line.toLane === lane
+        && line.targetHash === row.commit.hash);
 }
 
 function touchesIncomingCenter(line: LineDef, lane: number): boolean {

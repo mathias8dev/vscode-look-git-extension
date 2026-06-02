@@ -36,6 +36,8 @@ const scenarios = new Map<string, ScenarioSetup>([
     ['basics', setupBasics],
     ['merge-conflicts', setupMergeConflicts],
     ['merge-conflics', setupMergeConflicts],
+    ['graph-heavy', setupGraphHeavy],
+    ['heavy-graph', setupGraphHeavy],
     ['rebase-conflicts', setupRebaseConflicts],
     ['remote', setupRemote],
     ['remotes', setupRemote],
@@ -114,6 +116,7 @@ function printHelp(): void {
         '  ./lookGit setup basics',
         '  ./lookGit setup merge-conflicts',
         '  ./lookGit setup merge-conflics',
+        '  ./lookGit setup graph-heavy',
         '  ./lookGit setup remote',
         '  ./lookGit setup rebase-conflicts --output /tmp/look-git-fixtures',
         '  ./lookGit setup worktrees',
@@ -147,12 +150,13 @@ function printSummary(name: string, target: string): void {
 }
 
 function uniqueScenarios(): readonly string[] {
-    return ['basics', 'merge-conflicts', 'rebase-conflicts', 'remote', 'submodules', 'worktrees'];
+    return ['basics', 'graph-heavy', 'merge-conflicts', 'rebase-conflicts', 'remote', 'submodules', 'worktrees'];
 }
 
 function canonicalScenarioName(name: string): string {
     if (name === 'worktree') { return 'worktrees'; }
     if (name === 'remotes') { return 'remote'; }
+    if (name === 'heavy-graph') { return 'graph-heavy'; }
     return name === 'merge-conflics' ? 'merge-conflicts' : name;
 }
 
@@ -305,6 +309,69 @@ function setupBasics(target: string): void {
     write(target, 'notes/local.md', 'Untracked local note.\n');
     write(target, 'stash/wip.txt', 'stashed idea\n');
     git(target, ['stash', 'push', '-u', '-m', 'wip(core): stash fixture idea', '--', 'stash/wip.txt']);
+}
+
+function setupGraphHeavy(target: string): void {
+    initRepo(target);
+    write(target, 'README.md', '# Graph heavy fixture\n\nLarge merge-heavy history for graph renderer validation.\n');
+    commit(target, 'docs(graph): add heavy graph fixture overview');
+    write(target, 'src/graph/shared-filter.ts', 'export const selectedRevision = 0;\n');
+    commit(target, 'feat(graph): seed selected path history');
+
+    const mergeQueue: string[] = [];
+    let branchIndex = 0;
+    let batchIndex = 0;
+    const mainScopes = ['graph', 'core', 'changes', 'webview', 'protocol'] as const;
+
+    for (let i = 1; i <= 220; i++) {
+        const scope = mainScopes[i % mainScopes.length];
+        write(target, `src/main/segment-${String(i).padStart(3, '0')}.ts`, `export const mainSegment${i} = ${i};\n`);
+        if (i % 11 === 0) {
+            write(target, 'src/graph/shared-filter.ts', `export const selectedRevision = ${i};\n`);
+        }
+        commit(target, `feat(${scope}): add main graph segment ${i}`, { author: nextAuthor() });
+
+        if (i % 3 !== 0) { continue; }
+
+        const branchName = `feature/graph-heavy-${String(branchIndex).padStart(2, '0')}`;
+        const baseOffset = Math.min(i - 1, branchIndex % 23);
+        const base = git(target, ['rev-parse', `HEAD~${baseOffset}`]).trim();
+        git(target, ['checkout', '-q', '-b', branchName, base]);
+        for (let j = 1; j <= 4; j++) {
+            write(
+                target,
+                `src/topics/topic-${String(branchIndex).padStart(2, '0')}-${j}.ts`,
+                `export const topic${branchIndex}Step${j} = "${branchName}";\n`,
+            );
+            commit(target, `feat(graph): add heavy topic ${branchIndex} step ${j}`, { author: nextAuthor() });
+        }
+        if (branchIndex % 13 === 0) {
+            write(target, `tests/graph/heavy-topic-${String(branchIndex).padStart(2, '0')}.test.ts`, `export const topic${branchIndex}Covered = true;\n`);
+            commit(target, `test(graph): cover heavy topic ${branchIndex}`, { author: nextAuthor() });
+        }
+
+        git(target, ['checkout', '-q', 'main']);
+        if (branchIndex % 5 !== 4) {
+            mergeQueue.push(branchName);
+        }
+        if (mergeQueue.length >= 4) {
+            git(target, ['merge', '--no-ff', '-m', `chore(graph): merge heavy graph batch ${batchIndex}`, ...mergeQueue], { author: nextAuthor() });
+            if (batchIndex % 3 === 0) {
+                git(target, ['tag', `graph-heavy-batch-${batchIndex}`]);
+            }
+            mergeQueue.length = 0;
+            batchIndex++;
+        }
+        branchIndex++;
+    }
+
+    if (mergeQueue.length > 0) {
+        git(target, ['merge', '--no-ff', '-m', `chore(graph): merge heavy graph batch ${batchIndex}`, ...mergeQueue], { author: nextAuthor() });
+    }
+
+    git(target, ['checkout', '-q', 'main']);
+    write(target, 'docs/graph-heavy-summary.md', '# Graph heavy summary\n');
+    commit(target, 'docs(graph): summarize heavy graph fixture', { author: nextAuthor() });
 }
 
 function setupMergeConflicts(target: string): void {

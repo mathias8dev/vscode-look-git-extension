@@ -11,10 +11,11 @@ import type { ActiveRepositoryAccessor } from '../../../src/extension/repositori
 import type { ChangesExtensionToWebviewMessage } from '../../../src/protocol/changes/messages';
 import { ConflictState } from '../../../src/protocol/changes/types';
 import type { GraphDataResponse, GraphExtensionToWebviewMessage, WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
+import type { GraphRow } from '../../../src/webview/features/graph/layout/assignGraphLanes';
 import { createInitialGraphState, reduceGraphState } from '../../../src/webview/features/graph/graphState';
 import { addLinkedWorktree, createBareGitRepo, createTempGitRepo, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
 import { getFixtureRepoPath, gitFixtureOutput } from '../../helpers/fixtureRepo';
-import { findFloatingNodeIssues, findLaneContinuityIssues } from '../../helpers/graphLayoutAssertions';
+import { findAdjacentDisconnectedSameLaneIssues, findCommitLanePassThroughIssues, findFloatingNodeIssues, findLaneContinuityIssues, findNonVisibleLineTargetIssues } from '../../helpers/graphLayoutAssertions';
 import { runTestCases } from '../../helpers/testRunner';
 
 export function run(): Promise<void> {
@@ -291,12 +292,211 @@ async function runFloatingGraphNodeLayoutE2E(): Promise<void> {
         assert.equal(response.data.commits.some((commit) => commit.refs.includes('refs/stash')), false);
         assert.equal(response.data.commits.some((commit) => commit.message.includes('stash graph fixture')), false);
         const state = reduceGraphState(createInitialGraphState(), { type: 'message', message: response });
-        const issues = findFloatingNodeIssues(state.rows);
-        assert.deepEqual(issues, [], `Expected all visible graph nodes to be connected. Issues: ${JSON.stringify(issues)}`);
-        const continuityIssues = findLaneContinuityIssues(state.rows);
-        assert.deepEqual(continuityIssues, [], `Expected graph lanes to stay continuous. Issues: ${JSON.stringify(continuityIssues)}`);
+        assertGraphLayout(state.rows, 'crossing graph fixture');
     } finally {
         fixture.cleanup();
+    }
+
+    const largeFixture = createTempGitRepo();
+    const largeMessages: GraphExtensionToWebviewMessage[] = [];
+    try {
+        createLargeOctopusGraphFixture(largeFixture);
+        const router = routerFor(largeFixture.cwd, largeMessages);
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'large-floating-layout',
+            repoId: 'large-floating-layout',
+            filters: {},
+            page: { offset: 0, limit: 100 },
+        });
+
+        assertNoGraphError(largeMessages);
+        const response = graphDataResponse(largeMessages, 'large-floating-layout');
+        const state = reduceGraphState(createInitialGraphState(), { type: 'message', message: response });
+        const topicRows = state.rows.filter((row) => row.commit.message.startsWith('feat(graph): add octopus topic'));
+        const baseRow = state.rows.find((row) => row.commit.message === 'feat(graph): add octopus base');
+        assert.ok(Math.max(...topicRows.map((row) => row.laneData.lane)) >= 12, 'Expected the fixture to open many graph lanes.');
+        assert.equal(baseRow?.laneData.lane, 0);
+        assertGraphLayout(state.rows, 'large octopus graph fixture');
+    } finally {
+        largeFixture.cleanup();
+    }
+
+    const filteredFixture = createTempGitRepo();
+    const filteredMessages: GraphExtensionToWebviewMessage[] = [];
+    try {
+        createFilteredHistoryGraphFixture(filteredFixture);
+        const router = routerFor(filteredFixture.cwd, filteredMessages);
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'path-filtered-layout',
+            repoId: 'path-filtered-layout',
+            filters: { path: 'graph/selected.txt' },
+            page: { offset: 0, limit: 80 },
+        });
+
+        assertNoGraphError(filteredMessages);
+        const pathFilteredResponse = graphDataResponse(filteredMessages, 'path-filtered-layout');
+        const pathFilteredState = reduceGraphState(createInitialGraphState(), { type: 'message', message: pathFilteredResponse });
+        assert.ok(pathFilteredState.rows.length >= 8, 'Expected path-filtered graph to include sparse selected-path commits.');
+        assertGraphLayout(pathFilteredState.rows, 'path-filtered sparse graph fixture');
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'search-filtered-layout',
+            repoId: 'search-filtered-layout',
+            filters: { search: 'needle' },
+            page: { offset: 0, limit: 80 },
+        });
+
+        assertNoGraphError(filteredMessages);
+        const searchFilteredResponse = graphDataResponse(filteredMessages, 'search-filtered-layout');
+        const searchFilteredState = reduceGraphState(createInitialGraphState(), { type: 'message', message: searchFilteredResponse });
+        assert.ok(searchFilteredState.rows.some((row) => row.commit.message.includes('needle')), 'Expected search-filtered graph to include matching commits.');
+        assertGraphLayout(searchFilteredState.rows, 'search-filtered non-contiguous graph fixture');
+    } finally {
+        filteredFixture.cleanup();
+    }
+
+    const pagedFixture = createTempGitRepo();
+    const pagedMessages: GraphExtensionToWebviewMessage[] = [];
+    try {
+        createLargeOctopusGraphFixture(pagedFixture);
+        const router = routerFor(pagedFixture.cwd, pagedMessages);
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'paged-layout-first',
+            repoId: 'paged-layout',
+            filters: {},
+            page: { offset: 0, limit: 6 },
+        });
+
+        assertNoGraphError(pagedMessages);
+        const firstResponse = graphDataResponse(pagedMessages, 'paged-layout-first');
+        let state = reduceGraphState(createInitialGraphState(), { type: 'message', message: firstResponse });
+        const lockedLanes = new Map(state.rows.map((row) => [row.commit.hash, row.laneData.lane]));
+        assert.ok(state.hasMore, 'Expected first graph page to have more commits.');
+        assertGraphLayout(state.rows, 'first paged graph fixture');
+
+        state = reduceGraphState(state, { type: 'startLoadMore' });
+        await router.handle({
+            type: 'graph/loadMore',
+            requestId: 'paged-layout-more',
+            repoId: 'paged-layout',
+            filters: {},
+            page: { offset: state.loadedCount, limit: 40 },
+        });
+
+        assertNoGraphError(pagedMessages);
+        const moreResponse = graphDataResponse(pagedMessages, 'paged-layout-more');
+        state = reduceGraphState(state, { type: 'message', message: moreResponse });
+        for (const [hash, lane] of lockedLanes) {
+            const row = state.rows.find((candidate) => candidate.commit.hash === hash);
+            assert.equal(row?.laneData.lane, lane, `Expected loaded-more graph to preserve locked lane for ${hash}.`);
+        }
+        assertGraphLayout(state.rows, 'loaded-more graph fixture with locked lanes');
+    } finally {
+        pagedFixture.cleanup();
+    }
+
+    const pathologicalFixture = createTempGitRepo();
+    const pathologicalMessages: GraphExtensionToWebviewMessage[] = [];
+    try {
+        createPathologicalMergeGraphFixture(pathologicalFixture);
+        const router = routerFor(pathologicalFixture.cwd, pathologicalMessages);
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'pathological-merge-layout',
+            repoId: 'pathological-merge-layout',
+            filters: {},
+            page: { offset: 0, limit: 120 },
+        });
+
+        assertNoGraphError(pathologicalMessages);
+        const response = graphDataResponse(pathologicalMessages, 'pathological-merge-layout');
+        const state = reduceGraphState(createInitialGraphState(), { type: 'message', message: response });
+        assert.ok(Math.max(...state.rows.map((row) => row.laneData.lane)) >= 3, 'Expected pathological merge fixture to open several lanes.');
+        assertGraphLayout(state.rows, 'pathological merge graph fixture');
+    } finally {
+        pathologicalFixture.cleanup();
+    }
+
+    const graphHeavyRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-graph-heavy-e2e-'));
+    try {
+        execFileSync('node', [
+            path.join(process.cwd(), 'scripts', 'look-git.ts'),
+            'setup',
+            'graph-heavy',
+            '--output',
+            graphHeavyRoot,
+        ], { cwd: process.cwd(), encoding: 'utf8' });
+        const repoPath = path.join(graphHeavyRoot, 'graph-heavy');
+
+        const fullMessages: GraphExtensionToWebviewMessage[] = [];
+        const fullRouter = routerFor(repoPath, fullMessages);
+        await fullRouter.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph-heavy-full-layout',
+            repoId: 'graph-heavy-full-layout',
+            filters: {},
+            page: { offset: 0, limit: 700 },
+        });
+
+        assertNoGraphError(fullMessages);
+        const fullResponse = graphDataResponse(fullMessages, 'graph-heavy-full-layout');
+        const fullState = reduceGraphState(createInitialGraphState(), { type: 'message', message: fullResponse });
+        assert.ok(fullState.rows.length >= 500, 'Expected graph-heavy fixture to render a very large history.');
+        assert.ok(Math.max(...fullState.rows.map((row) => row.laneData.lane)) >= 8, 'Expected graph-heavy fixture to open many lanes.');
+        assertGraphLayout(fullState.rows, 'lookGit graph-heavy full fixture');
+
+        const pathMessages: GraphExtensionToWebviewMessage[] = [];
+        const pathRouter = routerFor(repoPath, pathMessages);
+        await pathRouter.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph-heavy-path-layout',
+            repoId: 'graph-heavy-path-layout',
+            filters: { path: 'src/graph/shared-filter.ts' },
+            page: { offset: 0, limit: 120 },
+        });
+
+        assertNoGraphError(pathMessages);
+        const pathResponse = graphDataResponse(pathMessages, 'graph-heavy-path-layout');
+        const pathState = reduceGraphState(createInitialGraphState(), { type: 'message', message: pathResponse });
+        assert.ok(pathState.rows.length >= 20, 'Expected graph-heavy path filter to render a sparse selected-path history.');
+        assertGraphLayout(pathState.rows, 'lookGit graph-heavy path-filter fixture');
+
+        const pagedMessages: GraphExtensionToWebviewMessage[] = [];
+        const pagedRouter = routerFor(repoPath, pagedMessages);
+        await pagedRouter.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph-heavy-paged-first',
+            repoId: 'graph-heavy-paged',
+            filters: {},
+            page: { offset: 0, limit: 80 },
+        });
+        assertNoGraphError(pagedMessages);
+        const firstResponse = graphDataResponse(pagedMessages, 'graph-heavy-paged-first');
+        let pagedState = reduceGraphState(createInitialGraphState(), { type: 'message', message: firstResponse });
+        const lockedLanes = new Map(pagedState.rows.map((row) => [row.commit.hash, row.laneData.lane]));
+
+        pagedState = reduceGraphState(pagedState, { type: 'startLoadMore' });
+        await pagedRouter.handle({
+            type: 'graph/loadMore',
+            requestId: 'graph-heavy-paged-more',
+            repoId: 'graph-heavy-paged',
+            filters: {},
+            page: { offset: pagedState.loadedCount, limit: 420 },
+        });
+        assertNoGraphError(pagedMessages);
+        const moreResponse = graphDataResponse(pagedMessages, 'graph-heavy-paged-more');
+        pagedState = reduceGraphState(pagedState, { type: 'message', message: moreResponse });
+        for (const [hash, lane] of lockedLanes) {
+            const row = pagedState.rows.find((candidate) => candidate.commit.hash === hash);
+            assert.equal(row?.laneData.lane, lane, `Expected graph-heavy loaded-more graph to preserve locked lane for ${hash}.`);
+        }
+        assertGraphLayout(pagedState.rows, 'lookGit graph-heavy paged fixture with locked lanes');
+    } finally {
+        fs.rmSync(graphHeavyRoot, { recursive: true, force: true });
     }
 }
 
@@ -585,6 +785,63 @@ function createFloatingNodeGraphFixture(fixture: TempGitRepo): void {
     fixture.commitFile('graph/main-child.txt', 'main child\n', 'feat(graph): add main child', FIXTURE_AUTHORS[3], '2024-01-03T00:00:00Z');
     fixture.write('graph/stash-wip.txt', 'stash wip\n');
     fixture.git(['stash', 'push', '-u', '-m', 'wip(graph): stash graph fixture', '--', 'graph/stash-wip.txt']);
+}
+
+function createLargeOctopusGraphFixture(fixture: TempGitRepo): void {
+    const base = fixture.commitFile('graph/octopus-base.txt', 'base\n', 'feat(graph): add octopus base', FIXTURE_AUTHORS[0], '2024-01-01T00:00:00Z');
+    for (let i = 0; i < 16; i++) {
+        fixture.git(['checkout', '-q', '-b', `topic/${i}`, base]);
+        const author = FIXTURE_AUTHORS[i % FIXTURE_AUTHORS.length]!;
+        fixture.commitFile(`graph/octopus-topic-${i}.txt`, `topic ${i}\n`, `feat(graph): add octopus topic ${i}`, author, `2024-01-02T00:${String(i).padStart(2, '0')}:00Z`);
+    }
+    fixture.git(['checkout', '-q', 'main']);
+    fixture.git(['merge', '-q', '--no-ff', '-m', 'chore(graph): merge octopus topics', ...Array.from({ length: 16 }, (_, i) => `topic/${i}`)], {
+        env: {
+            GIT_AUTHOR_DATE: '2024-02-01T00:00:00Z',
+            GIT_COMMITTER_DATE: '2024-02-01T00:00:00Z',
+        },
+    });
+}
+
+function createFilteredHistoryGraphFixture(fixture: TempGitRepo): void {
+    fixture.commitFile('graph/selected.txt', 'selected 0\n', 'feat(graph): add selected path root', FIXTURE_AUTHORS[0], '2024-01-01T00:00:00Z');
+    for (let i = 1; i <= 30; i++) {
+        const selected = i % 2 === 0;
+        const message = i === 5 || i === 28
+            ? `feat(graph): add needle search commit ${i}`
+            : `feat(graph): add sparse history commit ${i}`;
+        const filePath = selected ? 'graph/selected.txt' : `graph/unrelated-${i}.txt`;
+        fixture.commitFile(filePath, `${filePath} ${i}\n`, message, FIXTURE_AUTHORS[i % FIXTURE_AUTHORS.length], `2024-01-${String((i % 28) + 1).padStart(2, '0')}T00:00:00Z`);
+    }
+}
+
+function createPathologicalMergeGraphFixture(fixture: TempGitRepo): void {
+    const base = fixture.commitFile('graph/pathological-base.txt', 'base\n', 'feat(graph): add pathological base', FIXTURE_AUTHORS[0], '2024-01-01T00:00:00Z');
+    for (const branch of ['alpha', 'beta', 'gamma', 'delta', 'epsilon']) {
+        fixture.git(['checkout', '-q', '-b', `feature/${branch}`, base]);
+        for (let i = 1; i <= 3; i++) {
+            const authorIndex = i + branch.length;
+            fixture.commitFile(
+                `graph/${branch}-${i}.txt`,
+                `${branch} ${i}\n`,
+                `feat(graph): add ${branch} branch commit ${i}`,
+                FIXTURE_AUTHORS[authorIndex % FIXTURE_AUTHORS.length],
+                `2024-01-${String(authorIndex).padStart(2, '0')}T00:00:00Z`,
+            );
+        }
+    }
+
+    fixture.git(['checkout', '-q', '-b', 'integration/gamma-delta', 'feature/gamma']);
+    fixture.git(['merge', '-q', '--no-ff', '-m', 'chore(graph): merge delta into gamma integration', 'feature/delta']);
+    fixture.commitFile('graph/gamma-delta-followup.txt', 'followup\n', 'feat(graph): add gamma delta followup', FIXTURE_AUTHORS[6], '2024-02-01T00:00:00Z');
+
+    fixture.git(['checkout', '-q', 'main']);
+    fixture.commitFile('graph/main-before-weave.txt', 'main\n', 'feat(graph): add main before weave', FIXTURE_AUTHORS[7], '2024-02-02T00:00:00Z');
+    fixture.git(['merge', '-q', '--no-ff', '-m', 'chore(graph): merge alpha and beta into main', 'feature/alpha', 'feature/beta']);
+    fixture.commitFile('graph/main-between-weaves.txt', 'main\n', 'feat(graph): add main between weaves', FIXTURE_AUTHORS[8], '2024-02-03T00:00:00Z');
+    fixture.git(['merge', '-q', '--no-ff', '-m', 'chore(graph): merge gamma delta integration', 'integration/gamma-delta']);
+    fixture.commitFile('graph/main-before-epsilon.txt', 'main\n', 'feat(graph): add main before epsilon', FIXTURE_AUTHORS[9], '2024-02-04T00:00:00Z');
+    fixture.git(['merge', '-q', '--no-ff', '-m', 'chore(graph): merge epsilon into main', 'feature/epsilon']);
 }
 
 async function runBranchContextActionsE2E(): Promise<void> {
@@ -1029,6 +1286,23 @@ function changesRouterFor(repoPath: string, messages: ChangesExtensionToWebviewM
         requireRepository: () => repo,
     };
     return new ChangesMessageRouter(accessor, (message) => { messages.push(message); }, async () => undefined);
+}
+
+function assertGraphLayout(rows: readonly GraphRow[], label: string): void {
+    const nonVisibleTargetIssues = findNonVisibleLineTargetIssues(rows);
+    assert.deepEqual(nonVisibleTargetIssues, [], `Expected graph lines to target visible commits in ${label}. Issues: ${JSON.stringify(nonVisibleTargetIssues)}`);
+
+    const passThroughIssues = findCommitLanePassThroughIssues(rows);
+    assert.deepEqual(passThroughIssues, [], `Expected graph pass-through lines not to cross commit lanes in ${label}. Issues: ${JSON.stringify(passThroughIssues)}`);
+
+    const adjacentDisconnectedIssues = findAdjacentDisconnectedSameLaneIssues(rows);
+    assert.deepEqual(adjacentDisconnectedIssues, [], `Expected graph rows not to reuse a disconnected lane in ${label}. Issues: ${JSON.stringify(adjacentDisconnectedIssues)}`);
+
+    const floatingIssues = findFloatingNodeIssues(rows);
+    assert.deepEqual(floatingIssues, [], `Expected all visible graph nodes to be connected in ${label}. Issues: ${JSON.stringify(floatingIssues)}`);
+
+    const continuityIssues = findLaneContinuityIssues(rows);
+    assert.deepEqual(continuityIssues, [], `Expected graph lanes to stay continuous in ${label}. Issues: ${JSON.stringify(continuityIssues)}`);
 }
 
 function git(cwd: string, args: readonly string[]): string {
