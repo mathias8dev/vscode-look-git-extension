@@ -120,10 +120,117 @@ describe('Graph branch commands against real git repos', () => {
             remote.cleanup();
         }
     });
+
+    it('checks out remote branches by creating or reusing local tracking branches', async () => {
+        const remote = createBareGitRepo();
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        try {
+            const base = fixture.commitFile('base.txt', 'base\n', 'feat: base');
+            fixture.git(['remote', 'add', 'origin', remote.cwd]);
+            fixture.git(['push', '-u', 'origin', 'main']);
+            const remoteHead = createRemoteOnlyBranch(fixture, 'feature/remote-checkout', base, 'remote-checkout.txt', 'remote checkout\n', 'feat(graph): add remote checkout branch');
+            const router = routerFor(fixture.cwd, messages);
+
+            await router.handle({ type: 'graph/branchCommand', command: 'checkout', branch: 'origin/feature/remote-checkout', isRemote: true });
+            expect(fixture.gitTrim(['branch', '--show-current'])).toBe('feature/remote-checkout');
+            expect(fixture.gitTrim(['rev-parse', 'HEAD'])).toBe(remoteHead);
+            expect(fixture.gitTrim(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'])).toBe('origin/feature/remote-checkout');
+
+            fixture.git(['checkout', '-q', 'main']);
+            await router.handle({ type: 'graph/branchCommand', command: 'checkout', branch: 'origin/feature/remote-checkout', isRemote: true });
+            expect(fixture.gitTrim(['branch', '--show-current'])).toBe('feature/remote-checkout');
+            expect(messages.find((message) => message.type === 'graph/error')).toBeUndefined();
+        } finally {
+            remote.cleanup();
+        }
+    });
+
+    it('creates local branches and worktrees from remote branches', async () => {
+        const remote = createBareGitRepo();
+        try {
+            const base = fixture.commitFile('base.txt', 'base\n', 'feat: base');
+            fixture.git(['remote', 'add', 'origin', remote.cwd]);
+            fixture.git(['push', '-u', 'origin', 'main']);
+            const remoteHead = createRemoteOnlyBranch(fixture, 'feature/remote-source', base, 'remote-source.txt', 'remote source\n', 'feat(graph): add remote branch source');
+            const router = routerFor(fixture.cwd);
+
+            setInputBoxValue('feature/from-remote');
+            await router.handle({ type: 'graph/branchCommand', command: 'newBranchFrom', branch: 'origin/feature/remote-source', isRemote: true });
+            expect(fixture.gitTrim(['branch', '--show-current'])).toBe('feature/from-remote');
+            expect(fixture.gitTrim(['rev-parse', 'feature/from-remote'])).toBe(remoteHead);
+        } finally {
+            remote.cleanup();
+        }
+    });
+
+    it('rebases and merges branches against selected remote branches', async () => {
+        const remote = createBareGitRepo();
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        try {
+            const base = fixture.commitFile('base.txt', 'base\n', 'feat: base');
+            fixture.git(['remote', 'add', 'origin', remote.cwd]);
+            fixture.git(['push', '-u', 'origin', 'main']);
+            const remoteRebaseHead = createRemoteOnlyBranch(fixture, 'feature/remote-rebase', base, 'remote-rebase.txt', 'remote rebase\n', 'feat(graph): add remote rebase branch');
+            const remoteMergeHead = createRemoteOnlyBranch(fixture, 'feature/remote-merge', base, 'remote-merge.txt', 'remote merge\n', 'feat(graph): add remote merge branch');
+            fixture.git(['checkout', '-q', 'main']);
+            const mainHead = fixture.commitFile('main.txt', 'main\n', 'feat(graph): add main branch work');
+            const router = routerFor(fixture.cwd, messages);
+
+            await router.handle({ type: 'graph/branchCommand', command: 'checkoutRebaseOnto', branch: 'origin/feature/remote-rebase', isRemote: true });
+            expect(fixture.gitTrim(['branch', '--show-current'])).toBe('feature/remote-rebase');
+            expect(fixture.gitTrim(['merge-base', 'HEAD', 'main'])).toBe(mainHead);
+            expect(fixture.gitTrim(['show', 'HEAD:remote-rebase.txt'])).toBe('remote rebase');
+            expect(fixture.gitTrim(['rev-parse', 'origin/feature/remote-rebase'])).toBe(remoteRebaseHead);
+
+            fixture.git(['checkout', '-q', 'main']);
+            fixture.git(['checkout', '-q', '-b', 'feature/local-rebase-topic', base]);
+            fixture.commitFile('topic.txt', 'topic\n', 'feat(graph): add local rebase topic');
+            await router.handle({ type: 'graph/branchCommand', command: 'rebaseOnto', branch: 'origin/feature/remote-merge', isRemote: true });
+            expect(fixture.gitTrim(['branch', '--show-current'])).toBe('feature/local-rebase-topic');
+            expect(fixture.gitTrim(['merge-base', 'HEAD', 'origin/feature/remote-merge'])).toBe(remoteMergeHead);
+
+            fixture.git(['checkout', '-q', 'main']);
+            await router.handle({ type: 'graph/branchCommand', command: 'mergeInto', branch: 'origin/feature/remote-merge', isRemote: true });
+            expect(fixture.gitTrim(['show', 'HEAD:remote-merge.txt'])).toBe('remote merge');
+            expect(fixture.gitTrim(['log', '-1', '--format=%P']).split(' ')).toHaveLength(2);
+            expect(messages.find((message) => message.type === 'graph/error')).toBeUndefined();
+        } finally {
+            remote.cleanup();
+        }
+    });
+
+    it('opens compare and working tree diffs against remote branches', async () => {
+        const remote = createBareGitRepo();
+        try {
+            const base = fixture.commitFile('base.txt', 'base\n', 'feat: base');
+            fixture.git(['remote', 'add', 'origin', remote.cwd]);
+            fixture.git(['push', '-u', 'origin', 'main']);
+            createRemoteOnlyBranch(fixture, 'feature/remote-diff', base, 'remote-diff.txt', 'remote diff\n', 'feat(graph): add remote diff branch');
+            fixture.write('base.txt', 'working tree\n');
+            const router = routerFor(fixture.cwd);
+
+            await router.handle({ type: 'graph/branchCommand', command: 'compareWithCurrent', branch: 'origin/feature/remote-diff', isRemote: true });
+            await router.handle({ type: 'graph/branchCommand', command: 'showDiffWithWorkingTree', branch: 'origin/feature/remote-diff', isRemote: true });
+
+            expect(workspace.documents[0]?.content).toContain('remote-diff.txt');
+            expect(workspace.documents[1]?.content).toContain('working tree');
+        } finally {
+            remote.cleanup();
+        }
+    });
 });
 
-function routerFor(cwd: string): GraphMessageRouter {
+function createRemoteOnlyBranch(fixture: TempGitRepo, branch: string, startPoint: string, filePath: string, content: string, message: string): string {
+    fixture.git(['checkout', '-q', '-b', branch, startPoint]);
+    const head = fixture.commitFile(filePath, content, message);
+    fixture.git(['push', '-q', 'origin', `${branch}:${branch}`]);
+    fixture.git(['checkout', '-q', 'main']);
+    fixture.git(['branch', '-D', branch]);
+    fixture.git(['fetch', '-q', 'origin']);
+    return head;
+}
+
+function routerFor(cwd: string, messages: GraphExtensionToWebviewMessage[] = []): GraphMessageRouter {
     const repo = new GitProcessRepository(cwd);
-    const messages: GraphExtensionToWebviewMessage[] = [];
     return new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
 }

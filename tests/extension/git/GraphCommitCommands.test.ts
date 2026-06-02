@@ -3,7 +3,7 @@ import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepos
 import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessageRouter';
 import type { GraphExtensionToWebviewMessage } from '../../../src/protocol/graph/messages';
 import { makeRepositoryAccessor } from '../../helpers/repositoryMock';
-import { createTempGitRepo, type TempGitRepo } from '../../helpers/gitRepo';
+import { createBareGitRepo, createTempGitRepo, type TempGitRepo } from '../../helpers/gitRepo';
 import { resetMockVscode, setInputBoxValue, setWarningChoice } from '../../mocks/vscode';
 
 describe('Graph commit commands against real git repos', () => {
@@ -46,6 +46,36 @@ describe('Graph commit commands against real git repos', () => {
         expect(fixture.gitTrim(['log', '--format=%s', '-2']).split('\n')).toEqual(['feat: newer', 'feat: older']);
         expect(fixture.gitTrim(['show', 'HEAD:newer.txt'])).toBe('newer');
         expect(fixture.gitTrim(['show', 'HEAD~1:older.txt'])).toBe('older');
+    });
+
+    it('cherry-picks commits that are only reachable from a remote branch', async () => {
+        const remote = createBareGitRepo();
+        try {
+            const base = fixture.commitFile('base.txt', 'base\n', 'feat: base');
+            fixture.git(['remote', 'add', 'origin', remote.cwd]);
+            fixture.git(['push', '-u', 'origin', 'main']);
+            fixture.git(['checkout', '-q', '-b', 'feature/remote-cherry', base]);
+            const older = fixture.commitFile('remote-older.txt', 'older\n', 'feat(graph): add older remote cherry commit');
+            const newer = fixture.commitFile('remote-newer.txt', 'newer\n', 'feat(graph): add newer remote cherry commit');
+            fixture.git(['push', '-q', 'origin', 'feature/remote-cherry:feature/remote-cherry']);
+            fixture.git(['checkout', '-q', 'main']);
+            fixture.git(['branch', '-D', 'feature/remote-cherry']);
+            fixture.git(['fetch', '-q', 'origin']);
+            fixture.git(['reset', '--hard', base]);
+            const router = routerFor(fixture.cwd);
+
+            await router.handle({ type: 'graph/commitCommand', command: 'cherryPick', hash: newer, hashes: [newer, older] });
+
+            expect(fixture.gitTrim(['log', '--format=%s', '-2']).split('\n')).toEqual([
+                'feat(graph): add newer remote cherry commit',
+                'feat(graph): add older remote cherry commit',
+            ]);
+            expect(fixture.gitTrim(['show', 'HEAD:remote-newer.txt'])).toBe('newer');
+            expect(fixture.gitTrim(['show', 'HEAD~1:remote-older.txt'])).toBe('older');
+            expect(fixture.gitTrim(['branch', '--list', 'feature/remote-cherry'])).toBe('');
+        } finally {
+            remote.cleanup();
+        }
     });
 
     it('edits an older commit message and replays descendants', async () => {

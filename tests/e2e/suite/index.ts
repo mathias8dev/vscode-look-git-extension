@@ -227,6 +227,12 @@ export function run(): Promise<void> {
             },
         },
         {
+            name: 'runs remote branch and commit context actions end to end',
+            run: async () => {
+                await runRemoteContextActionsE2E();
+            },
+        },
+        {
             name: 'runs history-editing commit context actions end to end',
             run: async () => {
                 await runResetActionE2E();
@@ -688,6 +694,81 @@ async function runBranchPushAndRemoteDeleteE2E(): Promise<void> {
         fixture.cleanup();
         remote.cleanup();
     }
+}
+
+async function runRemoteContextActionsE2E(): Promise<void> {
+    const fixture = createTempGitRepo();
+    const remote = createBareGitRepo();
+    const messages: GraphExtensionToWebviewMessage[] = [];
+    try {
+        const base = fixture.commitFile('base.txt', 'base\n', 'feat: base');
+        fixture.git(['remote', 'add', 'origin', remote.cwd]);
+        fixture.git(['push', '-u', 'origin', 'main']);
+        const checkoutHead = createRemoteOnlyBranchE2E(fixture, 'feature/e2e-checkout', base, 'remote-checkout.txt', 'remote checkout\n', 'feat(graph): add remote checkout branch');
+        createRemoteOnlyBranchE2E(fixture, 'feature/e2e-rebase', base, 'remote-rebase.txt', 'remote rebase\n', 'feat(graph): add remote rebase branch');
+        const mergeHead = createRemoteOnlyBranchE2E(fixture, 'feature/e2e-merge', base, 'remote-merge.txt', 'remote merge\n', 'feat(graph): add remote merge branch');
+        fixture.git(['checkout', '-q', '-b', 'feature/e2e-cherry', base]);
+        const older = fixture.commitFile('remote-older.txt', 'older\n', 'feat(graph): add older remote cherry commit');
+        const newer = fixture.commitFile('remote-newer.txt', 'newer\n', 'feat(graph): add newer remote cherry commit');
+        fixture.git(['push', '-q', 'origin', 'feature/e2e-cherry:feature/e2e-cherry']);
+        fixture.git(['checkout', '-q', 'main']);
+        fixture.git(['branch', '-D', 'feature/e2e-cherry']);
+        fixture.git(['fetch', '-q', 'origin']);
+        const mainHead = fixture.commitFile('main.txt', 'main\n', 'feat(graph): add main branch work');
+        const router = routerFor(fixture.cwd, messages);
+
+        await router.handle({ type: 'graph/branchCommand', command: 'checkout', branch: 'origin/feature/e2e-checkout', isRemote: true });
+        assert.equal(git(fixture.cwd, ['branch', '--show-current']), 'feature/e2e-checkout');
+        assert.equal(git(fixture.cwd, ['rev-parse', 'HEAD']), checkoutHead);
+        assert.equal(git(fixture.cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']), 'origin/feature/e2e-checkout');
+        fixture.git(['checkout', '-q', 'main']);
+        await router.handle({ type: 'graph/branchCommand', command: 'checkout', branch: 'origin/feature/e2e-checkout', isRemote: true });
+        assert.equal(git(fixture.cwd, ['branch', '--show-current']), 'feature/e2e-checkout');
+
+        fixture.git(['checkout', '-q', 'main']);
+        await withPatchedVscode({ inputBoxValues: ['feature/e2e-from-remote'] }, async () => {
+            await router.handle({ type: 'graph/branchCommand', command: 'newBranchFrom', branch: 'origin/feature/e2e-checkout', isRemote: true });
+        });
+        assert.equal(git(fixture.cwd, ['rev-parse', 'feature/e2e-from-remote']), checkoutHead);
+
+        fixture.git(['checkout', '-q', 'main']);
+        await router.handle({ type: 'graph/branchCommand', command: 'checkoutRebaseOnto', branch: 'origin/feature/e2e-rebase', isRemote: true });
+        assert.equal(git(fixture.cwd, ['branch', '--show-current']), 'feature/e2e-rebase');
+        assert.equal(git(fixture.cwd, ['merge-base', 'HEAD', 'main']), mainHead);
+
+        fixture.git(['checkout', '-q', '-b', 'feature/e2e-local-topic', base]);
+        fixture.commitFile('topic.txt', 'topic\n', 'feat(graph): add local rebase topic');
+        await router.handle({ type: 'graph/branchCommand', command: 'rebaseOnto', branch: 'origin/feature/e2e-merge', isRemote: true });
+        assert.equal(git(fixture.cwd, ['merge-base', 'HEAD', 'origin/feature/e2e-merge']), mergeHead);
+
+        fixture.git(['checkout', '-q', 'main']);
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        await router.handle({ type: 'graph/branchCommand', command: 'compareWithCurrent', branch: 'origin/feature/e2e-merge', isRemote: true });
+        await waitForActiveEditorText('remote-merge.txt');
+
+        await router.handle({ type: 'graph/branchCommand', command: 'mergeInto', branch: 'origin/feature/e2e-merge', isRemote: true });
+        assert.equal(git(fixture.cwd, ['show', 'HEAD:remote-merge.txt']), 'remote merge');
+        assert.equal(git(fixture.cwd, ['log', '-1', '--format=%P']).split(' ').length, 2);
+
+        await router.handle({ type: 'graph/commitCommand', command: 'cherryPick', hash: newer, hashes: [newer, older] });
+        assert.equal(git(fixture.cwd, ['show', 'HEAD:remote-newer.txt']), 'newer');
+        assert.equal(git(fixture.cwd, ['show', 'HEAD~1:remote-older.txt']), 'older');
+        assertNoGraphError(messages);
+    } finally {
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        fixture.cleanup();
+        remote.cleanup();
+    }
+}
+
+function createRemoteOnlyBranchE2E(fixture: TempGitRepo, branch: string, startPoint: string, filePath: string, content: string, message: string): string {
+    fixture.git(['checkout', '-q', '-b', branch, startPoint]);
+    const head = fixture.commitFile(filePath, content, message);
+    fixture.git(['push', '-q', 'origin', `${branch}:${branch}`]);
+    fixture.git(['checkout', '-q', 'main']);
+    fixture.git(['branch', '-D', branch]);
+    fixture.git(['fetch', '-q', 'origin']);
+    return head;
 }
 
 async function runResetActionE2E(): Promise<void> {

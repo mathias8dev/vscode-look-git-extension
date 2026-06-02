@@ -857,7 +857,21 @@ async function checkoutBranch(repo: GitRepository, branch: string, isRemote: boo
         await repo.checkout(branch);
         return;
     }
+    const trackingBranch = await localBranchTrackingRemote(repo, branch);
+    if (trackingBranch) {
+        await repo.checkout(trackingBranch);
+        return;
+    }
     await repo.exec(['checkout', '--track', branch]);
+}
+
+async function localBranchTrackingRemote(repo: GitRepository, remoteBranch: string): Promise<string | undefined> {
+    const output = await repo.execRaw(['for-each-ref', '--format=%(refname:short)%00%(upstream:short)', 'refs/heads']);
+    for (const line of output.split('\n')) {
+        const [branch, upstream] = line.split('\0');
+        if (branch && upstream === remoteBranch) { return branch; }
+    }
+    return undefined;
 }
 
 async function pushBranch(repo: GitRepository, branch: string): Promise<void> {

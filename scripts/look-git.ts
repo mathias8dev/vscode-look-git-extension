@@ -37,6 +37,8 @@ const scenarios = new Map<string, ScenarioSetup>([
     ['merge-conflicts', setupMergeConflicts],
     ['merge-conflics', setupMergeConflicts],
     ['rebase-conflicts', setupRebaseConflicts],
+    ['remote', setupRemote],
+    ['remotes', setupRemote],
     ['submodules', setupSubmodules],
     ['worktree', setupWorktrees],
     ['worktrees', setupWorktrees],
@@ -112,6 +114,7 @@ function printHelp(): void {
         '  ./lookGit setup basics',
         '  ./lookGit setup merge-conflicts',
         '  ./lookGit setup merge-conflics',
+        '  ./lookGit setup remote',
         '  ./lookGit setup rebase-conflicts --output /tmp/look-git-fixtures',
         '  ./lookGit setup worktrees',
         '  ./lookGit setup all',
@@ -124,10 +127,18 @@ function printScenarios(): void {
 
 function printSummary(name: string, target: string): void {
     const branchCount = git(target, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']).split('\n').filter(Boolean).length;
+    const remoteCount = git(target, ['remote']).split('\n').filter(Boolean).length;
+    const remoteBranchCount = git(target, ['for-each-ref', '--format=%(refname:short)', 'refs/remotes']).split('\n').filter(Boolean).length;
     const commitCount = git(target, ['rev-list', '--all', '--count']).trim();
     const worktreeCount = git(target, ['worktree', 'list', '--porcelain']).split('\n').filter((line) => line.startsWith('worktree ')).length;
     console.log(`Created ${name}: ${target}`);
     console.log(`  branches: ${branchCount}`);
+    if (remoteCount > 0) {
+        console.log(`  remotes: ${remoteCount}`);
+    }
+    if (remoteBranchCount > 0) {
+        console.log(`  remote branches: ${remoteBranchCount}`);
+    }
     console.log(`  commits: ${commitCount}`);
     if (worktreeCount > 1) {
         console.log(`  worktrees: ${worktreeCount}`);
@@ -136,11 +147,12 @@ function printSummary(name: string, target: string): void {
 }
 
 function uniqueScenarios(): readonly string[] {
-    return ['basics', 'merge-conflicts', 'rebase-conflicts', 'submodules', 'worktrees'];
+    return ['basics', 'merge-conflicts', 'rebase-conflicts', 'remote', 'submodules', 'worktrees'];
 }
 
 function canonicalScenarioName(name: string): string {
     if (name === 'worktree') { return 'worktrees'; }
+    if (name === 'remotes') { return 'remote'; }
     return name === 'merge-conflics' ? 'merge-conflicts' : name;
 }
 
@@ -334,6 +346,195 @@ function setupRebaseConflicts(target: string): void {
     expectGitFailure(target, ['rebase', 'main']);
 }
 
+function setupRemote(target: string, outputRoot: string): void {
+    const remoteRoot = path.join(outputRoot, '.remotes');
+    const seed = path.join(outputRoot, '.remote-seed');
+    fs.rmSync(remoteRoot, { recursive: true, force: true });
+    fs.rmSync(seed, { recursive: true, force: true });
+    fs.mkdirSync(remoteRoot, { recursive: true });
+
+    const origin = path.join(remoteRoot, 'origin.git');
+    const upstream = path.join(remoteRoot, 'upstream.git');
+    initBareRepo(origin);
+    initBareRepo(upstream);
+
+    initRepo(seed);
+    git(seed, ['remote', 'add', 'origin', origin]);
+    git(seed, ['remote', 'add', 'upstream', upstream]);
+    write(seed, 'README.md', '# Remote fixture\n\nBranches, upstreams, divergence, and remote-only refs.\n');
+    commit(seed, 'docs(core): add remote fixture overview');
+
+    const mainCommits: readonly { readonly file: string; readonly content: string; readonly message: string }[] = [
+        { file: 'src/core/remotes.ts', content: 'export const remotes = ["origin", "upstream"];\n', message: 'feat(core): add remote registry model' },
+        { file: 'src/graph/remoteRefs.ts', content: 'export const remoteRefs = true;\n', message: 'feat(graph): add remote ref metadata' },
+        { file: 'src/changes/upstreamStatus.ts', content: 'export const upstreamStatus = "synced";\n', message: 'feat(changes): add upstream status summary' },
+        { file: 'tests/remote/status.test.ts', content: 'export const remoteStatusCovered = true;\n', message: 'test(graph): cover remote status fixtures' },
+        { file: 'docs/remotes.md', content: '# Remotes\n\nFixture branches exercise remotes.\n', message: 'docs(graph): document remote branch display' },
+        { file: '.github/workflows/remotes.yml', content: 'name: remotes\n', message: 'chore(ci): add remote fixture workflow' },
+    ];
+    for (const change of mainCommits) {
+        write(seed, change.file, change.content);
+        commit(seed, change.message, { author: nextAuthor() });
+    }
+    const sharedBase = git(seed, ['rev-parse', 'HEAD']).trim();
+
+    const originBranches: readonly {
+        readonly name: string;
+        readonly commits: readonly { readonly file: string; readonly content: string; readonly message: string }[];
+    }[] = [
+        {
+            name: 'feature/shared-tracking',
+            commits: [
+                { file: 'src/graph/sharedTracking.ts', content: 'export const sharedTracking = "remote";\n', message: 'feat(graph): add shared tracking branch model' },
+                { file: 'tests/graph/shared-tracking.test.ts', content: 'export const sharedTrackingCovered = true;\n', message: 'test(graph): cover shared tracking branch' },
+            ],
+        },
+        {
+            name: 'feature/diverged',
+            commits: [
+                { file: 'src/graph/diverged.ts', content: 'export const diverged = "base";\n', message: 'feat(graph): add diverged branch baseline' },
+                { file: 'docs/diverged.md', content: '# Diverged branch\n', message: 'docs(graph): explain diverged branch state' },
+            ],
+        },
+        {
+            name: 'feat/local-ahead',
+            commits: [
+                { file: 'src/changes/ahead.ts', content: 'export const ahead = "remote-base";\n', message: 'feat(changes): add ahead branch baseline' },
+                { file: 'tests/changes/ahead.test.ts', content: 'export const aheadCovered = true;\n', message: 'test(changes): cover ahead branch baseline' },
+            ],
+        },
+        {
+            name: 'feature/remote-only-dashboard',
+            commits: [
+                { file: 'src/webview/remoteDashboard.ts', content: 'export const dashboard = "remote-only";\n', message: 'feat(webview): add remote dashboard shell' },
+                { file: 'src/webview/remoteFilters.ts', content: 'export const filters = ["author", "path"];\n', message: 'feat(webview): add remote dashboard filters' },
+                { file: 'docs/remote-dashboard.md', content: '# Remote dashboard\n', message: 'docs(webview): describe remote dashboard' },
+            ],
+        },
+        {
+            name: 'docs/remote-only-guide',
+            commits: [
+                { file: 'docs/remote-guide.md', content: '# Remote guide\n', message: 'docs(core): add remote-only guide' },
+                { file: 'docs/remote-faq.md', content: '# Remote FAQ\n', message: 'docs(core): add remote branch faq' },
+            ],
+        },
+        {
+            name: 'chore/remote-ci-matrix',
+            commits: [
+                { file: '.github/workflows/remote-linux.yml', content: 'name: remote-linux\n', message: 'chore(ci): add remote linux job' },
+                { file: '.github/workflows/remote-windows.yml', content: 'name: remote-windows\n', message: 'chore(ci): add remote windows job' },
+            ],
+        },
+        {
+            name: 'release/2.0',
+            commits: [
+                { file: 'CHANGELOG.md', content: '# Changelog\n\n## 2.0.0\n\nRemote fixture release.\n', message: 'docs(core): add remote release notes' },
+                { file: 'VERSION', content: '2.0.0-remote\n', message: 'chore(core): bump remote fixture version' },
+            ],
+        },
+        {
+            name: 'hotfix/security-patch',
+            commits: [
+                { file: 'src/core/securityPatch.ts', content: 'export const patched = true;\n', message: 'fix(core): add remote security patch' },
+            ],
+        },
+        {
+            name: 'experiment/remote-graph-density',
+            commits: [
+                { file: 'experiments/remote-density.md', content: '# Remote density\n', message: 'feat(graph): prototype remote graph density' },
+                { file: 'experiments/remote-lanes.md', content: '# Remote lanes\n', message: 'docs(graph): record remote lane findings' },
+            ],
+        },
+        {
+            name: 'refactor/protocol-remote-slices',
+            commits: [
+                { file: 'src/protocol/remoteGraph.ts', content: 'export const remoteGraph = "graph/dataRequest";\n', message: 'refactor(protocol): add remote graph slice fixture' },
+                { file: 'src/protocol/remoteChanges.ts', content: 'export const remoteChanges = "changes/statusRequest";\n', message: 'refactor(protocol): add remote changes slice fixture' },
+            ],
+        },
+    ];
+
+    for (const branch of originBranches) {
+        createRemoteFixtureBranch(seed, branch.name, sharedBase, branch.commits);
+        git(seed, ['push', '-q', 'origin', `${branch.name}:${branch.name}`]);
+    }
+
+    git(seed, ['checkout', '-q', 'main']);
+    write(seed, 'src/graph/mainRemote.ts', 'export const mainRemote = true;\n');
+    commit(seed, 'feat(graph): add main remote graph surface', { author: nextAuthor() });
+    git(seed, ['merge', '--no-ff', '-m', 'chore(graph): merge feature/shared-tracking', 'feature/shared-tracking'], { author: nextAuthor() });
+    git(seed, ['merge', '--no-ff', '-m', 'chore(ci): merge chore/remote-ci-matrix', 'chore/remote-ci-matrix'], { author: nextAuthor() });
+    write(seed, 'docs/remote-release-checklist.md', '# Remote release checklist\n');
+    commit(seed, 'docs(core): add remote release checklist', { author: nextAuthor() });
+    git(seed, ['tag', 'v2.0.0-remote']);
+    git(seed, ['push', '-q', 'origin', 'main']);
+    git(seed, ['push', '-q', 'origin', '--tags']);
+    git(seed, ['push', '-q', 'upstream', 'main']);
+
+    createRemoteFixtureBranch(seed, 'feature/upstream-review', sharedBase, [
+        { file: 'src/graph/upstreamReview.ts', content: 'export const upstreamReview = true;\n', message: 'feat(graph): add upstream review branch' },
+        { file: 'tests/graph/upstream-review.test.ts', content: 'export const upstreamReviewCovered = true;\n', message: 'test(graph): cover upstream review branch' },
+    ]);
+    git(seed, ['push', '-q', 'upstream', 'feature/upstream-review:feature/upstream-review']);
+    createRemoteFixtureBranch(seed, 'release/upstream-sync', sharedBase, [
+        { file: 'docs/upstream-sync.md', content: '# Upstream sync\n', message: 'docs(core): add upstream sync notes' },
+        { file: 'src/core/upstreamSync.ts', content: 'export const upstreamSync = true;\n', message: 'feat(core): add upstream sync marker' },
+    ]);
+    git(seed, ['push', '-q', 'upstream', 'release/upstream-sync:release/upstream-sync']);
+
+    fs.rmSync(target, { recursive: true, force: true });
+    git(outputRoot, ['clone', '-q', origin, target]);
+    configureRepo(target);
+    git(target, ['remote', 'add', 'upstream', upstream]);
+    git(target, ['fetch', '-q', '--all']);
+
+    checkoutTrackingBranch(target, 'origin/feature/shared-tracking');
+    checkoutTrackingBranch(target, 'origin/feature/diverged');
+    write(target, 'src/graph/divergedLocal.ts', 'export const divergedLocal = true;\n');
+    commit(target, 'fix(graph): add local diverged branch change', { author: nextAuthor() });
+
+    checkoutTrackingBranch(target, 'origin/feat/local-ahead');
+    write(target, 'src/changes/localAheadOne.ts', 'export const localAheadOne = true;\n');
+    commit(target, 'feat(changes): add first local ahead change', { author: nextAuthor() });
+    write(target, 'src/changes/localAheadTwo.ts', 'export const localAheadTwo = true;\n');
+    commit(target, 'test(changes): cover local ahead branch', { author: nextAuthor() });
+
+    checkoutTrackingBranch(target, 'origin/release/2.0');
+    checkoutTrackingBranch(target, 'origin/hotfix/security-patch');
+    checkoutTrackingBranch(target, 'origin/chore/remote-ci-matrix');
+
+    git(seed, ['checkout', '-q', 'feature/diverged']);
+    write(seed, 'src/graph/divergedOrigin.ts', 'export const divergedOrigin = true;\n');
+    commit(seed, 'fix(graph): add origin diverged branch change', { author: nextAuthor() });
+    git(seed, ['push', '-q', 'origin', 'feature/diverged']);
+
+    git(seed, ['checkout', '-q', 'release/2.0']);
+    write(seed, 'docs/remote-release-followup.md', '# Remote release follow-up\n');
+    commit(seed, 'docs(core): add remote release follow-up', { author: nextAuthor() });
+    git(seed, ['push', '-q', 'origin', 'release/2.0']);
+    git(target, ['fetch', '-q', 'origin']);
+
+    git(target, ['checkout', '-q', '-b', 'docs/local-only-runbook', 'main']);
+    write(target, 'docs/local-runbook.md', '# Local runbook\n');
+    commit(target, 'docs(core): add local-only runbook', { author: nextAuthor() });
+    write(target, 'docs/local-checklist.md', '# Local checklist\n');
+    commit(target, 'docs(core): add local-only checklist', { author: nextAuthor() });
+
+    git(target, ['checkout', '-q', '-b', 'experiment/unpublished-graph', 'main']);
+    write(target, 'experiments/unpublished-graph.md', '# Unpublished graph\n');
+    commit(target, 'feat(graph): prototype unpublished graph branch', { author: nextAuthor() });
+    write(target, 'experiments/unpublished-renderer.md', '# Unpublished renderer\n');
+    commit(target, 'refactor(graph): tune unpublished renderer fixture', { author: nextAuthor() });
+
+    git(target, ['checkout', '-q', 'main']);
+    write(target, 'stash/remote-wip.txt', 'remote stash scratchpad\n');
+    git(target, ['stash', 'push', '-u', '-m', 'wip(graph): stash remote fixture note', '--', 'stash/remote-wip.txt']);
+    write(target, 'src/remote/staged-local.ts', 'export const remoteStaged = true;\n');
+    git(target, ['add', 'src/remote/staged-local.ts']);
+    write(target, 'README.md', '# Remote fixture\n\nLocal dirty README edit after fetching remotes.\n');
+    write(target, 'notes/remote-local.md', 'Local remote scenario note.\n');
+}
+
 function setupSubmodules(target: string, outputRoot: string): void {
     const sourceRoot = path.join(outputRoot, '.submodule-sources');
     fs.rmSync(sourceRoot, { recursive: true, force: true });
@@ -459,10 +660,39 @@ function addDetachedWorktree(parent: string, worktreeRoot: string, directoryName
     return worktreePath;
 }
 
+function createRemoteFixtureBranch(
+    cwd: string,
+    branch: string,
+    startPoint: string,
+    commits: readonly { readonly file: string; readonly content: string; readonly message: string }[],
+): void {
+    git(cwd, ['checkout', '-q', '-B', branch, startPoint]);
+    for (const change of commits) {
+        write(cwd, change.file, change.content);
+        commit(cwd, change.message, { author: nextAuthor() });
+    }
+}
+
+function checkoutTrackingBranch(cwd: string, remoteRef: string): void {
+    git(cwd, ['checkout', '-q', '--track', remoteRef]);
+}
+
+function initBareRepo(cwd: string): void {
+    fs.mkdirSync(cwd, { recursive: true });
+    git(cwd, ['init', '--bare', '-q']);
+    git(cwd, ['symbolic-ref', 'HEAD', 'refs/heads/main']);
+    git(cwd, ['config', 'gc.auto', '0']);
+    git(cwd, ['config', 'maintenance.auto', 'false']);
+}
+
 function initRepo(cwd: string): void {
     fs.mkdirSync(cwd, { recursive: true });
     git(cwd, ['init', '-q']);
     git(cwd, ['checkout', '-q', '-b', 'main']);
+    configureRepo(cwd);
+}
+
+function configureRepo(cwd: string): void {
     git(cwd, ['config', 'user.name', 'Look Git Fixture']);
     git(cwd, ['config', 'user.email', 'fixture@example.com']);
     git(cwd, ['config', 'gc.auto', '0']);
