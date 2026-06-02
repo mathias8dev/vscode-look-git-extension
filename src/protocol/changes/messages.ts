@@ -163,6 +163,7 @@ export interface OpenDiffMessage {
     readonly type: 'changes/openDiff';
     readonly filePath: string;
     readonly origPath?: string;
+    readonly isSubmodule?: boolean;
     readonly isStaged: boolean;
     readonly indexStatus: string;
     readonly workTreeStatus: string;

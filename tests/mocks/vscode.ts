@@ -208,9 +208,26 @@ export function getCommandCalls(): readonly CommandCall[] {
     return commands.calls;
 }
 
+type TextDocumentContentProvider = {
+    provideTextDocumentContent(uri: TestUri): string;
+};
+
+type TextDocumentOptions = {
+    readonly content: string;
+    readonly language?: string;
+};
+
+type MockTextDocument = {
+    readonly content: string;
+    readonly language?: string;
+    readonly uri?: TestUri;
+    readonly isDirty?: boolean;
+};
+
 export const workspace = {
     values: new Map<string, unknown>(),
-    documents: [] as Array<{ content: string; language?: string }>,
+    documents: [] as MockTextDocument[],
+    contentProviders: new Map<string, TextDocumentContentProvider>(),
     fs: {
         writes: [] as Array<{ uri: unknown; content: Uint8Array }>,
         writeFile(uri: unknown, content: Uint8Array) { this.writes.push({ uri, content }); return Promise.resolve(); },
@@ -229,9 +246,29 @@ export const workspace = {
             },
         };
     },
-    openTextDocument(options: { content: string; language?: string }) {
-        this.documents.push(options);
-        return Promise.resolve(options);
+    registerTextDocumentContentProvider(scheme: string, provider: TextDocumentContentProvider) {
+        this.contentProviders.set(scheme, provider);
+        return { dispose: () => { this.contentProviders.delete(scheme); } };
     },
-    reset() { this.values = new Map(); this.documents = []; this.fs.reset(); },
+    openTextDocument(input: TextDocumentOptions | TestUri) {
+        if (input instanceof TestUri) {
+            const provider = this.contentProviders.get(input.scheme);
+            const document = {
+                uri: input,
+                content: provider?.provideTextDocumentContent(input) ?? '',
+                language: input.path.endsWith('.diff') ? 'diff' : undefined,
+                isDirty: false,
+            };
+            this.documents.push(document);
+            return Promise.resolve(document);
+        }
+        this.documents.push(input);
+        return Promise.resolve(input);
+    },
+    reset() {
+        this.values = new Map();
+        this.documents = [];
+        this.contentProviders = new Map();
+        this.fs.reset();
+    },
 };

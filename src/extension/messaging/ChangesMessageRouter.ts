@@ -10,6 +10,7 @@ import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import { SubmoduleStatus } from '../../protocol/shared/repo';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import { confirmTypedPhrase, showModalWarningMessage } from '../utils/confirmation';
+import { openReadonlyDiffDocument } from '../utils/readonly-diff-documents';
 import { toProtocolSubmoduleStatus } from '../mapping/toProtocol';
 import { detectConflictStateFromFiles, parsePorcelainStatus } from '../../core/parsing/parseStatus';
 import { parseNameStatusZ } from '../../core/parsing/parseNameStatus';
@@ -325,7 +326,11 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/openDiff': {
-                await openStatusDiff(repo.cwd, msg);
+                if (msg.isSubmodule) {
+                    await openSubmoduleGitlinkDiff(repo, msg);
+                } else {
+                    await openStatusDiff(repo.cwd, msg);
+                }
                 break;
             }
 
@@ -1084,6 +1089,19 @@ async function openStatusDiff(cwd: string, msg: StatusDiffInput): Promise<void> 
         left = toGitUri(baseUri, baseRef); right = modifiedUri; title = `${baseName} (${msg.isStaged ? 'Staged' : 'Working Tree'})`;
     }
     await vscode.commands.executeCommand('vscode.diff', left, right, title);
+}
+
+async function openSubmoduleGitlinkDiff(repo: GitRepository, msg: StatusDiffInput): Promise<void> {
+    const args = [
+        'diff',
+        '--submodule=short',
+        ...(msg.isStaged ? ['--cached'] : []),
+        '--',
+        msg.filePath,
+    ];
+    const diff = await repo.execRaw(args);
+    const content = diff.trimEnd() || `No submodule gitlink changes for ${msg.filePath}.\n`;
+    await openReadonlyDiffDocument(`${path.basename(msg.filePath)} submodule gitlink`, content);
 }
 
 interface StashDiffInput {

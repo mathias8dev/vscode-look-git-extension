@@ -14,6 +14,7 @@ import { parsePorcelainStatus, summarizePorcelainStatus } from '../../core/parsi
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import { toProtocolBranch, toProtocolGraphCommit, toProtocolWorktree } from '../mapping/toProtocol';
 import { showModalWarningMessage } from '../utils/confirmation';
+import { openReadonlyDiffDocument } from '../utils/readonly-diff-documents';
 import { createErrorPayload, isAbortError } from './errorSerialization';
 
 type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
@@ -1011,8 +1012,7 @@ async function refBlobUri(repo: GitRepository, cwd: string, ref: string, filePat
 }
 
 async function openDiffDocument(title: string, content: string): Promise<void> {
-    const document = await vscode.workspace.openTextDocument({ content: content || `${title}\n`, language: 'diff' });
-    await vscode.window.showTextDocument(document, { preview: false });
+    await openReadonlyDiffDocument(title, content);
 }
 
 async function resetCurrentBranchToHere(repo: GitRepository, hash: string): Promise<void> {

@@ -55,6 +55,7 @@ describe('changeCommands', () => {
             type: 'changes/openDiff',
             filePath: 'src/app.ts',
             origPath: undefined,
+            isSubmodule: undefined,
             isStaged: false,
             indexStatus: ' ',
             workTreeStatus: 'M',
@@ -85,15 +86,25 @@ describe('changeCommands', () => {
         expect(messageForRowAction(submodule, ChangeRowAction.Open)).toEqual({ type: 'changes/openSubmodule', filePath: 'modules/lib' });
     });
 
-    it('omits unsafe row actions for submodules', () => {
+    it('offers gitlink diffs and safe row actions for submodules', () => {
         const submodule: ChangeListItem = {
             ...item(ChangeSectionId.Unstaged, 'modules/lib'),
             entry: { indexStatus: 'M', workTreeStatus: ' ', filePath: 'modules/lib', isSubmodule: true },
         };
         expect(rowActionsFor(submodule).map((action) => action.action)).toEqual([
+            ChangeRowAction.Diff,
             ChangeRowAction.Stage,
             ChangeRowAction.Open,
         ]);
+        expect(messageForRowAction(submodule, ChangeRowAction.Diff)).toEqual({
+            type: 'changes/openDiff',
+            filePath: 'modules/lib',
+            origPath: undefined,
+            isSubmodule: true,
+            isStaged: false,
+            indexStatus: 'M',
+            workTreeStatus: ' ',
+        });
     });
 
     it('creates protocol messages for bulk actions', () => {

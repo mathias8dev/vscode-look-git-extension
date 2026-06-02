@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { ChangesViewProvider } from '../../../src/extension/views/ChangesViewProvider';
+import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import type { GitRepository } from '../../../src/core/git/GitRepository';
 import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
-import { getCommandCalls, getInputBoxOptions, getWarningMessages, setInputBoxValue, setQuickPickValue, setWarningChoice } from '../../mocks/vscode';
+import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
+import { createSubmoduleFixture } from '../../helpers/gitRepo';
+import { getCommandCalls, getInputBoxOptions, getWarningMessages, setInputBoxValue, setQuickPickValue, setWarningChoice, window as mockWindow, workspace as mockWorkspace } from '../../mocks/vscode';
 
 function makeRepo(overrides: Partial<GitRepository> = {}): GitRepository {
     return {
@@ -131,7 +135,10 @@ function gitUriQuery(value: unknown): { readonly path: string; readonly ref: str
 }
 
 describe('ChangesViewProvider', () => {
-    beforeEach(resetVscodeMock);
+    beforeEach(() => {
+        resetVscodeMock();
+        registerReadonlyDiffDocumentProvider();
+    });
 
     it('resolveWebviewView sets CSP and script tag', () => {
         const repo = makeRepo();
@@ -870,6 +877,93 @@ describe('ChangesViewProvider', () => {
             assertUriWithPath(uri, 'modules/child');
             expect(call?.args[1]).toBe(true);
         });
+    });
+
+    it('opens submodule gitlink diffs using git submodule diff output', async () => {
+        const diff = [
+            'diff --git a/modules/auth-kit b/modules/auth-kit',
+            'index 8c253b5..52b893d 160000',
+            '--- a/modules/auth-kit',
+            '+++ b/modules/auth-kit',
+            '@@ -1 +1 @@',
+            '-Subproject commit 8c253b55f68bb7e39189a4c12a4043138b8f38fb',
+            '+Subproject commit 52b893d47db993db84236fed897f463a964632f8-dirty',
+            '',
+        ].join('\n');
+        const repo = makeRepo({
+            execRaw: vi.fn(async () => diff),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({
+            type: 'changes/openDiff',
+            filePath: 'modules/auth-kit',
+            isSubmodule: true,
+            isStaged: false,
+            indexStatus: ' ',
+            workTreeStatus: 'M',
+        });
+
+        await vi.waitFor(() => expect(mockWindow.shownDocuments.length).toBeGreaterThan(0));
+        expect(repo.execRaw).toHaveBeenCalledWith(['diff', '--submodule=short', '--', 'modules/auth-kit']);
+        const document = mockWorkspace.documents.at(-1);
+        expect(document?.uri?.scheme).toBe('lookgit-diff');
+        expect(document?.content).toBe(diff.trimEnd());
+        expect(document?.language).toBe('diff');
+        expect(document?.isDirty).toBe(false);
+    });
+
+    it('opens staged submodule gitlink diffs against HEAD', async () => {
+        const repo = makeRepo({
+            execRaw: vi.fn(async () => 'diff --git a/modules/auth-kit b/modules/auth-kit\n'),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({
+            type: 'changes/openDiff',
+            filePath: 'modules/auth-kit',
+            isSubmodule: true,
+            isStaged: true,
+            indexStatus: 'M',
+            workTreeStatus: ' ',
+        });
+
+        await vi.waitFor(() => expect(mockWindow.shownDocuments.length).toBeGreaterThan(0));
+        expect(repo.execRaw).toHaveBeenCalledWith(['diff', '--submodule=short', '--cached', '--', 'modules/auth-kit']);
+    });
+
+    it.skipIf(process.platform === 'win32')('opens real submodule gitlink diffs with subproject commit lines', async () => {
+        const { parent, subPath, cleanup } = createSubmoduleFixture();
+        try {
+            const repo = new GitProcessRepository(parent.cwd);
+            const provider = makeProvider(repo);
+            const view = makeWebviewView();
+            provider.resolveWebviewView(view);
+            parent.write(`${subPath}/extra.txt`, 'extra\n');
+            parent.git(['-C', path.join(parent.cwd, subPath), 'add', '-A']);
+            parent.git(['-C', path.join(parent.cwd, subPath), 'commit', '-q', '-m', 'child commit']);
+
+            view.messageHandler?.({
+                type: 'changes/openDiff',
+                filePath: subPath,
+                isSubmodule: true,
+                isStaged: false,
+                indexStatus: ' ',
+                workTreeStatus: 'M',
+            });
+
+            await vi.waitFor(() => expect(mockWorkspace.documents.length).toBeGreaterThan(0));
+            const document = mockWorkspace.documents.at(-1);
+            expect(document?.uri?.scheme).toBe('lookgit-diff');
+            expect(document?.isDirty).toBe(false);
+            expect(document?.language).toBe('diff');
+            expect(document?.content).toContain(`diff --git a/${subPath} b/${subPath}`);
+            expect(document?.content).toContain('Subproject commit');
+        } finally {
+            cleanup();
+        }
     });
 
     it('opens submodule diffs from the submodule working tree', async () => {

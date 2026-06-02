@@ -37,11 +37,21 @@ describe('ChangeRow', () => {
         expect(onAction).toHaveBeenCalledWith(item, ChangeRowAction.Diff);
     });
 
-    it('does not assign a primary row action to submodule gitlinks', () => {
+    it('opens the gitlink diff as the primary row action for submodule gitlinks', () => {
+        const onAction = vi.fn<(item: ChangeListItem, action: ChangeRowAction) => void>();
+        const item: ChangeListItem = {
+            ...changeItem(ChangeSectionId.Unstaged, 'modules/lib', ' ', 'M'),
+            entry: { indexStatus: ' ', workTreeStatus: 'M', filePath: 'modules/lib', isSubmodule: true },
+        };
+
+        renderRow(item, onAction);
+        fireEvent.click(screen.getByTitle('modules/lib'));
+
+        expect(onAction).toHaveBeenCalledWith(item, ChangeRowAction.Diff);
         expect(primaryRowActionFor({
             ...changeItem(ChangeSectionId.Unstaged, 'modules/lib', ' ', 'M'),
             entry: { indexStatus: ' ', workTreeStatus: 'M', filePath: 'modules/lib', isSubmodule: true },
-        })).toBeUndefined();
+        })).toBe(ChangeRowAction.Diff);
     });
 });
 

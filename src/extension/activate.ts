@@ -5,6 +5,7 @@ import { ChangesViewProvider } from './views/ChangesViewProvider';
 import { CommitHistoryViewProvider } from './views/CommitHistoryViewProvider';
 import { GraphViewProvider } from './views/GraphViewProvider';
 import { getBuiltInGitApi } from './utils/gitExtension';
+import { registerReadonlyDiffDocumentProvider } from './utils/readonly-diff-documents';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const gitApi = await getBuiltInGitApi();
@@ -28,6 +29,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     context.subscriptions.push(
         repositories,
+        registerReadonlyDiffDocumentProvider(),
         vscode.workspace.registerTextDocumentContentProvider('lookgit-empty', {
             provideTextDocumentContent: () => '',
         }),

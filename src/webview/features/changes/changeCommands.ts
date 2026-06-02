@@ -32,6 +32,7 @@ export function rowActionsFor(item: ChangeListItem): readonly ChangeActionDescri
     if (item.section === ChangeSectionId.Staged) {
         if (item.entry.isSubmodule) {
             return [
+                { action: ChangeRowAction.Diff, icon: 'diff', label: 'Diff', title: 'Open submodule gitlink diff' },
                 { action: ChangeRowAction.Unstage, icon: 'remove', label: 'Unstage', title: 'Unstage submodule gitlink' },
                 { action: ChangeRowAction.Open, icon: 'folder-opened', label: 'Open', title: 'Open submodule' },
             ];
@@ -46,11 +47,13 @@ export function rowActionsFor(item: ChangeListItem): readonly ChangeActionDescri
     if (item.entry.isSubmodule) {
         if (item.section === ChangeSectionId.Conflicts) {
             return [
+                { action: ChangeRowAction.Diff, icon: 'diff', label: 'Diff', title: 'Open submodule gitlink diff' },
                 { action: ChangeRowAction.MarkResolved, icon: 'check', label: 'Resolved', title: 'Mark resolved' },
                 { action: ChangeRowAction.Open, icon: 'folder-opened', label: 'Open', title: 'Open submodule' },
             ];
         }
         return [
+            { action: ChangeRowAction.Diff, icon: 'diff', label: 'Diff', title: 'Open submodule gitlink diff' },
             { action: ChangeRowAction.Stage, icon: 'add', label: 'Stage', title: 'Stage submodule gitlink' },
             { action: ChangeRowAction.Open, icon: 'folder-opened', label: 'Open', title: 'Open submodule' },
         ];
@@ -75,7 +78,7 @@ export function rowActionsFor(item: ChangeListItem): readonly ChangeActionDescri
 }
 
 export function primaryRowActionFor(item: ChangeListItem): ChangeRowAction | undefined {
-    if (item.entry.isSubmodule) { return undefined; }
+    if (item.entry.isSubmodule) { return ChangeRowAction.Diff; }
     return item.section === ChangeSectionId.Conflicts
         ? ChangeRowAction.OpenMergeEditor
         : ChangeRowAction.Diff;
@@ -115,6 +118,7 @@ export function messageForRowAction(item: ChangeListItem, action: ChangeRowActio
                 type: 'changes/openDiff',
                 filePath: entry.filePath,
                 origPath: entry.origPath,
+                isSubmodule: entry.isSubmodule,
                 isStaged: item.isStaged,
                 indexStatus: entry.indexStatus,
                 workTreeStatus: entry.workTreeStatus,
