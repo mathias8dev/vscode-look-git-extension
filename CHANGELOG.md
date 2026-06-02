@@ -2,6 +2,35 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [0.2.0] - 2026-06-02
+
+### Added
+
+#### Changes Panel
+- Open parent-repo submodule gitlink diffs, including dirty submodule pointers, in a read-only generated diff document
+- Open stash file diffs from stash rows and keep row selection/expansion stable across refreshes
+- Native VS Code context menus and toolbar commands for refresh, graph navigation, view/sort, commit, branch, remote, stash, tag, pull, push, and fetch workflows
+
+#### Look Graph
+- Repository toolbar actions for selecting branches, returning to the current item, fetching, pulling, pushing, refreshing, and switching tree/list views
+- Branch panel actions for create, update selected, delete, compare with local, show current branch, fetch, expand all, and collapse all
+- Branch context actions for worktree-aware branch comparisons, worktree opening/reveal, checkout, rebase, merge, push, rename, and delete
+- Remote branch indicators, origin badges, and not-pushed commit counters
+
+#### Packaging
+- VSIX packaging script support for experimental display names and filenames
+
+### Fixed
+
+#### Changes Panel
+- Preserve expanded submodules, stashes, staged, unstaged, and conflict sections after parent status refreshes
+- Keep submodule staged, unstaged, stash, and conflict sections toggleable and omit empty submodule detail sections
+- Avoid save prompts when closing generated submodule gitlink diff documents
+
+#### Look Graph
+- Refresh branch ahead/behind state after fetch operations
+- Route generated diff views through read-only virtual documents instead of dirty temporary editors
+
 ## [0.1.1] - 2026-06-02
 
 ### Fixed
