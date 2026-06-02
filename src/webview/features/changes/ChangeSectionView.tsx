@@ -62,18 +62,26 @@ export function ChangeSectionView({
 
     return (
         <section className="change-section" aria-labelledby={`${section.id}-title`}>
-            <header className="change-section-header">
+            <header
+                className="change-section-header"
+                onClick={onToggleCollapsed}
+                role="button"
+                tabIndex={0}
+                aria-expanded={!collapsed}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleCollapsed(); } }}
+            >
                 <button
                     type="button"
                     className="section-toggle"
                     title={collapsed ? 'Expand section' : 'Collapse section'}
-                    aria-expanded={!collapsed}
-                    onClick={onToggleCollapsed}
+                    aria-hidden="true"
+                    tabIndex={-1}
+                    onClick={(e) => e.stopPropagation()}
                 >
                     <i className={`codicon codicon-chevron-${collapsed ? 'right' : 'down'}`} aria-hidden="true" />
                 </button>
                 <h2 id={`${section.id}-title`}>{section.title}</h2>
-                <div className="section-actions">
+                <div className="section-actions" onClick={(e) => e.stopPropagation()}>
                     {bulkActions.map((descriptor) => (
                         <IconButton
                             key={descriptor.action}

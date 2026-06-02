@@ -14,38 +14,42 @@ interface StashItemProps {
 }
 
 export function StashItem({ stash, expanded, files, onToggle, onAction, onFileDiff }: StashItemProps) {
+    const displayMessage = stash.message || `stash@{${stash.index}}`;
     return (
         <article className="stash-item">
-            <header className="stash-item-header">
+            <header
+                className="stash-item-header"
+                onClick={() => onToggle(stash.index)}
+            >
                 <button
                     type="button"
                     className="stash-toggle"
                     title={expanded ? 'Hide files' : 'Show files'}
                     aria-label={expanded ? 'Hide files' : 'Show files'}
                     aria-expanded={expanded}
-                    onClick={() => onToggle(stash.index)}
+                    onClick={(e) => { e.stopPropagation(); onToggle(stash.index); }}
                 >
                     <Codicon name={expanded ? 'chevron-down' : 'chevron-right'} />
                 </button>
                 <div className="stash-title">
-                    <strong>stash@{'{'}{stash.index}{'}'}</strong>
-                    <span>{stash.message}</span>
+                    <span className="stash-title-message" title={displayMessage}>{displayMessage}</span>
+                    <span className="stash-title-ref">stash@{'{'}{'{'}{stash.index}{'}'}</span>
                 </div>
                 <div className="stash-actions">
                     <IconButton
                         icon="check"
                         title="Apply stash (keep in list)"
-                        onClick={() => onAction(stash.index, StashEntryAction.Apply)}
+                        onClick={(e) => { e.stopPropagation(); onAction(stash.index, StashEntryAction.Apply); }}
                     />
                     <IconButton
                         icon="play"
                         title="Pop stash (apply and remove)"
-                        onClick={() => onAction(stash.index, StashEntryAction.Pop)}
+                        onClick={(e) => { e.stopPropagation(); onAction(stash.index, StashEntryAction.Pop); }}
                     />
                     <IconButton
                         icon="trash"
                         title="Drop stash"
-                        onClick={() => onAction(stash.index, StashEntryAction.Drop)}
+                        onClick={(e) => { e.stopPropagation(); onAction(stash.index, StashEntryAction.Drop); }}
                     />
                 </div>
             </header>
@@ -63,7 +67,7 @@ function stashFilesContent(
     files: readonly StashFileEntry[] | undefined,
     onFileDiff: (index: number, file: StashFileEntry) => void,
 ) {
-    if (!files) { return <p className="stash-placeholder">Loading stash files…</p>; }
+    if (!files) { return <p className="stash-placeholder"><i className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" /> Loading…</p>; }
     if (files.length === 0) { return <p className="stash-placeholder">No files in this stash</p>; }
     return files.map((file) => (
         <StashFileRow
