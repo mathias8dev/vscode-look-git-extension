@@ -1,5 +1,5 @@
 import type { Pagination } from '../../../protocol/shared/base';
-import type { HistoryWebviewToExtensionMessage } from '../../../protocol/history/messages';
+import type { HistoryToolbarCommand, HistoryWebviewToExtensionMessage } from '../../../protocol/history/messages';
 import type { HistoryCommitFile, HistoryContextTarget } from '../../../protocol/history/types';
 
 let requestCounter = 0;
@@ -47,5 +47,12 @@ export function messageForHistoryContextTarget(target: HistoryContextTarget): Hi
     return {
         type: 'history/contextTarget',
         target,
+    };
+}
+
+export function messageForHistoryToolbarCommand(command: HistoryToolbarCommand): HistoryWebviewToExtensionMessage {
+    return {
+        type: 'history/toolbarCommand',
+        command,
     };
 }

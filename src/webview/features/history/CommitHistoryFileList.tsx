@@ -8,12 +8,13 @@ import { buildHistoryFileTree, type HistoryFileTreeNode } from './historyFileTre
 
 interface CommitHistoryFileListProps {
     readonly details: HistoryCommitDetails | undefined;
+    readonly viewMode: 'list' | 'tree';
     readonly loading: boolean;
     readonly onOpenDiff: (file: HistoryCommitFile) => void;
     readonly onFileContextMenu: (file: HistoryCommitFile) => void;
 }
 
-export function CommitHistoryFileList({ details, loading, onOpenDiff, onFileContextMenu }: CommitHistoryFileListProps) {
+export function CommitHistoryFileList({ details, viewMode, loading, onOpenDiff, onFileContextMenu }: CommitHistoryFileListProps) {
     if (loading) {
         return (
             <div className="history-file-loading">
@@ -27,6 +28,23 @@ export function CommitHistoryFileList({ details, loading, onOpenDiff, onFileCont
 
     if (details.files.length === 0) {
         return <div className="history-file-empty">No changed files</div>;
+    }
+
+    if (viewMode === 'list') {
+        return (
+            <div className="history-file-tree" role="list" aria-label="Changed files">
+                {details.files.map((file) => (
+                    <CommitHistoryFileRow
+                        key={`${file.parentHash ?? ''}:${file.filePath}:${file.origPath ?? ''}`}
+                        file={file}
+                        name={file.filePath}
+                        depth={0}
+                        onOpenDiff={onOpenDiff}
+                        onFileContextMenu={onFileContextMenu}
+                    />
+                ))}
+            </div>
+        );
     }
 
     const tree = buildHistoryFileTree(details.files);
@@ -81,12 +99,36 @@ function CommitHistoryFileNode({
     }
 
     const file = node.file;
+    return (
+        <CommitHistoryFileRow
+            file={file}
+            name={node.name}
+            depth={node.depth}
+            onOpenDiff={onOpenDiff}
+            onFileContextMenu={onFileContextMenu}
+        />
+    );
+}
+
+function CommitHistoryFileRow({
+    file,
+    name,
+    depth,
+    onOpenDiff,
+    onFileContextMenu,
+}: {
+    readonly file: HistoryCommitFile;
+    readonly name: string;
+    readonly depth: number;
+    readonly onOpenDiff: (file: HistoryCommitFile) => void;
+    readonly onFileContextMenu: (file: HistoryCommitFile) => void;
+}) {
     const rowContent = (
         <>
             <span className="history-file-spacer" aria-hidden="true" />
             <span className={`history-file-status history-file-status-${statusClass(file.status)}`}>{file.status}</span>
             <FileTypeIcon kind={file.isSubmodule ? 'submodule' : iconKindForPath(file.filePath)} />
-            <span className="history-file-path" title={file.filePath}>{node.name}</span>
+            <span className="history-file-path" title={file.filePath}>{name}</span>
             {file.origPath ? <span className="history-file-original" title={file.origPath}>{file.origPath}</span> : null}
         </>
     );
@@ -95,7 +137,7 @@ function CommitHistoryFileNode({
         return (
             <div
                 className="history-file-tree-row history-file-leaf-row history-file-entry-submodule"
-                style={depthStyle(node.depth)}
+                style={depthStyle(depth)}
                 title="Submodule diffs are not available from commit history"
                 data-vscode-context={JSON.stringify({
                     webviewSection: 'historyFile',
@@ -113,7 +155,7 @@ function CommitHistoryFileNode({
         <button
             type="button"
             className="history-file-tree-row history-file-leaf-row history-file-entry-clickable"
-            style={depthStyle(node.depth)}
+            style={depthStyle(depth)}
             title={`Open diff for ${file.filePath}`}
             data-vscode-context={JSON.stringify({
                 webviewSection: 'historyFile',

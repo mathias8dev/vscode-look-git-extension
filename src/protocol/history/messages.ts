@@ -79,10 +79,23 @@ export interface HistoryContextTargetMessage {
     readonly target: HistoryContextTarget;
 }
 
+export type HistoryToolbarCommand =
+    | 'selectBranch'
+    | 'goToCurrent'
+    | 'fetchAll'
+    | 'pull'
+    | 'push';
+
+export interface HistoryToolbarCommandMessage {
+    readonly type: 'history/toolbarCommand';
+    readonly command: HistoryToolbarCommand;
+}
+
 export type HistoryWebviewToExtensionMessage =
     | HistoryReadyMessage
     | HistoryDataRequest
     | HistoryRefreshMessage
     | HistoryCommitDetailsRequest
     | HistoryOpenDiffRequest
-    | HistoryContextTargetMessage;
+    | HistoryContextTargetMessage
+    | HistoryToolbarCommandMessage;

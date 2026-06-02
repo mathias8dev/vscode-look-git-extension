@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
-import { createTempGitRepo, addLinkedWorktree, createSubmoduleFixture, type TempGitRepo } from '../../helpers/gitRepo';
+import { createTempGitRepo, addLinkedWorktree, createRemoteWorkflowFixture, createSubmoduleFixture, type TempGitRepo } from '../../helpers/gitRepo';
 import { expectItem } from '../../helpers/assertions';
 
 describe('GitProcessRepository', () => {
@@ -120,6 +120,36 @@ describe('GitProcessRepository', () => {
         const log = await git.getLog(5, 0);
         expect(expectItem(log, 0).message).toBe('second');
         expect(expectItem(log, 1).message).toBe('first');
+    });
+
+    it('getLogForRef returns commits reachable from the selected branch', async () => {
+        const r = repo();
+        r.write('base.txt', 'base');
+        r.commit('base');
+        r.git(['checkout', '-q', '-b', 'feature/history']);
+        r.write('feature.txt', 'feature');
+        r.commit('feature branch commit');
+        r.git(['checkout', '-q', 'main']);
+        r.write('main.txt', 'main');
+        r.commit('main branch commit');
+
+        const git = new GitProcessRepository(r.cwd);
+        const log = await git.getLogForRef('feature/history', 5, 0);
+
+        expect(log.map((commit) => commit.message)).toEqual(['feature branch commit', 'base']);
+    });
+
+    it('getLogForRef accepts remote branch refs exposed by getAllBranches', async () => {
+        const fixture = createRemoteWorkflowFixture();
+        cleanups.push({ cleanup: fixture.cleanup });
+
+        const git = new GitProcessRepository(fixture.local.cwd);
+        const branches = await git.getAllBranches();
+        const remoteFeature = branches.find((branch) => branch.name === 'origin/feature/nested');
+
+        expect(remoteFeature).toEqual(expect.objectContaining({ isRemote: true }));
+        const log = await git.getLogForRef('origin/feature/nested', 5, 0);
+        expect(log.map((commit) => commit.message)).toEqual(['remote feature', 'remote base']);
     });
 
     it('getGraphLog excludes stash implementation commits', async () => {

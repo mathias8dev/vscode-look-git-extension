@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GitExec } from '../../../src/core/git/GitRepository';
-import { queryGraphLog } from '../../../src/core/queries/queryGraph';
+import { queryCommitLog, queryGraphLog } from '../../../src/core/queries/queryGraph';
 import { expectItem } from '../../helpers/assertions';
 
 function recordingExec(calls: string[][]): GitExec {
@@ -34,5 +34,17 @@ describe('queryGraphLog', () => {
         expect(args).toContain('--tags');
         expect(args).toContain('--remotes');
         expect(args).not.toContain('--all');
+    });
+});
+
+describe('queryCommitLog', () => {
+    it('passes the selected ref after pagination arguments', async () => {
+        const calls: string[][] = [];
+        await queryCommitLog(recordingExec(calls), 25, 50, 'feature/history');
+
+        const args = expectItem(calls, 0);
+        expect(args).toContain('--max-count=25');
+        expect(args).toContain('--skip=50');
+        expect(args.at(-1)).toBe('feature/history');
     });
 });

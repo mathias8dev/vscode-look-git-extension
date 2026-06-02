@@ -91,6 +91,30 @@ describe('CommitHistoryApp', () => {
         expect(tree.querySelector('.file-type-icon')).not.toBeNull();
     });
 
+    it('renders changed files as a flat list when list mode is selected', () => {
+        renderApp({
+            state: {
+                ...createInitialHistoryState(),
+                commits: [commit('abc123456789', 'feat: add graph history')],
+                selectedHash: 'abc123456789',
+                detailsByHash: {
+                    abc123456789: {
+                        hash: 'abc123456789',
+                        fullMessage: 'feat: add graph history',
+                        files: [{ status: 'M', filePath: 'src/history.ts' }],
+                    },
+                },
+                loadedCount: 1,
+                loading: false,
+            },
+            fileViewMode: 'list',
+        });
+
+        expect(screen.getByRole('list', { name: 'Changed files' })).toHaveTextContent('src/history.ts');
+        expect(screen.queryByRole('tree', { name: 'Changed files' })).not.toBeInTheDocument();
+    });
+
+
     it('opens file diffs for normal files and blocks submodule file navigation', () => {
         const onOpenFileDiff = vi.fn<(hash: string, file: HistoryCommitFile) => void>();
         const onContextTarget = vi.fn<(target: HistoryContextTarget) => void>();
@@ -203,13 +227,72 @@ describe('CommitHistoryApp', () => {
 
         expect(onLoadMore).toHaveBeenCalledOnce();
     });
+
+    it('dispatches toolbar commands from icon buttons', () => {
+        const onRefresh = vi.fn<() => void>();
+        const onToolbarCommand = vi.fn<(command: 'selectBranch' | 'goToCurrent' | 'fetchAll' | 'pull' | 'push') => void>();
+
+        renderApp({
+            state: {
+                ...createInitialHistoryState(),
+                loading: false,
+            },
+            onRefresh,
+            onToolbarCommand,
+        });
+
+        fireEvent.click(screen.getByLabelText('Select Branch'));
+        fireEvent.click(screen.getByLabelText('Go to Current History Item'));
+        fireEvent.click(screen.getByLabelText('Fetch from All Remotes'));
+        fireEvent.click(screen.getByLabelText('Pull'));
+        fireEvent.click(screen.getByLabelText('Push'));
+        fireEvent.click(screen.getByLabelText('Refresh'));
+
+        expect(onToolbarCommand).toHaveBeenCalledWith('selectBranch');
+        expect(onToolbarCommand).toHaveBeenCalledWith('goToCurrent');
+        expect(onToolbarCommand).toHaveBeenCalledWith('fetchAll');
+        expect(onToolbarCommand).toHaveBeenCalledWith('pull');
+        expect(onToolbarCommand).toHaveBeenCalledWith('push');
+        expect(onRefresh).toHaveBeenCalledOnce();
+    });
+
+    it('switches changed files between tree and list view from the more menu', () => {
+        const onFileViewModeChange = vi.fn<(mode: 'list' | 'tree') => void>();
+
+        renderApp({
+            state: {
+                ...createInitialHistoryState(),
+                commits: [commit('abc123456789', 'feat: add graph history')],
+                selectedHash: 'abc123456789',
+                detailsByHash: {
+                    abc123456789: {
+                        hash: 'abc123456789',
+                        fullMessage: 'feat: add graph history',
+                        files: [{ status: 'M', filePath: 'src/history.ts' }],
+                    },
+                },
+                loadedCount: 1,
+                loading: false,
+            },
+            onFileViewModeChange,
+        });
+
+        fireEvent.click(screen.getByLabelText('More Actions'));
+        expect(screen.getByRole('menuitemradio', { name: 'View as Tree' })).toHaveAttribute('aria-checked', 'true');
+        fireEvent.click(screen.getByRole('menuitemradio', { name: 'View as List' }));
+
+        expect(onFileViewModeChange).toHaveBeenCalledWith('list');
+    });
 });
 
 function renderApp(props: {
     readonly state: HistoryState;
     readonly query?: string;
+    readonly fileViewMode?: 'list' | 'tree';
     readonly onQueryChange?: (query: string) => void;
     readonly onRefresh?: () => void;
+    readonly onToolbarCommand?: (command: 'selectBranch' | 'goToCurrent' | 'fetchAll' | 'pull' | 'push') => void;
+    readonly onFileViewModeChange?: (mode: 'list' | 'tree') => void;
     readonly onSelectCommit?: (hash: string) => void;
     readonly onOpenFileDiff?: (hash: string, file: HistoryCommitFile) => void;
     readonly onContextTarget?: (target: HistoryContextTarget) => void;
@@ -219,8 +302,11 @@ function renderApp(props: {
         <CommitHistoryApp
             state={props.state}
             query={props.query ?? ''}
+            fileViewMode={props.fileViewMode ?? 'tree'}
             onQueryChange={props.onQueryChange ?? (() => undefined)}
             onRefresh={props.onRefresh ?? (() => undefined)}
+            onToolbarCommand={props.onToolbarCommand ?? (() => undefined)}
+            onFileViewModeChange={props.onFileViewModeChange ?? (() => undefined)}
             onSelectCommit={props.onSelectCommit ?? (() => undefined)}
             onOpenFileDiff={props.onOpenFileDiff ?? (() => undefined)}
             onContextTarget={props.onContextTarget ?? (() => undefined)}

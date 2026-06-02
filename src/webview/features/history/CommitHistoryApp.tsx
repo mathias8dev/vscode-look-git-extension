@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react';
+import type { HistoryToolbarCommand } from '../../../protocol/history/messages';
 import type { HistoryState } from './historyState';
 import type { HistoryCommit, HistoryCommitFile, HistoryContextTarget } from '../../../protocol/history/types';
 import { CommitHistoryFileList } from './CommitHistoryFileList';
@@ -8,8 +10,11 @@ import { ErrorNotice } from '../../shared/ErrorNotice';
 interface CommitHistoryAppProps {
     readonly state: HistoryState;
     readonly query: string;
+    readonly fileViewMode: 'list' | 'tree';
     readonly onQueryChange: (query: string) => void;
     readonly onRefresh: () => void;
+    readonly onToolbarCommand: (command: HistoryToolbarCommand) => void;
+    readonly onFileViewModeChange: (mode: 'list' | 'tree') => void;
     readonly onSelectCommit: (hash: string) => void;
     readonly onOpenFileDiff: (hash: string, file: HistoryCommitFile) => void;
     readonly onContextTarget: (target: HistoryContextTarget) => void;
@@ -19,8 +24,11 @@ interface CommitHistoryAppProps {
 export function CommitHistoryApp({
     state,
     query,
+    fileViewMode,
     onQueryChange,
     onRefresh,
+    onToolbarCommand,
+    onFileViewModeChange,
     onSelectCommit,
     onOpenFileDiff,
     onContextTarget,
@@ -37,15 +45,13 @@ export function CommitHistoryApp({
                     <h1>Commit History</h1>
                     <span>{state.loadedCount}</span>
                 </div>
-                <button
-                    type="button"
-                    className="history-icon-button"
-                    title="Refresh"
-                    aria-label="Refresh"
-                    onClick={onRefresh}
-                >
-                    <i className={`codicon codicon-${state.loading ? 'loading codicon-modifier-spin' : 'refresh'}`} aria-hidden="true" />
-                </button>
+                <HistoryToolbar
+                    loading={state.loading}
+                    fileViewMode={fileViewMode}
+                    onRefresh={onRefresh}
+                    onToolbarCommand={onToolbarCommand}
+                    onFileViewModeChange={onFileViewModeChange}
+                />
             </header>
 
             <div className="history-search">
@@ -96,6 +102,7 @@ export function CommitHistoryApp({
                             {expanded ? (
                                 <CommitHistoryFileList
                                     details={state.detailsByHash[commit.hash]}
+                                    viewMode={fileViewMode}
                                     loading={state.detailsLoadingHash === commit.hash}
                                     onOpenDiff={(file) => onOpenFileDiff(commit.hash, file)}
                                     onFileContextMenu={(file) => onContextTarget({ kind: 'file', commitHash: commit.hash, file })}
@@ -137,6 +144,102 @@ export function CommitHistoryApp({
                 </aside>
             ) : null}
         </main>
+    );
+}
+
+function HistoryToolbar({
+    loading,
+    fileViewMode,
+    onRefresh,
+    onToolbarCommand,
+    onFileViewModeChange,
+}: {
+    readonly loading: boolean;
+    readonly fileViewMode: 'list' | 'tree';
+    readonly onRefresh: () => void;
+    readonly onToolbarCommand: (command: HistoryToolbarCommand) => void;
+    readonly onFileViewModeChange: (mode: 'list' | 'tree') => void;
+}) {
+    const [menuOpen, setMenuOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!menuOpen) { return; }
+        const onPointerDown = (event: MouseEvent) => {
+            if (menuRef.current?.contains(event.target as Node)) { return; }
+            setMenuOpen(false);
+        };
+        window.addEventListener('mousedown', onPointerDown);
+        return () => window.removeEventListener('mousedown', onPointerDown);
+    }, [menuOpen]);
+
+    return (
+        <div className="history-toolbar" aria-label="Commit history actions">
+            <HistoryToolbarButton icon="git-branch" title="Select Branch" onClick={() => onToolbarCommand('selectBranch')} />
+            <HistoryToolbarButton icon="target" title="Go to Current History Item" onClick={() => onToolbarCommand('goToCurrent')} />
+            <HistoryToolbarButton icon="cloud-download" title="Fetch from All Remotes" onClick={() => onToolbarCommand('fetchAll')} />
+            <HistoryToolbarButton icon="repo-pull" title="Pull" onClick={() => onToolbarCommand('pull')} />
+            <HistoryToolbarButton icon="repo-push" title="Push" onClick={() => onToolbarCommand('push')} />
+            <button
+                type="button"
+                className="history-icon-button"
+                title="Refresh"
+                aria-label="Refresh"
+                onClick={onRefresh}
+            >
+                <i className={`codicon codicon-${loading ? 'loading codicon-modifier-spin' : 'refresh'}`} aria-hidden="true" />
+            </button>
+            <div className="history-toolbar-menu-host" ref={menuRef}>
+                <button
+                    type="button"
+                    className="history-icon-button"
+                    title="More Actions"
+                    aria-label="More Actions"
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
+                    onClick={() => setMenuOpen((open) => !open)}
+                >
+                    <i className="codicon codicon-more" aria-hidden="true" />
+                </button>
+                {menuOpen ? (
+                    <div className="history-view-menu" role="menu">
+                        <HistoryViewModeItem
+                            label="View as List"
+                            selected={fileViewMode === 'list'}
+                            onClick={() => {
+                                onFileViewModeChange('list');
+                                setMenuOpen(false);
+                            }}
+                        />
+                        <HistoryViewModeItem
+                            label="View as Tree"
+                            selected={fileViewMode === 'tree'}
+                            onClick={() => {
+                                onFileViewModeChange('tree');
+                                setMenuOpen(false);
+                            }}
+                        />
+                    </div>
+                ) : null}
+            </div>
+        </div>
+    );
+}
+
+function HistoryToolbarButton({ icon, title, onClick }: { readonly icon: string; readonly title: string; readonly onClick: () => void }) {
+    return (
+        <button type="button" className="history-icon-button" title={title} aria-label={title} onClick={onClick}>
+            <i className={`codicon codicon-${icon}`} aria-hidden="true" />
+        </button>
+    );
+}
+
+function HistoryViewModeItem({ label, selected, onClick }: { readonly label: string; readonly selected: boolean; readonly onClick: () => void }) {
+    return (
+        <button type="button" role="menuitemradio" aria-checked={selected} onClick={onClick}>
+            {selected ? <i className="codicon codicon-check" aria-hidden="true" /> : <span className="history-view-menu-check" aria-hidden="true" />}
+            <span>{label}</span>
+        </button>
     );
 }
 

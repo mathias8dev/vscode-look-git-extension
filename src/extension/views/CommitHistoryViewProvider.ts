@@ -2,13 +2,13 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
-import type { GitCommit, GitFileChange } from '../../core/git/GitRepository';
+import type { GitCommit, GitFileChange, GitRepository } from '../../core/git/GitRepository';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import type { ErrorCode, Pagination } from '../../protocol/shared/base';
 import type { SerializedRepoContext } from '../../protocol/shared/repo';
 import type { CommitCommand } from '../../protocol/graph/messages';
 import type { HistoryCommitDetails, HistoryContextTarget, HistoryData } from '../../protocol/history/types';
-import type { HistoryCommitDetailsRequest, HistoryDataRequest, HistoryExtensionToWebviewMessage, HistoryOpenDiffRequest, HistoryWebviewToExtensionMessage } from '../../protocol/history/messages';
+import type { HistoryCommitDetailsRequest, HistoryDataRequest, HistoryExtensionToWebviewMessage, HistoryOpenDiffRequest, HistoryToolbarCommand, HistoryWebviewToExtensionMessage } from '../../protocol/history/messages';
 import { runCommitCommand } from '../messaging/GraphMessageRouter';
 import { createErrorPayload } from '../messaging/errorSerialization';
 import { getWebviewHtml } from './webviewHtml';
@@ -42,6 +42,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private view?: vscode.WebviewView;
     private contextTarget?: HistoryContextTarget;
+    private selectedHistoryRef: string | undefined;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -108,6 +109,9 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             case 'history/contextTarget':
                 this.contextTarget = message.target;
                 return;
+            case 'history/toolbarCommand':
+                await this.handleToolbarCommand(message.command);
+                return;
         }
     }
 
@@ -144,12 +148,72 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             };
         }
 
-        const commits = await repo.getLog(normalizedPage.limit + 1, normalizedPage.offset);
+        const commits = this.selectedHistoryRef
+            ? await repo.getLogForRef(this.selectedHistoryRef, normalizedPage.limit + 1, normalizedPage.offset)
+            : await repo.getLog(normalizedPage.limit + 1, normalizedPage.offset);
         return {
             commits: commits.slice(0, normalizedPage.limit).map(toHistoryCommit),
             page: normalizedPage,
             hasMore: commits.length > normalizedPage.limit,
         };
+    }
+
+    private async handleToolbarCommand(command: HistoryToolbarCommand): Promise<void> {
+        switch (command) {
+            case 'selectBranch':
+                await this.selectHistoryBranch();
+                return;
+            case 'goToCurrent':
+                await this.goToCurrentHistoryItem();
+                return;
+            case 'fetchAll':
+                await this.runRepositoryToolbarOperation('fetchAll', (repo) => repo.fetchAll());
+                return;
+            case 'pull':
+                await this.runRepositoryToolbarOperation('pull', (repo) => repo.pull());
+                return;
+            case 'push':
+                await this.runRepositoryToolbarOperation('push', (repo) => repo.push());
+                return;
+        }
+    }
+
+    private async selectHistoryBranch(): Promise<void> {
+        try {
+            const repo = this.repositories.requireRepository();
+            const branches = await repo.getAllBranches();
+            const branchNames = branches.map((branch) => branch.name);
+            const selected = await vscode.window.showQuickPick(['Current Branch', ...branchNames], {
+                placeHolder: 'Select history branch',
+            });
+            if (!selected) { return; }
+            this.selectedHistoryRef = selected === 'Current Branch' ? undefined : selected;
+            await this.refresh();
+        } catch (error) {
+            this.postHistoryError(error, 'history/selectBranch', 'gitOperationFailed');
+        }
+    }
+
+    private async goToCurrentHistoryItem(): Promise<void> {
+        try {
+            const repo = this.repositories.requireRepository();
+            const hash = await repo.exec(['rev-parse', 'HEAD']);
+            this.selectedHistoryRef = undefined;
+            await this.refresh();
+            this.postMessage({ type: 'history/selectCommit', hash });
+        } catch (error) {
+            this.postHistoryError(error, 'history/goToCurrent', 'gitOperationFailed');
+        }
+    }
+
+    private async runRepositoryToolbarOperation(operation: 'fetchAll' | 'pull' | 'push', run: (repo: GitRepository) => Promise<void>): Promise<void> {
+        try {
+            const repo = this.repositories.requireRepository();
+            await run(repo);
+            await this.refresh();
+        } catch (error) {
+            this.postHistoryError(error, `history/${operation}`, 'gitOperationFailed');
+        }
     }
 
     private async handleCommitDetailsRequest(message: HistoryCommitDetailsRequest): Promise<void> {
@@ -271,6 +335,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     }
 
     async notifyRepoChanged(context: SerializedRepoContext): Promise<void> {
+        this.selectedHistoryRef = undefined;
         this.view?.webview.postMessage({ type: 'repo/contextChanged', context });
         await this.refresh();
     }

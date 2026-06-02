@@ -51,10 +51,13 @@ export async function queryCommitLog(
     execRawReadonly: GitExec,
     limit: number,
     skip: number,
+    ref?: string,
     signal?: AbortSignal,
 ): Promise<GitCommit[]> {
     const format = ['%H', '%h', '%s', '%an', '%ae', '%aI', '%P'].join(LOG_FIELD_SEP) + LOG_RECORD_SEP;
-    const output = await execRawReadonly(['log', `--format=${format}`, `--max-count=${limit}`, `--skip=${skip}`], signal);
+    const args = ['log', `--format=${format}`, `--max-count=${limit}`, `--skip=${skip}`];
+    if (ref) { args.push(ref); }
+    const output = await execRawReadonly(args, signal);
     return parseCommitLog(output);
 }
 

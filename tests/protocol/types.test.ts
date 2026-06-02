@@ -83,6 +83,7 @@ describe('protocol discriminated unions', () => {
                 case 'history/commitDetailsRequest': return msg.hash satisfies string;
                 case 'history/openDiff': return msg.filePath satisfies string;
                 case 'history/contextTarget': return msg.target.kind satisfies string;
+                case 'history/toolbarCommand': return msg.command satisfies string;
             }
         };
         void handle;

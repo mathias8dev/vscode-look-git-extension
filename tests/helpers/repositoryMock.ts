@@ -14,6 +14,7 @@ export function makeRepositoryMock(overrides: Partial<GitRepository> = {}): GitR
         stashList: vi.fn(async () => []),
         getStashFiles: vi.fn(async () => []),
         getLog: vi.fn(async () => []),
+        getLogForRef: vi.fn(async () => []),
         getGraphLog: vi.fn(async () => []),
         getCommitFiles: vi.fn(async () => []),
         getCommitMessage: vi.fn(async () => ''),

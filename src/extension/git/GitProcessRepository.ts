@@ -103,7 +103,10 @@ export class GitProcessRepository implements GitRepository {
     }
 
     getLog(limit: number, skip: number, signal?: AbortSignal): Promise<readonly GitCommit[]> {
-        return queryCommitLog(this.roRaw, limit, skip, signal);
+        return queryCommitLog(this.roRaw, limit, skip, undefined, signal);
+    }
+    getLogForRef(ref: string, limit: number, skip: number, signal?: AbortSignal): Promise<readonly GitCommit[]> {
+        return queryCommitLog(this.roRaw, limit, skip, ref, signal);
     }
     getGraphLog(maxCount: number, branches?: readonly string[], pathFilter?: string, filters?: GraphLogFilters, signal?: AbortSignal): Promise<readonly GitGraphCommit[]> {
         return queryGraphLog(this.roRaw, maxCount, branches, pathFilter, filters, signal);

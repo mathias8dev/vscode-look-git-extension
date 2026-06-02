@@ -104,6 +104,72 @@ describe('HistoryWebview', () => {
             },
         }));
     });
+
+    it('posts toolbar command messages from the history toolbar', async () => {
+        const api = createMockVsCodeApi();
+        const { HistoryWebview } = await import('../../../src/webview/history/HistoryWebview');
+
+        render(<HistoryWebview />);
+        sendToWebview({
+            type: 'history/data',
+            data: {
+                commits: [],
+                page: { offset: 0, limit: 50 },
+                hasMore: false,
+            },
+        });
+
+        await waitFor(() => expect(screen.getByLabelText('Select Branch')).toBeInTheDocument());
+        fireEvent.click(screen.getByLabelText('Select Branch'));
+        fireEvent.click(screen.getByLabelText('Go to Current History Item'));
+        fireEvent.click(screen.getByLabelText('Fetch from All Remotes'));
+        fireEvent.click(screen.getByLabelText('Pull'));
+        fireEvent.click(screen.getByLabelText('Push'));
+
+        expect(api.messages).toContainEqual({ type: 'history/toolbarCommand', command: 'selectBranch' });
+        expect(api.messages).toContainEqual({ type: 'history/toolbarCommand', command: 'goToCurrent' });
+        expect(api.messages).toContainEqual({ type: 'history/toolbarCommand', command: 'fetchAll' });
+        expect(api.messages).toContainEqual({ type: 'history/toolbarCommand', command: 'pull' });
+        expect(api.messages).toContainEqual({ type: 'history/toolbarCommand', command: 'push' });
+    });
+
+    it('switches opened commit files from tree to list through the more menu', async () => {
+        const { HistoryWebview } = await import('../../../src/webview/history/HistoryWebview');
+
+        render(<HistoryWebview />);
+        sendToWebview({
+            type: 'history/data',
+            data: {
+                commits: [commit('abc123456789', 'feat: render commit history')],
+                page: { offset: 0, limit: 50 },
+                hasMore: false,
+            },
+        });
+
+        await waitFor(() => expect(screen.getByText('feat: render commit history')).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('option', { name: /feat: render commit history/ }));
+
+        sendToWebview({
+            type: 'history/commitDetailsResponse',
+            requestId: 'history-details-1',
+            details: {
+                hash: 'abc123456789',
+                fullMessage: 'feat: render commit history',
+                files: [
+                    { status: 'M', filePath: 'src/history.ts' },
+                    { status: 'A', filePath: 'tests/history.test.ts' },
+                ],
+            },
+        });
+
+        await waitFor(() => expect(screen.getByRole('tree', { name: 'Changed files' })).toBeInTheDocument());
+        fireEvent.click(screen.getByLabelText('More Actions'));
+        fireEvent.click(screen.getByRole('menuitemradio', { name: 'View as List' }));
+
+        expect(screen.getByRole('list', { name: 'Changed files' })).toHaveTextContent('src/history.ts');
+        expect(screen.getByRole('list', { name: 'Changed files' })).toHaveTextContent('tests/history.test.ts');
+        expect(screen.queryByRole('tree', { name: 'Changed files' })).not.toBeInTheDocument();
+    });
 });
 
 function commit(hash: string, message: string): HistoryCommit {

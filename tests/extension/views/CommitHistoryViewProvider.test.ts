@@ -4,7 +4,7 @@ import type { GitFileChange } from '../../../src/core/git/GitRepository';
 import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHistoryViewProvider';
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
-import { env, getCommandCalls } from '../../mocks/vscode';
+import { env, getCommandCalls, setQuickPickValue } from '../../mocks/vscode';
 
 describe('CommitHistoryViewProvider error propagation', () => {
     beforeEach(resetVscodeMock);
@@ -154,6 +154,202 @@ describe('CommitHistoryViewProvider error propagation', () => {
         expect(repo.getCommitFiles).toHaveBeenCalledWith('abc123456789');
     });
 
+    it('selects a branch from the toolbar and refreshes history for that ref', async () => {
+        setQuickPickValue('feature/history');
+        const repo = makeRepositoryMock({
+            getAllBranches: vi.fn(async () => [{
+                name: 'feature/history',
+                isRemote: false,
+                isCurrent: false,
+                hash: 'feature123',
+                ahead: 0,
+                behind: 0,
+            }]),
+            getLogForRef: vi.fn(async () => [commit('feature123456789', 'feat: branch history')]),
+        });
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'selectBranch' });
+
+        await vi.waitFor(() => expect(repo.getLogForRef).toHaveBeenCalledWith('feature/history', 51, 0));
+        expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'history/data',
+            data: expect.objectContaining({
+                commits: [expect.objectContaining({ message: 'feat: branch history' })],
+            }),
+        }));
+    });
+
+    it('keeps the current history untouched when branch selection is cancelled', async () => {
+        const repo = makeRepositoryMock({
+            getAllBranches: vi.fn(async () => [{
+                name: 'feature/history',
+                isRemote: false,
+                isCurrent: false,
+                hash: 'feature123',
+                ahead: 0,
+                behind: 0,
+            }]),
+        });
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        await vi.waitFor(() => expect(repo.getLog).toHaveBeenCalledWith(51, 0));
+        vi.mocked(repo.getLog).mockClear();
+        vi.mocked(repo.getLogForRef).mockClear();
+
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'selectBranch' });
+
+        await vi.waitFor(() => expect(repo.getAllBranches).toHaveBeenCalledOnce());
+        expect(repo.getLog).not.toHaveBeenCalled();
+        expect(repo.getLogForRef).not.toHaveBeenCalled();
+    });
+
+    it('returns from a selected branch to the current branch history', async () => {
+        setQuickPickValue('feature/history');
+        const repo = makeRepositoryMock({
+            getAllBranches: vi.fn(async () => [{
+                name: 'feature/history',
+                isRemote: false,
+                isCurrent: false,
+                hash: 'feature123',
+                ahead: 0,
+                behind: 0,
+            }]),
+            getLogForRef: vi.fn(async () => [commit('feature123456789', 'feat: branch history')]),
+        });
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'selectBranch' });
+        await vi.waitFor(() => expect(repo.getLogForRef).toHaveBeenCalledWith('feature/history', 51, 0));
+
+        setQuickPickValue('Current Branch');
+        vi.mocked(repo.getLog).mockClear();
+        vi.mocked(repo.getLogForRef).mockClear();
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'selectBranch' });
+
+        await vi.waitFor(() => expect(repo.getLog).toHaveBeenCalledWith(51, 0));
+        expect(repo.getLogForRef).not.toHaveBeenCalled();
+    });
+
+    it('loads subsequent pages from the selected branch history', async () => {
+        setQuickPickValue('feature/history');
+        const repo = makeRepositoryMock({
+            getAllBranches: vi.fn(async () => [{
+                name: 'feature/history',
+                isRemote: false,
+                isCurrent: false,
+                hash: 'feature123',
+                ahead: 0,
+                behind: 0,
+            }]),
+            getLogForRef: vi.fn(async () => [
+                commit('feature123456789', 'feat: branch page'),
+                commit('featurebase1234', 'feat: branch base'),
+            ]),
+        });
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'selectBranch' });
+        await vi.waitFor(() => expect(repo.getLogForRef).toHaveBeenCalledWith('feature/history', 51, 0));
+        vi.mocked(repo.getLogForRef).mockClear();
+
+        view.messageHandler?.({
+            type: 'history/dataRequest',
+            requestId: 'history-branch-page-2',
+            page: { offset: 50, limit: 25 },
+        });
+
+        await vi.waitFor(() => expect(repo.getLogForRef).toHaveBeenCalledWith('feature/history', 26, 50));
+        await vi.waitFor(() => expect(view.messages.some((message) => isHistoryDataResponse(message, 'history-branch-page-2'))).toBe(true));
+    });
+
+    it('clears the selected history branch when the repository changes', async () => {
+        setQuickPickValue('feature/history');
+        const repo = makeRepositoryMock({
+            getAllBranches: vi.fn(async () => [{
+                name: 'feature/history',
+                isRemote: false,
+                isCurrent: false,
+                hash: 'feature123',
+                ahead: 0,
+                behind: 0,
+            }]),
+            getLogForRef: vi.fn(async () => [commit('feature123456789', 'feat: branch history')]),
+        });
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'selectBranch' });
+        await vi.waitFor(() => expect(repo.getLogForRef).toHaveBeenCalledWith('feature/history', 51, 0));
+        vi.mocked(repo.getLog).mockClear();
+        vi.mocked(repo.getLogForRef).mockClear();
+
+        await provider.notifyRepoChanged({ id: 'next', cwd: '/next', kind: 'main', label: 'next' });
+
+        expect(repo.getLogForRef).not.toHaveBeenCalled();
+        expect(repo.getLog).toHaveBeenCalledWith(51, 0);
+    });
+
+    it('goes to the current history item from the toolbar', async () => {
+        const repo = makeRepositoryMock({
+            exec: vi.fn(async () => 'head123456789'),
+        });
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'goToCurrent' });
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual({ type: 'history/selectCommit', hash: 'head123456789' }));
+        expect(repo.exec).toHaveBeenCalledWith(['rev-parse', 'HEAD']);
+    });
+
+    it('runs fetch pull and push toolbar commands then refreshes history', async () => {
+        const repo = makeRepositoryMock();
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'fetchAll' });
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'pull' });
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'push' });
+
+        await vi.waitFor(() => expect(repo.fetchAll).toHaveBeenCalledOnce());
+        await vi.waitFor(() => expect(repo.pull).toHaveBeenCalledOnce());
+        await vi.waitFor(() => expect(repo.push).toHaveBeenCalledOnce());
+        expect(repo.getLog).toHaveBeenCalled();
+    });
+
+    it('posts a recoverable toolbar error when a git operation fails', async () => {
+        const repo = makeRepositoryMock({
+            fetchAll: vi.fn(async () => { throw new Error('fetch all failed'); }),
+        });
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'fetchAll' });
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'history/error',
+            message: 'fetch all failed',
+            error: expect.objectContaining({
+                code: 'gitOperationFailed',
+                operation: 'history/fetchAll',
+                recoverable: true,
+            }),
+        })));
+    });
+
     it('opens commit history file diffs with parent and commit git URIs', async () => {
         const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(makeRepositoryMock({
             cwd: '/workspace',
@@ -288,4 +484,14 @@ function commit(hash: string, message: string) {
         authorDate: '2024-01-01T00:00:00Z',
         parentHashes: [],
     };
+}
+
+function isHistoryDataResponse(value: unknown, requestId: string): boolean {
+    return isRecord(value)
+        && value.type === 'history/dataResponse'
+        && value.requestId === requestId;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
 }

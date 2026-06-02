@@ -3,7 +3,7 @@ import type { HistoryExtensionToWebviewMessage } from '../../protocol/history/me
 import type { HistoryCommitFile, HistoryContextTarget } from '../../protocol/history/types';
 import { CommitHistoryApp } from '../features/history/CommitHistoryApp';
 import { createInitialHistoryState, reduceHistoryState } from '../features/history/historyState';
-import { messageForHistoryCommitDetails, messageForHistoryContextTarget, messageForHistoryDataRequest, messageForHistoryOpenDiff, messageForHistoryReady, messageForHistoryRefresh } from '../features/history/historyCommands';
+import { messageForHistoryCommitDetails, messageForHistoryContextTarget, messageForHistoryDataRequest, messageForHistoryOpenDiff, messageForHistoryReady, messageForHistoryRefresh, messageForHistoryToolbarCommand } from '../features/history/historyCommands';
 import { vscodeApi } from '../platform/vscodeHost';
 
 const PAGE_LIMIT = 50;
@@ -12,6 +12,7 @@ const ERROR_NOTICE_TIMEOUT_MS = 8000;
 export function HistoryWebview() {
     const [state, dispatch] = useReducer(reduceHistoryState, undefined, createInitialHistoryState);
     const [query, setQuery] = useState('');
+    const [fileViewMode, setFileViewMode] = useState<'list' | 'tree'>('tree');
 
     useEffect(() => {
         const onMessage = (event: MessageEvent<HistoryExtensionToWebviewMessage>) => {
@@ -60,8 +61,11 @@ export function HistoryWebview() {
         <CommitHistoryApp
             state={state}
             query={query}
+            fileViewMode={fileViewMode}
             onQueryChange={setQuery}
             onRefresh={handleRefresh}
+            onToolbarCommand={(command) => vscodeApi.postMessage(messageForHistoryToolbarCommand(command))}
+            onFileViewModeChange={setFileViewMode}
             onSelectCommit={(hash) => dispatch({ type: 'selectCommit', hash })}
             onOpenFileDiff={handleOpenFileDiff}
             onContextTarget={handleContextTarget}
