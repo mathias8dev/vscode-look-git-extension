@@ -120,7 +120,7 @@ export function CommitComposer({ stagedCount, conflictState, feedback, focusRequ
                     onClick={() => submitCommit(CommitMode.Commit)}
                 >
                     <i className="codicon codicon-git-commit" aria-hidden="true" />
-                    Commit
+                    <span className="commit-button-label">Commit</span>
                 </button>
                 <div className="commit-more-wrapper">
                     <button
@@ -153,7 +153,7 @@ export function CommitComposer({ stagedCount, conflictState, feedback, focusRequ
                                         onClick={() => submitCommit(option.mode)}
                                     >
                                         <i className={`codicon codicon-${option.icon}`} aria-hidden="true" />
-                                        {option.label}
+                                        <span className="commit-button-label">{option.label}</span>
                                     </button>
                                 );
                             })}

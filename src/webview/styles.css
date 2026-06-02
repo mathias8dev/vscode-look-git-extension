@@ -40,7 +40,7 @@ body,
 .eyebrow {
     margin: 0 0 8px;
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.85em;
+    font-size: 0.86em;
 }
 
 h1 {
@@ -74,19 +74,21 @@ h1 {
 
 .error-notice span {
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.85em;
+    font-size: 0.86em;
 }
 
 .changes-shell {
     min-height: 100%;
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
     background: var(--vscode-sideBar-background, var(--vscode-editor-background, #1e1e1e));
 }
 
 .changes-toolbar {
     display: grid;
-    grid-template-columns: minmax(90px, 1fr) minmax(84px, auto) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto) auto;
     gap: 6px;
     padding: 8px 0;
     border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border, #3c3c3c));
@@ -106,13 +108,15 @@ h1 {
 
 .segmented {
     display: inline-grid;
-    grid-template-columns: repeat(2, minmax(44px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
     border: 1px solid var(--vscode-button-border, var(--vscode-panel-border, #3c3c3c));
     border-radius: 4px;
     overflow: hidden;
 }
 
 .segmented button {
+    min-width: 0;
     min-height: 26px;
     border: 0;
     border-right: 1px solid var(--vscode-button-border, var(--vscode-panel-border, #3c3c3c));
@@ -120,6 +124,9 @@ h1 {
     color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, #cccccc));
     background: var(--vscode-button-secondaryBackground, transparent);
     font: inherit;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .segmented button:last-child {
@@ -134,9 +141,10 @@ h1 {
 .changes-banner {
     margin: 8px 0 0;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
     align-items: center;
     gap: 8px;
+    min-width: 0;
     border: 1px solid var(--vscode-inputValidation-warningBorder, #cca700);
     border-radius: 4px;
     padding: 8px 10px;
@@ -157,11 +165,13 @@ h1 {
 .operation-actions {
     display: flex;
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 4px;
+    min-width: 0;
 }
 
 .operation-actions button {
+    min-width: 0;
     min-height: 24px;
     border: 1px solid var(--vscode-button-border, transparent);
     border-radius: 3px;
@@ -170,6 +180,9 @@ h1 {
     background: var(--vscode-button-secondaryBackground, transparent);
     font: inherit;
     font-size: 0.86em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .operation-actions button:hover {
@@ -179,6 +192,7 @@ h1 {
 .commit-composer {
     display: grid;
     gap: 6px;
+    min-width: 0;
     padding: 8px;
     border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border, #3c3c3c));
 }
@@ -198,7 +212,7 @@ h1 {
 }
 
 .commit-hint {
-    font-size: 0.82em;
+    font-size: 0.8em;
     color: var(--vscode-descriptionForeground, #9d9d9d);
 }
 
@@ -208,10 +222,12 @@ h1 {
 
 .commit-primary-row {
     display: flex;
+    min-width: 0;
 }
 
 .commit-main-button {
     flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -225,6 +241,9 @@ h1 {
     background: var(--vscode-button-background, #0e639c);
     font: inherit;
     font-size: 0.9em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .commit-main-button:hover:not(:disabled) {
@@ -236,7 +255,7 @@ h1 {
 }
 
 .commit-main-button .codicon {
-    font-size: 14px;
+    font-size: inherit;
 }
 
 .commit-more-wrapper {
@@ -263,14 +282,16 @@ h1 {
 }
 
 .commit-more-trigger .codicon {
-    font-size: 12px;
+    font-size: inherit;
 }
 
 .commit-dropdown {
     position: absolute;
     right: 0;
     bottom: calc(100% + 6px);
-    min-width: min(210px, calc(100vw - 16px));
+    width: min(210px, calc(100vw - 16px));
+    min-width: 0;
+    max-width: calc(100vw - 16px);
     border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border, #454545));
     border-radius: 6px;
     background: var(--vscode-menu-background, var(--vscode-editor-background, #252526));
@@ -284,6 +305,7 @@ h1 {
     display: flex;
     align-items: center;
     gap: 9px;
+    min-width: 0;
     width: 100%;
     text-align: left;
     padding: 7px 14px;
@@ -291,9 +313,17 @@ h1 {
     background: transparent;
     color: var(--vscode-menu-foreground, var(--vscode-foreground, #cccccc));
     font: inherit;
-    font-size: 0.88em;
+    font-size: 0.86em;
     cursor: pointer;
     outline: none;
+    overflow: hidden;
+}
+
+.commit-button-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .commit-dropdown button:hover:not(:disabled),
@@ -303,7 +333,7 @@ h1 {
 }
 
 .commit-dropdown button .codicon {
-    font-size: 14px;
+    font-size: inherit;
     flex-shrink: 0;
     opacity: 0.8;
 }
@@ -318,6 +348,48 @@ h1 {
     cursor: default;
 }
 
+.selection-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border, #3c3c3c));
+    background: var(--vscode-sideBar-background, transparent);
+}
+
+.selection-toolbar > span {
+    flex: 1 1 0;
+    min-width: 0;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.86em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.selection-actions {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.selection-actions button {
+    min-width: 0;
+    min-height: 24px;
+    border: 1px solid var(--vscode-button-border, transparent);
+    border-radius: 3px;
+    padding: 0 7px;
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, #cccccc));
+    background: var(--vscode-button-secondaryBackground, transparent);
+    font: inherit;
+    font-size: 0.86em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .selection-actions button:hover {
     background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.1)));
 }
@@ -325,6 +397,7 @@ h1 {
 .stash-panel {
     display: grid;
     gap: 8px;
+    min-width: 0;
     padding: 10px 0;
     border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border, #3c3c3c));
 }
@@ -333,6 +406,7 @@ h1 {
     display: flex;
     align-items: center;
     gap: 6px;
+    min-width: 0;
     min-height: 28px;
     padding: 0 8px;
 }
@@ -341,7 +415,7 @@ h1 {
     flex: 1;
     min-width: 0;
     margin: 0;
-    font-size: 0.82em;
+    font-size: 0.8em;
     font-weight: 600;
     text-transform: uppercase;
     overflow: hidden;
@@ -379,6 +453,7 @@ h1 {
 
 .stash-create-actions,
 .stash-actions {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 2px;
@@ -419,11 +494,13 @@ h1 {
 
 .stash-list {
     display: grid;
+    min-width: 0;
     gap: 4px;
 }
 
 .stash-item {
     display: grid;
+    min-width: 0;
     border-top: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
 }
 
@@ -431,6 +508,7 @@ h1 {
     display: flex;
     align-items: center;
     gap: 8px;
+    min-width: 0;
     min-height: 28px;
     padding: 0 8px;
     cursor: pointer;
@@ -465,7 +543,7 @@ h1 {
 
 .stash-title-ref {
     font-family: var(--vscode-editor-font-family, monospace);
-    font-size: 0.74em;
+    font-size: 0.75em;
     color: var(--vscode-descriptionForeground, #9d9d9d);
 }
 
@@ -480,6 +558,8 @@ h1 {
 
 .stash-files {
     display: grid;
+    min-width: 0;
+    overflow: hidden;
     padding: 4px 8px 6px 18px;
     border-top: 1px solid var(--vscode-panel-border, #3c3c3c);
     background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground, rgba(14, 99, 156, 0.4)) 8%, transparent);
@@ -489,6 +569,7 @@ h1 {
     display: flex;
     align-items: center;
     gap: 6px;
+    min-width: 0;
     min-height: 22px;
     padding: 2px 0;
 }
@@ -504,11 +585,14 @@ h1 {
 .changes-content {
     flex: 1;
     min-height: 0;
-    overflow: auto;
+    min-width: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: 6px 0 12px;
 }
 
 .change-section {
+    min-width: 0;
     margin-top: 4px;
 }
 
@@ -519,6 +603,7 @@ h1 {
     display: flex;
     align-items: center;
     gap: 6px;
+    min-width: 0;
     min-height: 28px;
     padding: 0 8px;
     background: var(--vscode-sideBarSectionHeader-background, var(--vscode-sideBar-background, #252526));
@@ -550,6 +635,7 @@ h1 {
 }
 
 .icon-button {
+    flex: 0 0 22px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -570,10 +656,11 @@ h1 {
 }
 
 .icon-button .codicon {
-    font-size: 14px;
+    font-size: inherit;
 }
 
 .section-toggle {
+    flex: 0 0 22px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -585,7 +672,6 @@ h1 {
     color: var(--vscode-foreground, #cccccc);
     background: transparent;
     font-size: inherit;
-    flex-shrink: 0;
 }
 
 .section-toggle:hover {
@@ -593,7 +679,7 @@ h1 {
 }
 
 .section-toggle .codicon {
-    font-size: 14px;
+    font-size: inherit;
 }
 
 .change-row:hover .icon-button,
@@ -605,7 +691,7 @@ h1 {
 
 .change-section-header h2 {
     margin: 0;
-    font-size: 0.82em;
+    font-size: 0.8em;
     font-weight: 600;
     text-transform: uppercase;
 }
@@ -629,7 +715,7 @@ h1 {
     color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
     background: var(--vscode-input-background, transparent);
     font: inherit;
-    font-size: 0.88em;
+    font-size: 0.86em;
     outline: none;
 }
 
@@ -650,7 +736,12 @@ h1 {
 
 .change-list {
     display: grid;
+    min-width: 0;
     padding-left: 10px;
+}
+
+.change-list > * {
+    min-width: 0;
 }
 
 .show-more-changes {
@@ -673,6 +764,9 @@ h1 {
     display: flex;
     align-items: center;
     gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
     min-height: 22px;
     padding: 2px 8px 2px calc(8px + var(--depth) * 16px);
     color: var(--vscode-foreground, #cccccc);
@@ -705,7 +799,7 @@ h1 {
 .folder-chevron {
     flex: none;
     width: 16px;
-    font-size: 14px;
+    font-size: inherit;
     text-align: center;
     color: var(--vscode-descriptionForeground, #9d9d9d);
 }
@@ -720,7 +814,8 @@ h1 {
 }
 
 .file-name {
-    flex-shrink: 0;
+    flex: 0 1 auto;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -736,7 +831,7 @@ h1 {
 
 
 .status-letter {
-    flex: none;
+    flex: 0 0 1.2em;
     min-width: 1.2em;
     text-align: right;
     font-size: 0.78em;
@@ -767,13 +862,18 @@ h1 {
 }
 
 .file-path {
-    flex: 1;
+    flex: 1 1 0;
     min-width: 0;
     overflow: hidden;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     font-size: 0.86em;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.folder-row .file-name {
+    flex: 1 1 auto;
+    max-width: none;
 }
 
 .empty-state {
@@ -823,7 +923,7 @@ h1 {
 }
 
 .history-search-icon {
-    font-size: 12px;
+    font-size: 0.9em;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     flex-shrink: 0;
 }
@@ -885,7 +985,7 @@ h1 {
 
 .history-row-chevron {
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 12px;
+    font-size: 0.9em;
 }
 
 .history-row-main {
@@ -955,7 +1055,7 @@ h1 {
     color: var(--vscode-foreground, #cccccc);
     background: transparent;
     font: inherit;
-    font-size: 0.84em;
+    font-size: 0.86em;
     text-align: left;
 }
 
@@ -991,7 +1091,7 @@ h1 {
 .history-file-spacer {
     width: 16px;
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 13px;
+    font-size: inherit;
 }
 
 .history-file-status {
@@ -1024,7 +1124,7 @@ h1 {
     padding: 0 4px;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     background: var(--vscode-badge-background, #4d4d4d);
-    font-size: 0.74em;
+    font-size: 0.75em;
     text-align: center;
 }
 
@@ -1050,7 +1150,7 @@ h1 {
     padding: 4px 8px 5px 30px;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground, rgba(14, 99, 156, 0.4)) 16%, transparent);
-    font-size: 0.82em;
+    font-size: 0.8em;
 }
 
 .history-load-more {
@@ -1158,7 +1258,7 @@ h1 {
 .history-details-subject {
     margin: 0;
     color: var(--vscode-foreground, #cccccc);
-    font-size: 0.88em;
+    font-size: 0.86em;
     font-weight: 500;
     line-height: 1.35;
     word-break: break-word;
@@ -1167,7 +1267,7 @@ h1 {
 .history-details-body {
     margin: 0;
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.82em;
+    font-size: 0.8em;
     line-height: 1.4;
     word-break: break-word;
     white-space: pre-wrap;
@@ -1194,7 +1294,7 @@ h1 {
 }
 
 .history-copy-hash .codicon {
-    font-size: 11px;
+    font-size: 0.9em;
     opacity: 0.7;
 }
 
@@ -1233,6 +1333,7 @@ h1 {
 
 .submodule-panel {
     display: grid;
+    min-width: 0;
     padding: 8px 0;
     border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border, #3c3c3c));
 }
@@ -1241,16 +1342,21 @@ h1 {
     display: flex;
     align-items: center;
     gap: 6px;
+    min-width: 0;
     min-height: 28px;
     padding: 0 8px;
 }
 
 .submodule-panel-header h2 {
     flex: 1;
+    min-width: 0;
     margin: 0;
-    font-size: 0.82em;
+    font-size: 0.8em;
     font-weight: 600;
     text-transform: uppercase;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .submodule-panel-header span {
@@ -1265,6 +1371,7 @@ h1 {
 }
 
 .submodule-header-actions {
+    flex: none;
     display: flex;
     align-items: center;
 }
@@ -1275,10 +1382,12 @@ h1 {
 
 .submodule-list {
     display: grid;
+    min-width: 0;
 }
 
 .submodule-item {
     display: grid;
+    min-width: 0;
     border-top: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
 }
 
@@ -1286,6 +1395,7 @@ h1 {
     display: flex;
     align-items: center;
     gap: 8px;
+    min-width: 0;
     min-height: 28px;
     padding: 0 8px;
 }
@@ -1296,7 +1406,7 @@ h1 {
 
 .submodule-icon {
     flex-shrink: 0;
-    font-size: 14px;
+    font-size: inherit;
     color: var(--vscode-descriptionForeground, #9d9d9d);
 }
 
@@ -1310,35 +1420,43 @@ h1 {
 }
 
 .submodule-name {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 50%;
     font-size: 0.9em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    flex-shrink: 0;
 }
 
 .submodule-path {
+    flex: 1 1 0;
+    min-width: 0;
     font-size: 0.78em;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    flex: 1;
 }
 
 .submodule-actions {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 2px;
 }
 
 .submodule-badge {
-    flex-shrink: 0;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 8em;
     font-size: 0.72em;
     font-weight: 600;
     padding: 1px 7px;
     border-radius: 10px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .submodule-badge-dirty {
@@ -1358,7 +1476,14 @@ h1 {
 
 .submodule-files {
     display: grid;
+    min-width: 0;
+    overflow: hidden;
     padding: 0 8px 4px 18px;
+}
+
+.submodule-change-areas {
+    min-width: 0;
+    overflow: hidden;
 }
 
 /* ── Look Graph ──────────────────────────────────────────────────────────── */
@@ -1397,7 +1522,7 @@ h1 {
 }
 
 .branch-search-icon {
-    font-size: 12px;
+    font-size: 0.9em;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     flex-shrink: 0;
 }
@@ -1463,7 +1588,7 @@ h1 {
     background: transparent;
     color: var(--vscode-foreground, #cccccc);
     font: inherit;
-    font-size: 0.88em;
+    font-size: 0.86em;
     cursor: pointer;
     text-align: left;
     overflow: hidden;
@@ -1481,13 +1606,13 @@ h1 {
 .branch-head-item {
     padding: 0 8px;
     opacity: 0.7;
-    font-size: 0.82em;
+    font-size: 0.8em;
 }
 
 .branch-chevron,
 .branch-leaf-icon,
 .branch-folder-icon {
-    font-size: 13px;
+    font-size: inherit;
     flex-shrink: 0;
     color: var(--vscode-descriptionForeground, #9d9d9d);
 }
@@ -1515,13 +1640,13 @@ h1 {
 }
 
 .branch-ahead {
-    font-size: 0.74em;
+    font-size: 0.75em;
     color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
     flex-shrink: 0;
 }
 
 .branch-behind {
-    font-size: 0.74em;
+    font-size: 0.75em;
     color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
     flex-shrink: 0;
 }
@@ -1533,7 +1658,7 @@ h1 {
     min-height: 22px;
     padding: 0 4px 0 20px;
     color: var(--vscode-foreground, #cccccc);
-    font-size: 0.84em;
+    font-size: 0.86em;
 }
 
 .graph-resource-row:hover {
@@ -1603,7 +1728,7 @@ h1 {
 }
 
 .graph-search-icon {
-    font-size: 12px;
+    font-size: 0.9em;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     flex-shrink: 0;
 }
@@ -1629,7 +1754,7 @@ h1 {
     color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
     background: var(--vscode-input-background, transparent);
     font: inherit;
-    font-size: 0.82em;
+    font-size: 0.8em;
     max-width: 120px;
 }
 
@@ -1740,7 +1865,7 @@ h1 {
 }
 
 .graph-author-cell {
-    font-size: 0.84em;
+    font-size: 0.86em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1749,7 +1874,7 @@ h1 {
 }
 
 .graph-date-cell {
-    font-size: 0.82em;
+    font-size: 0.8em;
     white-space: nowrap;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     padding: 0 4px;
@@ -1851,7 +1976,7 @@ h1 {
 }
 
 .graph-details-hash {
-    font-size: 0.82em;
+    font-size: 0.8em;
     font-family: var(--vscode-editor-font-family, monospace);
     color: var(--vscode-descriptionForeground, #9d9d9d);
     min-width: 0;
@@ -1881,7 +2006,7 @@ h1 {
 }
 
 .graph-details-hash-full {
-    font-size: 0.74em;
+    font-size: 0.75em;
     font-family: var(--vscode-editor-font-family, monospace);
     color: var(--vscode-descriptionForeground, #9d9d9d);
     margin: 0;
@@ -1953,7 +2078,7 @@ h1 {
 
 .file-tree-chevron,
 .file-tree-folder-icon {
-    font-size: 13px;
+    font-size: inherit;
     flex-shrink: 0;
     color: var(--vscode-descriptionForeground, #9d9d9d);
 }
@@ -1967,7 +2092,7 @@ h1 {
 }
 
 .commit-file-count {
-    font-size: 0.74em;
+    font-size: 0.75em;
     padding: 1px 4px;
     border-radius: 3px;
     background: var(--vscode-badge-background, #4d4d4d);
@@ -2017,10 +2142,10 @@ h1 {
     flex-shrink: 0;
 }
 
-.wip-staged    { color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b); font-size: 0.82em; }
-.wip-unstaged  { color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d); font-size: 0.82em; }
-.wip-untracked { color: var(--vscode-descriptionForeground, #9d9d9d); font-size: 0.82em; }
-.wip-conflict  { color: var(--vscode-gitDecoration-conflictingResourceForeground, #e4676b); font-size: 0.82em; }
+.wip-staged    { color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b); font-size: 0.8em; }
+.wip-unstaged  { color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d); font-size: 0.8em; }
+.wip-untracked { color: var(--vscode-descriptionForeground, #9d9d9d); font-size: 0.8em; }
+.wip-conflict  { color: var(--vscode-gitDecoration-conflictingResourceForeground, #e4676b); font-size: 0.8em; }
 
 .graph-wip-path {
     font-size: 0.78em;
@@ -2029,7 +2154,7 @@ h1 {
 }
 
 .wip-date-cell {
-    font-size: 0.74em;
+    font-size: 0.75em;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     font-style: italic;
 }
