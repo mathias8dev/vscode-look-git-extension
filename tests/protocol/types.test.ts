@@ -9,6 +9,7 @@ describe('protocol discriminated unions', () => {
         const handle = (msg: GraphExtensionToWebviewMessage) => {
             switch (msg.type) {
                 case 'repo/contextChanged': return msg.context.id satisfies string;
+                case 'graph/refreshRequested': return;
                 case 'graph/dataPush': return msg.data.commits satisfies readonly unknown[];
                 case 'graph/dataResponse': return msg.requestId satisfies string;
                 case 'graph/commitDetailsResponse': return msg.files satisfies readonly unknown[];
@@ -149,6 +150,8 @@ describe('protocol discriminated unions', () => {
                 case 'changes/openSubmoduleStashDiff': return msg.submodulePath satisfies string;
                 case 'changes/continueOp': return msg.conflictState satisfies string;
                 case 'changes/abortOp': return msg.conflictState satisfies string;
+                case 'changes/submoduleContinueOp': return msg.conflictState satisfies string;
+                case 'changes/submoduleAbortOp': return msg.submodulePath satisfies string;
                 case 'changes/submoduleUpdate': return msg.path satisfies string;
                 case 'changes/submoduleUpdateAll': return;
                 case 'changes/getSubmoduleStatus': return msg.requestId satisfies string;

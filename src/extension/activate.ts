@@ -17,9 +17,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         gitApi.repositories.find((r) => r.ui.selected) ?? gitApi.repositories[0];
 
     const repositories = new ActiveRepositoryRegistry();
-    const changesProvider = new ChangesViewProvider(context.extensionUri, repositories);
-    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories);
     const graphProvider = new GraphViewProvider(context.extensionUri, repositories);
+    const refreshGraph = () => graphProvider.refresh();
+    const changesProvider = new ChangesViewProvider(context.extensionUri, repositories, refreshGraph);
+    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshGraph);
 
     context.subscriptions.push(
         repositories,

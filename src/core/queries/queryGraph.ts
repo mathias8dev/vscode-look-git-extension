@@ -66,7 +66,7 @@ export async function queryAllBranches(
     getCurrentBranch: (signal?: AbortSignal) => Promise<string>,
     signal?: AbortSignal,
 ): Promise<GitBranch[]> {
-    const format = ['%(refname)', '%(objectname:short)', '%(upstream:short)', '%(upstream:track)'].join('%00');
+    const format = ['%(refname)', '%(objectname)', '%(upstream:short)', '%(upstream:track)'].join('%00');
     const [output, currentBranch] = await Promise.all([
         execRawReadonly(['for-each-ref', `--format=${format}`, 'refs/heads', 'refs/remotes'], signal),
         getCurrentBranch(signal).catch(() => 'HEAD'),
@@ -93,7 +93,7 @@ export async function queryAllBranches(
 }
 
 export async function queryAllTags(execRawReadonly: GitExec, signal?: AbortSignal): Promise<GitTag[]> {
-    const format = '%(refname:short)%00%(objectname:short)';
+    const format = '%(refname:short)%00%(objectname)';
     const output = await execRawReadonly(['tag', `--format=${format}`], signal);
     if (!output) { return []; }
     return output.split('\n').filter(Boolean).map((line) => {

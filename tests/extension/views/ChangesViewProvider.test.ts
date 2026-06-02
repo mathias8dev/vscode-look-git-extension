@@ -167,6 +167,27 @@ describe('ChangesViewProvider', () => {
         await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({ type: 'changes/statusData' })));
     });
 
+    it('posts refreshed status data while the retained webview is hidden', async () => {
+        const repo = makeRepo({
+            getStatus: vi.fn(async () => ({
+                staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'hidden.ts' }],
+                unstaged: [], conflicts: [], conflictState: 'none' as const,
+            })),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        view.visible = false;
+
+        provider.resolveWebviewView(view);
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/statusData',
+            data: expect.objectContaining({
+                staged: [expect.objectContaining({ filePath: 'hidden.ts' })],
+            }),
+        })));
+    });
+
     it('adds semantic submodule status to submodule changes', async () => {
         const repo = makeRepo({
             getStatus: vi.fn(async () => ({
@@ -305,13 +326,15 @@ describe('ChangesViewProvider', () => {
 
     it('toolbar fetch all uses all remotes semantics', async () => {
         const repo = makeRepo();
-        const provider = makeProvider(repo);
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const provider = new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), onRepositoryUpdated);
         const view = makeWebviewView();
         provider.resolveWebviewView(view);
 
         view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'fetchAll' });
 
         await vi.waitFor(() => expect(repo.fetchAll).toHaveBeenCalledOnce());
+        await vi.waitFor(() => expect(onRepositoryUpdated).toHaveBeenCalledOnce());
     });
 
     it('toolbar checkout uses the selected branch', async () => {
@@ -547,6 +570,43 @@ describe('ChangesViewProvider', () => {
         await vi.waitFor(() => expect(repo.rebaseAbort).toHaveBeenCalled());
     });
 
+    it('continues and aborts active merge or rebase operations inside submodules', async () => {
+        setWarningChoice('Abort');
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+            getSubmoduleStatus: vi.fn(async () => [{ path: 'modules/lib', status: ' ' as const }]),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/submoduleContinueOp',
+            submodulePath: 'modules/lib',
+            conflictState: 'merge',
+        });
+        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith([
+            '-C',
+            '/workspace/modules/lib',
+            '-c',
+            'core.editor=true',
+            'merge',
+            '--continue',
+        ]));
+
+        view.messageHandler?.({
+            type: 'changes/submoduleAbortOp',
+            submodulePath: 'modules/lib',
+            conflictState: 'rebase',
+        });
+        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith([
+            '-C',
+            '/workspace/modules/lib',
+            'rebase',
+            '--abort',
+        ]));
+    });
+
     it('routes stash commands to the active repository', async () => {
         setWarningChoice('Drop');
         const repo = makeRepo();
@@ -675,7 +735,7 @@ describe('ChangesViewProvider', () => {
         view.messageHandler?.({ type: 'changes/getSubmoduleStatus', requestId: 'sub-1', path: 'modules/lib' });
 
         await vi.waitFor(() => expect(repo.execRaw).toHaveBeenCalledWith(
-            ['-C', '/workspace/modules/lib', 'status', '--porcelain', '-z', '--untracked-files=all'],
+            ['--no-optional-locks', '-C', '/workspace/modules/lib', 'status', '--porcelain', '-z', '--untracked-files=all'],
         ));
         await vi.waitFor(() => expect(view.messages).toContainEqual({
             type: 'changes/submoduleStatusData',
@@ -688,10 +748,37 @@ describe('ChangesViewProvider', () => {
                     expect.objectContaining({ filePath: 'LOCAL_NOTES.md', indexStatus: '?', workTreeStatus: '?' }),
                 ],
                 conflicts: [],
+                conflictState: 'none',
                 stashes: [],
             },
         }));
-        expect(repo.exec).not.toHaveBeenCalledWith(['-C', '/workspace/modules/lib', 'status', '--porcelain', '-z', '--untracked-files=all']);
+        expect(repo.exec).not.toHaveBeenCalledWith(['--no-optional-locks', '-C', '/workspace/modules/lib', 'status', '--porcelain', '-z', '--untracked-files=all']);
+    });
+
+    it('uses cached submodule paths from the parent refresh when loading submodule status', async () => {
+        const repo = makeRepo({
+            getSubmoduleStatus: vi.fn(async () => [{ path: 'modules/lib', status: ' ' as const }]),
+            getSubmodulePaths: vi.fn(async () => { throw new Error('submodule path validation should use cache'); }),
+            execRaw: vi.fn(async () => ' M index.ts\0'),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/statusData',
+            data: expect.objectContaining({
+                submodules: [expect.objectContaining({ path: 'modules/lib' })],
+            }),
+        })));
+
+        view.messageHandler?.({ type: 'changes/getSubmoduleStatus', requestId: 'sub-cached', path: 'modules/lib' });
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/submoduleStatusData',
+            requestId: 'sub-cached',
+        })));
+        expect(repo.getSubmodulePaths).not.toHaveBeenCalled();
     });
 
     it('rejects submodule status requests for unknown paths', async () => {

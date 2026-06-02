@@ -6,15 +6,15 @@ import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/reposi
 import { env } from '../../mocks/vscode';
 
 interface GraphDataPushLike {
-    readonly type: 'graph/dataPush';
+    readonly type: 'graph/dataPush' | 'graph/dataResponse';
     readonly data: Record<string, unknown>;
 }
 
-function isGraphDataPushLike(message: unknown): message is GraphDataPushLike {
+function isGraphDataMessageLike(message: unknown): message is GraphDataPushLike {
     return typeof message === 'object'
         && message !== null
         && 'type' in message
-        && message.type === 'graph/dataPush'
+        && (message.type === 'graph/dataPush' || message.type === 'graph/dataResponse')
         && 'data' in message
         && typeof message.data === 'object'
         && message.data !== null;
@@ -48,9 +48,16 @@ describe('GraphViewProvider', () => {
         const view = makeWebviewView();
 
         provider.resolveWebviewView(view);
+        view.messageHandler?.({
+            type: 'graph/dataRequest',
+            requestId: 'graph-provider-data',
+            repoId: repo.cwd,
+            filters: {},
+            page: { offset: 0, limit: 50 },
+        });
 
         await vi.waitFor(() => {
-            const message = view.messages.find(isGraphDataPushLike);
+            const message = view.messages.find(isGraphDataMessageLike);
             expect(message).toBeDefined();
             expect(message?.data.commits).toEqual([expect.objectContaining({
                 hash: 'abc123456789',
@@ -61,7 +68,7 @@ describe('GraphViewProvider', () => {
         });
     });
 
-    it('posts a protocol error when the initial graph refresh fails', async () => {
+    it('posts a protocol error when a graph data request fails', async () => {
         const repo = makeRepositoryMock({
             getGraphLog: vi.fn(async () => { throw new Error('graph refresh failed'); }),
         });
@@ -69,13 +76,21 @@ describe('GraphViewProvider', () => {
         const view = makeWebviewView();
 
         provider.resolveWebviewView(view);
+        view.messageHandler?.({
+            type: 'graph/dataRequest',
+            requestId: 'graph-refresh-failed',
+            repoId: repo.cwd,
+            filters: {},
+            page: { offset: 0, limit: 50 },
+        });
 
         await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
             type: 'graph/error',
+            requestId: 'graph-refresh-failed',
             message: 'graph refresh failed',
             error: expect.objectContaining({
-                code: 'refreshFailed',
-                operation: 'graph/refresh',
+                code: 'gitOperationFailed',
+                operation: 'graph/dataRequest',
                 recoverable: true,
             }),
         })));
@@ -116,6 +131,13 @@ describe('GraphViewProvider', () => {
         const view = makeWebviewView();
 
         provider.resolveWebviewView(view);
+        view.messageHandler?.({
+            type: 'graph/dataRequest',
+            requestId: 'graph-optional-data',
+            repoId: repo.cwd,
+            filters: {},
+            page: { offset: 0, limit: 50 },
+        });
 
         await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
             type: 'graph/error',
@@ -126,8 +148,21 @@ describe('GraphViewProvider', () => {
             }),
         })));
         await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
-            type: 'graph/dataPush',
+            type: 'graph/dataResponse',
+            requestId: 'graph-optional-data',
         })));
+    });
+
+    it('requests the webview to refresh instead of pushing default graph data', async () => {
+        const repo = makeRepositoryMock();
+        const provider = new GraphViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        await provider.refresh();
+
+        expect(view.messages).toContainEqual({ type: 'graph/refreshRequested' });
+        expect(repo.getGraphLog).not.toHaveBeenCalled();
     });
 
     it('runs native graph context commands against the latest webview target', async () => {

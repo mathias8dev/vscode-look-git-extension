@@ -37,6 +37,7 @@ describe('ChangesApp', () => {
                 onToggleSubmodule={() => undefined}
                 onSubmoduleRowAction={() => undefined}
                 onSubmoduleBulkAction={() => undefined}
+                onSubmoduleOperationAction={() => undefined}
                 onSubmoduleCommit={() => undefined}
                 onSubmoduleCreateStash={() => undefined}
                 onToggleSubmoduleStash={() => undefined}

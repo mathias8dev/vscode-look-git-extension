@@ -1,7 +1,8 @@
 import type { ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
-import type { StashFileEntry, StatusEntry } from '../../../protocol/changes/types';
+import type { ConflictState, StashFileEntry, StatusEntry } from '../../../protocol/changes/types';
 import { CommitMode } from '../../../protocol/changes/types';
 import { ChangeBulkAction, ChangeRowAction } from './changeCommands';
+import { OperationAction } from './operationCommands';
 import { StashEntryAction } from './stashCommands';
 
 export enum SubmoduleAction {
@@ -85,6 +86,21 @@ export function messageForSubmoduleBulkAction(
             return { type: 'changes/submoduleDiscardAll', submodulePath };
         case ChangeBulkAction.AcceptAllTheirs:
             return { type: 'changes/submoduleAcceptAllTheirs', submodulePath };
+    }
+}
+
+export function messageForSubmoduleOperationAction(
+    submodulePath: string,
+    conflictState: ConflictState,
+    action: OperationAction,
+): ChangesWebviewToExtensionMessage {
+    switch (action) {
+        case OperationAction.AcceptAllTheirs:
+            return { type: 'changes/submoduleAcceptAllTheirs', submodulePath };
+        case OperationAction.Continue:
+            return { type: 'changes/submoduleContinueOp', submodulePath, conflictState };
+        case OperationAction.Abort:
+            return { type: 'changes/submoduleAbortOp', submodulePath, conflictState };
     }
 }
 

@@ -63,6 +63,7 @@ describe('ChangesWebview', () => {
                 staged: [],
                 unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/inner.ts' }],
                 conflicts: [],
+                conflictState: ConflictState.None,
                 stashes: [],
             },
         });
@@ -72,6 +73,24 @@ describe('ChangesWebview', () => {
 
         await waitFor(() => expect(screen.getByRole('button', { name: 'Hide changes' })).toBeInTheDocument());
         await waitFor(() => expect(submoduleStatusRequests(api.messages).length).toBe(2));
+    });
+
+    it('does not duplicate submodule status requests while a previous one is still loading', async () => {
+        const api = createMockVsCodeApi();
+        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+        render(<ChangesWebview />);
+        sendStatusDataWithSubmodule();
+
+        await waitFor(() => expect(screen.getByText('lib')).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Show changes' }));
+
+        await waitFor(() => expect(submoduleStatusRequests(api.messages).length).toBe(1));
+        sendStatusDataWithSubmodule();
+        await waitFor(() => expect(screen.getByText('Loading changes…')).toBeInTheDocument());
+        await nextTick();
+
+        expect(submoduleStatusRequests(api.messages).length).toBe(1);
     });
 
     it('keeps expanded stashes open after status refreshes and reloads missing files', async () => {
@@ -89,6 +108,35 @@ describe('ChangesWebview', () => {
 
         await waitFor(() => expect(screen.getByRole('button', { name: 'Hide files' })).toBeInTheDocument());
         await waitFor(() => expect(stashFilesRequests(api.messages).length).toBe(2));
+    });
+
+    it('opens a stash file diff when clicking a loaded stash file row', async () => {
+        const api = createMockVsCodeApi();
+        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+        render(<ChangesWebview />);
+        sendStatusData();
+
+        await waitFor(() => expect(screen.getByText('WIP')).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Show files' }));
+        await waitFor(() => expect(stashFilesRequests(api.messages).length).toBe(1));
+        sendToWebview({
+            type: 'changes/stashFiles',
+            requestId: 'changes:stash-files:0',
+            index: 0,
+            files: [{ status: 'M', filePath: 'src/stashed.ts' }],
+        });
+
+        await waitFor(() => expect(screen.getByTitle('src/stashed.ts')).toBeInTheDocument());
+        fireEvent.click(screen.getByTitle('src/stashed.ts'));
+
+        expect(api.messages).toContainEqual({
+            type: 'changes/openStashDiff',
+            index: 0,
+            filePath: 'src/stashed.ts',
+            origPath: undefined,
+            status: 'M',
+        });
     });
 });
 
@@ -134,4 +182,8 @@ function stashFilesRequests(messages: readonly unknown[]): readonly unknown[] {
         if (!message || typeof message !== 'object') { return false; }
         return 'type' in message && message.type === 'changes/getStashFiles';
     });
+}
+
+async function nextTick(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 0));
 }

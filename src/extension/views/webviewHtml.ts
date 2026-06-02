@@ -1,6 +1,8 @@
 import * as crypto from 'crypto';
 import * as vscode from 'vscode';
 
+const WEBVIEW_CONTEXT = JSON.stringify({ preventDefaultContextMenuItems: true });
+
 export function getWebviewHtml(
     webview: vscode.Webview,
     extensionUri: vscode.Uri,
@@ -24,7 +26,7 @@ export function getWebviewHtml(
   <link rel="stylesheet" href="${styleUri}" />
   <title>Look Git</title>
 </head>
-<body>
+<body data-vscode-context='${WEBVIEW_CONTEXT}'>
   <div id="root"></div>
   <script nonce="${nonce}" type="module" src="${scriptUri}"></script>
 </body>

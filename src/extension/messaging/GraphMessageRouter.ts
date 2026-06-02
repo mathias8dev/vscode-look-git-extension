@@ -48,8 +48,10 @@ export class GraphMessageRouter {
     private async dispatch(msg: GraphWebviewToExtensionMessage): Promise<void> {
         switch (msg.type) {
             case 'graph/ready':
+                break;
+
             case 'graph/refresh':
-                await this.pushGraphData(undefined, undefined);
+                this.requestGraphRefresh();
                 break;
 
             case 'graph/dataRequest': {
@@ -319,7 +321,7 @@ export class GraphMessageRouter {
                 await repo.merge(branch);
                 break;
         }
-        await this.pushGraphData(undefined, undefined);
+        this.requestGraphRefresh();
     }
 
     private async handleWorktreeCommand(command: WorktreeCommand, wtPath?: string): Promise<void> {
@@ -410,13 +412,13 @@ export class GraphMessageRouter {
                 break;
             }
         }
-        await this.pushGraphData(undefined, undefined);
+        this.requestGraphRefresh();
     }
 
     private async handleCommitCommand(command: CommitCommand, hash: string, hashes: readonly string[]): Promise<void> {
         const repo = this.repositories.requireRepository();
         const shouldRefresh = await runCommitCommand(repo, command, hash, hashes);
-        if (shouldRefresh) { await this.pushGraphData(undefined, undefined); }
+        if (shouldRefresh) { this.requestGraphRefresh(); }
     }
 
     private postGraphError(
@@ -432,6 +434,10 @@ export class GraphMessageRouter {
                 recoverable: true,
             }),
         });
+    }
+
+    requestGraphRefresh(): void {
+        this.postMessage({ type: 'graph/refreshRequested' });
     }
 
     private optionalResultOrEmpty<T>(

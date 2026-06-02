@@ -74,6 +74,13 @@ export function rowActionsFor(item: ChangeListItem): readonly ChangeActionDescri
     ];
 }
 
+export function primaryRowActionFor(item: ChangeListItem): ChangeRowAction | undefined {
+    if (item.entry.isSubmodule) { return undefined; }
+    return item.section === ChangeSectionId.Conflicts
+        ? ChangeRowAction.OpenMergeEditor
+        : ChangeRowAction.Diff;
+}
+
 export function bulkActionsFor(section: ChangeSection): readonly ChangeActionDescriptor<ChangeBulkAction>[] {
     if (section.id === ChangeSectionId.Staged) {
         return section.items.length > 0

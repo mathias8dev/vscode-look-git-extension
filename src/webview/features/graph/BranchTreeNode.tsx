@@ -68,8 +68,34 @@ export function BranchTreeNode({ node, depth, selectedBranch, onSelect, onOpenCo
             />
             <span className="branch-node-name">{node.name}</span>
             {isCurrent && <span className="branch-current-indicator" aria-label="current branch" />}
-            {branch?.ahead ? <span className="branch-ahead" title={`${branch.ahead} ahead`}>↑{branch.ahead}</span> : null}
-            {branch?.behind ? <span className="branch-behind" title={`${branch.behind} behind`}>↓{branch.behind}</span> : null}
+            {branch?.ahead ? (
+                <span
+                    className="branch-tracking-indicator branch-ahead"
+                    title={notPushedTitle(branch.ahead)}
+                    aria-label={notPushedTitle(branch.ahead)}
+                >
+                    <i className="codicon codicon-cloud-upload" aria-hidden="true" />
+                    <span>{branch.ahead}</span>
+                </span>
+            ) : null}
+            {branch?.behind ? (
+                <span
+                    className="branch-tracking-indicator branch-behind"
+                    title={toPullTitle(branch.behind)}
+                    aria-label={toPullTitle(branch.behind)}
+                >
+                    <i className="codicon codicon-cloud-download" aria-hidden="true" />
+                    <span>{branch.behind}</span>
+                </span>
+            ) : null}
         </button>
     );
+}
+
+function notPushedTitle(count: number): string {
+    return `${count} commit${count === 1 ? '' : 's'} not pushed`;
+}
+
+function toPullTitle(count: number): string {
+    return `${count} commit${count === 1 ? '' : 's'} to pull`;
 }

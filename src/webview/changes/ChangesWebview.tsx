@@ -23,6 +23,7 @@ import {
     messageForSubmoduleAction,
     messageForSubmoduleBulkAction,
     messageForSubmoduleCommit,
+    messageForSubmoduleOperationAction,
     messageForSubmoduleRowAction,
     messageForSubmoduleStash,
     messageForSubmoduleStashAction,
@@ -66,13 +67,21 @@ export function ChangesWebview() {
         const knownSubmodulePaths = new Set(state.status.submodules.map((submodule) => submodule.path));
         for (const submodulePath of state.expandedSubmodulePaths) {
             if (!knownSubmodulePaths.has(submodulePath)) { continue; }
+            if (state.loadingSubmoduleStatusPaths.includes(submodulePath)) { continue; }
             if (
                 Object.prototype.hasOwnProperty.call(state.submoduleStatusByPath, submodulePath)
                 && !state.staleSubmoduleStatusPaths.includes(submodulePath)
             ) { continue; }
+            dispatch({ type: 'requestSubmoduleStatus', path: submodulePath });
             postToExtension(messageForGetSubmoduleStatus(submodulePath, submoduleStatusRequestId(submodulePath)));
         }
-    }, [state.expandedSubmodulePaths, state.status.submodules, state.staleSubmoduleStatusPaths, state.submoduleStatusByPath]);
+    }, [
+        state.expandedSubmodulePaths,
+        state.loadingSubmoduleStatusPaths,
+        state.status.submodules,
+        state.staleSubmoduleStatusPaths,
+        state.submoduleStatusByPath,
+    ]);
 
     useEffect(() => {
         for (const [submodulePath, statusData] of Object.entries(state.submoduleStatusByPath)) {
@@ -124,6 +133,8 @@ export function ChangesWebview() {
                 postToExtension(messageForSubmoduleRowAction(submodulePath, item.entry, item.isStaged, action))}
             onSubmoduleBulkAction={(submodulePath: string, action: ChangeBulkAction) =>
                 postToExtension(messageForSubmoduleBulkAction(submodulePath, action))}
+            onSubmoduleOperationAction={(submodulePath: string, conflictState: ActiveConflictState, action: OperationAction) =>
+                postToExtension(messageForSubmoduleOperationAction(submodulePath, conflictState, action))}
             onSubmoduleCommit={(submodulePath: string, message: string, mode: CommitMode) => {
                 dispatch({ type: 'rememberCommitMessage', message });
                 postToExtension(messageForSubmoduleCommit(submodulePath, message, mode));

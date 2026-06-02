@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { CommitMode } from '../../../src/protocol/changes/types';
+import { CommitMode, ConflictState } from '../../../src/protocol/changes/types';
 import { ChangeBulkAction, ChangeRowAction } from '../../../src/webview/features/changes/changeCommands';
+import { OperationAction } from '../../../src/webview/features/changes/operationCommands';
 import {
     messageForSubmoduleCommit,
     messageForSubmoduleBulkAction,
+    messageForSubmoduleOperationAction,
     messageForSubmoduleRowAction,
     messageForSubmoduleStash,
     messageForSubmoduleStashAction,
@@ -47,6 +49,23 @@ describe('submoduleCommands', () => {
             submodulePath: 'modules/lib',
         });
         expect(messageForSubmoduleBulkAction('modules/lib', ChangeBulkAction.AcceptAllTheirs)).toEqual({
+            type: 'changes/submoduleAcceptAllTheirs',
+            submodulePath: 'modules/lib',
+        });
+    });
+
+    it('maps operation actions to submodule-scoped messages', () => {
+        expect(messageForSubmoduleOperationAction('modules/lib', ConflictState.Merge, OperationAction.Continue)).toEqual({
+            type: 'changes/submoduleContinueOp',
+            submodulePath: 'modules/lib',
+            conflictState: ConflictState.Merge,
+        });
+        expect(messageForSubmoduleOperationAction('modules/lib', ConflictState.Rebase, OperationAction.Abort)).toEqual({
+            type: 'changes/submoduleAbortOp',
+            submodulePath: 'modules/lib',
+            conflictState: ConflictState.Rebase,
+        });
+        expect(messageForSubmoduleOperationAction('modules/lib', ConflictState.Merge, OperationAction.AcceptAllTheirs)).toEqual({
             type: 'changes/submoduleAcceptAllTheirs',
             submodulePath: 'modules/lib',
         });

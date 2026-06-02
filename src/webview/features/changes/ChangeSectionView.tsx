@@ -76,7 +76,7 @@ export function ChangeSectionView({
                     title={collapsed ? 'Expand section' : 'Collapse section'}
                     aria-hidden="true"
                     tabIndex={-1}
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); onToggleCollapsed(); }}
                 >
                     <i className={`codicon codicon-chevron-${collapsed ? 'right' : 'down'}`} aria-hidden="true" />
                 </button>

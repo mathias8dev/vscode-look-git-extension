@@ -9,6 +9,7 @@ export function filterHistoryCommits(commits: readonly HistoryCommit[], query: s
         commit.message,
         commit.authorName,
         commit.authorDate,
+        ...commit.refs.map((ref) => ref.name),
     ].some((value) => value.toLowerCase().includes(normalized)));
 }
 

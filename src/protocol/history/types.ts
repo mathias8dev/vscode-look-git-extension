@@ -7,6 +7,15 @@ export interface HistoryCommit {
     readonly authorName: string;
     readonly authorDate: string;
     readonly parentHashes: readonly string[];
+    readonly refs: readonly HistoryCommitRef[];
+}
+
+export type HistoryCommitRefKind = 'local' | 'remote' | 'tag';
+
+export interface HistoryCommitRef {
+    readonly name: string;
+    readonly kind: HistoryCommitRefKind;
+    readonly isCurrent?: boolean;
 }
 
 export interface HistoryData {

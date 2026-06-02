@@ -31,6 +31,7 @@ describe('CommitHistoryViewProvider error propagation', () => {
                     authorName: 'Ada',
                     authorDate: '2024-01-01T00:00:00Z',
                     parentHashes: [],
+                    refs: [],
                 }, {
                     hash: 'def123456789',
                     shortHash: 'def1234',
@@ -38,12 +39,48 @@ describe('CommitHistoryViewProvider error propagation', () => {
                     authorName: 'Ada',
                     authorDate: '2024-01-01T00:00:00Z',
                     parentHashes: [],
+                    refs: [],
                 }],
                 page: { offset: 0, limit: 50 },
                 hasMore: false,
             },
         }));
         expect(repo.getLog).toHaveBeenCalledWith(51, 0);
+    });
+
+    it('adds local remote and tag refs to commits', async () => {
+        const repo = makeRepositoryMock({
+            getLog: vi.fn(async () => [
+                commit('abc123456789', 'feat: history refs'),
+                commit('def123456789', 'fix: no refs'),
+            ]),
+            getAllBranches: vi.fn(async () => [
+                { name: 'experimental', isRemote: false, isCurrent: true, hash: 'abc1234', ahead: 0, behind: 0 },
+                { name: 'origin/experimental', isRemote: true, isCurrent: false, hash: 'abc1234', ahead: 0, behind: 0 },
+            ]),
+            getAllTags: vi.fn(async () => [{ name: 'v1.0.0', hash: 'abc1234' }]),
+        });
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'history/data',
+            data: expect.objectContaining({
+                commits: [
+                    expect.objectContaining({
+                        hash: 'abc123456789',
+                        refs: [
+                            { name: 'experimental', kind: 'local', isCurrent: true },
+                            { name: 'origin/experimental', kind: 'remote' },
+                            { name: 'v1.0.0', kind: 'tag' },
+                        ],
+                    }),
+                    expect.objectContaining({ hash: 'def123456789', refs: [] }),
+                ],
+            }),
+        })));
     });
 
     it('posts an empty history payload when no repository is active', async () => {
@@ -91,6 +128,7 @@ describe('CommitHistoryViewProvider error propagation', () => {
                     authorName: 'Ada',
                     authorDate: '2024-01-01T00:00:00Z',
                     parentHashes: [],
+                    refs: [],
                 }, {
                     hash: 'def123456789',
                     shortHash: 'def1234',
@@ -98,6 +136,7 @@ describe('CommitHistoryViewProvider error propagation', () => {
                     authorName: 'Ada',
                     authorDate: '2024-01-01T00:00:00Z',
                     parentHashes: [],
+                    refs: [],
                 }],
                 page: { offset: 2, limit: 2 },
                 hasMore: true,
@@ -200,6 +239,7 @@ describe('CommitHistoryViewProvider error propagation', () => {
         await vi.waitFor(() => expect(repo.getLog).toHaveBeenCalledWith(51, 0));
         vi.mocked(repo.getLog).mockClear();
         vi.mocked(repo.getLogForRef).mockClear();
+        vi.mocked(repo.getAllBranches).mockClear();
 
         view.messageHandler?.({ type: 'history/toolbarCommand', command: 'selectBranch' });
 
@@ -271,6 +311,39 @@ describe('CommitHistoryViewProvider error propagation', () => {
         await vi.waitFor(() => expect(view.messages.some((message) => isHistoryDataResponse(message, 'history-branch-page-2'))).toBe(true));
     });
 
+    it('reuses branch and tag refs across history pagination', async () => {
+        const repo = makeRepositoryMock({
+            getLog: vi.fn(async () => [commit('abc123456789', 'feat: history page')]),
+            getAllBranches: vi.fn(async () => [{
+                name: 'main',
+                isRemote: false,
+                isCurrent: true,
+                hash: 'abc123456789',
+                ahead: 0,
+                behind: 0,
+            }]),
+            getAllTags: vi.fn(async () => [{ name: 'v1.0.0', hash: 'abc123456789' }]),
+        });
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({ type: 'history/data' })));
+        expect(repo.getAllBranches).toHaveBeenCalledOnce();
+        vi.mocked(repo.getAllBranches).mockClear();
+        vi.mocked(repo.getAllTags).mockClear();
+
+        view.messageHandler?.({
+            type: 'history/dataRequest',
+            requestId: 'history-page-with-cached-refs',
+            page: { offset: 50, limit: 25 },
+        });
+
+        await vi.waitFor(() => expect(view.messages.some((message) => isHistoryDataResponse(message, 'history-page-with-cached-refs'))).toBe(true));
+        expect(repo.getAllBranches).not.toHaveBeenCalled();
+        expect(repo.getAllTags).not.toHaveBeenCalled();
+    });
+
     it('clears the selected history branch when the repository changes', async () => {
         setQuickPickValue('feature/history');
         const repo = makeRepositoryMock({
@@ -315,7 +388,8 @@ describe('CommitHistoryViewProvider error propagation', () => {
 
     it('runs fetch pull and push toolbar commands then refreshes history', async () => {
         const repo = makeRepositoryMock();
-        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo), onRepositoryUpdated);
         const view = makeWebviewView();
 
         provider.resolveWebviewView(view);
@@ -326,6 +400,7 @@ describe('CommitHistoryViewProvider error propagation', () => {
         await vi.waitFor(() => expect(repo.fetchAll).toHaveBeenCalledOnce());
         await vi.waitFor(() => expect(repo.pull).toHaveBeenCalledOnce());
         await vi.waitFor(() => expect(repo.push).toHaveBeenCalledOnce());
+        await vi.waitFor(() => expect(onRepositoryUpdated).toHaveBeenCalledTimes(3));
         expect(repo.getLog).toHaveBeenCalled();
     });
 

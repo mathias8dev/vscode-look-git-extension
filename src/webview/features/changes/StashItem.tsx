@@ -1,6 +1,7 @@
 import type { StashEntry, StashFileEntry } from '../../../protocol/changes/types';
 import { Codicon } from '../../shared/Codicon';
 import { IconButton } from '../../shared/IconButton';
+import { changesItemContext } from './context-menu-model';
 import { StashEntryAction } from './stashCommands';
 import { StashFileRow } from './StashFileRow';
 
@@ -16,7 +17,7 @@ interface StashItemProps {
 export function StashItem({ stash, expanded, files, onToggle, onAction, onFileDiff }: StashItemProps) {
     const displayMessage = stash.message || `stash@{${stash.index}}`;
     return (
-        <article className="stash-item">
+        <article className="stash-item" data-vscode-context={changesItemContext()}>
             <header
                 className="stash-item-header"
                 onClick={() => onToggle(stash.index)}

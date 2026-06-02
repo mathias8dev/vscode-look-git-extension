@@ -36,6 +36,7 @@ interface ChangesAppProps {
     readonly onToggleSubmodule: (path: string) => void;
     readonly onSubmoduleRowAction: (submodulePath: string, item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onSubmoduleBulkAction: (submodulePath: string, action: ChangeBulkAction) => void;
+    readonly onSubmoduleOperationAction: (submodulePath: string, conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly onSubmoduleCommit: (submodulePath: string, message: string, mode: CommitMode) => void;
     readonly onSubmoduleCreateStash: (submodulePath: string, message: string) => void;
     readonly onToggleSubmoduleStash: (submodulePath: string, index: number) => void;
@@ -59,6 +60,7 @@ export function ChangesApp({
     onToggleSubmodule,
     onSubmoduleRowAction,
     onSubmoduleBulkAction,
+    onSubmoduleOperationAction,
     onSubmoduleCommit,
     onSubmoduleCreateStash,
     onToggleSubmoduleStash,
@@ -126,6 +128,7 @@ export function ChangesApp({
                         onUpdateAll={() => onSubmoduleAction('', SubmoduleAction.UpdateAll)}
                         onRowAction={onSubmoduleRowAction}
                         onBulkAction={onSubmoduleBulkAction}
+                        onOperationAction={onSubmoduleOperationAction}
                         onCommit={onSubmoduleCommit}
                         onCreateStash={onSubmoduleCreateStash}
                         onToggleStash={onToggleSubmoduleStash}

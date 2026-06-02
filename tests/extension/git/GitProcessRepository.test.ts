@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
-import { createTempGitRepo, addLinkedWorktree, createRemoteWorkflowFixture, createSubmoduleFixture, type TempGitRepo } from '../../helpers/gitRepo';
+import { createTempGitRepo, addLinkedWorktree, createRemoteWorkflowFixture, createSubmoduleFixture, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
 import { expectItem } from '../../helpers/assertions';
 
 describe('GitProcessRepository', () => {
@@ -150,6 +150,27 @@ describe('GitProcessRepository', () => {
         expect(remoteFeature).toEqual(expect.objectContaining({ isRemote: true }));
         const log = await git.getLogForRef('origin/feature/nested', 5, 0);
         expect(log.map((commit) => commit.message)).toEqual(['remote feature', 'remote base']);
+    });
+
+    it('getAllBranches updates behind counts after fetching all remotes', async () => {
+        const fixture = createRemoteWorkflowFixture();
+        cleanups.push({ cleanup: fixture.cleanup });
+
+        fixture.seed.git(['checkout', '-q', 'main']);
+        fixture.seed.commitFile('remote-main.txt', 'remote main\n', 'remote main update', FIXTURE_AUTHORS[3], '2024-01-04T00:00:00Z');
+        fixture.seed.git(['push', '-q', 'origin', 'main']);
+
+        const git = new GitProcessRepository(fixture.local.cwd);
+        const beforeFetch = await git.getAllBranches();
+        expect(beforeFetch.find((branch) => branch.name === 'main')?.behind).toBe(0);
+
+        await git.fetchAll();
+
+        const afterFetch = await git.getAllBranches();
+        expect(afterFetch.find((branch) => branch.name === 'main')).toEqual(expect.objectContaining({
+            upstream: 'origin/main',
+            behind: 1,
+        }));
     });
 
     it('getGraphLog excludes stash implementation commits', async () => {

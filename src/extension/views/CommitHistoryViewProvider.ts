@@ -2,12 +2,12 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
-import type { GitCommit, GitFileChange, GitRepository } from '../../core/git/GitRepository';
+import type { GitBranch, GitCommit, GitFileChange, GitRepository, GitTag } from '../../core/git/GitRepository';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import type { ErrorCode, Pagination } from '../../protocol/shared/base';
 import type { SerializedRepoContext } from '../../protocol/shared/repo';
 import type { CommitCommand } from '../../protocol/graph/messages';
-import type { HistoryCommitDetails, HistoryContextTarget, HistoryData } from '../../protocol/history/types';
+import type { HistoryCommitDetails, HistoryCommitRef, HistoryContextTarget, HistoryData } from '../../protocol/history/types';
 import type { HistoryCommitDetailsRequest, HistoryDataRequest, HistoryExtensionToWebviewMessage, HistoryOpenDiffRequest, HistoryToolbarCommand, HistoryWebviewToExtensionMessage } from '../../protocol/history/messages';
 import { runCommitCommand } from '../messaging/GraphMessageRouter';
 import { createErrorPayload } from '../messaging/errorSerialization';
@@ -54,10 +54,12 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     private view?: vscode.WebviewView;
     private contextTarget?: HistoryContextTarget;
     private selectedHistoryRef: string | undefined;
+    private refCache?: HistoryRefCache;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
         private readonly repositories: ActiveRepositoryAccessor,
+        private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -92,6 +94,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     async refresh(): Promise<void> {
         if (!this.view) { return; }
         try {
+            this.refCache = undefined;
             const data = await this.loadHistoryPage(DEFAULT_PAGE);
             this.postMessage({ type: 'history/data', data });
         } catch (error) {
@@ -163,11 +166,14 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             };
         }
 
-        const commits = this.selectedHistoryRef
-            ? await repo.getLogForRef(this.selectedHistoryRef, normalizedPage.limit + 1, normalizedPage.offset)
-            : await repo.getLog(normalizedPage.limit + 1, normalizedPage.offset);
+        const [commits, refs] = await Promise.all([
+            this.selectedHistoryRef
+                ? repo.getLogForRef(this.selectedHistoryRef, normalizedPage.limit + 1, normalizedPage.offset)
+                : repo.getLog(normalizedPage.limit + 1, normalizedPage.offset),
+            this.loadRefs(repo),
+        ]);
         return {
-            commits: commits.slice(0, normalizedPage.limit).map(toHistoryCommit),
+            commits: commits.slice(0, normalizedPage.limit).map((commit) => toHistoryCommit(commit, refsForCommit(commit, refs.branches, refs.tags))),
             page: normalizedPage,
             hasMore: commits.length > normalizedPage.limit,
         };
@@ -225,10 +231,23 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         try {
             const repo = this.repositories.requireRepository();
             await run(repo);
-            await this.refresh();
+            await Promise.all([
+                this.onRepositoryUpdated(),
+                this.refresh(),
+            ]);
         } catch (error) {
             this.postHistoryError(error, `history/${operation}`, 'gitOperationFailed');
         }
+    }
+
+    private async loadRefs(repo: GitRepository): Promise<HistoryRefCache> {
+        if (this.refCache) { return this.refCache; }
+        const [branches, tags] = await Promise.all([
+            repo.getAllBranches(),
+            repo.getAllTags(),
+        ]);
+        this.refCache = { branches, tags };
+        return this.refCache;
     }
 
     private applyFileViewMode(mode: 'list' | 'tree'): void {
@@ -356,6 +375,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     async notifyRepoChanged(context: SerializedRepoContext): Promise<void> {
         this.selectedHistoryRef = undefined;
+        this.refCache = undefined;
         this.view?.webview.postMessage({ type: 'repo/contextChanged', context });
         await this.refresh();
     }
@@ -365,21 +385,67 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     }
 }
 
+interface HistoryRefCache {
+    readonly branches: readonly GitBranch[];
+    readonly tags: readonly GitTag[];
+}
+
 function normalizePage(page: Pagination): Pagination {
     const offset = Number.isFinite(page.offset) ? Math.max(0, Math.floor(page.offset)) : 0;
     const limit = Number.isFinite(page.limit) ? Math.min(MAX_PAGE_LIMIT, Math.max(1, Math.floor(page.limit))) : DEFAULT_PAGE.limit;
     return { offset, limit };
 }
 
-function toHistoryCommit(commit: GitCommit) {
+function toHistoryCommit(commit: GitCommit, refs: readonly HistoryCommitRef[]) {
     return {
-            hash: commit.hash,
-            shortHash: commit.shortHash,
-            message: commit.message,
-            authorName: commit.authorName,
-            authorDate: commit.authorDate,
-            parentHashes: commit.parentHashes,
+        hash: commit.hash,
+        shortHash: commit.shortHash,
+        message: commit.message,
+        authorName: commit.authorName,
+        authorDate: commit.authorDate,
+        parentHashes: commit.parentHashes,
+        refs,
     };
+}
+
+function refsForCommit(
+    commit: GitCommit,
+    branches: readonly GitBranch[],
+    tags: readonly GitTag[],
+): readonly HistoryCommitRef[] {
+    const refs: HistoryCommitRef[] = [];
+    for (const branch of branches) {
+        if (!refPointsAtCommit(branch.hash, commit)) { continue; }
+        refs.push({
+            name: branch.name,
+            kind: branch.isRemote ? 'remote' : 'local',
+            ...(branch.isCurrent ? { isCurrent: true } : {}),
+        });
+    }
+    for (const tag of tags) {
+        if (!refPointsAtCommit(tag.hash, commit)) { continue; }
+        refs.push({ name: tag.name, kind: 'tag' });
+    }
+    return refs.sort(compareHistoryRefs);
+}
+
+function refPointsAtCommit(refHash: string, commit: GitCommit): boolean {
+    if (!refHash) { return false; }
+    return commit.hash === refHash
+        || commit.shortHash === refHash
+        || commit.hash.startsWith(refHash)
+        || refHash.startsWith(commit.hash);
+}
+
+function compareHistoryRefs(left: HistoryCommitRef, right: HistoryCommitRef): number {
+    return refSortRank(left) - refSortRank(right) || left.name.localeCompare(right.name);
+}
+
+function refSortRank(ref: HistoryCommitRef): number {
+    if (ref.kind === 'local' && ref.isCurrent) { return 0; }
+    if (ref.kind === 'local') { return 1; }
+    if (ref.kind === 'remote') { return 2; }
+    return 3;
 }
 
 function toHistoryCommitFile(file: GitFileChange) {

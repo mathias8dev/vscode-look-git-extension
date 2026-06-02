@@ -97,6 +97,7 @@ export interface GraphState {
     readonly detailsLoading: boolean;
     readonly repoId: string | undefined;
     readonly loadingMore: boolean;
+    readonly refreshVersion: number;
 }
 
 export type GraphAction =
@@ -109,6 +110,7 @@ export type GraphAction =
     | { readonly type: 'selectCommitRange'; readonly hashes: readonly string[]; readonly focusHash: string }
     | { readonly type: 'clearSelection' }
     | { readonly type: 'clearError' }
+    | { readonly type: 'refreshRequested' }
     | { readonly type: 'startLoadMore' };
 
 export function createInitialGraphState(): GraphState {
@@ -134,6 +136,7 @@ export function createInitialGraphState(): GraphState {
         detailsLoading: false,
         repoId: undefined,
         loadingMore: false,
+        refreshVersion: 0,
     };
 }
 
@@ -148,6 +151,7 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
                 loading: true,
                 loadingMore: false,
                 loadedCount: 0,
+                refreshVersion: state.refreshVersion + 1,
             };
         case 'setBranchFilter':
             return {
@@ -160,6 +164,7 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
                 loading: true,
                 loadingMore: false,
                 loadedCount: 0,
+                refreshVersion: state.refreshVersion + 1,
             };
         case 'selectCommit':
             return selectCommit(state, action.hash, [action.hash], action.hash);
@@ -173,6 +178,8 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
             return { ...state, selectedHash: undefined, selectedWorktreePath: undefined, selectedHashes: [], selectionAnchorHash: undefined, commitDetails: undefined, detailsLoading: false };
         case 'clearError':
             return { ...state, error: undefined };
+        case 'refreshRequested':
+            return { ...state, loading: true, loadingMore: false, refreshVersion: state.refreshVersion + 1 };
         case 'startLoadMore':
             return state.hasMore && !state.loading && !state.loadingMore
                 ? { ...state, loadingMore: true }
@@ -224,6 +231,8 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
     switch (message.type) {
         case 'graph/dataPush':
             return applyGraphData(state, message.data, message.repoId);
+        case 'graph/refreshRequested':
+            return { ...state, loading: true, loadingMore: false, refreshVersion: state.refreshVersion + 1 };
         case 'graph/dataResponse':
             return applyGraphData(state, message.data, state.repoId);
         case 'graph/commitDetailsResponse':

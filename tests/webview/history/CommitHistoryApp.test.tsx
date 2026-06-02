@@ -31,6 +31,29 @@ describe('CommitHistoryApp', () => {
         expect(onSelectCommit).toHaveBeenCalledWith('abc123456789');
     });
 
+    it('renders local remote and tag badges on commit rows', () => {
+        renderApp({
+            state: {
+                ...createInitialHistoryState(),
+                commits: [{
+                    ...commit('abc123456789', 'feat: publish branch'),
+                    refs: [
+                        { name: 'experimental', kind: 'local', isCurrent: true },
+                        { name: 'origin/experimental', kind: 'remote' },
+                        { name: 'v1.0.0', kind: 'tag' },
+                    ],
+                }],
+                loadedCount: 1,
+                loading: false,
+            },
+        });
+
+        expect(screen.getByText('experimental')).toBeInTheDocument();
+        expect(screen.getByText('origin/experimental')).toBeInTheDocument();
+        expect(screen.getByText('v1.0.0')).toBeInTheDocument();
+        expect(screen.getByTitle('Remote branch origin/experimental')).toHaveClass('history-ref-badge-remote');
+    });
+
     it('marks commit rows as VS Code native context menu targets', () => {
         const onContextTarget = vi.fn<(target: HistoryContextTarget) => void>();
         renderApp({
@@ -275,5 +298,6 @@ function commit(hash: string, message: string): HistoryCommit {
         authorName: 'Ada',
         authorDate: '2024-01-01T00:00:00Z',
         parentHashes: [],
+        refs: [],
     };
 }

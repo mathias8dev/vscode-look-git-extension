@@ -83,6 +83,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     constructor(
         private readonly extensionUri: vscode.Uri,
         private readonly repositories: ActiveRepositoryAccessor,
+        private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -96,7 +97,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
         this.router = new ChangesMessageRouter(this.repositories, (msg) => {
             webviewView.webview.postMessage(msg);
-        }, () => this.refresh());
+        }, () => this.refresh(), this.onRepositoryUpdated);
 
         webviewView.webview.onDidReceiveMessage((msg: ChangesWebviewToExtensionMessage) => {
             void this.router!.handle(msg);
@@ -190,10 +191,9 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             try {
                 const repo = this.repositories.currentRepository;
                 if (!repo) {
+                    this.router?.setKnownSubmodulePaths([]);
                     this.updateBadge(0);
-                    if (this.view.visible) {
-                        this.view.webview.postMessage(emptyStatusData());
-                    }
+                    this.view.webview.postMessage(emptyStatusData());
                     continue;
                 }
 
@@ -202,23 +202,20 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     repo.stashList(controller.signal),
                     optionalSubmodules(repo, controller.signal),
                 ]);
+                this.router?.setKnownSubmodulePaths(submodules.map((submodule) => submodule.path));
                 this.updateBadge(status.staged.length + status.unstaged.length + status.conflicts.length);
-                if (this.view.visible) {
-                    this.view.webview.postMessage(buildStatusData(status, stashes, submodules));
-                }
+                this.view.webview.postMessage(buildStatusData(status, stashes, submodules));
             } catch (error) {
                 if (isAbortError(error)) { continue; }
                 this.updateBadge(0);
-                if (this.view.visible) {
-                    this.view.webview.postMessage({
-                        type: 'changes/error',
-                        ...createErrorPayload(error, {
-                            code: 'refreshFailed',
-                            operation: 'changes/refresh',
-                            recoverable: true,
-                        }),
-                    });
-                }
+                this.view.webview.postMessage({
+                    type: 'changes/error',
+                    ...createErrorPayload(error, {
+                        code: 'refreshFailed',
+                        operation: 'changes/refresh',
+                        recoverable: true,
+                    }),
+                });
             } finally {
                 if (this.refreshAbortController === controller) {
                     this.refreshAbortController = undefined;
@@ -235,6 +232,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     /** Called by RepoRegistry when the active repo changes. */
     async notifyRepoChanged(context: SerializedRepoContext): Promise<void> {
+        this.router?.setKnownSubmodulePaths([]);
         this.view?.webview.postMessage({ type: 'repo/contextChanged', context });
         this.scheduleRefresh();
     }

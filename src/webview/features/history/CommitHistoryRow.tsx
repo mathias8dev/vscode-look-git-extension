@@ -1,4 +1,4 @@
-import type { HistoryCommit } from '../../../protocol/history/types';
+import type { HistoryCommit, HistoryCommitRef } from '../../../protocol/history/types';
 import { formatHistoryDate, formatRelativeDate } from './historyModel';
 
 interface CommitHistoryRowProps {
@@ -41,7 +41,12 @@ export function CommitHistoryRow({ commit, expanded, childHash, parentHash, canU
         >
             <i className={`codicon codicon-chevron-${expanded ? 'down' : 'right'} history-row-chevron`} aria-hidden="true" />
             <span className="history-row-main">
-                <span className="history-row-message">{commit.message}</span>
+                <span className="history-row-title">
+                    <span className="history-row-message">{commit.message}</span>
+                    <span className="history-row-refs">
+                        {commit.refs.map((ref) => <HistoryRefBadge key={`${ref.kind}:${ref.name}`} refInfo={ref} />)}
+                    </span>
+                </span>
                 <span className="history-row-meta">
                     <span className="history-row-author">{commit.authorName}</span>
                     <span
@@ -55,4 +60,28 @@ export function CommitHistoryRow({ commit, expanded, childHash, parentHash, canU
             <span className="history-row-hash">{commit.shortHash}</span>
         </button>
     );
+}
+
+function HistoryRefBadge({ refInfo }: { readonly refInfo: HistoryCommitRef }) {
+    return (
+        <span
+            className={`history-ref-badge history-ref-badge-${refInfo.kind}`}
+            title={refTitle(refInfo)}
+        >
+            <i className={`codicon codicon-${refIcon(refInfo)}`} aria-hidden="true" />
+            <span className="history-ref-label">{refInfo.name}</span>
+        </span>
+    );
+}
+
+function refTitle(refInfo: HistoryCommitRef): string {
+    if (refInfo.kind === 'remote') { return `Remote branch ${refInfo.name}`; }
+    if (refInfo.kind === 'tag') { return `Tag ${refInfo.name}`; }
+    return refInfo.isCurrent ? `Current branch ${refInfo.name}` : `Local branch ${refInfo.name}`;
+}
+
+function refIcon(refInfo: HistoryCommitRef): string {
+    if (refInfo.kind === 'remote') { return 'cloud'; }
+    if (refInfo.kind === 'tag') { return 'tag'; }
+    return 'git-branch';
 }

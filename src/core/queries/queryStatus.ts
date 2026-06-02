@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import type { GitExec } from '../git/GitRepository';
 import type { GitStatus, GitStash } from '../git/domain/GitStatus';
 import type { GitFileChange } from '../git/domain/GitCommit';
@@ -61,7 +61,7 @@ export async function queryStashFiles(
 async function detectConflictState(getGitDir: () => Promise<string>) {
     try {
         const gitDir = await getGitDir();
-        const entries = fs.readdirSync(gitDir);
+        const entries = await fs.readdir(gitDir);
         return detectConflictStateFromFiles(entries);
     } catch {
         return 'none' as const;

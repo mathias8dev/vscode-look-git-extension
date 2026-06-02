@@ -1,5 +1,6 @@
 import type { StashFileEntry } from '../../../protocol/changes/types';
 import { IconButton } from '../../shared/IconButton';
+import { changesItemContext } from './context-menu-model';
 import { FileTypeIcon } from './FileTypeIcon';
 import { iconKindForStashFile } from './fileIconModel';
 
@@ -10,8 +11,20 @@ interface StashFileRowProps {
 }
 
 export function StashFileRow({ index, file, onDiff }: StashFileRowProps) {
+    const openDiff = () => onDiff(index, file);
     return (
-        <div className="stash-file-row" title={file.filePath}>
+        <div
+            className="stash-file-row"
+            data-vscode-context={changesItemContext()}
+            title={file.filePath}
+            tabIndex={0}
+            onClick={openDiff}
+            onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') { return; }
+                event.preventDefault();
+                openDiff();
+            }}
+        >
             <FileTypeIcon kind={iconKindForStashFile(file)} />
             <div className="file-info">
                 <span className="file-name">{fileName(file.filePath)}</span>
@@ -21,7 +34,10 @@ export function StashFileRow({ index, file, onDiff }: StashFileRowProps) {
                 <IconButton
                     icon="diff"
                     title="Open stash diff"
-                    onClick={() => onDiff(index, file)}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        openDiff();
+                    }}
                 />
             </div>
             <span className={`status-letter status-letter-${statusLetterKind(file.status)}`} aria-hidden="true">

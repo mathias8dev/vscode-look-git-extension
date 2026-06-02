@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs/promises';
 import type { GitRepository } from '../../core/git/GitRepository';
 import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
 import type { ChangesToolbarCommand, ChangesWebviewToExtensionMessage, ChangesExtensionToWebviewMessage } from '../../protocol/changes/messages';
@@ -10,19 +11,27 @@ import { SubmoduleStatus } from '../../protocol/shared/repo';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import { confirmTypedPhrase, showModalWarningMessage } from '../utils/confirmation';
 import { toProtocolSubmoduleStatus } from '../mapping/toProtocol';
-import { parsePorcelainStatus } from '../../core/parsing/parseStatus';
+import { detectConflictStateFromFiles, parsePorcelainStatus } from '../../core/parsing/parseStatus';
 import { parseNameStatusZ } from '../../core/parsing/parseNameStatus';
 import { createErrorPayload } from './errorSerialization';
 
 type PostMessage = (msg: ChangesExtensionToWebviewMessage) => void;
 type RefreshCallback = () => Promise<void>;
+type RepositoryUpdatedCallback = () => Promise<void>;
 
 export class ChangesMessageRouter {
+    private knownSubmodulePaths: ReadonlySet<string> | undefined;
+
     constructor(
         private readonly repositories: ActiveRepositoryAccessor,
         private readonly postMessage: PostMessage,
         private readonly refresh: RefreshCallback,
+        private readonly onRepositoryUpdated: RepositoryUpdatedCallback = async () => {},
     ) {}
+
+    setKnownSubmodulePaths(paths: readonly string[]): void {
+        this.knownSubmodulePaths = new Set(paths);
+    }
 
     async handle(msg: ChangesWebviewToExtensionMessage): Promise<void> {
         try {
@@ -235,7 +244,7 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/submoduleCommit': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 const message = msg.message.trim();
                 if (!message) {
                     this.postMessage({
@@ -294,7 +303,7 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/openSubmodule': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.filePath);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.filePath);
                 const uri = vscode.Uri.file(path.join(repo.cwd, submodulePath));
                 const choice = await vscode.window.showQuickPick(
                     ['Open in New Window', 'Open in Current Window'],
@@ -321,33 +330,33 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/openSubmoduleDiff': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 await openStatusDiff(path.join(repo.cwd, submodulePath), msg);
                 break;
             }
 
             case 'changes/submoduleOpenFile': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(path.join(repo.cwd, submodulePath, msg.filePath)));
                 break;
             }
 
             case 'changes/submoduleStageFile': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 await repo.exec(['-C', path.join(repo.cwd, submodulePath), 'add', '--', msg.filePath]);
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleUnstageFile': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 await repo.exec(['-C', path.join(repo.cwd, submodulePath), 'reset', 'HEAD', '--', msg.filePath]);
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleDiscardFile': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 const choice = await showModalWarningMessage(
                     `Discard changes to "${submodulePath}/${msg.filePath}"? This cannot be undone.`, 'Discard',
                 );
@@ -359,7 +368,7 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/submoduleOpenMergeEditor': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 const uri = vscode.Uri.file(path.join(repo.cwd, submodulePath, msg.filePath));
                 try {
                     await vscode.commands.executeCommand('merge-conflict.accept.select', uri);
@@ -370,14 +379,14 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/submoduleMarkResolved': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 await repo.exec(['-C', path.join(repo.cwd, submodulePath), 'add', '--', msg.filePath]);
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleAcceptOurs': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 const submoduleCwd = path.join(repo.cwd, submodulePath);
                 await repo.exec(['-C', submoduleCwd, 'checkout', '--ours', '--', msg.filePath]);
                 await repo.exec(['-C', submoduleCwd, 'add', '--', msg.filePath]);
@@ -386,7 +395,7 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/submoduleAcceptTheirs': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 const submoduleCwd = path.join(repo.cwd, submodulePath);
                 await repo.exec(['-C', submoduleCwd, 'checkout', '--theirs', '--', msg.filePath]);
                 await repo.exec(['-C', submoduleCwd, 'add', '--', msg.filePath]);
@@ -445,7 +454,7 @@ export class ChangesMessageRouter {
             case 'changes/submoduleStashDrop':
             case 'changes/getSubmoduleStashFiles':
             case 'changes/openSubmoduleStashDiff': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 const submoduleCwd = path.join(repo.cwd, submodulePath);
                 switch (msg.type) {
                     case 'changes/submoduleStash':
@@ -490,7 +499,7 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/submoduleUpdate': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.path);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.path);
                 await repo.updateSubmodule(submodulePath);
                 await this.refresh();
                 break;
@@ -509,21 +518,21 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/submoduleStageAll': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 await repo.exec(['-C', path.join(repo.cwd, submodulePath), 'add', '-A']);
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleUnstageAll': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 await repo.exec(['-C', path.join(repo.cwd, submodulePath), 'reset', 'HEAD']);
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleDiscardAll': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 const confirmed = await confirmTypedPhrase(
                     `Discard all changes inside "${submodulePath}"? This cannot be undone.`,
                     'DISCARD ALL',
@@ -539,7 +548,7 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/submoduleAcceptAllTheirs': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 const choice = await showModalWarningMessage(
                     `Accept incoming changes for all conflicts inside "${submodulePath}"?`, 'Accept All Theirs',
                 );
@@ -556,11 +565,12 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/getSubmoduleStatus': {
-                const submodulePath = await requireKnownSubmodulePath(repo, msg.path);
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.path);
                 const subPath = path.join(repo.cwd, submodulePath);
-                const [raw, stashRaw] = await Promise.all([
-                    repo.execRaw(['-C', subPath, 'status', '--porcelain', '-z', '--untracked-files=all']),
-                    repo.exec(['-C', subPath, 'stash', 'list', '--format=%gd %s']),
+                const [raw, stashRaw, conflictState] = await Promise.all([
+                    repo.execRaw(['--no-optional-locks', '-C', subPath, 'status', '--porcelain', '-z', '--untracked-files=all']),
+                    repo.exec(['--no-optional-locks', '-C', subPath, 'stash', 'list', '--format=%gd %s']),
+                    detectSubmoduleConflictState(repo, subPath),
                 ]);
                 const { staged, unstaged, conflicts } = parsePorcelainStatus(raw);
                 const toEntry = (e: typeof staged[number]): StatusEntry => ({
@@ -578,6 +588,7 @@ export class ChangesMessageRouter {
                         staged: staged.map(toEntry),
                         unstaged: unstaged.map(toEntry),
                         conflicts: conflicts.map(toEntry),
+                        conflictState,
                         stashes: parseStashList(stashRaw),
                     },
                 });
@@ -596,6 +607,34 @@ export class ChangesMessageRouter {
                 if (choice === 'Abort') {
                     if (msg.conflictState === ConflictState.Merge) { await repo.mergeAbort(); }
                     else { await repo.rebaseAbort(); }
+                    await this.refresh();
+                }
+                break;
+            }
+
+            case 'changes/submoduleContinueOp': {
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submoduleCwd = path.join(repo.cwd, submodulePath);
+                if (msg.conflictState === ConflictState.Merge) {
+                    await repo.exec(['-C', submoduleCwd, '-c', 'core.editor=true', 'merge', '--continue']);
+                } else {
+                    await repo.exec(['-C', submoduleCwd, '-c', 'core.editor=true', 'rebase', '--continue']);
+                }
+                await this.refresh();
+                break;
+            }
+
+            case 'changes/submoduleAbortOp': {
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                const opName = msg.conflictState === ConflictState.Merge ? 'merge' : 'rebase';
+                const choice = await showModalWarningMessage(`Abort the current ${opName} in "${submodulePath}"?`, 'Abort');
+                if (choice === 'Abort') {
+                    const submoduleCwd = path.join(repo.cwd, submodulePath);
+                    if (msg.conflictState === ConflictState.Merge) {
+                        await repo.exec(['-C', submoduleCwd, 'merge', '--abort']);
+                    } else {
+                        await repo.exec(['-C', submoduleCwd, 'rebase', '--abort']);
+                    }
                     await this.refresh();
                 }
                 break;
@@ -624,56 +663,56 @@ export class ChangesMessageRouter {
         switch (command) {
             case 'pull':
                 await repo.pull();
-                await this.refresh();
+                await this.refreshAfterRepositoryUpdate();
                 return;
             case 'push':
                 await repo.push();
-                await this.refresh();
+                await this.refreshAfterRepositoryUpdate();
                 return;
             case 'fetch':
                 await repo.exec(['fetch']);
-                await this.refresh();
+                await this.refreshAfterRepositoryUpdate();
                 return;
             case 'fetchAll':
                 await repo.fetchAll();
-                await this.refresh();
+                await this.refreshAfterRepositoryUpdate();
                 return;
             case 'sync':
                 await repo.pullAndPush();
-                await this.refresh();
+                await this.refreshAfterRepositoryUpdate();
                 return;
             case 'pullRebase':
                 await repo.exec(['pull', '--rebase']);
-                await this.refresh();
+                await this.refreshAfterRepositoryUpdate();
                 return;
             case 'pullFrom': {
                 const remote = await pickRemote(repo, 'Pull from remote');
                 if (!remote) { return; }
                 await repo.exec(['pull', remote]);
-                await this.refresh();
+                await this.refreshAfterRepositoryUpdate();
                 return;
             }
             case 'pushForce':
                 await repo.exec(['push', '--force-with-lease']);
-                await this.refresh();
+                await this.refreshAfterRepositoryUpdate();
                 return;
             case 'pushTo': {
                 const remote = await pickRemote(repo, 'Push to remote');
                 if (!remote) { return; }
                 await repo.pushBranch(remote, await repo.getCurrentBranch());
-                await this.refresh();
+                await this.refreshAfterRepositoryUpdate();
                 return;
             }
             case 'pushToForce': {
                 const remote = await pickRemote(repo, 'Force push to remote');
                 if (!remote) { return; }
                 await repo.exec(['push', '--force-with-lease', remote, await repo.getCurrentBranch()]);
-                await this.refresh();
+                await this.refreshAfterRepositoryUpdate();
                 return;
             }
             case 'fetchPrune':
                 await repo.exec(['fetch', '--prune']);
-                await this.refresh();
+                await this.refreshAfterRepositoryUpdate();
                 return;
             case 'checkout': {
                 const branch = await pickBranch(repo, 'Checkout branch');
@@ -881,6 +920,13 @@ export class ChangesMessageRouter {
         }
     }
 
+    private async refreshAfterRepositoryUpdate(): Promise<void> {
+        await Promise.all([
+            this.onRepositoryUpdated(),
+            this.refresh(),
+        ]);
+    }
+
     private postChangesError(
         error: unknown,
         options: { readonly requestId?: RequestId; readonly operation: string; readonly code: ErrorCode },
@@ -894,6 +940,21 @@ export class ChangesMessageRouter {
                 recoverable: true,
             }),
         });
+    }
+
+    private async requireKnownSubmodulePath(repo: GitRepository, requestedPath: string): Promise<string> {
+        if (this.knownSubmodulePaths) {
+            if (!this.knownSubmodulePaths.has(requestedPath)) {
+                throw new Error(`Unknown submodule path: ${requestedPath}`);
+            }
+            return requestedPath;
+        }
+        const submodulePaths = await repo.getSubmodulePaths();
+        this.knownSubmodulePaths = submodulePaths;
+        if (!submodulePaths.has(requestedPath)) {
+            throw new Error(`Unknown submodule path: ${requestedPath}`);
+        }
+        return requestedPath;
     }
 }
 
@@ -1066,12 +1127,14 @@ function parseStashList(output: string): readonly { readonly index: number; read
     });
 }
 
-async function requireKnownSubmodulePath(repo: GitRepository, requestedPath: string): Promise<string> {
-    const submodulePaths = await repo.getSubmodulePaths();
-    if (!submodulePaths.has(requestedPath)) {
-        throw new Error(`Unknown submodule path: ${requestedPath}`);
+async function detectSubmoduleConflictState(repo: GitRepository, submoduleCwd: string): Promise<ConflictState> {
+    try {
+        const gitDir = await repo.exec(['--no-optional-locks', '-C', submoduleCwd, 'rev-parse', '--git-dir']);
+        const absoluteGitDir = path.isAbsolute(gitDir) ? gitDir : path.resolve(submoduleCwd, gitDir);
+        return toProtocolConflictState(detectConflictStateFromFiles(await fs.readdir(absoluteGitDir)));
+    } catch {
+        return ConflictState.None;
     }
-    return requestedPath;
 }
 
 function toGitUri(uri: vscode.Uri, ref: string): vscode.Uri {

@@ -3,6 +3,7 @@ import type { ChangeRowAction } from './changeCommands';
 import type { ChangeListItem, ChangeTreeNode } from './changeTree';
 import type { ChangeSelectionMode } from './changesState';
 import { ChangeRow } from './ChangeRow';
+import { changesItemContext } from './context-menu-model';
 import { FolderIcon } from './FolderIcon';
 import { depthStyle } from './viewStyles';
 
@@ -31,6 +32,7 @@ export function TreeNodeView({ node, selectedItemIds, onSelectItem, onRowAction 
         <div>
             <div
                 className="change-row folder-row"
+                data-vscode-context={changesItemContext()}
                 style={depthStyle(node.depth)}
                 role="button"
                 tabIndex={0}

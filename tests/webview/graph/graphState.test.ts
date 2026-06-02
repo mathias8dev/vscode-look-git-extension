@@ -86,6 +86,27 @@ describe('graphState', () => {
         expect(next.hasMore).toBe(false);
     });
 
+    it('keeps the current loaded window when an external graph refresh is requested', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: 'graph-loaded',
+                data: graphData([commit('b', ['a']), commit('a')], 2, true),
+            },
+        });
+        const filtered = reduceGraphState(loaded, { type: 'setFilters', filters: { search: 'needle' } });
+        const refreshed = reduceGraphState(
+            { ...filtered, loadedCount: 600, loading: false },
+            { type: 'message', message: { type: 'graph/refreshRequested' } },
+        );
+
+        expect(refreshed.loading).toBe(true);
+        expect(refreshed.loadingMore).toBe(false);
+        expect(refreshed.loadedCount).toBe(600);
+        expect(refreshed.filters).toEqual({ search: 'needle' });
+    });
+
     it('ignores commit details responses for commits that are no longer selected', () => {
         const selected = reduceGraphState(createInitialGraphState(), { type: 'selectCommit', hash: 'selected' });
         const stale = reduceGraphState(selected, {

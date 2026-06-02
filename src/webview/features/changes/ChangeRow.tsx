@@ -1,9 +1,10 @@
 import type { StatusEntry } from '../../../protocol/changes/types';
 import { IconButton } from '../../shared/IconButton';
-import { ChangeRowAction, rowActionsFor, type ChangeActionDescriptor } from './changeCommands';
+import { ChangeRowAction, primaryRowActionFor, rowActionsFor, type ChangeActionDescriptor } from './changeCommands';
 import type { ChangeListItem } from './changeTree';
 import { ChangeSelectionMode } from './changesState';
 import { FileTypeIcon } from './FileTypeIcon';
+import { changesItemContext } from './context-menu-model';
 import { iconKindForStatusEntry } from './fileIconModel';
 import { depthStyle } from './viewStyles';
 
@@ -19,9 +20,11 @@ interface ChangeRowProps {
 export function ChangeRow({ item, depth, selected, onSelect, onAction, actions: actionOverride }: ChangeRowProps) {
     const entry = item.entry;
     const actions = actionOverride ?? rowActionsFor(item);
+    const primaryAction = primaryRowActionFor(item);
     return (
         <article
             className="change-row"
+            data-vscode-context={changesItemContext()}
             style={depthStyle(depth)}
             title={entry.filePath}
             aria-selected={selected}
@@ -33,9 +36,7 @@ export function ChangeRow({ item, depth, selected, onSelect, onAction, actions: 
                     onSelect(item, ChangeSelectionMode.Toggle);
                 } else {
                     onSelect(item, ChangeSelectionMode.Replace);
-                    if (!entry.isSubmodule) {
-                        onAction(item, ChangeRowAction.Diff);
-                    }
+                    if (primaryAction) { onAction(item, primaryAction); }
                 }
             }}
             onKeyDown={(event) => {
@@ -52,9 +53,7 @@ export function ChangeRow({ item, depth, selected, onSelect, onAction, actions: 
                 if (event.key === 'Enter') {
                     event.preventDefault();
                     onSelect(item, ChangeSelectionMode.Replace);
-                    if (!entry.isSubmodule) {
-                        onAction(item, ChangeRowAction.Diff);
-                    }
+                    if (primaryAction) { onAction(item, primaryAction); }
                     return;
                 }
                 if (event.key === ' ') {

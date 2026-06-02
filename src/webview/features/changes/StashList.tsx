@@ -29,15 +29,30 @@ export function StashList({
 
     if (stashes.length === 0 && !showWhenEmpty) { return null; }
 
+    const togglePanel = () => setPanelCollapsed((collapsed) => !collapsed);
+
     return (
         <section className="stash-panel" aria-label="Stashes">
-            <header className="stash-panel-header">
+            <header
+                className="stash-panel-header"
+                role="button"
+                tabIndex={0}
+                aria-expanded={!panelCollapsed}
+                onClick={togglePanel}
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        togglePanel();
+                    }
+                }}
+            >
                 <button
                     type="button"
                     className="stash-toggle"
-                    aria-expanded={!panelCollapsed}
+                    aria-hidden="true"
+                    tabIndex={-1}
                     title={panelCollapsed ? 'Expand stashes' : 'Collapse stashes'}
-                    onClick={() => setPanelCollapsed(!panelCollapsed)}
+                    onClick={(event) => { event.stopPropagation(); togglePanel(); }}
                 >
                     <Codicon name={panelCollapsed ? 'chevron-right' : 'chevron-down'} />
                 </button>

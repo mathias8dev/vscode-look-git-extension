@@ -15,6 +15,10 @@ export interface GraphDataPush {
     readonly data: GraphData;
 }
 
+export interface GraphRefreshRequestedPush {
+    readonly type: 'graph/refreshRequested';
+}
+
 export interface GraphErrorPush {
     readonly type: 'graph/error';
     readonly requestId?: RequestId;
@@ -200,6 +204,7 @@ export interface GraphContextTargetMessage {
 
 export type GraphExtensionToWebviewMessage =
     | RepoContextChangedPush
+    | GraphRefreshRequestedPush
     | GraphDataPush
     | GraphDataResponse
     | CommitDetailsResponse

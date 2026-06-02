@@ -255,6 +255,7 @@ describe('changesState', () => {
                     staged: [{ indexStatus: 'A', workTreeStatus: ' ', filePath: 'src/new.ts' }],
                     unstaged: [],
                     conflicts: [],
+                    conflictState: ConflictState.None,
                     stashes: [{ index: 0, message: 'On main: work' }],
                 },
             },
@@ -316,6 +317,7 @@ describe('changesState', () => {
                     staged: [],
                     unstaged: [],
                     conflicts: [],
+                    conflictState: ConflictState.None,
                     stashes: [{ index: 0, message: 'On main: work' }],
                 },
             },
@@ -351,6 +353,7 @@ describe('changesState', () => {
                     staged: [],
                     unstaged: [],
                     conflicts: [],
+                    conflictState: ConflictState.None,
                     stashes: [{ index: 0, message: 'On main: different work' }],
                 },
             },
@@ -359,6 +362,40 @@ describe('changesState', () => {
         expect(freshDetails.staleSubmoduleStatusPaths).toEqual([]);
         expect(freshDetails.expandedSubmoduleStashKeys).toEqual([]);
         expect(freshDetails.submoduleStashFilesByKey).toEqual({});
+    });
+
+    it('tracks pending submodule status requests and clears them on response or error', () => {
+        const withStatus = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: statusDataMessage({
+                submodules: [{ path: 'modules/lib', name: 'lib', status: SubmoduleStatus.Dirty }],
+            }),
+        });
+        const loading = reduceChangesState(withStatus, { type: 'requestSubmoduleStatus', path: 'modules/lib' });
+        const freshDetails = reduceChangesState(loading, {
+            type: 'message',
+            message: {
+                type: 'changes/submoduleStatusData',
+                requestId: 'changes:submodule-status:modules/lib',
+                path: 'modules/lib',
+                data: { staged: [], unstaged: [], conflicts: [], conflictState: ConflictState.None, stashes: [] },
+            },
+        });
+        const loadingAgain = reduceChangesState(freshDetails, { type: 'requestSubmoduleStatus', path: 'modules/lib' });
+        const failed = reduceChangesState(loadingAgain, {
+            type: 'message',
+            message: {
+                type: 'changes/error',
+                requestId: 'changes:submodule-status:modules/lib',
+                message: 'status failed',
+                error: { code: 'gitOperationFailed', message: 'status failed', recoverable: true },
+            },
+        });
+
+        expect(loading.loadingSubmoduleStatusPaths).toEqual(['modules/lib']);
+        expect(freshDetails.loadingSubmoduleStatusPaths).toEqual([]);
+        expect(loadingAgain.loadingSubmoduleStatusPaths).toEqual(['modules/lib']);
+        expect(failed.loadingSubmoduleStatusPaths).toEqual([]);
     });
 
     it('ignores late submodule detail responses for unknown submodules and stale stashes', () => {
@@ -382,7 +419,7 @@ describe('changesState', () => {
                 type: 'changes/submoduleStatusData',
                 requestId: 'sub-old',
                 path: 'modules/removed',
-                data: { staged: [], unstaged: [], conflicts: [], stashes: [] },
+                data: { staged: [], unstaged: [], conflicts: [], conflictState: ConflictState.None, stashes: [] },
             },
         });
         const staleFiles = reduceChangesState(unknownStatus, {

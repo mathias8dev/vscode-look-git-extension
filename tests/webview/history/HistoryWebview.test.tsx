@@ -171,6 +171,7 @@ function commit(hash: string, message: string): HistoryCommit {
         authorName: 'Ada',
         authorDate: '2024-01-01T00:00:00Z',
         parentHashes: [],
+        refs: [],
     };
 }
 

@@ -10,6 +10,7 @@ export interface SubmoduleStatusData {
     readonly staged: readonly StatusEntry[];
     readonly unstaged: readonly StatusEntry[];
     readonly conflicts: readonly StatusEntry[];
+    readonly conflictState: ConflictState;
     readonly stashes: readonly StashEntry[];
 }
 

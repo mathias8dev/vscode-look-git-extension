@@ -242,6 +242,8 @@ export interface OpenSubmoduleStashDiffMessage {
 
 export interface ContinueOpMessage { readonly type: 'changes/continueOp'; readonly conflictState: ConflictState; }
 export interface AbortOpMessage    { readonly type: 'changes/abortOp'; readonly conflictState: ConflictState; }
+export interface SubmoduleContinueOpMessage { readonly type: 'changes/submoduleContinueOp'; readonly submodulePath: string; readonly conflictState: ConflictState; }
+export interface SubmoduleAbortOpMessage    { readonly type: 'changes/submoduleAbortOp'; readonly submodulePath: string; readonly conflictState: ConflictState; }
 
 export interface SubmoduleUpdateMessage    { readonly type: 'changes/submoduleUpdate'; readonly path: string; }
 export interface SubmoduleUpdateAllMessage { readonly type: 'changes/submoduleUpdateAll'; }
@@ -279,5 +281,5 @@ export type ChangesWebviewToExtensionMessage =
     | GetStashFilesRequest | OpenStashDiffMessage
     | SubmoduleStashMessage | SubmoduleStashPopMessage | SubmoduleStashApplyMessage | SubmoduleStashDropMessage
     | GetSubmoduleStashFilesRequest | OpenSubmoduleStashDiffMessage
-    | ContinueOpMessage | AbortOpMessage
+    | ContinueOpMessage | AbortOpMessage | SubmoduleContinueOpMessage | SubmoduleAbortOpMessage
     | SubmoduleUpdateMessage | SubmoduleUpdateAllMessage | GetSubmoduleStatusRequest;

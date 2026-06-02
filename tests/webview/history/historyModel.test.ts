@@ -14,6 +14,18 @@ describe('historyModel', () => {
         expect(filterHistoryCommits(commits, 'grace').map((item) => item.hash)).toEqual(['def123456789']);
     });
 
+    it('filters commits by local and remote ref names', () => {
+        const commits = [
+            {
+                ...commit('abc123456789', 'feat: add graph', 'Ada'),
+                refs: [{ name: 'origin/experimental', kind: 'remote' as const }],
+            },
+            commit('def123456789', 'fix: repair history', 'Grace'),
+        ];
+
+        expect(filterHistoryCommits(commits, 'origin/experimental').map((item) => item.hash)).toEqual(['abc123456789']);
+    });
+
     it('finds the selected commit', () => {
         const commits = [commit('abc123456789', 'feat: add graph', 'Ada')];
 
@@ -35,5 +47,6 @@ function commit(hash: string, message: string, authorName: string): HistoryCommi
         authorName,
         authorDate: '2024-01-01T00:00:00Z',
         parentHashes: [],
+        refs: [],
     };
 }

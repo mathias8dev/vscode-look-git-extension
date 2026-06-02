@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { SubmoduleStatus } from '../../../protocol/shared/repo';
 import type { StashFileEntry, SubmoduleEntry, SubmoduleStatusData } from '../../../protocol/changes/types';
 import { ConflictState } from '../../../protocol/changes/types';
@@ -11,6 +12,9 @@ import type { ChangeListItem, ChangeSection } from './changeTree';
 import { ChangeSectionId } from './changeTree';
 import { ChangeSelectionMode, ChangesViewMode, type CommitFeedback } from './changesState';
 import { CommitComposer } from './CommitComposer';
+import { changesItemContext } from './context-menu-model';
+import { OperationBanner } from './OperationBanner';
+import type { ActiveConflictState, OperationAction } from './operationCommands';
 import { StashList } from './StashList';
 import type { StashEntryAction } from './stashCommands';
 
@@ -24,6 +28,7 @@ interface SubmoduleItemProps {
     readonly stashFilesByIndex: Readonly<Record<number, readonly StashFileEntry[]>>;
     readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onBulkAction: (action: ChangeBulkAction) => void;
+    readonly onOperationAction: (conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly commitFeedback: CommitFeedback | undefined;
     readonly onCommit: (message: string, mode: CommitMode) => void;
     readonly onCreateStash: (message: string) => void;
@@ -48,6 +53,7 @@ export function SubmoduleItem({
     stashFilesByIndex,
     onRowAction,
     onBulkAction,
+    onOperationAction,
     commitFeedback,
     onCommit,
     onCreateStash,
@@ -55,12 +61,15 @@ export function SubmoduleItem({
     onStashAction,
     onStashFileDiff,
 }: SubmoduleItemProps) {
+    const [collapsedSectionIds, setCollapsedSectionIds] = useState<readonly ChangeSectionId[]>([]);
     const needsAction = submodule.status !== SubmoduleStatus.Clean;
     const sections = statusData ? buildSubmoduleSections(statusData) : [];
     const visibleItemIds = sections.flatMap((section) => section.items.map((item) => item.id));
+    const showCommitComposer = statusData ? statusData.staged.length > 0 || commitFeedback !== undefined : false;
+    const hasVisibleDetails = showCommitComposer || visibleItemIds.length > 0 || (statusData?.stashes.length ?? 0) > 0;
     return (
         <article className="submodule-item">
-            <header className="submodule-item-header">
+            <header className="submodule-item-header" data-vscode-context={changesItemContext()}>
                 <button
                     type="button"
                     className="stash-toggle"
@@ -102,26 +111,28 @@ export function SubmoduleItem({
                         <p className="stash-placeholder">Loading changes…</p>
                     ) : (
                         <div className="submodule-change-areas">
-                            <CommitComposer
-                                stagedCount={statusData.staged.length}
-                                conflictState={statusData.conflicts.length > 0 ? ConflictState.Merge : ConflictState.None}
-                                feedback={commitFeedback}
-                                focusRequest={0}
-                                onCommit={onCommit}
-                            />
+                            {operationBannerFor(statusData.conflictState, statusData.conflicts.length, onOperationAction)}
+                            {showCommitComposer ? (
+                                <CommitComposer
+                                    stagedCount={statusData.staged.length}
+                                    conflictState={commitConflictState(statusData)}
+                                    feedback={commitFeedback}
+                                    focusRequest={0}
+                                    onCommit={onCommit}
+                                />
+                            ) : null}
                             {sections.map((section) => (
                                 <ChangeSectionView
                                     key={section.id}
                                     section={section}
                                     viewMode={ChangesViewMode.List}
-                                    collapsed={false}
+                                    collapsed={collapsedSectionIds.includes(section.id)}
                                     selectedItemIds={new Set()}
-                                    onToggleCollapsed={noopToggle}
+                                    onToggleCollapsed={() => setCollapsedSectionIds((ids) => toggleSectionId(ids, section.id))}
                                     onSelectItem={noopSelect}
                                     onRowAction={onRowAction}
                                     onBulkAction={onBulkAction}
                                     onStash={section.id === ChangeSectionId.Unstaged ? onCreateStash : undefined}
-                                    showWhenEmpty
                                 />
                             ))}
                             <StashList
@@ -132,9 +143,8 @@ export function SubmoduleItem({
                                 onToggleStash={onToggleStash}
                                 onStashAction={onStashAction}
                                 onStashFileDiff={onStashFileDiff}
-                                showWhenEmpty
                             />
-                            {visibleItemIds.length === 0 && statusData.stashes.length === 0 ? (
+                            {!hasVisibleDetails ? (
                                 <p className="stash-placeholder">No changes inside submodule</p>
                             ) : null}
                         </div>
@@ -146,7 +156,12 @@ export function SubmoduleItem({
 }
 
 function noopSelect(_item: ChangeListItem, _mode: ChangeSelectionMode): void {}
-function noopToggle(): void {}
+
+function toggleSectionId(sectionIds: readonly ChangeSectionId[], sectionId: ChangeSectionId): readonly ChangeSectionId[] {
+    return sectionIds.includes(sectionId)
+        ? sectionIds.filter((id) => id !== sectionId)
+        : [...sectionIds, sectionId];
+}
 
 function buildSubmoduleSections(statusData: SubmoduleStatusData): readonly ChangeSection[] {
     return [
@@ -165,7 +180,28 @@ function buildSubmoduleSections(statusData: SubmoduleStatusData): readonly Chang
             title: 'Changes',
             items: statusData.unstaged.map((entry) => toItem(ChangeSectionId.Unstaged, entry, false)),
         },
-    ];
+    ].filter((section) => section.items.length > 0);
+}
+
+function operationBannerFor(
+    conflictState: ConflictState,
+    conflictCount: number,
+    onOperationAction: (conflictState: ActiveConflictState, action: OperationAction) => void,
+) {
+    if (conflictState === ConflictState.None) { return null; }
+    return (
+        <OperationBanner
+            conflictState={conflictState}
+            conflictCount={conflictCount}
+            onAction={(action) => onOperationAction(conflictState, action)}
+        />
+    );
+}
+
+function commitConflictState(statusData: SubmoduleStatusData): ConflictState {
+    return statusData.conflictState === ConflictState.None && statusData.conflicts.length > 0
+        ? ConflictState.Merge
+        : statusData.conflictState;
 }
 
 function toItem(

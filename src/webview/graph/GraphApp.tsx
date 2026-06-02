@@ -50,12 +50,13 @@ export function GraphApp() {
     useEffect(() => {
         if (!state.loading) { return; }
         const repoId = state.repoId ?? 'default';
+        const limit = Math.max(PAGE_LIMIT, state.loadedCount || PAGE_LIMIT);
         vscodeApi.postMessage(messageForGraphDataRequest(
             repoId,
             state.filters,
-            { offset: 0, limit: PAGE_LIMIT },
+            { offset: 0, limit },
         ));
-    }, [state.filters, state.loading, state.repoId]);
+    }, [state.filters, state.loading, state.repoId, state.loadedCount, state.refreshVersion]);
 
     useEffect(() => {
         if (!state.error) { return; }
@@ -136,7 +137,7 @@ export function GraphApp() {
                     selectedBranchFilter={state.selectedBranchFilter}
                     onFiltersChange={(filters) => dispatch({ type: 'setFilters', filters })}
                     onBranchFilterChange={(branch) => dispatch({ type: 'setBranchFilter', branch })}
-                    onRefresh={() => vscodeApi.postMessage({ type: 'graph/refresh' })}
+                    onRefresh={() => dispatch({ type: 'refreshRequested' })}
                 />
 
                 <ErrorNotice error={state.error} />

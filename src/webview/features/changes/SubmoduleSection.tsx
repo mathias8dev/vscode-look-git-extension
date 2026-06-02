@@ -6,6 +6,7 @@ import { IconButton } from '../../shared/IconButton';
 import type { ChangeBulkAction, ChangeRowAction } from './changeCommands';
 import type { ChangeListItem } from './changeTree';
 import { submoduleStashKey, type CommitFeedback } from './changesState';
+import type { ActiveConflictState, OperationAction } from './operationCommands';
 import { SubmoduleAction } from './submoduleCommands';
 import { SubmoduleItem } from './SubmoduleItem';
 import type { StashEntryAction } from './stashCommands';
@@ -22,6 +23,7 @@ interface SubmoduleSectionProps {
     readonly onUpdateAll: () => void;
     readonly onRowAction: (submodulePath: string, item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onBulkAction: (submodulePath: string, action: ChangeBulkAction) => void;
+    readonly onOperationAction: (submodulePath: string, conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly onCommit: (submodulePath: string, message: string, mode: CommitMode) => void;
     readonly onCreateStash: (submodulePath: string, message: string) => void;
     readonly onToggleStash: (submodulePath: string, index: number) => void;
@@ -41,6 +43,7 @@ export function SubmoduleSection({
     onUpdateAll,
     onRowAction,
     onBulkAction,
+    onOperationAction,
     onCommit,
     onCreateStash,
     onToggleStash,
@@ -93,6 +96,7 @@ export function SubmoduleSection({
                                 }, {})}
                                 onRowAction={(item, action) => onRowAction(submodule.path, item, action)}
                                 onBulkAction={(action) => onBulkAction(submodule.path, action)}
+                                onOperationAction={(conflictState, action) => onOperationAction(submodule.path, conflictState, action)}
                                 commitFeedback={commitFeedbackByPath[submodule.path]}
                                 onCommit={(message, mode) => onCommit(submodule.path, message, mode)}
                                 onCreateStash={(message) => onCreateStash(submodule.path, message)}

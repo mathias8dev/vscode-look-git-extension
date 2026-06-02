@@ -43,6 +43,7 @@ export interface ChangesState {
     readonly expandedSubmodulePaths: readonly string[];
     readonly submoduleStatusByPath: Readonly<Record<string, SubmoduleStatusData>>;
     readonly staleSubmoduleStatusPaths: readonly string[];
+    readonly loadingSubmoduleStatusPaths: readonly string[];
     readonly expandedSubmoduleStashKeys: readonly string[];
     readonly submoduleStashFilesByKey: Readonly<Record<string, readonly StashFileEntry[]>>;
 }
@@ -78,6 +79,7 @@ export type ChangesAction =
     | { readonly type: 'toggleStash'; readonly index: number }
     | { readonly type: 'clearError' }
     | { readonly type: 'toggleSubmodule'; readonly path: string }
+    | { readonly type: 'requestSubmoduleStatus'; readonly path: string }
     | { readonly type: 'toggleSubmoduleStash'; readonly key: string };
 
 export function createInitialChangesState(preferences: ChangesStatePreferences = {}): ChangesState {
@@ -100,6 +102,7 @@ export function createInitialChangesState(preferences: ChangesStatePreferences =
         expandedSubmodulePaths: [],
         submoduleStatusByPath: {},
         staleSubmoduleStatusPaths: [],
+        loadingSubmoduleStatusPaths: [],
         expandedSubmoduleStashKeys: [],
         submoduleStashFilesByKey: {},
     };
@@ -127,6 +130,8 @@ export function reduceChangesState(state: ChangesState, action: ChangesAction): 
             return { ...state, expandedStashIndexes: toggledIndex(state.expandedStashIndexes, action.index) };
         case 'toggleSubmodule':
             return { ...state, expandedSubmodulePaths: toggledPath(state.expandedSubmodulePaths, action.path) };
+        case 'requestSubmoduleStatus':
+            return { ...state, loadingSubmoduleStatusPaths: addedPath(state.loadingSubmoduleStatusPaths, action.path) };
         case 'toggleSubmoduleStash':
             return { ...state, expandedSubmoduleStashKeys: toggledPath(state.expandedSubmoduleStashKeys, action.key) };
         case 'clearError':
@@ -158,14 +163,24 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                     ...keepKnownPaths(state.staleSubmoduleStatusPaths, submodulePaths),
                     ...expandedSubmodulePaths,
                 ]),
+                loadingSubmoduleStatusPaths: keepKnownPaths(state.loadingSubmoduleStatusPaths, submodulePaths),
                 expandedSubmoduleStashKeys: keepKnownSubmoduleStashKeys(state.expandedSubmoduleStashKeys, submodulePaths),
                 submoduleStashFilesByKey: keepKnownSubmoduleStashFilesByPath(state.submoduleStashFilesByKey, submodulePaths),
                 submoduleCommitFeedbackByPath: keepKnownRecord(state.submoduleCommitFeedbackByPath, submodulePaths),
             };
         }
         case 'changes/error':
-        case 'error':
-            return { ...state, loading: false, error: readProtocolError(message) };
+        case 'error': {
+            const failedSubmodulePath = submodulePathFromStatusRequestId(message.requestId);
+            return {
+                ...state,
+                loading: false,
+                error: readProtocolError(message),
+                loadingSubmoduleStatusPaths: failedSubmodulePath
+                    ? state.loadingSubmoduleStatusPaths.filter((path) => path !== failedSubmodulePath)
+                    : state.loadingSubmoduleStatusPaths,
+            };
+        }
         case 'changes/commitResult':
             return message.success
                 ? { ...state, error: undefined, commitFeedback: { success: true, message: undefined } }
@@ -199,6 +214,7 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 ...state,
                 error: undefined,
                 staleSubmoduleStatusPaths: state.staleSubmoduleStatusPaths.filter((path) => path !== message.path),
+                loadingSubmoduleStatusPaths: state.loadingSubmoduleStatusPaths.filter((path) => path !== message.path),
                 expandedSubmoduleStashKeys: keepKnownStashKeysForPath(
                     state.expandedSubmoduleStashKeys,
                     message.path,
@@ -259,6 +275,16 @@ function keepKnownPaths(paths: readonly string[], knownPaths: ReadonlySet<string
 
 function uniquePaths(paths: readonly string[]): readonly string[] {
     return Array.from(new Set(paths));
+}
+
+function addedPath(paths: readonly string[], path: string): readonly string[] {
+    return paths.includes(path) ? paths : [...paths, path];
+}
+
+function submodulePathFromStatusRequestId(requestId: string | undefined): string | undefined {
+    const prefix = 'changes:submodule-status:';
+    if (!requestId?.startsWith(prefix)) { return undefined; }
+    return requestId.substring(prefix.length);
 }
 
 function keepKnownStashIndexes(
