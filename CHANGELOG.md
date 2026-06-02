@@ -22,7 +22,7 @@ All notable changes to Look Git are documented in this file.
 - Changed files displayed as a folder tree with click-to-diff support
 - Submodule gitlink entries blocked from unsafe diff navigation
 
-#### Git Graph
+#### Look Graph
 - SVG lane graph with 10 rotating colors; Bezier curves for merges and forks
 - Primary branch (current) pinned to lane 0
 - Branch panel: Local / Remote / Worktrees collapsible tree

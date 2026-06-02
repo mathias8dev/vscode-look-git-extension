@@ -26,7 +26,7 @@
       "panel": [
         {
           "id": "look-git-graph",
-          "title": "Git Graph",
+          "title": "Look Graph",
           "icon": "resources/look-git-icon.svg"
         }
       ]
@@ -51,10 +51,10 @@
       "look-git-graph": [
         {
           "id": "lookGit.graphView",
-          "name": "Git Graph",
+          "name": "Look Graph",
           "type": "webview",
           "icon": "resources/look-git-icon.svg",
-          "contextualTitle": "Git Graph"
+          "contextualTitle": "Look Graph"
         }
       ]
     },
@@ -230,7 +230,7 @@
       },
       {
         "command": "lookGit.changes.openGraph",
-        "title": "Open Git Graph",
+        "title": "Open Look Graph",
         "category": "Look Git",
         "icon": "$(git-compare)"
       },

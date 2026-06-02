@@ -22,7 +22,7 @@ A modern, React-based Git extension for Visual Studio Code — featuring a visua
 - **Search** — filter the commit list in real time by message, author, hash, or date
 - **Load more** — incremental pagination, 50 commits at a time
 
-### Git Graph
+### Look Graph
 
 - **SVG commit graph** — colored lanes with Bezier curves for merges and forks, primary branch always on lane 0
 - **Branch panel** — collapsible Local / Remote / Worktrees tree on the left
@@ -36,7 +36,7 @@ A modern, React-based Git extension for Visual Studio Code — featuring a visua
 
 1. Open a folder or workspace containing a Git repository in VS Code
 2. Click the **Look Git** icon in the Activity Bar to access the Changes and Commit History panels
-3. Open the **Git Graph** panel from the bottom panel area
+3. Open the **Look Graph** panel from the bottom panel area
 
 ## Requirements
 
@@ -45,7 +45,7 @@ A modern, React-based Git extension for Visual Studio Code — featuring a visua
 
 ## Known Limitations
 
-- The Git Graph view loads up to 300 commits per page by default
+- The Look Graph view loads up to 300 commits per page by default
 - CI/CD pipeline status indicators are not shown on graph rows
 - Submodule graph navigation (browsing a submodule's own commit history) is not yet available
 
