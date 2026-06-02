@@ -16,6 +16,8 @@ import {
     messageForLoadMore,
     messageForOpenDiff,
     messageForOpenWorktreeDiff,
+    messageForBranchCommand,
+    messageForGraphRepositoryCommand,
     messageForWorktreeCommand,
     messageForWorktreeDetails,
 } from '../features/graph/graphCommands';
@@ -124,6 +126,8 @@ export function GraphApp() {
                 selectedBranchFilter={state.selectedBranchFilter}
                 selectedWorktreePath={state.selectedWorktreePath}
                 onSelectBranch={(branch) => dispatch({ type: 'setBranchFilter', branch })}
+                onBranchCommand={(command, branch, isRemote) => vscodeApi.postMessage(messageForBranchCommand(command, branch, isRemote))}
+                onFetch={() => vscodeApi.postMessage(messageForGraphRepositoryCommand('fetch'))}
                 onSelectWorktree={handleSelectWorktree}
                 onOpenWorktree={(path) => vscodeApi.postMessage(messageForWorktreeCommand('openInNewWindow', path))}
                 onAddWorktree={() => vscodeApi.postMessage(messageForWorktreeCommand('add'))}

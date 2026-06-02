@@ -165,6 +165,20 @@ describe('GraphViewProvider', () => {
         expect(repo.getGraphLog).not.toHaveBeenCalled();
     });
 
+    it('notifies dependent views after repository mutations from the graph webview', async () => {
+        const repo = makeRepositoryMock();
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const provider = new GraphViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo), onRepositoryUpdated);
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'graph/repositoryCommand', command: 'fetch' });
+
+        await vi.waitFor(() => expect(repo.fetchAll).toHaveBeenCalledOnce());
+        expect(view.messages).toContainEqual({ type: 'graph/refreshRequested' });
+        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
+    });
+
     it('runs native graph context commands against the latest webview target', async () => {
         const repo = makeRepositoryMock();
         const provider = new GraphViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));

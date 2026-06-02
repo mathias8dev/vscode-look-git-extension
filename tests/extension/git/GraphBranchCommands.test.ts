@@ -1,10 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
 import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessageRouter';
 import type { GraphExtensionToWebviewMessage } from '../../../src/protocol/graph/messages';
 import { makeRepositoryAccessor } from '../../helpers/repositoryMock';
 import { createBareGitRepo, createTempGitRepo, type TempGitRepo } from '../../helpers/gitRepo';
-import { commands, resetMockVscode, setInputBoxValue, setWarningChoice } from '../../mocks/vscode';
+import { commands, resetMockVscode, setInputBoxValue, setWarningChoice, window } from '../../mocks/vscode';
 
 describe('Graph branch commands against real git repos', () => {
     let fixture: TempGitRepo;
@@ -120,6 +122,150 @@ describe('Graph branch commands against real git repos', () => {
         }
     });
 
+    it('updates a selected local branch from its upstream remote branch', async () => {
+        const remote = createBareGitRepo();
+        const seed = createTempGitRepo();
+        try {
+            fixture.commitFile('base.txt', 'base\n', 'feat: base');
+            fixture.git(['remote', 'add', 'origin', remote.cwd]);
+            fixture.git(['push', '-u', 'origin', 'main']);
+            fixture.git(['checkout', '-q', '-b', 'topic']);
+            fixture.commitFile('topic.txt', 'topic\n', 'feat: topic');
+            fixture.git(['push', '-u', 'origin', 'topic:review/topic']);
+
+            seed.git(['remote', 'add', 'origin', remote.cwd]);
+            seed.git(['fetch', '-q', 'origin']);
+            seed.git(['checkout', '-q', '-b', 'review/topic', 'origin/review/topic']);
+            const remoteHead = seed.commitFile('remote-update.txt', 'remote update\n', 'feat: remote update');
+            seed.git(['push', '-q', 'origin', 'review/topic:review/topic']);
+
+            const router = routerFor(fixture.cwd);
+            await router.handle({ type: 'graph/branchCommand', command: 'update', branch: 'topic', isRemote: false });
+
+            expect(fixture.gitTrim(['branch', '--show-current'])).toBe('topic');
+            expect(fixture.gitTrim(['rev-parse', 'topic'])).toBe(remoteHead);
+            expect(fixture.gitTrim(['rev-parse', 'origin/review/topic'])).toBe(remoteHead);
+        } finally {
+            seed.cleanup();
+            remote.cleanup();
+        }
+    });
+
+    it('reports diverged update selected branches without creating conflicts', async () => {
+        const remote = createBareGitRepo();
+        const seed = createTempGitRepo();
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        try {
+            fixture.commitFile('base.txt', 'base\n', 'feat: base');
+            fixture.git(['remote', 'add', 'origin', remote.cwd]);
+            fixture.git(['push', '-u', 'origin', 'main']);
+            fixture.git(['checkout', '-q', '-b', 'topic']);
+            const localBase = fixture.commitFile('topic.txt', 'topic\n', 'feat: topic');
+            fixture.git(['push', '-u', 'origin', 'topic:topic']);
+
+            seed.git(['remote', 'add', 'origin', remote.cwd]);
+            seed.git(['fetch', '-q', 'origin']);
+            seed.git(['checkout', '-q', '-b', 'topic', 'origin/topic']);
+            seed.commitFile('remote.txt', 'remote\n', 'feat: remote');
+            seed.git(['push', '-q', 'origin', 'topic:topic']);
+
+            fixture.commitFile('local.txt', 'local\n', 'feat: local');
+            const localHead = fixture.gitTrim(['rev-parse', 'topic']);
+            const router = routerFor(fixture.cwd, messages);
+            await router.handle({ type: 'graph/branchCommand', command: 'update', branch: 'topic', isRemote: false });
+
+            expect(fixture.gitTrim(['rev-parse', 'topic'])).toBe(localHead);
+            expect(fixture.gitTrim(['merge-base', 'topic', 'origin/topic'])).toBe(localBase);
+            expect(fixture.gitTrim(['status', '--porcelain', '-uall'])).not.toContain('UU ');
+            expect(fs.existsSync(path.join(fixture.cwd, '.git', 'MERGE_HEAD'))).toBe(false);
+            expect(messages.some((message) => message.type === 'graph/error')).toBe(true);
+            expect(window.errorMessages.at(-1)).toBeTruthy();
+        } finally {
+            seed.cleanup();
+            remote.cleanup();
+        }
+    });
+
+    it('reports dirty working tree fast-forward blockers without creating conflicts', async () => {
+        const remote = createBareGitRepo();
+        const seed = createTempGitRepo();
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        try {
+            fixture.commitFile('shared.txt', 'base\n', 'feat: base');
+            fixture.git(['remote', 'add', 'origin', remote.cwd]);
+            fixture.git(['push', '-u', 'origin', 'main']);
+            fixture.git(['checkout', '-q', '-b', 'topic']);
+            fixture.git(['push', '-u', 'origin', 'topic:topic']);
+
+            seed.git(['remote', 'add', 'origin', remote.cwd]);
+            seed.git(['fetch', '-q', 'origin']);
+            seed.git(['checkout', '-q', '-b', 'topic', 'origin/topic']);
+            seed.commitFile('shared.txt', 'remote\n', 'feat: remote');
+            seed.git(['push', '-q', 'origin', 'topic:topic']);
+
+            fixture.write('shared.txt', 'local dirty\n');
+            const localHead = fixture.gitTrim(['rev-parse', 'topic']);
+            const router = routerFor(fixture.cwd, messages);
+            await router.handle({ type: 'graph/branchCommand', command: 'update', branch: 'topic', isRemote: false });
+
+            expect(fixture.gitTrim(['rev-parse', 'topic'])).toBe(localHead);
+            const status = fixture.git(['status', '--porcelain', '-uall']);
+            expect(status).toContain(' M shared.txt');
+            expect(status).not.toContain('UU ');
+            expect(fs.existsSync(path.join(fixture.cwd, '.git', 'MERGE_HEAD'))).toBe(false);
+            expect(messages.some((message) => message.type === 'graph/error')).toBe(true);
+            expect(window.errorMessages.at(-1)).toBeTruthy();
+        } finally {
+            seed.cleanup();
+            remote.cleanup();
+        }
+    });
+
+    it('notifies after merge conflicts so the changes panel can show conflict controls', async () => {
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const onRepositoryUpdated = vi.fn(async () => {});
+        fixture.commitFile('conflict.txt', 'base\n', 'feat: base');
+        fixture.git(['checkout', '-q', '-b', 'incoming']);
+        fixture.commitFile('conflict.txt', 'incoming\n', 'feat: incoming');
+        fixture.git(['checkout', '-q', 'main']);
+        fixture.commitFile('conflict.txt', 'current\n', 'feat: current');
+        const router = routerFor(fixture.cwd, messages, onRepositoryUpdated);
+
+        await router.handle({ type: 'graph/branchCommand', command: 'mergeInto', branch: 'incoming', isRemote: false });
+
+        const status = fixture.git(['status', '--porcelain', '-uall']);
+        expect(status).toContain('UU conflict.txt');
+        expect(fs.existsSync(path.join(fixture.cwd, '.git', 'MERGE_HEAD'))).toBe(true);
+        expect(messages).toContainEqual(expect.objectContaining({ type: 'graph/error' }));
+        expect(messages).toContainEqual({ type: 'graph/refreshRequested' });
+        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
+        expect(window.errorMessages.at(-1)).toBeTruthy();
+    });
+
+    it('notifies after rebase conflicts so the changes panel can show rebase controls', async () => {
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const onRepositoryUpdated = vi.fn(async () => {});
+        fixture.commitFile('conflict.txt', 'base\n', 'feat: base');
+        fixture.git(['checkout', '-q', '-b', 'target']);
+        fixture.commitFile('conflict.txt', 'target\n', 'feat: target');
+        fixture.git(['checkout', '-q', 'main']);
+        fixture.commitFile('conflict.txt', 'current\n', 'feat: current');
+        const router = routerFor(fixture.cwd, messages, onRepositoryUpdated);
+
+        await router.handle({ type: 'graph/branchCommand', command: 'rebaseOnto', branch: 'target', isRemote: false });
+
+        const status = fixture.git(['status', '--porcelain', '-uall']);
+        expect(status).toContain('UU conflict.txt');
+        expect(
+            fs.existsSync(path.join(fixture.cwd, '.git', 'rebase-merge'))
+            || fs.existsSync(path.join(fixture.cwd, '.git', 'rebase-apply')),
+        ).toBe(true);
+        expect(messages).toContainEqual(expect.objectContaining({ type: 'graph/error' }));
+        expect(messages).toContainEqual({ type: 'graph/refreshRequested' });
+        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
+        expect(window.errorMessages.at(-1)).toBeTruthy();
+    });
+
     it('checks out remote branches by creating or reusing local tracking branches', async () => {
         const remote = createBareGitRepo();
         const messages: GraphExtensionToWebviewMessage[] = [];
@@ -228,7 +374,11 @@ function createRemoteOnlyBranch(fixture: TempGitRepo, branch: string, startPoint
     return head;
 }
 
-function routerFor(cwd: string, messages: GraphExtensionToWebviewMessage[] = []): GraphMessageRouter {
+function routerFor(
+    cwd: string,
+    messages: GraphExtensionToWebviewMessage[] = [],
+    onRepositoryUpdated: () => Promise<void> = async () => {},
+): GraphMessageRouter {
     const repo = new GitProcessRepository(cwd);
-    return new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+    return new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); }, onRepositoryUpdated);
 }

@@ -1575,6 +1575,43 @@ h1 {
     overflow: hidden;
 }
 
+.graph-branch-panel-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+}
+
+.graph-branch-action-bar {
+    flex: 0 0 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 3px;
+    border-right: 1px solid var(--vscode-panel-border, #3c3c3c);
+}
+
+.graph-branch-action-bar .icon-button {
+    opacity: 1;
+}
+
+.graph-branch-action-bar .icon-button:disabled {
+    opacity: 0.35;
+}
+
+.graph-branch-action-separator {
+    flex: 0 0 6px;
+}
+
+.graph-branch-content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+}
+
 .branch-search {
     padding: 4px 6px;
     border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);

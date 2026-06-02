@@ -2,17 +2,26 @@ import { useState } from 'react';
 import type { BranchInfo } from '../../../protocol/graph/types';
 import type { BranchNode } from './graphBranchTree';
 
+export interface BranchTreeExpansionRequest {
+    readonly mode: 'expanded' | 'collapsed';
+    readonly version: number;
+}
+
 interface BranchTreeNodeProps {
     readonly node: BranchNode;
     readonly depth: number;
     readonly selectedBranch: string | undefined;
+    readonly expansionRequest: BranchTreeExpansionRequest;
     readonly onSelect: (fullName: string) => void;
     readonly onOpenContextMenu: (branch: BranchInfo) => void;
     readonly contextForBranch: (branch: BranchInfo) => Record<string, unknown>;
 }
 
-export function BranchTreeNode({ node, depth, selectedBranch, onSelect, onOpenContextMenu, contextForBranch }: BranchTreeNodeProps) {
-    const [collapsed, setCollapsed] = useState(false);
+export function BranchTreeNode({ node, depth, selectedBranch, expansionRequest, onSelect, onOpenContextMenu, contextForBranch }: BranchTreeNodeProps) {
+    const [localCollapse, setLocalCollapse] = useState<{ readonly version: number; readonly collapsed: boolean }>();
+    const collapsed = localCollapse?.version === expansionRequest.version
+        ? localCollapse.collapsed
+        : expansionRequest.mode === 'collapsed';
 
     if (node.isFolder || node.children.length > 0) {
         return (
@@ -21,7 +30,7 @@ export function BranchTreeNode({ node, depth, selectedBranch, onSelect, onOpenCo
                     type="button"
                     className="branch-node branch-folder-header"
                     style={{ paddingLeft: `${8 + depth * 12}px` }}
-                    onClick={() => setCollapsed(!collapsed)}
+                    onClick={() => setLocalCollapse({ version: expansionRequest.version, collapsed: !collapsed })}
                 >
                     <i
                         className={`codicon codicon-chevron-${collapsed ? 'right' : 'down'} branch-chevron`}
@@ -36,6 +45,7 @@ export function BranchTreeNode({ node, depth, selectedBranch, onSelect, onOpenCo
                         node={child}
                         depth={depth + 1}
                         selectedBranch={selectedBranch}
+                        expansionRequest={expansionRequest}
                         onSelect={onSelect}
                         onOpenContextMenu={onOpenContextMenu}
                         contextForBranch={contextForBranch}

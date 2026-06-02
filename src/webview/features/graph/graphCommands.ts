@@ -1,5 +1,5 @@
 import type { GraphContextTarget, GraphFilters, GraphPage } from '../../../protocol/graph/types';
-import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, WorktreeCommand } from '../../../protocol/graph/messages';
+import type { BranchCommand, CommitCommand, GraphRepositoryCommand, GraphWebviewToExtensionMessage, WorktreeCommand } from '../../../protocol/graph/messages';
 
 let requestCounter = 0;
 function nextRequestId(): string {
@@ -84,6 +84,13 @@ export function messageForGraphContextTarget(target: GraphContextTarget): GraphW
     return {
         type: 'graph/contextTarget',
         target,
+    };
+}
+
+export function messageForGraphRepositoryCommand(command: GraphRepositoryCommand): GraphWebviewToExtensionMessage {
+    return {
+        type: 'graph/repositoryCommand',
+        command,
     };
 }
 

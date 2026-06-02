@@ -494,6 +494,19 @@ function missingPath(prefix: string): string {
 describe('GraphMessageRouter branch commands', () => {
     beforeEach(resetMockVscode);
 
+    it('fetches all remotes from repository commands and refreshes the graph', async () => {
+        const repo = makeRepositoryMock();
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); }, onRepositoryUpdated);
+
+        await router.handle({ type: 'graph/repositoryCommand', command: 'fetch' });
+
+        expect(vi.mocked(repo.fetchAll)).toHaveBeenCalledOnce();
+        expect(messages).toContainEqual({ type: 'graph/refreshRequested' });
+        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
+    });
+
     it('checks out and rebases the selected branch onto the current branch', async () => {
         const repo = makeRepositoryMock();
         const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
@@ -530,6 +543,52 @@ describe('GraphMessageRouter branch commands', () => {
         expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/workspace', 'diff', '--name-status', '-z', 'feature/ui', '--']);
         expect(commands.calls.map((call) => call.command)).toEqual(['vscode.changes']);
         expect(changesResourcesAt(0)).toHaveLength(1);
+    });
+
+    it('notifies dependent views when merge commands fail after partially updating the repository', async () => {
+        const repo = makeRepositoryMock({
+            merge: vi.fn(async () => { throw new Error('Automatic merge failed; fix conflicts and then commit the result.'); }),
+        });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); }, onRepositoryUpdated);
+
+        await router.handle({ type: 'graph/branchCommand', command: 'mergeInto', branch: 'feature/conflict', isRemote: false });
+
+        expect(messages).toContainEqual(expect.objectContaining({ type: 'graph/error' }));
+        expect(messages).toContainEqual({ type: 'graph/refreshRequested' });
+        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
+        expect(window.errorMessages.at(-1)).toContain('Automatic merge failed');
+    });
+
+    it('updates the selected local branch from its configured upstream', async () => {
+        const repo = makeRepositoryMock({
+            execRaw: vi.fn(async (args) => args[0] === 'for-each-ref' ? 'origin/review/topic\n' : ''),
+        });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); }, onRepositoryUpdated);
+
+        await router.handle({ type: 'graph/branchCommand', command: 'update', branch: 'topic', isRemote: false });
+
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['for-each-ref', '--format=%(upstream:short)', 'refs/heads/topic']);
+        expect(vi.mocked(repo.fetchBranch)).toHaveBeenCalledWith('origin', 'review/topic');
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['merge-base', '--is-ancestor', 'topic', 'origin/review/topic']);
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['branch', '-f', 'topic', 'origin/review/topic']);
+        expect(messages).toContainEqual({ type: 'graph/refreshRequested' });
+        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
+    });
+
+    it('rejects update selected for remote branches', async () => {
+        const repo = makeRepositoryMock();
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+
+        await router.handle({ type: 'graph/branchCommand', command: 'update', branch: 'origin/topic', isRemote: true });
+
+        expect(vi.mocked(repo.fetchBranch)).not.toHaveBeenCalled();
+        expect(messages.some((message) => message.type === 'graph/error')).toBe(true);
+        expect(window.errorMessages.at(-1)).toContain('Update selected branch is only available for local branches.');
     });
 
     it('pushes to the configured upstream branch', async () => {

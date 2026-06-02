@@ -17,10 +17,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         gitApi.repositories.find((r) => r.ui.selected) ?? gitApi.repositories[0];
 
     const repositories = new ActiveRepositoryRegistry();
-    const graphProvider = new GraphViewProvider(context.extensionUri, repositories);
+    const graphRepositoryRefreshers: Array<() => Promise<void>> = [];
+    const graphProvider = new GraphViewProvider(context.extensionUri, repositories, async () => {
+        await Promise.all(graphRepositoryRefreshers.map((refresh) => refresh()));
+    });
     const refreshGraph = () => graphProvider.refresh();
     const changesProvider = new ChangesViewProvider(context.extensionUri, repositories, refreshGraph);
     const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshGraph);
+    graphRepositoryRefreshers.push(() => changesProvider.refresh(), () => commitHistoryProvider.refresh());
 
     context.subscriptions.push(
         repositories,

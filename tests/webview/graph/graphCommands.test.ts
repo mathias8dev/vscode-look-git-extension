@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { messageForBranchCommand, messageForCommitCommand, messageForGraphContextTarget } from '../../../src/webview/features/graph/graphCommands';
+import { messageForBranchCommand, messageForCommitCommand, messageForGraphContextTarget, messageForGraphRepositoryCommand } from '../../../src/webview/features/graph/graphCommands';
 
 describe('graphCommands', () => {
     it('sends commit command selections', () => {
@@ -24,6 +24,13 @@ describe('graphCommands', () => {
         expect(messageForGraphContextTarget({ kind: 'worktree', path: '/repo/.worktrees/a' })).toEqual({
             type: 'graph/contextTarget',
             target: { kind: 'worktree', path: '/repo/.worktrees/a' },
+        });
+    });
+
+    it('sends repository commands', () => {
+        expect(messageForGraphRepositoryCommand('fetch')).toEqual({
+            type: 'graph/repositoryCommand',
+            command: 'fetch',
         });
     });
 });

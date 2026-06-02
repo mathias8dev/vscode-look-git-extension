@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
-import type { BranchCommand, CommitCommand, WorktreeCommand, GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse, WorktreeDetailsResponse, OpenDiffRequest, OpenWorktreeDiffRequest } from '../../protocol/graph/messages';
+import type { BranchCommand, CommitCommand, GraphRepositoryCommand, WorktreeCommand, GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse, WorktreeDetailsResponse, OpenDiffRequest, OpenWorktreeDiffRequest } from '../../protocol/graph/messages';
 import type { CommitFileChange, GraphData, GraphFilters, WorktreeWip } from '../../protocol/graph/types';
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import type { GitRepository } from '../../core/git/GitRepository';
@@ -25,6 +25,7 @@ export class GraphMessageRouter {
     constructor(
         private readonly repositories: ActiveRepositoryAccessor,
         private readonly postMessage: PostMessage,
+        private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
     ) {}
 
     dispose(): void {
@@ -41,7 +42,11 @@ export class GraphMessageRouter {
                 requestId: requestIdOf(msg),
                 operation: msg.type,
                 code: errorCodeFor(msg),
+                notifyUser: shouldNotifyUserForError(msg),
             });
+            if (shouldRefreshAfterFailedRepositoryMutation(msg)) {
+                await this.refreshAfterError();
+            }
         }
     }
 
@@ -122,6 +127,10 @@ export class GraphMessageRouter {
                 this.postMessage(response);
                 break;
             }
+
+            case 'graph/repositoryCommand':
+                await this.handleRepositoryCommand(msg.command);
+                break;
 
             case 'graph/branchCommand':
                 await this.handleBranchCommand(msg.command, msg.branch, msg.isRemote);
@@ -231,6 +240,16 @@ export class GraphMessageRouter {
         };
     }
 
+    private async handleRepositoryCommand(command: GraphRepositoryCommand): Promise<void> {
+        const repo = this.repositories.requireRepository();
+        switch (command) {
+            case 'fetch':
+                await repo.fetchAll();
+                break;
+        }
+        await this.refreshAfterRepositoryChange();
+    }
+
     private async handleBranchCommand(command: BranchCommand, branch: string, isRemote: boolean): Promise<void> {
         const repo = this.repositories.requireRepository();
         const currentBranch = await repo.getCurrentBranch();
@@ -239,7 +258,10 @@ export class GraphMessageRouter {
                 await checkoutBranch(repo, branch, isRemote);
                 break;
             case 'newBranchFrom': {
-                const name = await vscode.window.showInputBox({ prompt: `New branch from "${branch}":` });
+                const name = await vscode.window.showInputBox({
+                    prompt: `Create branch from "${branch}":`,
+                    value: isRemote ? localBranchNameForRemote(branch) : undefined,
+                });
                 if (!name) { return; }
                 await repo.checkoutNewBranch(name, branch);
                 break;
@@ -308,8 +330,8 @@ export class GraphMessageRouter {
                 if (!await removeBranchWorktree(repo, branch, isRemote)) { return; }
                 break;
             case 'update': {
-                const { remote, branchName } = await resolveRemoteBranch(repo, branch);
-                await repo.fetchBranch(remote, branchName);
+                if (isRemote) { throw new Error('Update selected branch is only available for local branches.'); }
+                await updateSelectedLocalBranch(repo, branch, currentBranch);
                 break;
             }
             case 'rebaseOnto':
@@ -321,7 +343,7 @@ export class GraphMessageRouter {
                 await repo.merge(branch);
                 break;
         }
-        this.requestGraphRefresh();
+        await this.refreshAfterRepositoryChange();
     }
 
     private async handleWorktreeCommand(command: WorktreeCommand, wtPath?: string): Promise<void> {
@@ -412,28 +434,48 @@ export class GraphMessageRouter {
                 break;
             }
         }
-        this.requestGraphRefresh();
+        await this.refreshAfterRepositoryChange();
     }
 
     private async handleCommitCommand(command: CommitCommand, hash: string, hashes: readonly string[]): Promise<void> {
         const repo = this.repositories.requireRepository();
         const shouldRefresh = await runCommitCommand(repo, command, hash, hashes);
-        if (shouldRefresh) { this.requestGraphRefresh(); }
+        if (shouldRefresh) { await this.refreshAfterRepositoryChange(); }
     }
 
     private postGraphError(
         error: unknown,
-        options: { readonly requestId?: RequestId; readonly operation: string; readonly code: ErrorCode },
+        options: { readonly requestId?: RequestId; readonly operation: string; readonly code: ErrorCode; readonly notifyUser?: boolean },
     ): void {
+        const payload = createErrorPayload(error, {
+            code: options.code,
+            operation: options.operation,
+            recoverable: true,
+        });
         this.postMessage({
             type: 'graph/error',
             requestId: options.requestId,
-            ...createErrorPayload(error, {
-                code: options.code,
-                operation: options.operation,
-                recoverable: true,
-            }),
+            ...payload,
         });
+        if (options.notifyUser) {
+            void vscode.window.showErrorMessage(payload.message);
+        }
+    }
+
+    private async refreshAfterRepositoryChange(): Promise<void> {
+        this.requestGraphRefresh();
+        await this.onRepositoryUpdated();
+    }
+
+    private async refreshAfterError(): Promise<void> {
+        try {
+            await this.refreshAfterRepositoryChange();
+        } catch (error) {
+            this.postGraphError(error, {
+                operation: 'graph/refreshAfterError',
+                code: 'refreshFailed',
+            });
+        }
     }
 
     requestGraphRefresh(): void {
@@ -868,6 +910,28 @@ async function resolveRemoteBranch(repo: GitRepository, branch: string): Promise
     };
 }
 
+async function updateTargetForLocalBranch(repo: GitRepository, branch: string): Promise<{ readonly remote: string; readonly branchName: string }> {
+    const upstream = (await repo.execRaw(['for-each-ref', '--format=%(upstream:short)', `refs/heads/${branch}`])).trim();
+    return resolveRemoteBranch(repo, upstream || branch);
+}
+
+async function updateSelectedLocalBranch(repo: GitRepository, branch: string, currentBranch: string): Promise<void> {
+    const { remote, branchName } = await updateTargetForLocalBranch(repo, branch);
+    await repo.fetchBranch(remote, branchName);
+    const upstreamRef = `${remote}/${branchName}`;
+    if (branch === currentBranch) {
+        await repo.exec(['merge', '--ff-only', upstreamRef]);
+        return;
+    }
+    await repo.exec(['merge-base', '--is-ancestor', branch, upstreamRef]);
+    await repo.exec(['branch', '-f', branch, upstreamRef]);
+}
+
+function localBranchNameForRemote(branch: string): string | undefined {
+    const slashIdx = branch.indexOf('/');
+    return slashIdx === -1 ? undefined : branch.substring(slashIdx + 1);
+}
+
 async function showRepositoryAtRevision(
     hash: string,
     exec: (args: readonly string[]) => Promise<string>,
@@ -1160,6 +1224,41 @@ function requestIdOf(msg: GraphWebviewToExtensionMessage): RequestId | undefined
 function errorCodeFor(msg: GraphWebviewToExtensionMessage): ErrorCode {
     if (msg.type === 'graph/openDiff' || msg.type === 'graph/openWorktreeDiff') { return 'vscodeCommandFailed'; }
     return 'gitOperationFailed';
+}
+
+function shouldNotifyUserForError(msg: GraphWebviewToExtensionMessage): boolean {
+    return msg.type === 'graph/branchCommand'
+        || msg.type === 'graph/commitCommand'
+        || msg.type === 'graph/worktreeCommand'
+        || msg.type === 'graph/repositoryCommand'
+        || msg.type === 'graph/openDiff'
+        || msg.type === 'graph/openWorktreeDiff';
+}
+
+function shouldRefreshAfterFailedRepositoryMutation(msg: GraphWebviewToExtensionMessage): boolean {
+    switch (msg.type) {
+        case 'graph/branchCommand':
+            return msg.command === 'checkoutRebaseOnto'
+                || msg.command === 'rebaseOnto'
+                || msg.command === 'mergeInto'
+                || (msg.command === 'update' && !msg.isRemote);
+        case 'graph/commitCommand':
+            return msg.command === 'cherryPick'
+                || msg.command === 'revertCommit'
+                || msg.command === 'dropCommit'
+                || msg.command === 'editCommitMessage'
+                || msg.command === 'fixup'
+                || msg.command === 'squashInto'
+                || msg.command === 'resetCurrentBranchToHere'
+                || msg.command === 'undoCommit';
+        case 'graph/worktreeCommand':
+            return msg.command === 'pull'
+                || msg.command === 'checkoutBranch'
+                || msg.command === 'commit'
+                || msg.command === 'stash';
+        default:
+            return false;
+    }
 }
 
 async function createDiffUris(cwd: string, msg: OpenDiffRequest): Promise<{ readonly left: vscode.Uri; readonly right: vscode.Uri }> {

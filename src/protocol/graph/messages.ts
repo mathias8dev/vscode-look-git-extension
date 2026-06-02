@@ -200,6 +200,13 @@ export interface GraphContextTargetMessage {
     readonly target: GraphContextTarget;
 }
 
+export type GraphRepositoryCommand = 'fetch';
+
+export interface GraphRepositoryCommandRequest {
+    readonly type: 'graph/repositoryCommand';
+    readonly command: GraphRepositoryCommand;
+}
+
 // ── Union types ─────────────────────────────────────────────────────────────
 
 export type GraphExtensionToWebviewMessage =
@@ -222,6 +229,7 @@ export type GraphWebviewToExtensionMessage =
     | CommitDetailsRequest
     | WorktreeDetailsRequest
     | GraphContextTargetMessage
+    | GraphRepositoryCommandRequest
     | BranchCommandRequest
     | WorktreeCommandRequest
     | CommitCommandRequest

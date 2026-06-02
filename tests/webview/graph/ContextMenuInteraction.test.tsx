@@ -30,6 +30,8 @@ describe('graph native context menu targets', () => {
                 selectedBranchFilter={undefined}
                 selectedWorktreePath={undefined}
                 onSelectBranch={() => undefined}
+                onBranchCommand={() => undefined}
+                onFetch={() => undefined}
                 onSelectWorktree={() => undefined}
                 onOpenWorktree={() => undefined}
                 onAddWorktree={() => undefined}
@@ -60,6 +62,8 @@ describe('graph native context menu targets', () => {
                 selectedBranchFilter={undefined}
                 selectedWorktreePath={undefined}
                 onSelectBranch={() => undefined}
+                onBranchCommand={() => undefined}
+                onFetch={() => undefined}
                 onSelectWorktree={onSelectWorktree}
                 onOpenWorktree={() => undefined}
                 onAddWorktree={() => undefined}
