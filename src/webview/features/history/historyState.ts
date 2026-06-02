@@ -4,7 +4,7 @@ import type { ProtocolError } from '../../../protocol/shared/base';
 
 export interface HistoryState {
     readonly commits: readonly HistoryCommit[];
-    readonly selectedHash: string | undefined;
+    readonly expandedHashes: readonly string[];
     readonly detailsByHash: Readonly<Record<string, HistoryCommitDetails>>;
     readonly detailsLoadingHash: string | undefined;
     readonly loading: boolean;
@@ -16,7 +16,8 @@ export interface HistoryState {
 
 export type HistoryAction =
     | { readonly type: 'message'; readonly message: HistoryExtensionToWebviewMessage }
-    | { readonly type: 'selectCommit'; readonly hash: string }
+    | { readonly type: 'toggleCommit'; readonly hash: string }
+    | { readonly type: 'startLoadingDetails'; readonly hash: string }
     | { readonly type: 'startRefresh' }
     | { readonly type: 'startLoadMore' }
     | { readonly type: 'clearError' };
@@ -24,7 +25,7 @@ export type HistoryAction =
 export function createInitialHistoryState(): HistoryState {
     return {
         commits: [],
-        selectedHash: undefined,
+        expandedHashes: [],
         detailsByHash: {},
         detailsLoadingHash: undefined,
         loading: true,
@@ -39,8 +40,10 @@ export function reduceHistoryState(state: HistoryState, action: HistoryAction): 
     switch (action.type) {
         case 'message':
             return reduceMessage(state, action.message);
-        case 'selectCommit':
-            return selectCommit(state, action.hash);
+        case 'toggleCommit':
+            return toggleCommit(state, action.hash);
+        case 'startLoadingDetails':
+            return { ...state, detailsLoadingHash: action.hash };
         case 'startRefresh':
             return { ...state, loading: true, loadingMore: false, error: undefined };
         case 'startLoadMore':
@@ -60,7 +63,7 @@ function reduceMessage(state: HistoryState, message: HistoryExtensionToWebviewMe
         case 'history/commitDetailsResponse':
             return applyCommitDetails(state, message.details);
         case 'history/selectCommit':
-            return selectCommit(state, message.hash);
+            return toggleCommit(state, message.hash);
         case 'history/applyFileViewMode':
             return state;
         case 'history/error':
@@ -71,26 +74,27 @@ function reduceMessage(state: HistoryState, message: HistoryExtensionToWebviewMe
     }
 }
 
-function selectCommit(state: HistoryState, hash: string): HistoryState {
-    return {
-        ...state,
-        selectedHash: hash,
-        detailsLoadingHash: state.detailsByHash[hash] ? undefined : hash,
-    };
+function toggleCommit(state: HistoryState, hash: string): HistoryState {
+    const isExpanded = state.expandedHashes.includes(hash);
+    if (isExpanded) {
+        return { ...state, expandedHashes: state.expandedHashes.filter((h) => h !== hash) };
+    }
+    // Don't set detailsLoadingHash here — the useEffect in HistoryWebview.tsx
+    // watches expandedHashes and dispatches startLoadingDetails for uncached commits.
+    return { ...state, expandedHashes: [...state.expandedHashes, hash] };
 }
 
 function applyData(state: HistoryState, data: HistoryData): HistoryState {
     const commits = data.page.offset === 0
         ? data.commits
         : appendUniqueCommits(state.commits, data.commits);
-    const selectedHash = commits.some((commit) => commit.hash === state.selectedHash)
-        ? state.selectedHash
-        : undefined;
+    const commitHashes = new Set(commits.map((c) => c.hash));
+    const expandedHashes = state.expandedHashes.filter((h) => commitHashes.has(h));
     return {
         ...state,
         commits,
-        selectedHash,
-        detailsLoadingHash: selectedHash ? state.detailsLoadingHash : undefined,
+        expandedHashes,
+        detailsLoadingHash: expandedHashes.includes(state.detailsLoadingHash ?? '') ? state.detailsLoadingHash : undefined,
         loading: false,
         loadingMore: false,
         hasMore: data.hasMore,
@@ -102,10 +106,7 @@ function applyData(state: HistoryState, data: HistoryData): HistoryState {
 function applyCommitDetails(state: HistoryState, details: HistoryCommitDetails): HistoryState {
     return {
         ...state,
-        detailsByHash: {
-            ...state.detailsByHash,
-            [details.hash]: details,
-        },
+        detailsByHash: { ...state.detailsByHash, [details.hash]: details },
         detailsLoadingHash: state.detailsLoadingHash === details.hash ? undefined : state.detailsLoadingHash,
         error: undefined,
     };

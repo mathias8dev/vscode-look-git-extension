@@ -856,7 +856,6 @@ h1 {
 }
 
 .history-row-message,
-.history-row-meta,
 .history-row-hash {
     min-width: 0;
     overflow: hidden;
@@ -869,8 +868,26 @@ h1 {
 }
 
 .history-row-meta {
-    color: var(--vscode-descriptionForeground, #9d9d9d);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
     font-size: 0.78em;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    min-width: 0;
+}
+
+.history-row-author {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.history-row-date {
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .history-row-hash {
@@ -1019,12 +1036,75 @@ h1 {
 .history-loading,
 .history-empty {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 8px;
     padding: 24px 12px;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     font-size: 0.86em;
+}
+
+.history-empty-icon {
+    font-size: 1.8em;
+    opacity: 0.5;
+}
+
+.history-item-expanded {
+    background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground, rgba(14, 99, 156, 0.4)) 14%, transparent);
+    border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
+}
+
+.history-item-expanded .history-file-tree {
+    padding-top: 4px;
+    padding-bottom: 6px;
+    border-top: 1px solid var(--vscode-panel-border, #3c3c3c);
+}
+
+.history-item-meta {
+    display: grid;
+    gap: 4px;
+    padding: 6px 8px 6px 28px;
+}
+
+.history-item-subject {
+    margin: 0;
+    color: var(--vscode-foreground, #cccccc);
+    font-size: 0.86em;
+    font-weight: 500;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.history-item-body {
+    margin: 0;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.8em;
+    line-height: 1.4;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.history-item-info {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.78em;
+}
+
+.history-item-author {
+    font-weight: 500;
+    color: var(--vscode-foreground, #cccccc);
+}
+
+.history-item-date {
+    white-space: nowrap;
+}
+
+.history-item-sep {
+    opacity: 0.4;
 }
 
 .history-details {
@@ -1036,12 +1116,47 @@ h1 {
     background: var(--vscode-sideBar-background, transparent);
 }
 
-.history-details-message {
+.history-details-subject {
     margin: 0;
     color: var(--vscode-foreground, #cccccc);
     font-size: 0.88em;
+    font-weight: 500;
     line-height: 1.35;
     word-break: break-word;
+}
+
+.history-details-body {
+    margin: 0;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.82em;
+    line-height: 1.4;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.history-copy-hash {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: none;
+    background: transparent;
+    color: var(--vscode-foreground, #cccccc);
+    font: inherit;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.78em;
+    cursor: pointer;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-left: -4px;
+}
+
+.history-copy-hash:hover {
+    background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
+}
+
+.history-copy-hash .codicon {
+    font-size: 11px;
+    opacity: 0.7;
 }
 
 .history-details dl {

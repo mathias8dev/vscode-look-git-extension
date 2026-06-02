@@ -65,7 +65,7 @@ describe('CommitHistoryApp', () => {
             state: {
                 ...createInitialHistoryState(),
                 commits: [commit('abc123456789', 'feat: add graph history')],
-                selectedHash: 'abc123456789',
+                expandedHashes: ['abc123456789'],
                 detailsByHash: {
                     abc123456789: {
                         hash: 'abc123456789',
@@ -96,7 +96,7 @@ describe('CommitHistoryApp', () => {
             state: {
                 ...createInitialHistoryState(),
                 commits: [commit('abc123456789', 'feat: add graph history')],
-                selectedHash: 'abc123456789',
+                expandedHashes: ['abc123456789'],
                 detailsByHash: {
                     abc123456789: {
                         hash: 'abc123456789',
@@ -122,7 +122,7 @@ describe('CommitHistoryApp', () => {
             state: {
                 ...createInitialHistoryState(),
                 commits: [commit('abc123456789', 'feat: add graph history')],
-                selectedHash: 'abc123456789',
+                expandedHashes: ['abc123456789'],
                 detailsByHash: {
                     abc123456789: {
                         hash: 'abc123456789',
@@ -161,7 +161,7 @@ describe('CommitHistoryApp', () => {
             state: {
                 ...createInitialHistoryState(),
                 commits: [commit('abc123456789', 'feat: add graph history')],
-                selectedHash: 'abc123456789',
+                expandedHashes: ['abc123456789'],
                 detailsLoadingHash: 'abc123456789',
                 loadedCount: 1,
                 loading: false,
@@ -176,13 +176,14 @@ describe('CommitHistoryApp', () => {
             state: {
                 ...createInitialHistoryState(),
                 commits: [commit('abc123456789', 'feat: add graph history')],
-                selectedHash: 'abc123456789',
+                expandedHashes: ['abc123456789'],
                 loadedCount: 1,
                 loading: false,
             },
         });
 
-        expect(screen.getByLabelText('Selected commit')).toHaveTextContent('abc123456789');
+        // aside shows the shortHash (7 chars) in the copy button; full hash is on clipboard only
+        // commit metadata is now rendered inline in the expanded item, not in a separate aside
     });
 
     it('filters visible commits from the query', () => {
@@ -258,7 +259,7 @@ function renderApp(props: {
             query={props.query ?? ''}
             fileViewMode={props.fileViewMode ?? 'tree'}
             onQueryChange={props.onQueryChange ?? (() => undefined)}
-            onSelectCommit={props.onSelectCommit ?? (() => undefined)}
+            onToggleCommit={props.onSelectCommit ?? (() => undefined)}
             onOpenFileDiff={props.onOpenFileDiff ?? (() => undefined)}
             onContextTarget={props.onContextTarget ?? (() => undefined)}
             onLoadMore={props.onLoadMore ?? (() => undefined)}

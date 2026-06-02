@@ -34,9 +34,13 @@ export function HistoryWebview() {
     }, [state.error]);
 
     useEffect(() => {
-        if (!state.selectedHash || state.detailsByHash[state.selectedHash]) { return; }
-        vscodeApi.postMessage(messageForHistoryCommitDetails(state.selectedHash));
-    }, [state.selectedHash, state.detailsByHash]);
+        const pending = state.expandedHashes.find(
+            (h) => !state.detailsByHash[h] && state.detailsLoadingHash !== h,
+        );
+        if (!pending) { return; }
+        dispatch({ type: 'startLoadingDetails', hash: pending });
+        vscodeApi.postMessage(messageForHistoryCommitDetails(pending));
+    }, [state.expandedHashes, state.detailsByHash, state.detailsLoadingHash]);
 
     const handleLoadMore = useCallback(() => {
         if (!state.hasMore || state.loading || state.loadingMore) { return; }
@@ -62,7 +66,7 @@ export function HistoryWebview() {
             query={query}
             fileViewMode={fileViewMode}
             onQueryChange={setQuery}
-            onSelectCommit={(hash) => dispatch({ type: 'selectCommit', hash })}
+            onToggleCommit={(hash: string) => dispatch({ type: 'toggleCommit', hash })}
             onOpenFileDiff={handleOpenFileDiff}
             onContextTarget={handleContextTarget}
             onLoadMore={handleLoadMore}

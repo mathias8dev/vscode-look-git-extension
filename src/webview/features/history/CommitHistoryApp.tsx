@@ -2,7 +2,7 @@ import type { HistoryState } from './historyState';
 import type { HistoryCommit, HistoryCommitFile, HistoryContextTarget } from '../../../protocol/history/types';
 import { CommitHistoryFileList } from './CommitHistoryFileList';
 import { CommitHistoryRow } from './CommitHistoryRow';
-import { filterHistoryCommits, historyEmptyLabel, selectedHistoryCommit } from './historyModel';
+import { filterHistoryCommits, formatHistoryDate, historyEmptyLabel, parseCommitMessage, formatRelativeDate } from './historyModel';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 
 interface CommitHistoryAppProps {
@@ -10,7 +10,7 @@ interface CommitHistoryAppProps {
     readonly query: string;
     readonly fileViewMode: 'list' | 'tree';
     readonly onQueryChange: (query: string) => void;
-    readonly onSelectCommit: (hash: string) => void;
+    readonly onToggleCommit: (hash: string) => void;
     readonly onOpenFileDiff: (hash: string, file: HistoryCommitFile) => void;
     readonly onContextTarget: (target: HistoryContextTarget) => void;
     readonly onLoadMore: () => void;
@@ -21,14 +21,12 @@ export function CommitHistoryApp({
     query,
     fileViewMode,
     onQueryChange,
-    onSelectCommit,
+    onToggleCommit,
     onOpenFileDiff,
     onContextTarget,
     onLoadMore,
 }: CommitHistoryAppProps) {
     const commits = filterHistoryCommits(state.commits, query);
-    const selectedCommit = selectedHistoryCommit(state.commits, state.selectedHash);
-    const selectedDetails = selectedCommit ? state.detailsByHash[selectedCommit.hash] : undefined;
 
     return (
         <main className="history-shell">
@@ -53,21 +51,24 @@ export function CommitHistoryApp({
                 ) : null}
 
                 {!state.loading && commits.length === 0 ? (
-                    <div className="history-empty">{historyEmptyLabel(state.commits, query)}</div>
+                    <div className="history-empty">
+                        <i className="codicon codicon-git-commit history-empty-icon" aria-hidden="true" />
+                        <span>{historyEmptyLabel(state.commits, query)}</span>
+                    </div>
                 ) : null}
 
                 {commits.map((commit) => {
-                    const expanded = commit.hash === state.selectedHash;
+                    const expanded = state.expandedHashes.includes(commit.hash);
+                    const details = state.detailsByHash[commit.hash];
                     return (
                         <div key={commit.hash} className="history-item">
                             <CommitHistoryRow
                                 commit={commit}
-                                selected={expanded}
                                 expanded={expanded}
                                 childHash={childHash(state.commits, commit.hash)}
                                 parentHash={commit.parentHashes[0]}
                                 canUndoCommit={state.commits[0]?.hash === commit.hash}
-                                onSelect={onSelectCommit}
+                                onSelect={onToggleCommit}
                                 onContextMenu={() => onContextTarget({
                                     kind: 'commit',
                                     hash: commit.hash,
@@ -78,13 +79,41 @@ export function CommitHistoryApp({
                                 })}
                             />
                             {expanded ? (
-                                <CommitHistoryFileList
-                                    details={state.detailsByHash[commit.hash]}
-                                    viewMode={fileViewMode}
-                                    loading={state.detailsLoadingHash === commit.hash}
-                                    onOpenDiff={(file) => onOpenFileDiff(commit.hash, file)}
-                                    onFileContextMenu={(file) => onContextTarget({ kind: 'file', commitHash: commit.hash, file })}
-                                />
+                                <div className="history-item-expanded">
+                                    <div className="history-item-meta">
+                                        {(() => {
+                                            const { body } = parseCommitMessage(details?.fullMessage ?? commit.message);
+                                            return body ? <p className="history-item-body">{body}</p> : null;
+                                        })()}
+                                        <div className="history-item-info">
+                                            <span className="history-item-author">{commit.authorName}</span>
+                                            <span className="history-item-sep" aria-hidden="true">·</span>
+                                            <span
+                                                className="history-item-date"
+                                                title={formatHistoryDate(commit.authorDate)}
+                                            >
+                                                {formatRelativeDate(commit.authorDate)}
+                                            </span>
+                                            <span className="history-item-sep" aria-hidden="true">·</span>
+                                            <button
+                                                type="button"
+                                                className="history-copy-hash"
+                                                title="Copy full hash"
+                                                onClick={() => navigator.clipboard.writeText(commit.hash).catch(() => {})}
+                                            >
+                                                {commit.shortHash}
+                                                <i className="codicon codicon-copy" aria-hidden="true" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <CommitHistoryFileList
+                                        details={details}
+                                        viewMode={fileViewMode}
+                                        loading={state.detailsLoadingHash === commit.hash}
+                                        onOpenDiff={(file) => onOpenFileDiff(commit.hash, file)}
+                                        onFileContextMenu={(file) => onContextTarget({ kind: 'file', commitHash: commit.hash, file })}
+                                    />
+                                </div>
                             ) : null}
                         </div>
                     );
@@ -101,26 +130,6 @@ export function CommitHistoryApp({
                     </button>
                 ) : null}
             </section>
-
-            {selectedCommit ? (
-                <aside className="history-details" aria-label="Selected commit">
-                    <p className="history-details-message">{selectedDetails?.fullMessage || selectedCommit.message}</p>
-                    <dl>
-                        <div>
-                            <dt>Revision</dt>
-                            <dd>{selectedCommit.hash}</dd>
-                        </div>
-                        <div>
-                            <dt>Author</dt>
-                            <dd>{selectedCommit.authorName}</dd>
-                        </div>
-                        <div>
-                            <dt>Date</dt>
-                            <dd>{selectedCommit.authorDate}</dd>
-                        </div>
-                    </dl>
-                </aside>
-            ) : null}
         </main>
     );
 }

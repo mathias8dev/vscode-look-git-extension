@@ -57,7 +57,7 @@ describe('historyState', () => {
         const selected = reduceHistoryState({
             ...createInitialHistoryState(),
             commits: [commit('a111111', 'feat: first')],
-            selectedHash: 'a111111',
+            expandedHashes: ['a111111'],
         }, {
             type: 'message',
             message: {
@@ -70,16 +70,18 @@ describe('historyState', () => {
             },
         });
 
-        expect(selected.selectedHash).toBeUndefined();
+        expect(selected.expandedHashes).toEqual([]);
     });
 
     it('marks selected commits as loading until details arrive', () => {
-        const selected = reduceHistoryState({
+        const toggled = reduceHistoryState({
             ...createInitialHistoryState(),
             commits: [commit('a111111', 'feat: first')],
-        }, { type: 'selectCommit', hash: 'a111111' });
+        }, { type: 'toggleCommit', hash: 'a111111' });
 
-        expect(selected.selectedHash).toBe('a111111');
+        expect(toggled.expandedHashes).toContain('a111111');
+        // detailsLoadingHash is set by the useEffect via startLoadingDetails, not by toggleCommit
+        const selected = reduceHistoryState(toggled, { type: 'startLoadingDetails', hash: 'a111111' });
         expect(selected.detailsLoadingHash).toBe('a111111');
 
         const loaded = reduceHistoryState(selected, {
@@ -110,7 +112,7 @@ describe('historyState', () => {
                     files: [{ status: 'M', filePath: 'src/a.ts' }],
                 },
             },
-        }, { type: 'selectCommit', hash: 'a111111' });
+        }, { type: 'toggleCommit', hash: 'a111111' });
 
         expect(selected.detailsLoadingHash).toBeUndefined();
     });
@@ -124,8 +126,9 @@ describe('historyState', () => {
             message: { type: 'history/selectCommit', hash: 'a111111' },
         });
 
-        expect(selected.selectedHash).toBe('a111111');
-        expect(selected.detailsLoadingHash).toBe('a111111');
+        expect(selected.expandedHashes).toContain('a111111');
+        // detailsLoadingHash is set by startLoadingDetails (dispatched from useEffect)
+        expect(selected.detailsLoadingHash).toBeUndefined();
     });
 
     it('stops details loading on errors', () => {
