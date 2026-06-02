@@ -41,7 +41,7 @@ A modern, React-based Git extension for Visual Studio Code — featuring a visua
 ## Requirements
 
 - Visual Studio Code 1.85 or later
-- A Git repository opened in VS Code (the built-in Git extension must be active)
+- A Git repository opened in VS Code
 
 ## Known Limitations
 
