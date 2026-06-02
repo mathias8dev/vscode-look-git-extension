@@ -53,6 +53,26 @@ export function ChangesWebview() {
         vscodeApi.setState(changesStateToPersisted(state));
     }, [state]);
 
+    useEffect(() => {
+        const knownSubmodulePaths = new Set(state.status.submodules.map((submodule) => submodule.path));
+        for (const submodulePath of state.expandedSubmodulePaths) {
+            if (!knownSubmodulePaths.has(submodulePath)) { continue; }
+            if (Object.prototype.hasOwnProperty.call(state.submoduleStatusByPath, submodulePath)) { continue; }
+            postToExtension(messageForGetSubmoduleStatus(submodulePath, submoduleStatusRequestId(submodulePath)));
+        }
+    }, [state.expandedSubmodulePaths, state.status.submodules, state.submoduleStatusByPath]);
+
+    useEffect(() => {
+        for (const [submodulePath, statusData] of Object.entries(state.submoduleStatusByPath)) {
+            for (const stash of statusData.stashes) {
+                const key = submoduleStashKey(submodulePath, stash.index);
+                if (!state.expandedSubmoduleStashKeys.includes(key)) { continue; }
+                if (Object.prototype.hasOwnProperty.call(state.submoduleStashFilesByKey, key)) { continue; }
+                postToExtension(messageForSubmoduleStashAction(submodulePath, stash.index, StashEntryAction.LoadFiles));
+            }
+        }
+    }, [state.expandedSubmoduleStashKeys, state.submoduleStatusByPath, state.submoduleStashFilesByKey]);
+
     const toggleStash = (index: number) => {
         const isExpanded = state.expandedStashIndexes.includes(index);
         const hasFiles = Object.prototype.hasOwnProperty.call(state.stashFilesByIndex, index);
@@ -63,22 +83,12 @@ export function ChangesWebview() {
     };
 
     const toggleSubmodule = (submodulePath: string) => {
-        const isExpanded = state.expandedSubmodulePaths.includes(submodulePath);
-        const hasStatus = Object.prototype.hasOwnProperty.call(state.submoduleStatusByPath, submodulePath);
         dispatch({ type: 'toggleSubmodule', path: submodulePath });
-        if (!isExpanded && !hasStatus) {
-            postToExtension(messageForGetSubmoduleStatus(submodulePath, submoduleStatusRequestId(submodulePath)));
-        }
     };
 
     const toggleSubmoduleStash = (submodulePath: string, index: number) => {
         const key = submoduleStashKey(submodulePath, index);
-        const isExpanded = state.expandedSubmoduleStashKeys.includes(key);
-        const hasFiles = Object.prototype.hasOwnProperty.call(state.submoduleStashFilesByKey, key);
         dispatch({ type: 'toggleSubmoduleStash', key });
-        if (!isExpanded && !hasFiles) {
-            postToExtension(messageForSubmoduleStashAction(submodulePath, index, StashEntryAction.LoadFiles));
-        }
     };
 
     return (

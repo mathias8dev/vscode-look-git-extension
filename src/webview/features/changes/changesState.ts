@@ -138,7 +138,8 @@ export function getChangeCount(status: StatusData): number {
 
 function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMessage): ChangesState {
     switch (message.type) {
-        case 'changes/statusData':
+        case 'changes/statusData': {
+            const submodulePaths = new Set(message.data.submodules.map((submodule) => submodule.path));
             return {
                 ...state,
                 status: message.data,
@@ -148,12 +149,13 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 selectionAnchorId: undefined,
                 expandedStashIndexes: [],
                 stashFilesByIndex: {},
-                expandedSubmodulePaths: [],
+                expandedSubmodulePaths: keepKnownPaths(state.expandedSubmodulePaths, submodulePaths),
                 submoduleStatusByPath: {},
-                expandedSubmoduleStashKeys: [],
+                expandedSubmoduleStashKeys: keepKnownSubmoduleStashKeys(state.expandedSubmoduleStashKeys, submodulePaths),
                 submoduleStashFilesByKey: {},
-                submoduleCommitFeedbackByPath: {},
+                submoduleCommitFeedbackByPath: keepKnownRecord(state.submoduleCommitFeedbackByPath, submodulePaths),
             };
+        }
         case 'changes/error':
         case 'error':
             return { ...state, loading: false, error: readProtocolError(message) };
@@ -183,15 +185,23 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                     [message.index]: message.files,
                 },
             };
-        case 'changes/submoduleStatusData':
+        case 'changes/submoduleStatusData': {
+            if (!isKnownSubmodulePath(state.status, message.path)) { return state; }
+            const knownStashKeys = new Set(message.data.stashes.map((stash) => submoduleStashKey(message.path, stash.index)));
             return {
                 ...state,
+                error: undefined,
+                expandedSubmoduleStashKeys: keepKnownStashKeysForPath(state.expandedSubmoduleStashKeys, message.path, knownStashKeys),
                 submoduleStatusByPath: {
                     ...state.submoduleStatusByPath,
                     [message.path]: message.data,
                 },
+                submoduleStashFilesByKey: keepKnownStashFilesForPath(state.submoduleStashFilesByKey, message.path, knownStashKeys),
             };
+        }
         case 'changes/submoduleStashFiles':
+            if (!isKnownSubmodulePath(state.status, message.path)) { return state; }
+            if (!isKnownSubmoduleStash(state.submoduleStatusByPath, message.path, message.index)) { return state; }
             return {
                 ...state,
                 loading: false,
@@ -223,6 +233,48 @@ function sortModeFromProtocol(sortMode: 'name' | 'path' | 'status' | 'directory'
 
 export function submoduleStashKey(submodulePath: string, index: number): string {
     return `${submodulePath}\0${index}`;
+}
+
+function keepKnownPaths(paths: readonly string[], knownPaths: ReadonlySet<string>): readonly string[] {
+    return paths.filter((path) => knownPaths.has(path));
+}
+
+function keepKnownSubmoduleStashKeys(keys: readonly string[], knownPaths: ReadonlySet<string>): readonly string[] {
+    return keys.filter((key) => knownPaths.has(submodulePathFromStashKey(key)));
+}
+
+function keepKnownRecord<T>(record: Readonly<Record<string, T>>, knownPaths: ReadonlySet<string>): Readonly<Record<string, T>> {
+    return Object.fromEntries(Object.entries(record).filter(([path]) => knownPaths.has(path)));
+}
+
+function keepKnownStashKeysForPath(keys: readonly string[], path: string, knownStashKeys: ReadonlySet<string>): readonly string[] {
+    return keys.filter((key) => submodulePathFromStashKey(key) !== path || knownStashKeys.has(key));
+}
+
+function keepKnownStashFilesForPath(
+    filesByKey: Readonly<Record<string, readonly StashFileEntry[]>>,
+    path: string,
+    knownStashKeys: ReadonlySet<string>,
+): Readonly<Record<string, readonly StashFileEntry[]>> {
+    return Object.fromEntries(
+        Object.entries(filesByKey).filter(([key]) => submodulePathFromStashKey(key) !== path || knownStashKeys.has(key)),
+    );
+}
+
+function submodulePathFromStashKey(key: string): string {
+    return key.split('\0', 1)[0] ?? key;
+}
+
+function isKnownSubmodulePath(status: StatusData, path: string): boolean {
+    return status.submodules.some((submodule) => submodule.path === path);
+}
+
+function isKnownSubmoduleStash(
+    statusByPath: Readonly<Record<string, SubmoduleStatusData>>,
+    path: string,
+    index: number,
+): boolean {
+    return statusByPath[path]?.stashes.some((stash) => stash.index === index) ?? false;
 }
 
 function toggledIndex(indexes: readonly number[], index: number): readonly number[] {

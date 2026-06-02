@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConflictState, RepositoryState } from '../../../src/protocol/changes/types';
+import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 import { createMockVsCodeApi, sendToWebview } from '../../helpers/webviewRuntime';
 
 describe('ChangesWebview', () => {
@@ -42,6 +43,36 @@ describe('ChangesWebview', () => {
 
         await waitFor(() => expect(screen.getByLabelText('Commit message')).toHaveFocus());
     });
+
+    it('keeps expanded submodules open after parent status refreshes and reloads their details', async () => {
+        const api = createMockVsCodeApi();
+        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+        render(<ChangesWebview />);
+        sendStatusDataWithSubmodule();
+
+        await waitFor(() => expect(screen.getByText('lib')).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Show changes' }));
+
+        await waitFor(() => expect(submoduleStatusRequests(api.messages).length).toBe(1));
+        sendToWebview({
+            type: 'changes/submoduleStatusData',
+            requestId: 'changes:submodule-status:modules/lib',
+            path: 'modules/lib',
+            data: {
+                staged: [],
+                unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/inner.ts' }],
+                conflicts: [],
+                stashes: [],
+            },
+        });
+
+        await waitFor(() => expect(screen.getByTitle('src/inner.ts')).toBeInTheDocument());
+        sendStatusDataWithSubmodule();
+
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Hide changes' })).toBeInTheDocument());
+        await waitFor(() => expect(submoduleStatusRequests(api.messages).length).toBe(2));
+    });
 });
 
 function sendStatusData(): void {
@@ -56,5 +87,27 @@ function sendStatusData(): void {
             stashes: [{ index: 0, message: 'WIP' }],
             submodules: [],
         },
+    });
+}
+
+function sendStatusDataWithSubmodule(): void {
+    sendToWebview({
+        type: 'changes/statusData',
+        data: {
+            repositoryState: RepositoryState.Available,
+            staged: [],
+            unstaged: [],
+            conflicts: [],
+            conflictState: ConflictState.None,
+            stashes: [],
+            submodules: [{ path: 'modules/lib', name: 'lib', status: SubmoduleStatus.Dirty }],
+        },
+    });
+}
+
+function submoduleStatusRequests(messages: readonly unknown[]): readonly unknown[] {
+    return messages.filter((message) => {
+        if (!message || typeof message !== 'object') { return false; }
+        return 'type' in message && message.type === 'changes/getSubmoduleStatus';
     });
 }
