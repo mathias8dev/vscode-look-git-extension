@@ -49,4 +49,20 @@ describe('GraphLaneCell', () => {
         expect(markup).toContain('M 8 12');
         expect(markup).toContain('24 24');
     });
+
+    it('renders merge commits with a double circle marker', () => {
+        const laneData: LaneData = {
+            lane: 0,
+            color: '#fff',
+            isPrimary: false,
+            lines: [],
+        };
+
+        const markup = renderToStaticMarkup(<GraphLaneCell laneData={laneData} merge />);
+
+        expect(markup).toContain('r="5.5"');
+        expect(markup).toContain('stroke="#fff"');
+        expect(markup).toContain('r="2.5"');
+        expect(markup).toContain('fill="#fff"');
+    });
 });

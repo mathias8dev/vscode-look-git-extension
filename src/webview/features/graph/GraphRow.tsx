@@ -57,7 +57,7 @@ export function GraphCommitRow({ row, branches, selected, childHash, parentHash,
             }}
         >
             <div className="graph-lane-cell">
-                <GraphLaneCell laneData={laneData} />
+                <GraphLaneCell laneData={laneData} merge={commit.parentHashes.length > 1} />
             </div>
             <div className="graph-message-cell">
                 {refs.map((ref) => (

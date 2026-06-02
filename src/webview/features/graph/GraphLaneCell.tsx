@@ -7,10 +7,11 @@ const LINE_WIDTH = 2;
 
 interface GraphLaneCellProps {
     readonly laneData: LaneData;
+    readonly merge?: boolean;
     readonly wip?: boolean;
 }
 
-export function GraphLaneCell({ laneData, wip = false }: GraphLaneCellProps) {
+export function GraphLaneCell({ laneData, merge = false, wip = false }: GraphLaneCellProps) {
     const width = (getLaneDataMaxLane(laneData) + 1) * LANE_WIDTH;
     const cx = (laneData.lane + 0.5) * LANE_WIDTH;
     const cy = ROW_HEIGHT / 2;
@@ -36,6 +37,23 @@ export function GraphLaneCell({ laneData, wip = false }: GraphLaneCellProps) {
                     strokeWidth={1.5}
                     strokeDasharray="3 2"
                 />
+            ) : merge ? (
+                <>
+                    <circle
+                        cx={cx}
+                        cy={cy}
+                        r={DOT_RADIUS + 1.5}
+                        fill="var(--vscode-editor-background, #1e1e1e)"
+                        stroke={laneData.color}
+                        strokeWidth={2}
+                    />
+                    <circle
+                        cx={cx}
+                        cy={cy}
+                        r={DOT_RADIUS - 1.5}
+                        fill={laneData.color}
+                    />
+                </>
             ) : (
                 <circle
                     cx={cx}

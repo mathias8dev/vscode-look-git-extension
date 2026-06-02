@@ -37,6 +37,26 @@ describe('GraphCommitRow', () => {
         expect(compact).toContain('--graph-row-message-offset:20px');
         expect(wide).toContain('--graph-row-message-offset:52px');
     });
+
+    it('marks merge commits with the merge node renderer', () => {
+        const markup = renderToStaticMarkup(
+            <GraphCommitRow
+                row={{ ...rowWithLane(0), commit: { ...rowWithLane(0).commit, parentHashes: ['left', 'right'] } }}
+                branches={[]}
+                selected={false}
+                childHash={undefined}
+                parentHash={undefined}
+                canUndoCommit={false}
+                style={{}}
+                onSelect={() => undefined}
+                onOpenContextMenu={() => undefined}
+                onPostMessage={() => undefined}
+            />,
+        );
+
+        expect(markup).toContain('r="5.5"');
+        expect(markup).toContain('r="2.5"');
+    });
 });
 
 function rowWithLane(lane: number): GraphRow {
