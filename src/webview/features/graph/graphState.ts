@@ -252,6 +252,10 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
                     branch: message.branch,
                 },
             };
+        case 'graph/selectCommit':
+            return selectCommit(state, message.hash, [message.hash], message.hash);
+        case 'graph/selectWorktree':
+            return selectWorktree(state, message.path);
         case 'graph/error':
         case 'error':
             return { ...state, loading: false, loadingMore: false, error: message.error };

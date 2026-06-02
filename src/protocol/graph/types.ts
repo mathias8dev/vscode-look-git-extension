@@ -80,3 +80,28 @@ export interface CommitFileChange {
     readonly origPath?: string;
     readonly parentHash?: string;
 }
+
+export interface GraphCommitContextTarget {
+    readonly kind: 'commit';
+    readonly hash: string;
+    readonly hashes: readonly string[];
+    readonly childHash?: string;
+    readonly parentHash?: string;
+    readonly canUndoCommit: boolean;
+}
+
+export interface GraphBranchContextTarget {
+    readonly kind: 'branch';
+    readonly branch: string;
+    readonly isRemote: boolean;
+}
+
+export interface GraphWorktreeContextTarget {
+    readonly kind: 'worktree';
+    readonly path: string;
+}
+
+export type GraphContextTarget =
+    | GraphCommitContextTarget
+    | GraphBranchContextTarget
+    | GraphWorktreeContextTarget;

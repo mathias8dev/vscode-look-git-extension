@@ -1,10 +1,7 @@
 import { useState } from 'react';
-import type { BranchCommand, WorktreeCommand } from '../../../protocol/graph/messages';
-import type { BranchInfo, WorktreeInfo } from '../../../protocol/graph/types';
+import type { BranchInfo, GraphContextTarget, WorktreeInfo } from '../../../protocol/graph/types';
 import { buildBranchTree, buildRemoteBranchTree } from './graphBranchTree';
 import { BranchTreeNode } from './BranchTreeNode';
-import { BranchContextMenu, type BranchContextMenuState } from './BranchContextMenu';
-import { WorktreeContextMenu, type WorktreeContextMenuState } from './WorktreeContextMenu';
 import { IconButton } from '../../shared/IconButton';
 import { selectBranchFilter } from './graphBranchSelection';
 
@@ -15,11 +12,10 @@ interface BranchPanelProps {
     readonly selectedBranchFilter: string | undefined;
     readonly selectedWorktreePath: string | undefined;
     readonly onSelectBranch: (branch: string | undefined) => void;
-    readonly onBranchCommand: (command: BranchCommand, branch: string, isRemote: boolean) => void;
     readonly onSelectWorktree: (path: string) => void;
     readonly onOpenWorktree: (path: string) => void;
-    readonly onWorktreeCommand: (command: WorktreeCommand, path: string) => void;
     readonly onAddWorktree: () => void;
+    readonly onContextTarget: (target: GraphContextTarget) => void;
 }
 
 export function BranchPanel({
@@ -29,18 +25,15 @@ export function BranchPanel({
     selectedBranchFilter,
     selectedWorktreePath,
     onSelectBranch,
-    onBranchCommand,
     onSelectWorktree,
     onOpenWorktree,
-    onWorktreeCommand,
     onAddWorktree,
+    onContextTarget,
 }: BranchPanelProps) {
     const [search, setSearch] = useState('');
     const [localCollapsed, setLocalCollapsed] = useState(false);
     const [remoteCollapsed, setRemoteCollapsed] = useState(false);
     const [worktreesCollapsed, setWorktreesCollapsed] = useState(false);
-    const [contextMenu, setContextMenu] = useState<BranchContextMenuState | undefined>(undefined);
-    const [worktreeContextMenu, setWorktreeContextMenu] = useState<WorktreeContextMenuState | undefined>(undefined);
 
     const filtered = search
         ? branches.filter((b) => b.name.toLowerCase().includes(search.toLowerCase()))
@@ -55,26 +48,33 @@ export function BranchPanel({
         onSelectBranch(selectBranchFilter(fullName, selectedBranchFilter));
     };
 
-    const handleOpenContextMenu = (branch: BranchInfo, x: number, y: number) => {
-        const branchWorktree = branch.isRemote ? undefined : worktrees.find((worktree) => shortWorktreeBranch(worktree.branch) === branch.name);
-        setWorktreeContextMenu(undefined);
-        setContextMenu({
+    const branchWorktreeFor = (branch: BranchInfo): WorktreeInfo | undefined =>
+        branch.isRemote ? undefined : worktrees.find((worktree) => shortWorktreeBranch(worktree.branch) === branch.name);
+
+    const branchContextFor = (branch: BranchInfo): Record<string, unknown> => {
+        const branchWorktree = branchWorktreeFor(branch);
+        return {
+            webviewSection: 'graphBranch',
+            graphBranchIsRemote: branch.isRemote,
+            graphBranchIsCurrent: branch.isCurrent,
+            graphBranchHasWorktree: branchWorktree !== undefined,
+            graphBranchWorktreeIsMain: branchWorktree?.isMain === true,
+            graphBranchWorktreeIsLocked: branchWorktree?.isLocked === true,
+            preventDefaultContextMenuItems: true,
+        };
+    };
+
+    const handleOpenContextMenu = (branch: BranchInfo) => {
+        onContextTarget({
+            kind: 'branch',
             branch: branch.name,
             isRemote: branch.isRemote,
-            isCurrent: branch.isCurrent,
-            currentBranch,
-            worktreePath: branchWorktree?.path,
-            worktreeIsMain: branchWorktree?.isMain,
-            worktreeIsLocked: branchWorktree?.isLocked,
-            x,
-            y,
         });
     };
 
-    const handleOpenWorktreeContextMenu = (worktree: WorktreeInfo, x: number, y: number) => {
-        setContextMenu(undefined);
+    const handleWorktreeContextTarget = (worktree: WorktreeInfo) => {
         onSelectWorktree(worktree.path);
-        setWorktreeContextMenu({ worktree, x, y });
+        onContextTarget({ kind: 'worktree', path: worktree.path });
     };
 
     return (
@@ -122,6 +122,7 @@ export function BranchPanel({
                                         selectedBranch={selectedBranchFilter}
                                         onSelect={handleSelect}
                                         onOpenContextMenu={handleOpenContextMenu}
+                                        contextForBranch={branchContextFor}
                                     />
                                 ))}
                             </>
@@ -150,6 +151,7 @@ export function BranchPanel({
                                 selectedBranch={selectedBranchFilter}
                                 onSelect={handleSelect}
                                 onOpenContextMenu={handleOpenContextMenu}
+                                contextForBranch={branchContextFor}
                             />
                         ))}
                     </div>
@@ -183,11 +185,14 @@ export function BranchPanel({
                             role="button"
                             tabIndex={0}
                             aria-selected={worktree.path === selectedWorktreePath}
+                            data-vscode-context={JSON.stringify({
+                                webviewSection: 'graphWorktree',
+                                graphWorktreeIsMain: worktree.isMain,
+                                graphWorktreeIsLocked: worktree.isLocked,
+                                preventDefaultContextMenuItems: true,
+                            })}
                             onClick={() => onSelectWorktree(worktree.path)}
-                            onContextMenu={(e) => {
-                                e.preventDefault();
-                                handleOpenWorktreeContextMenu(worktree, e.clientX, e.clientY);
-                            }}
+                            onContextMenu={() => handleWorktreeContextTarget(worktree)}
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' || e.key === ' ') {
                                     e.preventDefault();
@@ -212,21 +217,6 @@ export function BranchPanel({
                 </div>
 
             </div>
-            {contextMenu ? (
-                <BranchContextMenu
-                    state={contextMenu}
-                    onClose={() => setContextMenu(undefined)}
-                    onCommand={onBranchCommand}
-                />
-            ) : null}
-            {worktreeContextMenu ? (
-                <WorktreeContextMenu
-                    state={worktreeContextMenu}
-                    onClose={() => setWorktreeContextMenu(undefined)}
-                    onCommand={onWorktreeCommand}
-                    onShowDetails={onSelectWorktree}
-                />
-            ) : null}
         </div>
     );
 }

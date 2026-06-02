@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer } from 'react';
-import type { BranchCommand, CommitCommand, WorktreeCommand, GraphExtensionToWebviewMessage } from '../../protocol/graph/messages';
-import type { CommitFileChange } from '../../protocol/graph/types';
+import type { GraphExtensionToWebviewMessage } from '../../protocol/graph/messages';
+import type { CommitFileChange, GraphContextTarget } from '../../protocol/graph/types';
 import { BranchPanel } from '../features/graph/BranchPanel';
 import { CommitDetailsPanel } from '../features/graph/CommitDetailsPanel';
 import { GraphTable } from '../features/graph/GraphTable';
@@ -11,9 +11,8 @@ import {
 } from '../features/graph/graphState';
 import {
     messageForCommitDetails,
-    messageForCommitCommand,
-    messageForBranchCommand,
     messageForGraphDataRequest,
+    messageForGraphContextTarget,
     messageForLoadMore,
     messageForOpenDiff,
     messageForOpenWorktreeDiff,
@@ -111,16 +110,8 @@ export function GraphApp() {
         dispatch({ type: 'selectWorktree', path });
     }, []);
 
-    const handleCommitCommand = useCallback((command: CommitCommand, hash: string, hashes: readonly string[]) => {
-        vscodeApi.postMessage(messageForCommitCommand(command, hash, hashes));
-    }, []);
-
-    const handleBranchCommand = useCallback((command: BranchCommand, branch: string, isRemote: boolean) => {
-        vscodeApi.postMessage(messageForBranchCommand(command, branch, isRemote));
-    }, []);
-
-    const handleWorktreeCommand = useCallback((command: WorktreeCommand, path: string) => {
-        vscodeApi.postMessage(messageForWorktreeCommand(command, path));
+    const handleContextTarget = useCallback((target: GraphContextTarget) => {
+        vscodeApi.postMessage(messageForGraphContextTarget(target));
     }, []);
 
     return (
@@ -132,11 +123,10 @@ export function GraphApp() {
                 selectedBranchFilter={state.selectedBranchFilter}
                 selectedWorktreePath={state.selectedWorktreePath}
                 onSelectBranch={(branch) => dispatch({ type: 'setBranchFilter', branch })}
-                onBranchCommand={handleBranchCommand}
                 onSelectWorktree={handleSelectWorktree}
                 onOpenWorktree={(path) => vscodeApi.postMessage(messageForWorktreeCommand('openInNewWindow', path))}
-                onWorktreeCommand={handleWorktreeCommand}
                 onAddWorktree={() => vscodeApi.postMessage(messageForWorktreeCommand('add'))}
+                onContextTarget={handleContextTarget}
             />
 
             <div className="graph-center">
@@ -168,7 +158,7 @@ export function GraphApp() {
                     loadingMore={state.loadingMore}
                     onSelectCommit={handleSelectCommit}
                     onSelectWorktree={handleSelectWorktree}
-                    onCommitCommand={handleCommitCommand}
+                    onContextTarget={handleContextTarget}
                     onLoadMore={handleLoadMore}
                     onPostMessage={(msg) => vscodeApi.postMessage(msg)}
                 />

@@ -1,4 +1,4 @@
-import type { GraphFilters, GraphPage } from '../../../protocol/graph/types';
+import type { GraphContextTarget, GraphFilters, GraphPage } from '../../../protocol/graph/types';
 import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, WorktreeCommand } from '../../../protocol/graph/messages';
 
 let requestCounter = 0;
@@ -77,6 +77,13 @@ export function messageForCommitCommand(command: CommitCommand, hash: string, ha
         command,
         hash,
         hashes,
+    };
+}
+
+export function messageForGraphContextTarget(target: GraphContextTarget): GraphWebviewToExtensionMessage {
+    return {
+        type: 'graph/contextTarget',
+        target,
     };
 }
 

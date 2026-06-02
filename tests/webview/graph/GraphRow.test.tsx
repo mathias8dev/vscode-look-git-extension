@@ -10,6 +10,9 @@ describe('GraphCommitRow', () => {
                 row={rowWithLane(0)}
                 branches={[]}
                 selected={false}
+                childHash={undefined}
+                parentHash={undefined}
+                canUndoCommit={false}
                 style={{}}
                 onSelect={() => undefined}
                 onOpenContextMenu={() => undefined}
@@ -21,6 +24,9 @@ describe('GraphCommitRow', () => {
                 row={rowWithLane(2)}
                 branches={[]}
                 selected={false}
+                childHash={undefined}
+                parentHash={undefined}
+                canUndoCommit={false}
                 style={{}}
                 onSelect={() => undefined}
                 onOpenContextMenu={() => undefined}

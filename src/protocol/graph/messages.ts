@@ -1,6 +1,6 @@
 import type { RequestId, ErrorMessage, ProtocolError } from '../shared/base';
 import type { SerializedRepoContext } from '../shared/repo';
-import type { GraphData, GraphFilters, GraphPage, CommitFileChange } from './types';
+import type { GraphContextTarget, GraphData, GraphFilters, GraphPage, CommitFileChange } from './types';
 
 // ── Extension → Webview (push — no requestId) ──────────────────────────────
 
@@ -20,6 +20,16 @@ export interface GraphErrorPush {
     readonly requestId?: RequestId;
     readonly message: string;
     readonly error: ProtocolError;
+}
+
+export interface GraphSelectCommitPush {
+    readonly type: 'graph/selectCommit';
+    readonly hash: string;
+}
+
+export interface GraphSelectWorktreePush {
+    readonly type: 'graph/selectWorktree';
+    readonly path: string;
 }
 
 // ── Extension → Webview (responses — echo requestId) ───────────────────────
@@ -181,6 +191,11 @@ export interface GraphRefreshMessage {
     readonly type: 'graph/refresh';
 }
 
+export interface GraphContextTargetMessage {
+    readonly type: 'graph/contextTarget';
+    readonly target: GraphContextTarget;
+}
+
 // ── Union types ─────────────────────────────────────────────────────────────
 
 export type GraphExtensionToWebviewMessage =
@@ -189,6 +204,8 @@ export type GraphExtensionToWebviewMessage =
     | GraphDataResponse
     | CommitDetailsResponse
     | WorktreeDetailsResponse
+    | GraphSelectCommitPush
+    | GraphSelectWorktreePush
     | GraphErrorPush
     | ErrorMessage;
 
@@ -199,6 +216,7 @@ export type GraphWebviewToExtensionMessage =
     | LoadMoreGraphRequest
     | CommitDetailsRequest
     | WorktreeDetailsRequest
+    | GraphContextTargetMessage
     | BranchCommandRequest
     | WorktreeCommandRequest
     | CommitCommandRequest

@@ -12,13 +12,16 @@ interface GraphRowProps {
     readonly row: GraphRow;
     readonly branches: readonly BranchInfo[];
     readonly selected: boolean;
+    readonly childHash: string | undefined;
+    readonly parentHash: string | undefined;
+    readonly canUndoCommit: boolean;
     readonly style: CSSProperties;
     readonly onSelect: (hash: string, mode: CommitSelectMode) => void;
-    readonly onOpenContextMenu: (commit: GraphCommit, x: number, y: number) => void;
+    readonly onOpenContextMenu: (commit: GraphCommit) => void;
     readonly onPostMessage: (msg: unknown) => void;
 }
 
-export function GraphCommitRow({ row, branches, selected, style, onSelect, onOpenContextMenu, onPostMessage }: GraphRowProps) {
+export function GraphCommitRow({ row, branches, selected, childHash, parentHash, canUndoCommit, style, onSelect, onOpenContextMenu, onPostMessage }: GraphRowProps) {
     const { commit, laneData } = row;
     const refs = parseRefs(commit.refs, branches);
     const messageOffset = (getLaneDataMaxLane(laneData) + 1) * LANE_WIDTH + 4;
@@ -34,14 +37,18 @@ export function GraphCommitRow({ row, branches, selected, style, onSelect, onOpe
             aria-selected={selected}
             tabIndex={0}
             title={commit.message}
+            data-vscode-context={JSON.stringify({
+                webviewSection: 'graphCommit',
+                graphCommitCanGoToChild: childHash !== undefined,
+                graphCommitCanGoToParent: parentHash !== undefined,
+                graphCommitCanUndoCommit: canUndoCommit,
+                preventDefaultContextMenuItems: true,
+            })}
             onClick={(event) => {
                 const mode = event.shiftKey ? 'range' : event.metaKey || event.ctrlKey ? 'toggle' : 'replace';
                 onSelect(commit.hash, mode);
             }}
-            onContextMenu={(event) => {
-                event.preventDefault();
-                onOpenContextMenu(commit, event.clientX, event.clientY);
-            }}
+            onContextMenu={() => onOpenContextMenu(commit)}
             onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();

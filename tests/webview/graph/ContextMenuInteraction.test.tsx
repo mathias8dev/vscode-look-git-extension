@@ -2,8 +2,7 @@
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BranchInfo, GraphCommit, WorktreeInfo } from '../../../src/protocol/graph/types';
-import type { BranchCommand, CommitCommand } from '../../../src/protocol/graph/messages';
+import type { BranchInfo, GraphCommit, GraphContextTarget, WorktreeInfo } from '../../../src/protocol/graph/types';
 import { BranchPanel } from '../../../src/webview/features/graph/BranchPanel';
 import { GraphTable } from '../../../src/webview/features/graph/GraphTable';
 import { assignLanes } from '../../../src/webview/features/graph/layout/assignGraphLanes';
@@ -15,13 +14,13 @@ class TestResizeObserver {
     disconnect(): void {}
 }
 
-describe('graph context menu interactions', () => {
+describe('graph native context menu targets', () => {
     beforeEach(() => {
         Object.defineProperty(window, 'ResizeObserver', { configurable: true, value: TestResizeObserver });
     });
 
-    it('dispatches branch worktree commands from the branch context menu', () => {
-        const onBranchCommand = vi.fn<(command: BranchCommand, branch: string, isRemote: boolean) => void>();
+    it('marks branch rows as VS Code native context targets', () => {
+        const onContextTarget = vi.fn<(target: GraphContextTarget) => void>();
 
         render(
             <BranchPanel
@@ -31,23 +30,64 @@ describe('graph context menu interactions', () => {
                 selectedBranchFilter={undefined}
                 selectedWorktreePath={undefined}
                 onSelectBranch={() => undefined}
-                onBranchCommand={onBranchCommand}
                 onSelectWorktree={() => undefined}
                 onOpenWorktree={() => undefined}
-                onWorktreeCommand={() => undefined}
                 onAddWorktree={() => undefined}
+                onContextTarget={onContextTarget}
             />,
         );
 
-        fireEvent.contextMenu(screen.getByTitle('feature/a'), { clientX: 12, clientY: 24 });
-        fireEvent.click(screen.getByText('Open Branch Worktree'));
+        const row = screen.getByTitle('feature/a');
+        const context = row.getAttribute('data-vscode-context') ?? '';
 
-        expect(onBranchCommand).toHaveBeenCalledWith('openBranchWorktree', 'feature/a', false);
+        expect(context).toContain('"webviewSection":"graphBranch"');
+        expect(context).toContain('"graphBranchHasWorktree":true');
+
+        fireEvent.contextMenu(row);
+
+        expect(onContextTarget).toHaveBeenCalledWith({ kind: 'branch', branch: 'feature/a', isRemote: false });
     });
 
-    it('dispatches commit worktree commands from the commit context menu', () => {
-        const onCommitCommand = vi.fn<(command: CommitCommand, hash: string, hashes: readonly string[]) => void>();
-        const rows = assignLanes([commit('abc1234567890abcdef')]);
+    it('marks worktree rows as VS Code native context targets', () => {
+        const onContextTarget = vi.fn<(target: GraphContextTarget) => void>();
+        const onSelectWorktree = vi.fn<(path: string) => void>();
+
+        render(
+            <BranchPanel
+                branches={[]}
+                worktrees={[worktree('/repo/.worktrees/a', 'refs/heads/feature/a')]}
+                currentBranch="main"
+                selectedBranchFilter={undefined}
+                selectedWorktreePath={undefined}
+                onSelectBranch={() => undefined}
+                onSelectWorktree={onSelectWorktree}
+                onOpenWorktree={() => undefined}
+                onAddWorktree={() => undefined}
+                onContextTarget={onContextTarget}
+            />,
+        );
+
+        const row = screen.getByTitle('/repo/.worktrees/a').closest('[data-vscode-context]');
+        if (!(row instanceof HTMLElement)) { throw new Error('Expected worktree context row.'); }
+        const context = row.getAttribute('data-vscode-context') ?? '';
+
+        expect(context).toContain('"webviewSection":"graphWorktree"');
+        expect(context).toContain('"graphWorktreeIsMain":false');
+
+        fireEvent.contextMenu(row);
+
+        expect(onSelectWorktree).toHaveBeenCalledWith('/repo/.worktrees/a');
+        expect(onContextTarget).toHaveBeenCalledWith({ kind: 'worktree', path: '/repo/.worktrees/a' });
+    });
+
+    it('marks commit rows as VS Code native context targets with selected hashes', () => {
+        const onContextTarget = vi.fn<(target: GraphContextTarget) => void>();
+        const onSelectCommit = vi.fn<(hash: string, mode: 'replace' | 'toggle' | 'range') => void>();
+        const commits = [
+            commit('head1234567890abcdef', ['base1234567890abcdef']),
+            commit('base1234567890abcdef', []),
+        ];
+        const rows = assignLanes(commits);
         const displayRows: readonly DisplayRow[] = rows.map((row) => ({ kind: 'commit', row }));
 
         render(
@@ -55,22 +95,36 @@ describe('graph context menu interactions', () => {
                 rows={rows}
                 displayRows={displayRows}
                 branches={[]}
-                selectedHashes={[]}
+                selectedHashes={['base1234567890abcdef']}
                 selectedWorktreePath={undefined}
                 hasMore={false}
                 loadingMore={false}
-                onSelectCommit={() => undefined}
+                onSelectCommit={onSelectCommit}
                 onSelectWorktree={() => undefined}
-                onCommitCommand={onCommitCommand}
+                onContextTarget={onContextTarget}
                 onLoadMore={() => undefined}
                 onPostMessage={() => undefined}
             />,
         );
 
-        fireEvent.contextMenu(screen.getByTitle('feat(graph): test context menu'), { clientX: 12, clientY: 24 });
-        fireEvent.click(screen.getByText('Compare Commit with Worktree...'));
+        const row = screen.getByTitle('commit base1234567890abcdef');
+        const context = row.getAttribute('data-vscode-context') ?? '';
 
-        expect(onCommitCommand).toHaveBeenCalledWith('compareCommitWithWorktree', 'abc1234567890abcdef', ['abc1234567890abcdef']);
+        expect(context).toContain('"webviewSection":"graphCommit"');
+        expect(context).toContain('"graphCommitCanGoToChild":true');
+        expect(context).toContain('"graphCommitCanGoToParent":false');
+
+        fireEvent.contextMenu(row);
+
+        expect(onSelectCommit).not.toHaveBeenCalled();
+        expect(onContextTarget).toHaveBeenCalledWith({
+            kind: 'commit',
+            hash: 'base1234567890abcdef',
+            hashes: ['base1234567890abcdef'],
+            childHash: 'head1234567890abcdef',
+            parentHash: undefined,
+            canUndoCommit: false,
+        });
     });
 });
 
@@ -96,15 +150,15 @@ function worktree(worktreePath: string, branchName: string): WorktreeInfo {
     };
 }
 
-function commit(hash: string): GraphCommit {
+function commit(hash: string, parentHashes: readonly string[]): GraphCommit {
     return {
         hash,
         shortHash: hash.substring(0, 7),
-        message: 'feat(graph): test context menu',
+        message: `commit ${hash}`,
         authorName: 'Test User',
         authorEmail: 'test@example.com',
         authorDate: '2024-01-01T00:00:00Z',
-        parentHashes: [],
+        parentHashes,
         refs: [],
     };
 }

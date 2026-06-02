@@ -19,11 +19,10 @@ describe('BranchPanel', () => {
                 selectedBranchFilter={undefined}
                 selectedWorktreePath={undefined}
                 onSelectBranch={() => undefined}
-                onBranchCommand={() => undefined}
                 onSelectWorktree={() => undefined}
                 onOpenWorktree={() => undefined}
-                onWorktreeCommand={() => undefined}
                 onAddWorktree={() => undefined}
+                onContextTarget={() => undefined}
             />,
         );
 

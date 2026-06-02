@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { GraphViewProvider } from '../../../src/extension/views/GraphViewProvider';
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
+import { env } from '../../mocks/vscode';
 
 interface GraphDataPushLike {
     readonly type: 'graph/dataPush';
@@ -127,5 +128,49 @@ describe('GraphViewProvider', () => {
         await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
             type: 'graph/dataPush',
         })));
+    });
+
+    it('runs native graph context commands against the latest webview target', async () => {
+        const repo = makeRepositoryMock();
+        const provider = new GraphViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({
+            type: 'graph/contextTarget',
+            target: {
+                kind: 'commit',
+                hash: 'abc123456789',
+                hashes: ['abc123456789'],
+                childHash: 'child123456789',
+                parentHash: 'parent123456789',
+                canUndoCommit: true,
+            },
+        });
+
+        await vscode.commands.executeCommand('lookGit.graph.commit.copyRevisionNumber');
+        await vscode.commands.executeCommand('lookGit.graph.commit.goToChildCommit');
+        await vscode.commands.executeCommand('lookGit.graph.commit.goToParentCommit');
+
+        expect(env.clipboard.value).toBe('abc123456789');
+        expect(view.messages).toContainEqual({ type: 'graph/selectCommit', hash: 'child123456789' });
+        expect(view.messages).toContainEqual({ type: 'graph/selectCommit', hash: 'parent123456789' });
+
+        view.messageHandler?.({
+            type: 'graph/contextTarget',
+            target: { kind: 'branch', branch: 'feature/native', isRemote: false },
+        });
+        await vscode.commands.executeCommand('lookGit.graph.branch.checkout');
+        expect(repo.checkout).toHaveBeenCalledWith('feature/native');
+
+        view.messageHandler?.({
+            type: 'graph/contextTarget',
+            target: { kind: 'worktree', path: '/repo/.worktrees/native' },
+        });
+        await vscode.commands.executeCommand('lookGit.graph.worktree.showDetails');
+        expect(view.messages).toContainEqual({ type: 'graph/selectWorktree', path: '/repo/.worktrees/native' });
+
+        disposables.forEach((disposable) => disposable.dispose());
     });
 });

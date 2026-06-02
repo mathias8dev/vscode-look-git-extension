@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { BranchInfo } from '../../../protocol/graph/types';
-import type { CommitCommand } from '../../../protocol/graph/messages';
+import type { BranchInfo, GraphContextTarget } from '../../../protocol/graph/types';
 import type { GraphRow } from './layout/assignGraphLanes';
 import { GraphCommitRow, type CommitSelectMode } from './GraphRow';
 import { GraphWIPRow } from './GraphWIPRow';
 import { ROW_HEIGHT } from './GraphLaneCell';
-import { CommitContextMenu, type CommitContextMenuState } from './CommitContextMenu';
 import { getVisibleGraphRowRange } from './graphVirtualization';
 import type { DisplayRow } from './graphState';
 
@@ -19,7 +17,7 @@ interface GraphTableProps {
     readonly loadingMore: boolean;
     readonly onSelectCommit: (hash: string, mode: CommitSelectMode) => void;
     readonly onSelectWorktree: (path: string) => void;
-    readonly onCommitCommand: (command: CommitCommand, hash: string, hashes: readonly string[]) => void;
+    readonly onContextTarget: (target: GraphContextTarget) => void;
     readonly onLoadMore: () => void;
     readonly onPostMessage: (msg: unknown) => void;
 }
@@ -34,12 +32,11 @@ export function GraphTable({
     loadingMore,
     onSelectCommit,
     onSelectWorktree,
-    onCommitCommand,
+    onContextTarget,
     onLoadMore,
     onPostMessage,
 }: GraphTableProps) {
     const wrapperRef = useRef<HTMLDivElement>(null);
-    const [contextMenu, setContextMenu] = useState<CommitContextMenuState | undefined>(undefined);
     const [scrollTop, setScrollTop] = useState(0);
     const [viewportHeight, setViewportHeight] = useState(400);
     const totalHeight = displayRows.length * ROW_HEIGHT + (hasMore ? ROW_HEIGHT : 0);
@@ -86,25 +83,19 @@ export function GraphTable({
 
     const visibleDisplayRows = displayRows.slice(firstVisible, lastVisible + 1);
     const selectedHashSet = useMemo(() => new Set(selectedHashes), [selectedHashes]);
-    const selectedRows = rows.filter((row) => selectedHashSet.has(row.commit.hash));
 
-    const handleOpenContextMenu = useCallback((hash: string, x: number, y: number) => {
+    const handleOpenContextMenu = useCallback((hash: string) => {
         const hashes = selectedHashSet.has(hash) ? selectedHashes : [hash];
         if (!selectedHashSet.has(hash)) { onSelectCommit(hash, 'replace'); }
-        setContextMenu({
+        onContextTarget({
+            kind: 'commit',
             hash,
             hashes,
-            x,
-            y,
-            canGoToChild: childHash(rows, hash) !== undefined,
-            canGoToParent: parentHash(rows, hash) !== undefined,
+            childHash: childHash(rows, hash),
+            parentHash: parentHash(rows, hash),
             canUndoCommit: rows[0]?.commit.hash === hash,
         });
-    }, [onSelectCommit, rows, selectedHashSet, selectedHashes]);
-
-    const goToHash = useCallback((hash: string | undefined) => {
-        if (hash) { onSelectCommit(hash, 'replace'); }
-    }, [onSelectCommit]);
+    }, [onContextTarget, onSelectCommit, rows, selectedHashSet, selectedHashes]);
 
     return (
         <div className="graph-table-wrapper">
@@ -143,9 +134,12 @@ export function GraphTable({
                                 row={row}
                                 branches={branches}
                                 selected={selectedHashSet.has(row.commit.hash)}
+                                childHash={childHash(rows, row.commit.hash)}
+                                parentHash={parentHash(rows, row.commit.hash)}
+                                canUndoCommit={rows[0]?.commit.hash === row.commit.hash}
                                 style={rowStyle}
                                 onSelect={onSelectCommit}
-                                onOpenContextMenu={(commit, x, y) => handleOpenContextMenu(commit.hash, x, y)}
+                                onOpenContextMenu={(commit) => handleOpenContextMenu(commit.hash)}
                                 onPostMessage={onPostMessage}
                             />
                         );
@@ -168,15 +162,6 @@ export function GraphTable({
                     )}
                 </div>
             </div>
-            {contextMenu ? (
-                <CommitContextMenu
-                    state={contextMenu}
-                    onClose={() => setContextMenu(undefined)}
-                    onCommand={(command, hash, hashes) => onCommitCommand(command, hash, hashes)}
-                    onGoToChild={(hash) => goToHash(childHash(selectedRows.length > 0 ? selectedRows : rows, hash) ?? childHash(rows, hash))}
-                    onGoToParent={(hash) => goToHash(parentHash(rows, hash))}
-                />
-            ) : null}
         </div>
     );
 }

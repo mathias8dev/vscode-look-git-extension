@@ -174,6 +174,335 @@
         "title": "Open Diff",
         "category": "Look Git",
         "icon": "$(diff)"
+      },
+      {
+        "command": "lookGit.graph.commit.copyRevisionNumber",
+        "title": "Copy Revision Number",
+        "category": "Look Git",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "lookGit.graph.commit.createPatch",
+        "title": "Create Patch...",
+        "category": "Look Git",
+        "icon": "$(diff-added)"
+      },
+      {
+        "command": "lookGit.graph.commit.cherryPick",
+        "title": "Cherry-Pick",
+        "category": "Look Git",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "lookGit.graph.commit.checkoutRevision",
+        "title": "Checkout Revision",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.commit.showRepositoryAtRevision",
+        "title": "Show Repository at Revision",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.commit.compareWithLocal",
+        "title": "Compare with Local",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.commit.newWorktreeFromCommit",
+        "title": "New Branch + Worktree from Here...",
+        "category": "Look Git",
+        "icon": "$(repo-create)"
+      },
+      {
+        "command": "lookGit.graph.commit.compareCommitWithWorktree",
+        "title": "Compare Commit with Worktree...",
+        "category": "Look Git",
+        "icon": "$(compare-changes)"
+      },
+      {
+        "command": "lookGit.graph.commit.resetCurrentBranchToHere",
+        "title": "Reset Current Branch to Here...",
+        "category": "Look Git",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "lookGit.graph.commit.revertCommit",
+        "title": "Revert Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.commit.undoCommit",
+        "title": "Undo Commit...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.commit.editCommitMessage",
+        "title": "Edit Commit Message...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.commit.fixup",
+        "title": "Fixup...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.commit.squashInto",
+        "title": "Squash Into...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.commit.dropCommit",
+        "title": "Drop Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.commit.interactiveRebaseFromHere",
+        "title": "Interactively Rebase from Here...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.commit.pushAllUpToHere",
+        "title": "Push All up to Here...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.commit.newBranch",
+        "title": "New Branch...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.commit.newTag",
+        "title": "New Tag...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.commit.goToChildCommit",
+        "title": "Go to Child Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.commit.goToParentCommit",
+        "title": "Go to Parent Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.branch.checkout",
+        "title": "Checkout",
+        "category": "Look Git",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "lookGit.graph.branch.newBranchFrom",
+        "title": "New Branch from Here...",
+        "category": "Look Git",
+        "icon": "$(add)"
+      },
+      {
+        "command": "lookGit.graph.branch.checkoutRebaseOnto",
+        "title": "Checkout and Rebase onto Current Branch",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.branch.newWorktreeFromBranch",
+        "title": "New Worktree from Branch...",
+        "category": "Look Git",
+        "icon": "$(repo-create)"
+      },
+      {
+        "command": "lookGit.graph.branch.openBranchWorktree",
+        "title": "Open Branch Worktree",
+        "category": "Look Git",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "lookGit.graph.branch.revealBranchWorktree",
+        "title": "Reveal Branch Worktree in File Explorer",
+        "category": "Look Git",
+        "icon": "$(folder)"
+      },
+      {
+        "command": "lookGit.graph.branch.compareWithCurrent",
+        "title": "Compare with Current Branch",
+        "category": "Look Git",
+        "icon": "$(compare-changes)"
+      },
+      {
+        "command": "lookGit.graph.branch.showDiffWithWorkingTree",
+        "title": "Show Diff with Working Tree",
+        "category": "Look Git",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "lookGit.graph.branch.compareBranchWithWorktree",
+        "title": "Compare Branch with Worktree...",
+        "category": "Look Git",
+        "icon": "$(compare-changes)"
+      },
+      {
+        "command": "lookGit.graph.branch.showDiffWithBranchWorktree",
+        "title": "Show Diff with Branch Worktree",
+        "category": "Look Git",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "lookGit.graph.branch.rebaseOnto",
+        "title": "Rebase Current Branch onto This Branch",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.branch.mergeInto",
+        "title": "Merge into Current Branch",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.branch.push",
+        "title": "Push...",
+        "category": "Look Git",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "lookGit.graph.branch.pullBranchWorktree",
+        "title": "Pull Branch Worktree",
+        "category": "Look Git",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "lookGit.graph.branch.pushBranchWorktree",
+        "title": "Push Branch Worktree",
+        "category": "Look Git",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "lookGit.graph.branch.lockBranchWorktree",
+        "title": "Lock Branch Worktree",
+        "category": "Look Git",
+        "icon": "$(lock)"
+      },
+      {
+        "command": "lookGit.graph.branch.unlockBranchWorktree",
+        "title": "Unlock Branch Worktree",
+        "category": "Look Git",
+        "icon": "$(unlock)"
+      },
+      {
+        "command": "lookGit.graph.branch.removeBranchWorktree",
+        "title": "Remove Branch Worktree...",
+        "category": "Look Git",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "lookGit.graph.branch.rename",
+        "title": "Rename...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.branch.delete",
+        "title": "Delete",
+        "category": "Look Git",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "lookGit.graph.worktree.open",
+        "title": "Open",
+        "category": "Look Git",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "lookGit.graph.worktree.openInNewWindow",
+        "title": "Open in New Window",
+        "category": "Look Git",
+        "icon": "$(empty-window)"
+      },
+      {
+        "command": "lookGit.graph.worktree.reveal",
+        "title": "Reveal in File Explorer",
+        "category": "Look Git",
+        "icon": "$(folder)"
+      },
+      {
+        "command": "lookGit.graph.worktree.showDetails",
+        "title": "Show Details",
+        "category": "Look Git",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "lookGit.graph.worktree.showDiffWithHead",
+        "title": "Show Diff with HEAD",
+        "category": "Look Git",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "lookGit.graph.worktree.showDiffWithMainWorktree",
+        "title": "Show Diff with Main Worktree",
+        "category": "Look Git",
+        "icon": "$(compare-changes)"
+      },
+      {
+        "command": "lookGit.graph.worktree.fetch",
+        "title": "Fetch",
+        "category": "Look Git",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "lookGit.graph.worktree.pull",
+        "title": "Pull",
+        "category": "Look Git",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "lookGit.graph.worktree.push",
+        "title": "Push",
+        "category": "Look Git",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "lookGit.graph.worktree.commit",
+        "title": "Commit...",
+        "category": "Look Git",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "lookGit.graph.worktree.stash",
+        "title": "Stash Changes",
+        "category": "Look Git",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "lookGit.graph.worktree.newBranch",
+        "title": "New Branch from HEAD...",
+        "category": "Look Git",
+        "icon": "$(add)"
+      },
+      {
+        "command": "lookGit.graph.worktree.checkoutBranch",
+        "title": "Checkout Branch...",
+        "category": "Look Git",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "lookGit.graph.worktree.lock",
+        "title": "Lock Worktree",
+        "category": "Look Git",
+        "icon": "$(lock)"
+      },
+      {
+        "command": "lookGit.graph.worktree.unlock",
+        "title": "Unlock Worktree",
+        "category": "Look Git",
+        "icon": "$(unlock)"
+      },
+      {
+        "command": "lookGit.graph.worktree.remove",
+        "title": "Remove...",
+        "category": "Look Git",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "lookGit.graph.worktree.removeForce",
+        "title": "Force Remove...",
+        "category": "Look Git",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -287,6 +616,296 @@
           "command": "lookGit.history.openFileDiff",
           "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyFile' && historyFileDiffable",
           "group": "1_history_file@1"
+        },
+        {
+          "command": "lookGit.graph.commit.copyRevisionNumber",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "1_graph_commit_copy@1"
+        },
+        {
+          "command": "lookGit.graph.commit.createPatch",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "1_graph_commit_copy@2"
+        },
+        {
+          "command": "lookGit.graph.commit.cherryPick",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "1_graph_commit_copy@3"
+        },
+        {
+          "command": "lookGit.graph.commit.checkoutRevision",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "2_graph_commit_revision@1"
+        },
+        {
+          "command": "lookGit.graph.commit.showRepositoryAtRevision",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "2_graph_commit_revision@2"
+        },
+        {
+          "command": "lookGit.graph.commit.compareWithLocal",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "2_graph_commit_revision@3"
+        },
+        {
+          "command": "lookGit.graph.commit.newWorktreeFromCommit",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "2_graph_commit_revision@4"
+        },
+        {
+          "command": "lookGit.graph.commit.compareCommitWithWorktree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "2_graph_commit_revision@5"
+        },
+        {
+          "command": "lookGit.graph.commit.resetCurrentBranchToHere",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "3_graph_commit_mutate@1"
+        },
+        {
+          "command": "lookGit.graph.commit.revertCommit",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "3_graph_commit_mutate@2"
+        },
+        {
+          "command": "lookGit.graph.commit.undoCommit",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && graphCommitCanUndoCommit",
+          "group": "3_graph_commit_mutate@3"
+        },
+        {
+          "command": "lookGit.graph.commit.editCommitMessage",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "4_graph_commit_rewrite@1"
+        },
+        {
+          "command": "lookGit.graph.commit.fixup",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "4_graph_commit_rewrite@2"
+        },
+        {
+          "command": "lookGit.graph.commit.squashInto",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "4_graph_commit_rewrite@3"
+        },
+        {
+          "command": "lookGit.graph.commit.dropCommit",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "4_graph_commit_rewrite@4"
+        },
+        {
+          "command": "lookGit.graph.commit.interactiveRebaseFromHere",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "4_graph_commit_rewrite@5"
+        },
+        {
+          "command": "lookGit.graph.commit.pushAllUpToHere",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "4_graph_commit_rewrite@6"
+        },
+        {
+          "command": "lookGit.graph.commit.newBranch",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "5_graph_commit_refs@1"
+        },
+        {
+          "command": "lookGit.graph.commit.newTag",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "5_graph_commit_refs@2"
+        },
+        {
+          "command": "lookGit.graph.commit.goToChildCommit",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && graphCommitCanGoToChild",
+          "group": "6_graph_commit_navigation@1"
+        },
+        {
+          "command": "lookGit.graph.commit.goToParentCommit",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && graphCommitCanGoToParent",
+          "group": "6_graph_commit_navigation@2"
+        },
+        {
+          "command": "lookGit.graph.branch.checkout",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+          "group": "1_graph_branch_open@1"
+        },
+        {
+          "command": "lookGit.graph.branch.newBranchFrom",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+          "group": "1_graph_branch_open@2"
+        },
+        {
+          "command": "lookGit.graph.branch.checkoutRebaseOnto",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent",
+          "group": "1_graph_branch_open@3"
+        },
+        {
+          "command": "lookGit.graph.branch.newWorktreeFromBranch",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+          "group": "1_graph_branch_open@4"
+        },
+        {
+          "command": "lookGit.graph.branch.openBranchWorktree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree",
+          "group": "1_graph_branch_open@5"
+        },
+        {
+          "command": "lookGit.graph.branch.revealBranchWorktree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree",
+          "group": "1_graph_branch_open@6"
+        },
+        {
+          "command": "lookGit.graph.branch.compareWithCurrent",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent",
+          "group": "2_graph_branch_diff@1"
+        },
+        {
+          "command": "lookGit.graph.branch.showDiffWithWorkingTree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+          "group": "2_graph_branch_diff@2"
+        },
+        {
+          "command": "lookGit.graph.branch.compareBranchWithWorktree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+          "group": "2_graph_branch_diff@3"
+        },
+        {
+          "command": "lookGit.graph.branch.showDiffWithBranchWorktree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree",
+          "group": "2_graph_branch_diff@4"
+        },
+        {
+          "command": "lookGit.graph.branch.rebaseOnto",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent",
+          "group": "3_graph_branch_history@1"
+        },
+        {
+          "command": "lookGit.graph.branch.mergeInto",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent",
+          "group": "3_graph_branch_history@2"
+        },
+        {
+          "command": "lookGit.graph.branch.push",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsRemote",
+          "group": "4_graph_branch_publish@1"
+        },
+        {
+          "command": "lookGit.graph.branch.pullBranchWorktree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree",
+          "group": "4_graph_branch_publish@2"
+        },
+        {
+          "command": "lookGit.graph.branch.pushBranchWorktree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree",
+          "group": "4_graph_branch_publish@3"
+        },
+        {
+          "command": "lookGit.graph.branch.lockBranchWorktree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree && !graphBranchWorktreeIsMain && !graphBranchWorktreeIsLocked",
+          "group": "5_graph_branch_worktree@1"
+        },
+        {
+          "command": "lookGit.graph.branch.unlockBranchWorktree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree && !graphBranchWorktreeIsMain && graphBranchWorktreeIsLocked",
+          "group": "5_graph_branch_worktree@2"
+        },
+        {
+          "command": "lookGit.graph.branch.removeBranchWorktree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree && !graphBranchWorktreeIsMain",
+          "group": "5_graph_branch_worktree@3"
+        },
+        {
+          "command": "lookGit.graph.branch.rename",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsRemote",
+          "group": "6_graph_branch_manage@1"
+        },
+        {
+          "command": "lookGit.graph.branch.delete",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+          "group": "6_graph_branch_manage@2"
+        },
+        {
+          "command": "lookGit.graph.worktree.open",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree'",
+          "group": "1_graph_worktree_open@1"
+        },
+        {
+          "command": "lookGit.graph.worktree.openInNewWindow",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree'",
+          "group": "1_graph_worktree_open@2"
+        },
+        {
+          "command": "lookGit.graph.worktree.reveal",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree'",
+          "group": "1_graph_worktree_open@3"
+        },
+        {
+          "command": "lookGit.graph.worktree.showDetails",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree'",
+          "group": "2_graph_worktree_details@1"
+        },
+        {
+          "command": "lookGit.graph.worktree.showDiffWithHead",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree'",
+          "group": "2_graph_worktree_details@2"
+        },
+        {
+          "command": "lookGit.graph.worktree.showDiffWithMainWorktree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree' && !graphWorktreeIsMain",
+          "group": "2_graph_worktree_details@3"
+        },
+        {
+          "command": "lookGit.graph.worktree.fetch",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree'",
+          "group": "3_graph_worktree_sync@1"
+        },
+        {
+          "command": "lookGit.graph.worktree.pull",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree'",
+          "group": "3_graph_worktree_sync@2"
+        },
+        {
+          "command": "lookGit.graph.worktree.push",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree'",
+          "group": "3_graph_worktree_sync@3"
+        },
+        {
+          "command": "lookGit.graph.worktree.commit",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree'",
+          "group": "4_graph_worktree_changes@1"
+        },
+        {
+          "command": "lookGit.graph.worktree.stash",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree'",
+          "group": "4_graph_worktree_changes@2"
+        },
+        {
+          "command": "lookGit.graph.worktree.newBranch",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree'",
+          "group": "5_graph_worktree_refs@1"
+        },
+        {
+          "command": "lookGit.graph.worktree.checkoutBranch",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree'",
+          "group": "5_graph_worktree_refs@2"
+        },
+        {
+          "command": "lookGit.graph.worktree.lock",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree' && !graphWorktreeIsMain && !graphWorktreeIsLocked",
+          "group": "6_graph_worktree_manage@1"
+        },
+        {
+          "command": "lookGit.graph.worktree.unlock",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree' && !graphWorktreeIsMain && graphWorktreeIsLocked",
+          "group": "6_graph_worktree_manage@2"
+        },
+        {
+          "command": "lookGit.graph.worktree.remove",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree' && !graphWorktreeIsMain",
+          "group": "6_graph_worktree_manage@3"
+        },
+        {
+          "command": "lookGit.graph.worktree.removeForce",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree' && !graphWorktreeIsMain",
+          "group": "6_graph_worktree_manage@4"
         }
       ]
     }

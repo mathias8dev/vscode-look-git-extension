@@ -7,10 +7,11 @@ interface BranchTreeNodeProps {
     readonly depth: number;
     readonly selectedBranch: string | undefined;
     readonly onSelect: (fullName: string) => void;
-    readonly onOpenContextMenu: (branch: BranchInfo, x: number, y: number) => void;
+    readonly onOpenContextMenu: (branch: BranchInfo) => void;
+    readonly contextForBranch: (branch: BranchInfo) => Record<string, unknown>;
 }
 
-export function BranchTreeNode({ node, depth, selectedBranch, onSelect, onOpenContextMenu }: BranchTreeNodeProps) {
+export function BranchTreeNode({ node, depth, selectedBranch, onSelect, onOpenContextMenu, contextForBranch }: BranchTreeNodeProps) {
     const [collapsed, setCollapsed] = useState(false);
 
     if (node.isFolder || node.children.length > 0) {
@@ -37,6 +38,7 @@ export function BranchTreeNode({ node, depth, selectedBranch, onSelect, onOpenCo
                         selectedBranch={selectedBranch}
                         onSelect={onSelect}
                         onOpenContextMenu={onOpenContextMenu}
+                        contextForBranch={contextForBranch}
                     />
                 ))}
             </div>
@@ -53,11 +55,11 @@ export function BranchTreeNode({ node, depth, selectedBranch, onSelect, onOpenCo
             className={`branch-node branch-leaf${isActive ? ' branch-node-active' : ''}`}
             style={{ paddingLeft: `${8 + depth * 12}px` }}
             title={node.fullName}
+            data-vscode-context={branch ? JSON.stringify(contextForBranch(branch)) : undefined}
             onClick={() => onSelect(node.fullName)}
-            onContextMenu={(event) => {
+            onContextMenu={() => {
                 if (!branch) { return; }
-                event.preventDefault();
-                onOpenContextMenu(branch, event.clientX, event.clientY);
+                onOpenContextMenu(branch);
             }}
         >
             <i
