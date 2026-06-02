@@ -9,7 +9,7 @@ import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHi
 import { createBareGitRepo, createTempGitRepo, removeDirSyncWithRetry, type TempGitRepo } from '../../helpers/gitRepo';
 import { makeWebviewView, resetVscodeMock, type MockWebviewView } from '../../helpers/providerRuntime';
 import { makeRepositoryAccessor } from '../../helpers/repositoryMock';
-import { env, getCommandCalls, setInputBoxValue, setInputBoxValues, setQuickPickValue, setWarningChoice, window, workspace } from '../../mocks/vscode';
+import { env, getCommandCalls, setInputBoxValue, setInputBoxValues, setQuickPickValue, setWarningChoice, window } from '../../mocks/vscode';
 
 describe('CommitHistoryViewProvider native context command semantics', () => {
     const repos: TempGitRepo[] = [];
@@ -55,7 +55,7 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
 
         fixture.write('head.txt', 'head local\n');
         await vscode.commands.executeCommand('lookGit.history.compareWithLocal');
-        expect(workspace.documents.at(-1)?.content).toContain('head local');
+        expect(getCommandCalls().at(-1)?.command).toBe('vscode.changes');
 
         await vscode.commands.executeCommand('lookGit.history.interactiveRebaseFromHere');
         expect(window.terminals.at(-1)?.texts).toEqual([`git rebase --autostash -i '${head}'`]);
@@ -92,7 +92,7 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
         writeFileSync(join(worktreePath, 'base.txt'), 'base local\n');
         setQuickPickValue(worktreePath);
         await vscode.commands.executeCommand('lookGit.history.compareCommitWithWorktree');
-        expect(workspace.documents.at(-1)?.content).toContain('base local');
+        expect(getCommandCalls().at(-1)?.command).toBe('vscode.changes');
     });
 
     it('applies checkout, reset, undo, revert, cherry-pick, drop, and push semantics from native commands', async () => {

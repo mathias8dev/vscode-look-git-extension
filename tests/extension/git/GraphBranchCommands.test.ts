@@ -4,7 +4,7 @@ import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessag
 import type { GraphExtensionToWebviewMessage } from '../../../src/protocol/graph/messages';
 import { makeRepositoryAccessor } from '../../helpers/repositoryMock';
 import { createBareGitRepo, createTempGitRepo, type TempGitRepo } from '../../helpers/gitRepo';
-import { resetMockVscode, setInputBoxValue, setWarningChoice, workspace } from '../../mocks/vscode';
+import { commands, resetMockVscode, setInputBoxValue, setWarningChoice } from '../../mocks/vscode';
 
 describe('Graph branch commands against real git repos', () => {
     let fixture: TempGitRepo;
@@ -85,7 +85,7 @@ describe('Graph branch commands against real git repos', () => {
         expect(fixture.gitTrim(['branch', '--list', 'renamed/from-source'])).toBe('');
     });
 
-    it('opens branch compare and working tree diff documents', async () => {
+    it('opens branch compare and working tree diff in the changes editor', async () => {
         fixture.commitFile('base.txt', 'base\n', 'feat: base');
         fixture.git(['checkout', '-q', '-b', 'feature/diff']);
         fixture.commitFile('feature.txt', 'feature\n', 'feat: feature');
@@ -96,8 +96,7 @@ describe('Graph branch commands against real git repos', () => {
         await router.handle({ type: 'graph/branchCommand', command: 'compareWithCurrent', branch: 'feature/diff', isRemote: false });
         await router.handle({ type: 'graph/branchCommand', command: 'showDiffWithWorkingTree', branch: 'feature/diff', isRemote: false });
 
-        expect(workspace.documents[0]?.content).toContain('feature.txt');
-        expect(workspace.documents[1]?.content).toContain('working tree');
+        expect(commands.calls.filter((call) => call.command === 'vscode.changes')).toHaveLength(2);
     });
 
     it('pushes a local branch to its upstream and deletes remote branches', async () => {
@@ -199,7 +198,7 @@ describe('Graph branch commands against real git repos', () => {
         }
     });
 
-    it('opens compare and working tree diffs against remote branches', async () => {
+    it('opens compare and working tree diffs against remote branches in the changes editor', async () => {
         const remote = createBareGitRepo();
         try {
             const base = fixture.commitFile('base.txt', 'base\n', 'feat: base');
@@ -212,8 +211,7 @@ describe('Graph branch commands against real git repos', () => {
             await router.handle({ type: 'graph/branchCommand', command: 'compareWithCurrent', branch: 'origin/feature/remote-diff', isRemote: true });
             await router.handle({ type: 'graph/branchCommand', command: 'showDiffWithWorkingTree', branch: 'origin/feature/remote-diff', isRemote: true });
 
-            expect(workspace.documents[0]?.content).toContain('remote-diff.txt');
-            expect(workspace.documents[1]?.content).toContain('working tree');
+            expect(commands.calls.filter((call) => call.command === 'vscode.changes')).toHaveLength(2);
         } finally {
             remote.cleanup();
         }

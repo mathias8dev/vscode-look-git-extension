@@ -154,7 +154,7 @@ export function run(): Promise<void> {
                     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
                     fixture.write('head.txt', 'head local\n');
                     await router.handle({ type: 'graph/commitCommand', command: 'compareWithLocal', hash: base, hashes: [base] });
-                    await waitForActiveEditorText('head local');
+                    await waitForTabLabel(`Diff ${base.substring(0, 7)}..local`);
 
                     const showCapture = await withPatchedVscode({ interceptOpenFolder: true }, async (capture) => {
                         await router.handle({ type: 'graph/commitCommand', command: 'showRepositoryAtRevision', hash: base, hashes: [base] });
@@ -420,13 +420,11 @@ async function runWorktreeContextActionsE2E(): Promise<void> {
         fs.writeFileSync(path.join(worktreePath, 'base.txt'), 'base from worktree\n');
         fs.writeFileSync(path.join(worktreePath, 'untracked-diff.txt'), 'untracked diff\n');
         await router.handle({ type: 'graph/worktreeCommand', command: 'showDiffWithHead', path: worktreePath });
-        await waitForActiveEditorText('base from worktree');
-        await waitForActiveEditorText('untracked-diff.txt');
+        await waitForTabLabel(`Diff ${path.basename(worktreePath)} with HEAD`);
 
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
         await router.handle({ type: 'graph/worktreeCommand', command: 'showDiffWithMainWorktree', path: worktreePath });
-        await waitForActiveEditorText('base from worktree');
-        await waitForActiveEditorText('untracked-diff.txt');
+        await waitForTabLabel(`Diff ${path.basename(worktreePath)} with ${path.basename(fixture.cwd)}`);
 
         fs.writeFileSync(path.join(worktreePath, 'committed.txt'), 'committed\n');
         await withPatchedVscode({ warningChoices: ['Stage All and Commit'], inputBoxValues: ['feat(worktrees): commit from context action'] }, async () => {
@@ -528,15 +526,13 @@ async function runWorktreeAwareCommitAndBranchMenusE2E(): Promise<void> {
         fs.writeFileSync(path.join(branchWorktreePath, 'branch-untracked.txt'), 'branch untracked\n');
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
         await router.handle({ type: 'graph/branchCommand', command: 'showDiffWithBranchWorktree', branch: 'feature/menu-source', isRemote: false });
-        await waitForActiveEditorText('branch worktree dirty');
-        await waitForActiveEditorText('branch-untracked.txt');
+        await waitForTabLabel(`Diff feature/menu-source with ${path.basename(branchWorktreePath)}`);
 
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
         await withPatchedVscode({ quickPickValues: [branchWorktreePath] }, async () => {
             await router.handle({ type: 'graph/branchCommand', command: 'compareBranchWithWorktree', branch: 'feature/menu-source', isRemote: false });
         });
-        await waitForActiveEditorText('branch worktree dirty');
-        await waitForActiveEditorText('branch-untracked.txt');
+        await waitForTabLabel(`Diff feature/menu-source with ${path.basename(branchWorktreePath)}`);
 
         git(branchWorktreePath, ['checkout', '--', 'base.txt']);
         fs.rmSync(path.join(branchWorktreePath, 'branch-untracked.txt'), { force: true });
@@ -567,8 +563,7 @@ async function runWorktreeAwareCommitAndBranchMenusE2E(): Promise<void> {
         await withPatchedVscode({ quickPickValues: [commitWorktreePath] }, async () => {
             await router.handle({ type: 'graph/commitCommand', command: 'compareCommitWithWorktree', hash: base, hashes: [base] });
         });
-        await waitForActiveEditorText('commit worktree dirty');
-        await waitForActiveEditorText('commit-untracked.txt');
+        await waitForTabLabel(`Diff ${base.substring(0, 7)} with ${path.basename(commitWorktreePath)}`);
         assertNoGraphError(messages);
     } finally {
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
@@ -640,12 +635,12 @@ async function runBranchRebaseMergeAndDiffE2E(): Promise<void> {
 
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
         await router.handle({ type: 'graph/branchCommand', command: 'compareWithCurrent', branch: 'feature/topic', isRemote: false });
-        await waitForActiveEditorText('feature.txt');
+        await waitForTabLabel('Diff main...feature/topic');
 
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
         fixture.write('base.txt', 'working tree\n');
         await router.handle({ type: 'graph/branchCommand', command: 'showDiffWithWorkingTree', branch: 'feature/topic', isRemote: false });
-        await waitForActiveEditorText('working tree');
+        await waitForTabLabel('Diff feature/topic..working tree');
         fixture.git(['checkout', '--', 'base.txt']);
 
         await router.handle({ type: 'graph/branchCommand', command: 'checkoutRebaseOnto', branch: 'feature/topic', isRemote: false });
@@ -744,7 +739,7 @@ async function runRemoteContextActionsE2E(): Promise<void> {
         fixture.git(['checkout', '-q', 'main']);
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
         await router.handle({ type: 'graph/branchCommand', command: 'compareWithCurrent', branch: 'origin/feature/e2e-merge', isRemote: true });
-        await waitForActiveEditorText('remote-merge.txt');
+        await waitForTabLabel('Diff main...origin/feature/e2e-merge');
 
         await router.handle({ type: 'graph/branchCommand', command: 'mergeInto', branch: 'origin/feature/e2e-merge', isRemote: true });
         assert.equal(git(fixture.cwd, ['show', 'HEAD:remote-merge.txt']), 'remote merge');
@@ -1124,15 +1119,6 @@ async function withPatchedVscode<T>(
         Object.defineProperty(vscode.commands, 'executeCommand', { configurable: true, value: originalExecuteCommand });
         Object.defineProperty(vscode.window, 'createTerminal', { configurable: true, value: originalCreateTerminal });
     }
-}
-
-async function waitForActiveEditorText(expected: string): Promise<void> {
-    for (let attempt = 0; attempt < 40; attempt++) {
-        const text = vscode.window.activeTextEditor?.document.getText();
-        if (text?.includes(expected)) { return; }
-        await sleep(100);
-    }
-    assert.fail(`Expected active editor text containing "${expected}".`);
 }
 
 function fsPathOf(value: unknown): string {

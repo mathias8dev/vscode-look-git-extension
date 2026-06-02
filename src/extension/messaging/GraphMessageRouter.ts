@@ -8,6 +8,8 @@ import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import type { GitRepository } from '../../core/git/GitRepository';
 import type { GitStatusEntry } from '../../core/git/domain/GitStatus';
 import type { GitWorktree } from '../../core/git/domain/GitWorktree';
+import type { DiffNameStatusEntry } from '../../core/parsing/parse-diff-name-status';
+import { parseDiffNameStatus } from '../../core/parsing/parse-diff-name-status';
 import { parsePorcelainStatus, summarizePorcelainStatus } from '../../core/parsing/parseStatus';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import { toProtocolBranch, toProtocolGraphCommit, toProtocolWorktree } from '../mapping/toProtocol';
@@ -15,6 +17,7 @@ import { showModalWarningMessage } from '../utils/confirmation';
 import { createErrorPayload, isAbortError } from './errorSerialization';
 
 type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
+type ChangesResource = readonly [vscode.Uri, vscode.Uri, vscode.Uri];
 
 export class GraphMessageRouter {
     private readonly pending = new Map<string, AbortController>();
@@ -254,10 +257,10 @@ export class GraphMessageRouter {
                 await revealBranchWorktree(repo, branch, isRemote);
                 return;
             case 'compareWithCurrent':
-                await openDiffDocument(`Diff ${currentBranch}...${branch}`, await repo.execRaw(['diff', `${currentBranch}...${branch}`, '--']));
+                await openChangesBetweenMergeBaseAndRef(repo, currentBranch, branch, `Diff ${currentBranch}...${branch}`);
                 return;
             case 'showDiffWithWorkingTree':
-                await openDiffDocument(`Diff ${branch}..working tree`, await repo.execRaw(['diff', branch, '--']));
+                await openChangesWithWorkingTree(repo, repo.cwd, branch, `Diff ${branch}..working tree`);
                 return;
             case 'compareBranchWithWorktree':
                 await compareRefWithPickedWorktree(repo, branch, `Diff ${branch}`);
@@ -337,7 +340,7 @@ export class GraphMessageRouter {
                 return;
             case 'showDiffWithHead': {
                 const pathValue = requireWorktreePath(wtPath);
-                await openDiffDocument(`Diff ${path.basename(pathValue)} with HEAD`, await worktreeDiffFromBase(repo, pathValue, 'HEAD'));
+                await openChangesWithWorkingTree(repo, pathValue, 'HEAD', `Diff ${path.basename(pathValue)} with HEAD`);
                 return;
             }
             case 'showDiffWithMainWorktree':
@@ -462,7 +465,7 @@ export async function runCommitCommand(repo: GitRepository, command: CommitComma
             await showRepositoryAtRevision(hash, repo.exec.bind(repo));
             return false;
         case 'compareWithLocal':
-            await openDiffDocument(`Diff ${hash.substring(0, 7)}..local`, await repo.execRaw(['diff', hash, '--']));
+            await openChangesWithWorkingTree(repo, repo.cwd, hash, `Diff ${hash.substring(0, 7)}..local`);
             return false;
         case 'resetCurrentBranchToHere':
             await resetCurrentBranchToHere(repo, hash);
@@ -530,8 +533,7 @@ async function showDiffWithMainWorktree(repo: GitRepository, wtPath: string): Pr
     if (!main) { throw new Error('Main worktree not found.'); }
     if (!selected) { throw new Error(`Unknown worktree: ${wtPath}`); }
     if (selected.isMain) { throw new Error('Cannot compare the main worktree with itself.'); }
-    const diff = await worktreeDiffFromBase(repo, wtPath, main.head);
-    await openDiffDocument(`Diff ${path.basename(wtPath)} with ${path.basename(main.path)}`, diff);
+    await openChangesWithWorkingTree(repo, wtPath, main.head, `Diff ${path.basename(wtPath)} with ${path.basename(main.path)}`);
 }
 
 async function createWorktreeFromBranch(repo: GitRepository, branch: string, isRemote: boolean): Promise<boolean> {
@@ -645,13 +647,13 @@ async function revealBranchWorktree(repo: GitRepository, branch: string, isRemot
 
 async function showDiffWithBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean): Promise<void> {
     const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
-    await openDiffDocument(`Diff ${branch} with ${path.basename(worktree.path)}`, await worktreeDiffFromBase(repo, worktree.path, branch));
+    await openChangesWithWorkingTree(repo, worktree.path, branch, `Diff ${branch} with ${path.basename(worktree.path)}`);
 }
 
 async function compareRefWithPickedWorktree(repo: GitRepository, ref: string, titlePrefix: string): Promise<boolean> {
     const worktree = await pickWorktree(repo, 'Select worktree to compare');
     if (!worktree) { return false; }
-    await openDiffDocument(`${titlePrefix} with ${path.basename(worktree.path)}`, await worktreeDiffFromBase(repo, worktree.path, ref));
+    await openChangesWithWorkingTree(repo, worktree.path, ref, `${titlePrefix} with ${path.basename(worktree.path)}`);
     return true;
 }
 
@@ -713,49 +715,6 @@ function shortWorktreeBranch(branch: string | undefined): string | undefined {
 
 function worktreeForBranch(worktrees: readonly GitWorktree[], branch: string): GitWorktree | undefined {
     return worktrees.find((candidate) => shortWorktreeBranch(candidate.branch) === branch);
-}
-
-async function worktreeDiffFromBase(repo: GitRepository, wtPath: string, baseRef: string): Promise<string> {
-    const trackedDiff = await repo.execRaw(['-C', wtPath, 'diff', baseRef, '--']);
-    const untrackedDiff = await worktreeUntrackedDiff(repo, wtPath);
-    const diff = [trackedDiff.trimEnd(), untrackedDiff.trimEnd()].filter(Boolean).join('\n\n');
-    return diff || 'No changes.\n';
-}
-
-async function worktreeUntrackedDiff(repo: GitRepository, wtPath: string): Promise<string> {
-    const output = await repo.execRaw(['-C', wtPath, 'ls-files', '--others', '--exclude-standard', '-z']);
-    const files = output.split('\0').filter(Boolean);
-    const patches = await Promise.all(files.map((filePath) => untrackedFilePatch(wtPath, filePath)));
-    return patches.join('\n');
-}
-
-async function untrackedFilePatch(wtPath: string, filePath: string): Promise<string> {
-    const content = await fs.readFile(path.join(wtPath, filePath));
-    const normalizedPath = filePath.replace(/\\/g, '/');
-    if (content.includes(0)) {
-        return [
-            `diff --git a/${normalizedPath} b/${normalizedPath}`,
-            'new file mode 100644',
-            `Binary files /dev/null and b/${normalizedPath} differ`,
-            '',
-        ].join('\n');
-    }
-
-    const text = content.toString('utf8');
-    const hasTrailingNewline = text.endsWith('\n');
-    const lines = hasTrailingNewline ? text.slice(0, -1).split('\n') : text.split('\n');
-    const body = lines.length === 1 && lines[0] === '' ? [] : lines.map((line) => `+${line}`);
-    const noNewlineMarker = !hasTrailingNewline && body.length > 0 ? ['\\ No newline at end of file'] : [];
-    return [
-        `diff --git a/${normalizedPath} b/${normalizedPath}`,
-        'new file mode 100644',
-        '--- /dev/null',
-        `+++ b/${normalizedPath}`,
-        `@@ -0,0 +1,${body.length} @@`,
-        ...body,
-        ...noNewlineMarker,
-        '',
-    ].join('\n');
 }
 
 async function commitWorktree(repo: GitRepository, wtPath: string): Promise<boolean> {
@@ -911,6 +870,74 @@ async function showRepositoryAtRevision(
     const worktreePath = path.join(parentPath, hash.substring(0, 7));
     await exec(['worktree', 'add', '--detach', worktreePath, hash]);
     await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(worktreePath), { forceNewWindow: true });
+}
+
+async function openChangesBetweenMergeBaseAndRef(repo: GitRepository, leftRef: string, rightRef: string, title: string): Promise<void> {
+    const mergeBase = await repo.exec(['merge-base', leftRef, rightRef]);
+    await openChangesBetweenRefs(repo, mergeBase, rightRef, title);
+}
+
+async function openChangesBetweenRefs(repo: GitRepository, leftRef: string, rightRef: string, title: string): Promise<void> {
+    const output = await repo.execRaw(['diff', '--name-status', '-z', leftRef, rightRef, '--']);
+    const resources = await Promise.all(parseDiffNameStatus(output).map((entry) => refChangeResource(repo, leftRef, rightRef, entry)));
+    await openChangesEditor(title, resources);
+}
+
+async function openChangesWithWorkingTree(repo: GitRepository, worktreePath: string, baseRef: string, title: string): Promise<void> {
+    const resources = await workingTreeChangeResources(repo, worktreePath, baseRef);
+    await openChangesEditor(title, resources);
+}
+
+async function openChangesEditor(title: string, resources: readonly ChangesResource[]): Promise<void> {
+    if (resources.length === 0) {
+        await openDiffDocument(title, 'No changes.\n');
+        return;
+    }
+    await vscode.commands.executeCommand('vscode.changes', title, resources);
+}
+
+async function workingTreeChangeResources(repo: GitRepository, worktreePath: string, baseRef: string): Promise<readonly ChangesResource[]> {
+    const tracked = parseDiffNameStatus(await repo.execRaw(['-C', worktreePath, 'diff', '--name-status', '-z', baseRef, '--']));
+    const untracked = (await repo.execRaw(['-C', worktreePath, 'ls-files', '--others', '--exclude-standard', '-z']))
+        .split('\0')
+        .filter(Boolean)
+        .map((filePath): DiffNameStatusEntry => ({ status: '?', filePath }));
+    return Promise.all([...tracked, ...untracked].map((entry) => workingTreeChangeResource(repo, worktreePath, baseRef, entry)));
+}
+
+async function refChangeResource(repo: GitRepository, leftRef: string, rightRef: string, entry: DiffNameStatusEntry): Promise<ChangesResource> {
+    const fileUri = vscode.Uri.file(path.join(repo.cwd, entry.filePath));
+    const origPath = entry.origPath ?? entry.filePath;
+
+    if (entry.status === 'A') {
+        return [fileUri, await emptyDiffUri(rightRef, entry.filePath, 'original'), await refBlobUri(repo, repo.cwd, rightRef, entry.filePath, 'modified')];
+    }
+    if (entry.status === 'D') {
+        return [fileUri, await refBlobUri(repo, repo.cwd, leftRef, origPath, 'original'), await emptyDiffUri(leftRef, entry.filePath, 'modified')];
+    }
+    return [
+        fileUri,
+        await refBlobUri(repo, repo.cwd, leftRef, origPath, 'original'),
+        await refBlobUri(repo, repo.cwd, rightRef, entry.filePath, 'modified'),
+    ];
+}
+
+async function workingTreeChangeResource(repo: GitRepository, worktreePath: string, baseRef: string, entry: DiffNameStatusEntry): Promise<ChangesResource> {
+    const fileUri = vscode.Uri.file(path.join(worktreePath, entry.filePath));
+    const origPath = entry.origPath ?? entry.filePath;
+
+    if (entry.status === 'A' || entry.status === '?') {
+        return [fileUri, await emptyDiffUri('working-tree', entry.filePath, 'original'), fileUri];
+    }
+    if (entry.status === 'D') {
+        return [fileUri, await refBlobUri(repo, worktreePath, baseRef, origPath, 'original'), await emptyDiffUri(baseRef, entry.filePath, 'modified')];
+    }
+    return [fileUri, await refBlobUri(repo, worktreePath, baseRef, origPath, 'original'), fileUri];
+}
+
+async function refBlobUri(repo: GitRepository, cwd: string, ref: string, filePath: string, side: string): Promise<vscode.Uri> {
+    const content = await repo.execRaw(['-C', cwd, 'show', `${ref}:${filePath}`]);
+    return tempDiffUri(ref, filePath, side, content);
 }
 
 async function openDiffDocument(title: string, content: string): Promise<void> {
@@ -1191,7 +1218,8 @@ async function worktreeHeadBlobUri(repo: GitRepository, worktreePath: string, fi
 
 async function tempDiffUri(namespace: string, filePath: string, side: string, content: string): Promise<vscode.Uri> {
     const dir = path.join(os.tmpdir(), 'look-git-empty-diffs');
-    const fileName = `${namespace.substring(0, 12)}-${side}-${Buffer.from(filePath).toString('base64url')}`;
+    const safeNamespace = Buffer.from(namespace).toString('base64url').substring(0, 16);
+    const fileName = `${safeNamespace}-${side}-${Buffer.from(filePath).toString('base64url')}`;
     const emptyPath = path.join(dir, fileName);
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(emptyPath, content);

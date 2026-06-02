@@ -137,7 +137,6 @@ describe('GraphMessageRouter graph data', () => {
         const call = commands.calls[0];
         expect(call?.command).toBe('vscode.diff');
         expect(String(call?.args[0])).toContain('look-git-empty-diffs');
-        expect(String(call?.args[0])).toContain('worktree-he');
         expect(String(call?.args[1])).toBe('file:/repo/.worktrees/a/src/dirty.ts');
         expect(call?.args[2]).toBe('dirty.ts (a)');
         expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'show', 'HEAD:src/dirty.ts']);
@@ -166,8 +165,8 @@ describe('GraphMessageRouter graph data', () => {
                 worktree('/repo/.worktrees/a', 'topic-head', 'feature/a'),
             ]),
             execRaw: vi.fn(async (args) => {
-                if (args[2] === 'diff' && args[3] === 'HEAD') { return 'head diff\n'; }
-                if (args[2] === 'diff' && args[3] === 'main-head') { return 'main diff\n'; }
+                if (args[2] === 'diff' && args[5] === 'HEAD') { return 'M\0head.txt\0'; }
+                if (args[2] === 'diff' && args[5] === 'main-head') { return 'M\0main.txt\0'; }
                 if (args[2] === 'ls-files') { return ''; }
                 return '';
             }),
@@ -177,10 +176,12 @@ describe('GraphMessageRouter graph data', () => {
         await router.handle({ type: 'graph/worktreeCommand', command: 'showDiffWithHead', path: '/repo/.worktrees/a' });
         await router.handle({ type: 'graph/worktreeCommand', command: 'showDiffWithMainWorktree', path: '/repo/.worktrees/a' });
 
-        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', 'HEAD', '--']);
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', '--name-status', '-z', 'HEAD', '--']);
         expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'ls-files', '--others', '--exclude-standard', '-z']);
-        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', 'main-head', '--']);
-        expect(workspace.documents.map((document) => document.content)).toEqual(['head diff', 'main diff']);
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', '--name-status', '-z', 'main-head', '--']);
+        expect(commands.calls.map((call) => call.command)).toEqual(['vscode.changes', 'vscode.changes']);
+        expect(changesResourcesAt(0)).toHaveLength(1);
+        expect(changesResourcesAt(1)).toHaveLength(1);
     });
 
     it('runs worktree git commands in the selected worktree', async () => {
@@ -361,7 +362,7 @@ describe('GraphMessageRouter commit commands', () => {
                 worktree('/repo/.worktrees/a', 'topic-head', 'feature/a'),
             ]),
             execRaw: vi.fn(async (args) => {
-                if (args[2] === 'diff' && args[3] === 'abc123') { return 'commit diff\n'; }
+                if (args[2] === 'diff' && args[5] === 'abc123') { return 'M\0commit.txt\0'; }
                 if (args[2] === 'ls-files') { return ''; }
                 return '';
             }),
@@ -371,21 +372,24 @@ describe('GraphMessageRouter commit commands', () => {
         setQuickPickValue('/repo/.worktrees/a');
         await router.handle({ type: 'graph/commitCommand', command: 'compareCommitWithWorktree', hash: 'abc123', hashes: ['abc123'] });
 
-        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', 'abc123', '--']);
-        expect(workspace.documents.map((document) => document.content)).toEqual(['commit diff']);
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', '--name-status', '-z', 'abc123', '--']);
+        expect(commands.calls.map((call) => call.command)).toEqual(['vscode.changes']);
+        expect(changesResourcesAt(0)).toHaveLength(1);
     });
 
-    it('opens compare-with-local output as a diff document', async () => {
+    it('opens compare-with-local output in the changes editor', async () => {
         const repo = makeRepositoryMock({
-            execRaw: vi.fn(async () => 'diff --git a/file b/file\n'),
+            execRaw: vi.fn(async (args) => args[2] === 'diff' ? 'M\0file.ts\0' : ''),
         });
         const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
 
         await router.handle({ type: 'graph/commitCommand', command: 'compareWithLocal', hash: 'abc123', hashes: ['abc123'] });
 
-        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['diff', 'abc123', '--']);
-        expect(workspace.documents).toEqual([{ content: 'diff --git a/file b/file\n', language: 'diff' }]);
-        expect(window.shownDocuments).toHaveLength(1);
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/workspace', 'diff', '--name-status', '-z', 'abc123', '--']);
+        expect(commands.calls.map((call) => call.command)).toEqual(['vscode.changes']);
+        expect(changesResourcesAt(0)).toHaveLength(1);
+        expect(workspace.documents).toEqual([]);
+        expect(window.shownDocuments).toHaveLength(0);
     });
 
     it('starts interactive rebase in a terminal', async () => {
@@ -502,26 +506,30 @@ describe('GraphMessageRouter branch commands', () => {
 
     it('compares the selected branch with the current branch', async () => {
         const repo = makeRepositoryMock({
-            execRaw: vi.fn(async (args) => args[0] === 'diff' ? 'diff --git a/file b/file\n' : ''),
+            exec: vi.fn(async (args) => args[0] === 'merge-base' ? 'base123' : ''),
+            execRaw: vi.fn(async (args) => args[0] === 'diff' ? 'M\0file.ts\0' : ''),
         });
         const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
 
         await router.handle({ type: 'graph/branchCommand', command: 'compareWithCurrent', branch: 'feature/ui', isRemote: false });
 
-        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['diff', 'main...feature/ui', '--']);
-        expect(workspace.documents).toEqual([{ content: 'diff --git a/file b/file\n', language: 'diff' }]);
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['merge-base', 'main', 'feature/ui']);
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['diff', '--name-status', '-z', 'base123', 'feature/ui', '--']);
+        expect(commands.calls.map((call) => call.command)).toEqual(['vscode.changes']);
+        expect(changesResourcesAt(0)).toHaveLength(1);
     });
 
     it('shows the selected branch diff against the working tree', async () => {
         const repo = makeRepositoryMock({
-            execRaw: vi.fn(async (args) => args[0] === 'diff' ? 'diff --git a/local b/local\n' : ''),
+            execRaw: vi.fn(async (args) => args[2] === 'diff' ? 'M\0local.ts\0' : ''),
         });
         const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
 
         await router.handle({ type: 'graph/branchCommand', command: 'showDiffWithWorkingTree', branch: 'feature/ui', isRemote: false });
 
-        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['diff', 'feature/ui', '--']);
-        expect(workspace.documents).toEqual([{ content: 'diff --git a/local b/local\n', language: 'diff' }]);
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/workspace', 'diff', '--name-status', '-z', 'feature/ui', '--']);
+        expect(commands.calls.map((call) => call.command)).toEqual(['vscode.changes']);
+        expect(changesResourcesAt(0)).toHaveLength(1);
     });
 
     it('pushes to the configured upstream branch', async () => {
@@ -604,7 +612,7 @@ describe('GraphMessageRouter branch commands', () => {
                 { ...worktree('/repo/.worktrees/a', 'topic-head', 'feature/a'), branch: 'refs/heads/feature/a' },
             ]),
             execRaw: vi.fn(async (args) => {
-                if (args[2] === 'diff' && args[3] === 'feature/a') { return 'branch worktree diff\n'; }
+                if (args[2] === 'diff' && args[5] === 'feature/a') { return 'M\0branch-worktree.ts\0'; }
                 if (args[2] === 'for-each-ref') { return ''; }
                 if (args[2] === 'ls-files') { return ''; }
                 return '';
@@ -627,9 +635,9 @@ describe('GraphMessageRouter branch commands', () => {
         expect(commands.calls).toEqual([
             { command: 'vscode.openFolder', args: [Uri.file('/repo/.worktrees/a'), { forceNewWindow: false }] },
             { command: 'revealFileInOS', args: [Uri.file('/repo/.worktrees/a')] },
+            { command: 'vscode.changes', args: ['Diff feature/a with a', changesResourcesAt(2)] },
         ]);
-        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', 'feature/a', '--']);
-        expect(workspace.documents.map((document) => document.content)).toEqual(['branch worktree diff']);
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', '--name-status', '-z', 'feature/a', '--']);
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'pull']);
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'push', '-u', 'origin', 'feature/a']);
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['worktree', 'lock', '/repo/.worktrees/a']);
@@ -657,7 +665,7 @@ describe('GraphMessageRouter branch commands', () => {
                 worktree('/repo/.worktrees/a', 'topic-head', 'feature/a'),
             ]),
             execRaw: vi.fn(async (args) => {
-                if (args[2] === 'diff' && args[3] === 'feature/a') { return 'chosen worktree diff\n'; }
+                if (args[2] === 'diff' && args[5] === 'feature/a') { return 'M\0chosen.ts\0'; }
                 if (args[2] === 'ls-files') { return ''; }
                 return '';
             }),
@@ -667,7 +675,20 @@ describe('GraphMessageRouter branch commands', () => {
         setQuickPickValue('/repo/.worktrees/a');
         await router.handle({ type: 'graph/branchCommand', command: 'compareBranchWithWorktree', branch: 'feature/a', isRemote: false });
 
-        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', 'feature/a', '--']);
-        expect(workspace.documents.map((document) => document.content)).toEqual(['chosen worktree diff']);
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', '--name-status', '-z', 'feature/a', '--']);
+        expect(commands.calls.map((call) => call.command)).toEqual(['vscode.changes']);
+        expect(changesResourcesAt(0)).toHaveLength(1);
     });
 });
+
+function changesResourcesAt(callIndex: number): readonly unknown[] {
+    const resources = commands.calls[callIndex]?.args[1];
+    if (!Array.isArray(resources)) { throw new Error(`Expected vscode.changes resources at call ${callIndex}.`); }
+    for (const resource of resources) {
+        if (!Array.isArray(resource)) { throw new Error(`Expected vscode.changes resource tuple at call ${callIndex}.`); }
+        for (const uri of resource) {
+            expect(String(uri).startsWith('git:')).toBe(false);
+        }
+    }
+    return resources;
+}

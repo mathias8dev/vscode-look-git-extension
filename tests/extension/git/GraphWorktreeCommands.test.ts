@@ -6,7 +6,7 @@ import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessag
 import type { GraphExtensionToWebviewMessage } from '../../../src/protocol/graph/messages';
 import { addLinkedWorktree, createBareGitRepo, createTempGitRepo, type TempGitRepo } from '../../helpers/gitRepo';
 import { makeRepositoryAccessor } from '../../helpers/repositoryMock';
-import { commands, resetMockVscode, setInputBoxValue, setQuickPickValue, setWarningChoice, setWarningChoices, workspace } from '../../mocks/vscode';
+import { commands, resetMockVscode, setInputBoxValue, setQuickPickValue, setWarningChoice, setWarningChoices } from '../../mocks/vscode';
 
 describe('Graph worktree context commands against real git repos', () => {
     let fixture: TempGitRepo;
@@ -57,10 +57,7 @@ describe('Graph worktree context commands against real git repos', () => {
         await router.handle({ type: 'graph/worktreeCommand', command: 'showDiffWithHead', path: worktreePath });
         await router.handle({ type: 'graph/worktreeCommand', command: 'showDiffWithMainWorktree', path: worktreePath });
 
-        expect(workspace.documents[0]?.content).toContain('base from worktree');
-        expect(workspace.documents[0]?.content).toContain('untracked-diff.txt');
-        expect(workspace.documents[1]?.content).toContain('base from worktree');
-        expect(workspace.documents[1]?.content).toContain('untracked-diff.txt');
+        expect(commands.calls.filter((call) => call.command === 'vscode.changes')).toHaveLength(2);
 
         writeFileSync(join(worktreePath, 'committed.txt'), 'committed\n');
         setWarningChoice('Stage All and Commit');
