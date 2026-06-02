@@ -12,6 +12,7 @@ export enum ChangesViewMode {
 }
 
 export enum ChangesSortMode {
+    Name = 'name',
     Path = 'path',
     Status = 'status',
     Directory = 'directory',
@@ -31,6 +32,7 @@ export interface ChangesState {
     readonly commitMessageHistory: readonly string[];
     readonly loading: boolean;
     readonly error: ProtocolError | undefined;
+    readonly commitFocusRequest: number;
     readonly commitFeedback: CommitFeedback | undefined;
     readonly submoduleCommitFeedbackByPath: Readonly<Record<string, CommitFeedback>>;
     readonly collapsedSectionIds: readonly ChangeSectionId[];
@@ -86,6 +88,7 @@ export function createInitialChangesState(preferences: ChangesStatePreferences =
         commitMessageHistory: preferences.commitMessageHistory ?? [],
         loading: true,
         error: undefined,
+        commitFocusRequest: 0,
         commitFeedback: undefined,
         submoduleCommitFeedbackByPath: {},
         collapsedSectionIds: preferences.collapsedSectionIds ?? [],
@@ -198,8 +201,23 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                     [submoduleStashKey(message.path, message.index)]: message.files,
                 },
             };
+        case 'changes/applyViewMode':
+            return { ...state, viewMode: message.viewMode === ChangesViewMode.List ? ChangesViewMode.List : ChangesViewMode.Tree };
+        case 'changes/applySortMode':
+            return { ...state, sortMode: sortModeFromProtocol(message.sortMode), selectedItemIds: [], selectionAnchorId: undefined };
+        case 'changes/focusCommitComposer':
+            return { ...state, commitFocusRequest: state.commitFocusRequest + 1 };
         case 'repo/contextChanged':
             return state;
+    }
+}
+
+function sortModeFromProtocol(sortMode: 'name' | 'path' | 'status' | 'directory'): ChangesSortMode {
+    switch (sortMode) {
+        case 'name': return ChangesSortMode.Name;
+        case 'status': return ChangesSortMode.Status;
+        case 'directory': return ChangesSortMode.Directory;
+        case 'path': return ChangesSortMode.Path;
     }
 }
 

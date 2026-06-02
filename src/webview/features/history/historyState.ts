@@ -61,6 +61,8 @@ function reduceMessage(state: HistoryState, message: HistoryExtensionToWebviewMe
             return applyCommitDetails(state, message.details);
         case 'history/selectCommit':
             return selectCommit(state, message.hash);
+        case 'history/applyFileViewMode':
+            return state;
         case 'history/error':
         case 'error':
             return { ...state, loading: false, loadingMore: false, detailsLoadingHash: undefined, error: message.error };

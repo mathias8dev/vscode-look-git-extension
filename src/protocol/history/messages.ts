@@ -36,12 +36,18 @@ export interface HistorySelectCommitPush {
     readonly hash: string;
 }
 
+export interface HistoryApplyFileViewModePush {
+    readonly type: 'history/applyFileViewMode';
+    readonly mode: 'list' | 'tree';
+}
+
 export type HistoryExtensionToWebviewMessage =
     | RepoContextChangedPush
     | HistoryDataPush
     | HistoryDataResponse
     | HistoryCommitDetailsResponse
     | HistorySelectCommitPush
+    | HistoryApplyFileViewModePush
     | HistoryErrorPush
     | ErrorMessage;
 

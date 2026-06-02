@@ -105,8 +105,7 @@ describe('HistoryWebview', () => {
         }));
     });
 
-    it('posts toolbar command messages from the history toolbar', async () => {
-        const api = createMockVsCodeApi();
+    it('does not render a duplicate webview toolbar', async () => {
         const { HistoryWebview } = await import('../../../src/webview/history/HistoryWebview');
 
         render(<HistoryWebview />);
@@ -119,21 +118,13 @@ describe('HistoryWebview', () => {
             },
         });
 
-        await waitFor(() => expect(screen.getByLabelText('Select Branch')).toBeInTheDocument());
-        fireEvent.click(screen.getByLabelText('Select Branch'));
-        fireEvent.click(screen.getByLabelText('Go to Current History Item'));
-        fireEvent.click(screen.getByLabelText('Fetch from All Remotes'));
-        fireEvent.click(screen.getByLabelText('Pull'));
-        fireEvent.click(screen.getByLabelText('Push'));
-
-        expect(api.messages).toContainEqual({ type: 'history/toolbarCommand', command: 'selectBranch' });
-        expect(api.messages).toContainEqual({ type: 'history/toolbarCommand', command: 'goToCurrent' });
-        expect(api.messages).toContainEqual({ type: 'history/toolbarCommand', command: 'fetchAll' });
-        expect(api.messages).toContainEqual({ type: 'history/toolbarCommand', command: 'pull' });
-        expect(api.messages).toContainEqual({ type: 'history/toolbarCommand', command: 'push' });
+        await waitFor(() => expect(screen.getByLabelText('Search commits')).toBeInTheDocument());
+        expect(screen.queryByRole('heading', { name: 'Commit History' })).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('Select Branch')).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('More Actions')).not.toBeInTheDocument();
     });
 
-    it('switches opened commit files from tree to list through the more menu', async () => {
+    it('switches opened commit files from tree to list through a native view title message', async () => {
         const { HistoryWebview } = await import('../../../src/webview/history/HistoryWebview');
 
         render(<HistoryWebview />);
@@ -163,9 +154,9 @@ describe('HistoryWebview', () => {
         });
 
         await waitFor(() => expect(screen.getByRole('tree', { name: 'Changed files' })).toBeInTheDocument());
-        fireEvent.click(screen.getByLabelText('More Actions'));
-        fireEvent.click(screen.getByRole('menuitemradio', { name: 'View as List' }));
+        sendToWebview({ type: 'history/applyFileViewMode', mode: 'list' });
 
+        await waitFor(() => expect(screen.getByRole('list', { name: 'Changed files' })).toBeInTheDocument());
         expect(screen.getByRole('list', { name: 'Changed files' })).toHaveTextContent('src/history.ts');
         expect(screen.getByRole('list', { name: 'Changed files' })).toHaveTextContent('tests/history.test.ts');
         expect(screen.queryByRole('tree', { name: 'Changed files' })).not.toBeInTheDocument();

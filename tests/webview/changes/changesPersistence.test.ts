@@ -7,13 +7,13 @@ describe('changesPersistence', () => {
     it('reads only valid persisted preferences', () => {
         expect(readChangesStatePreferences({
             viewMode: 'list',
-            sortMode: 'directory',
+            sortMode: 'name',
             pathFilter: 'src',
             collapsedSectionIds: ['staged', 'bad'],
             commitMessageHistory: ['feat: one'],
         })).toEqual({
             viewMode: ChangesViewMode.List,
-            sortMode: ChangesSortMode.Directory,
+            sortMode: ChangesSortMode.Name,
             pathFilter: 'src',
             collapsedSectionIds: undefined,
             commitMessageHistory: ['feat: one'],

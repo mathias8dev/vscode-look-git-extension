@@ -87,6 +87,7 @@ export function ChangesApp({
                     stagedCount={state.status.staged.length}
                     conflictState={state.status.conflictState}
                     feedback={state.commitFeedback}
+                    focusRequest={state.commitFocusRequest}
                     onCommit={onCommit}
                 />
             ) : null}

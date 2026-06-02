@@ -36,6 +36,17 @@ const HISTORY_COMMIT_COMMANDS: readonly { readonly id: string; readonly command:
     { id: 'lookGit.history.newBranch', command: 'newBranch' },
     { id: 'lookGit.history.newTag', command: 'newTag' },
 ];
+const HISTORY_TITLE_COMMANDS: readonly { readonly id: string; readonly command: HistoryToolbarCommand }[] = [
+    { id: 'lookGit.history.selectBranch', command: 'selectBranch' },
+    { id: 'lookGit.history.goToCurrent', command: 'goToCurrent' },
+    { id: 'lookGit.history.fetchAll', command: 'fetchAll' },
+    { id: 'lookGit.history.pull', command: 'pull' },
+    { id: 'lookGit.history.push', command: 'push' },
+];
+const HISTORY_FILE_VIEW_COMMANDS: readonly { readonly id: string; readonly mode: 'list' | 'tree' }[] = [
+    { id: 'lookGit.history.viewAsList', mode: 'list' },
+    { id: 'lookGit.history.viewAsTree', mode: 'tree' },
+];
 
 export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     static readonly viewType = 'lookGit.commitHistory';
@@ -62,12 +73,16 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             void this.handleMessage(msg);
         });
 
+        void vscode.commands.executeCommand('setContext', 'lookGit.historyFileViewTree', true);
         void this.refresh();
     }
 
     registerNativeContextCommands(): readonly vscode.Disposable[] {
         return [
             ...HISTORY_COMMIT_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runCommitContextCommand(command))),
+            ...HISTORY_TITLE_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.handleToolbarCommand(command))),
+            ...HISTORY_FILE_VIEW_COMMANDS.map(({ id, mode }) => vscode.commands.registerCommand(id, () => this.applyFileViewMode(mode))),
+            vscode.commands.registerCommand('lookGit.history.refresh', () => this.refresh()),
             vscode.commands.registerCommand('lookGit.history.goToChildCommit', () => this.selectContextCommit('child')),
             vscode.commands.registerCommand('lookGit.history.goToParentCommit', () => this.selectContextCommit('parent')),
             vscode.commands.registerCommand('lookGit.history.openFileDiff', () => this.openContextFileDiff()),
@@ -214,6 +229,11 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         } catch (error) {
             this.postHistoryError(error, `history/${operation}`, 'gitOperationFailed');
         }
+    }
+
+    private applyFileViewMode(mode: 'list' | 'tree'): void {
+        void vscode.commands.executeCommand('setContext', 'lookGit.historyFileViewTree', mode === 'tree');
+        this.postMessage({ type: 'history/applyFileViewMode', mode });
     }
 
     private async handleCommitDetailsRequest(message: HistoryCommitDetailsRequest): Promise<void> {

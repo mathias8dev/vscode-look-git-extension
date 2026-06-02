@@ -58,10 +58,73 @@ export interface ChangesErrorPush {
     readonly error: ProtocolError;
 }
 
+export type ChangesViewPreference = 'list' | 'tree';
+export type ChangesSortPreference = 'name' | 'path' | 'status' | 'directory';
+
+export interface ApplyViewModePush {
+    readonly type: 'changes/applyViewMode';
+    readonly viewMode: ChangesViewPreference;
+}
+
+export interface ApplySortModePush {
+    readonly type: 'changes/applySortMode';
+    readonly sortMode: ChangesSortPreference;
+}
+
+export interface FocusCommitComposerPush {
+    readonly type: 'changes/focusCommitComposer';
+}
+
 // ── Webview → Extension (commands — no response expected unless noted) ──────
 
 export interface ChangesReadyMessage    { readonly type: 'changes/ready'; }
 export interface ViewModeChangedMessage { readonly type: 'changes/viewModeChanged'; readonly asTree: boolean; }
+export type ChangesToolbarCommand =
+    | 'openGraph'
+    | 'pull'
+    | 'push'
+    | 'clone'
+    | 'checkout'
+    | 'fetch'
+    | 'sync'
+    | 'pullRebase'
+    | 'pullFrom'
+    | 'pushForce'
+    | 'pushTo'
+    | 'pushToForce'
+    | 'fetchPrune'
+    | 'fetchAll'
+    | 'undoLastCommit'
+    | 'abortRebase'
+    | 'mergeBranch'
+    | 'rebaseBranch'
+    | 'createBranch'
+    | 'createBranchFrom'
+    | 'renameBranch'
+    | 'deleteBranch'
+    | 'deleteRemoteBranch'
+    | 'publishBranch'
+    | 'addRemote'
+    | 'removeRemote'
+    | 'stash'
+    | 'stashIncludeUntracked'
+    | 'stashStaged'
+    | 'applyLatestStash'
+    | 'applyStash'
+    | 'popLatestStash'
+    | 'popStash'
+    | 'dropStash'
+    | 'dropAllStashes'
+    | 'viewStash'
+    | 'createTag'
+    | 'deleteTag'
+    | 'deleteRemoteTag'
+    | 'pushTags'
+    | 'showGitOutput';
+export interface ChangesToolbarCommandMessage {
+    readonly type: 'changes/toolbarCommand';
+    readonly command: ChangesToolbarCommand;
+}
 export interface StageFileMessage       { readonly type: 'changes/stageFile'; readonly filePath: string; }
 export interface UnstageFileMessage     { readonly type: 'changes/unstageFile'; readonly filePath: string; }
 export interface StageFilesMessage      { readonly type: 'changes/stageFiles'; readonly filePaths: readonly string[]; }
@@ -198,11 +261,14 @@ export type ChangesExtensionToWebviewMessage =
     | StashFilesResponse
     | SubmoduleStatusResponse
     | SubmoduleStashFilesResponse
+    | ApplyViewModePush
+    | ApplySortModePush
+    | FocusCommitComposerPush
     | ChangesErrorPush
     | ErrorMessage;
 
 export type ChangesWebviewToExtensionMessage =
-    | ChangesReadyMessage | ViewModeChangedMessage
+    | ChangesReadyMessage | ViewModeChangedMessage | ChangesToolbarCommandMessage
     | StageFileMessage | UnstageFileMessage | StageFilesMessage | UnstageFilesMessage | StageAllMessage | UnstageAllMessage
     | DiscardFileMessage | DiscardFilesMessage | DiscardAllMessage
     | MarkResolvedMessage | MarkResolvedFilesMessage

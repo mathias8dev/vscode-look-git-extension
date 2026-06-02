@@ -249,6 +249,115 @@ describe('ChangesViewProvider', () => {
         await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalledTimes(2));
     });
 
+    it('runs native view title commands through VS Code registrations', async () => {
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+
+        provider.resolveWebviewView(view);
+        await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
+        vi.mocked(repo.getStatus).mockClear();
+
+        await vscode.commands.executeCommand('lookGit.changes.openGraph');
+        await vscode.commands.executeCommand('lookGit.changes.viewAsList');
+        await vscode.commands.executeCommand('lookGit.changes.sortByName');
+        await vscode.commands.executeCommand('lookGit.changes.stageAllChanges');
+        await vscode.commands.executeCommand('lookGit.changes.refresh');
+
+        expect(getCommandCalls()).toContainEqual({ command: 'lookGit.graphView.focus', args: [] });
+        expect(view.messages).toContainEqual({ type: 'changes/applyViewMode', viewMode: 'list' });
+        expect(view.messages).toContainEqual({ type: 'changes/applySortMode', sortMode: 'name' });
+        await vi.waitFor(() => expect(repo.stageAll).toHaveBeenCalledOnce());
+        await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('toolbar openGraph focuses the Git Graph view', async () => {
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'openGraph' });
+
+        await vi.waitFor(() => expect(getCommandCalls()).toContainEqual({
+            command: 'lookGit.graphView.focus',
+            args: [],
+        }));
+    });
+
+    it('toolbar pull push and fetch run repository operations then refresh', async () => {
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'pull' });
+        view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'push' });
+        view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'fetch' });
+
+        await vi.waitFor(() => expect(repo.pull).toHaveBeenCalledOnce());
+        await vi.waitFor(() => expect(repo.push).toHaveBeenCalledOnce());
+        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith(['fetch']));
+        expect(repo.getStatus).toHaveBeenCalled();
+    });
+
+    it('toolbar fetch all uses all remotes semantics', async () => {
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'fetchAll' });
+
+        await vi.waitFor(() => expect(repo.fetchAll).toHaveBeenCalledOnce());
+    });
+
+    it('toolbar checkout uses the selected branch', async () => {
+        setQuickPickValue('feature/menu');
+        const repo = makeRepo({
+            getAllBranches: vi.fn(async () => [{
+                name: 'feature/menu',
+                isRemote: false,
+                isCurrent: false,
+                hash: 'feature123',
+                ahead: 0,
+                behind: 0,
+            }]),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'checkout' });
+
+        await vi.waitFor(() => expect(repo.checkout).toHaveBeenCalledWith('feature/menu'));
+    });
+
+    it('toolbar delete remote branch resolves the selected remote name', async () => {
+        setQuickPickValue('upstream/feature/menu');
+        setWarningChoice('Delete');
+        const repo = makeRepo({
+            getRemotes: vi.fn(async () => ['upstream']),
+            getAllBranches: vi.fn(async () => [{
+                name: 'upstream/feature/menu',
+                isRemote: true,
+                isCurrent: false,
+                hash: 'remote123',
+                ahead: 0,
+                behind: 0,
+            }]),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'deleteRemoteBranch' });
+
+        await vi.waitFor(() => expect(repo.deleteRemoteBranch).toHaveBeenCalledWith('upstream', 'feature/menu'));
+    });
+
     it('batch file commands call git once per file and refresh once', async () => {
         const repo = makeRepo();
         const provider = makeProvider(repo);

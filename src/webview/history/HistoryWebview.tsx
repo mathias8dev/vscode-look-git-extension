@@ -3,7 +3,7 @@ import type { HistoryExtensionToWebviewMessage } from '../../protocol/history/me
 import type { HistoryCommitFile, HistoryContextTarget } from '../../protocol/history/types';
 import { CommitHistoryApp } from '../features/history/CommitHistoryApp';
 import { createInitialHistoryState, reduceHistoryState } from '../features/history/historyState';
-import { messageForHistoryCommitDetails, messageForHistoryContextTarget, messageForHistoryDataRequest, messageForHistoryOpenDiff, messageForHistoryReady, messageForHistoryRefresh, messageForHistoryToolbarCommand } from '../features/history/historyCommands';
+import { messageForHistoryCommitDetails, messageForHistoryContextTarget, messageForHistoryDataRequest, messageForHistoryOpenDiff, messageForHistoryReady } from '../features/history/historyCommands';
 import { vscodeApi } from '../platform/vscodeHost';
 
 const PAGE_LIMIT = 50;
@@ -16,6 +16,10 @@ export function HistoryWebview() {
 
     useEffect(() => {
         const onMessage = (event: MessageEvent<HistoryExtensionToWebviewMessage>) => {
+            if (event.data.type === 'history/applyFileViewMode') {
+                setFileViewMode(event.data.mode);
+                return;
+            }
             dispatch({ type: 'message', message: event.data });
         };
         window.addEventListener('message', onMessage);
@@ -33,11 +37,6 @@ export function HistoryWebview() {
         if (!state.selectedHash || state.detailsByHash[state.selectedHash]) { return; }
         vscodeApi.postMessage(messageForHistoryCommitDetails(state.selectedHash));
     }, [state.selectedHash, state.detailsByHash]);
-
-    const handleRefresh = useCallback(() => {
-        dispatch({ type: 'startRefresh' });
-        vscodeApi.postMessage(messageForHistoryRefresh());
-    }, []);
 
     const handleLoadMore = useCallback(() => {
         if (!state.hasMore || state.loading || state.loadingMore) { return; }
@@ -63,9 +62,6 @@ export function HistoryWebview() {
             query={query}
             fileViewMode={fileViewMode}
             onQueryChange={setQuery}
-            onRefresh={handleRefresh}
-            onToolbarCommand={(command) => vscodeApi.postMessage(messageForHistoryToolbarCommand(command))}
-            onFileViewModeChange={setFileViewMode}
             onSelectCommit={(hash) => dispatch({ type: 'selectCommit', hash })}
             onOpenFileDiff={handleOpenFileDiff}
             onContextTarget={handleContextTarget}

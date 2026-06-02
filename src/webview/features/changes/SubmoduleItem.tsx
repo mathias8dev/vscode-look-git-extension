@@ -106,6 +106,7 @@ export function SubmoduleItem({
                                 stagedCount={statusData.staged.length}
                                 conflictState={statusData.conflicts.length > 0 ? ConflictState.Merge : ConflictState.None}
                                 feedback={commitFeedback}
+                                focusRequest={0}
                                 onCommit={onCommit}
                             />
                             {sections.map((section) => (

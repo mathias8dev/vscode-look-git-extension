@@ -1,11 +1,72 @@
 import * as vscode from 'vscode';
 import type { GitRepository, GitSubmodule } from '../../core/git/GitRepository';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
-import type { ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
+import type { ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
 import type { SerializedRepoContext } from '../../protocol/shared/repo';
 import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '../messaging/ChangesMessageRouter';
 import { createErrorPayload, isAbortError } from '../messaging/errorSerialization';
 import { getWebviewHtml } from './webviewHtml';
+
+const CHANGES_TOOLBAR_COMMANDS: readonly { readonly id: string; readonly command: ChangesToolbarCommand }[] = [
+    { id: 'lookGit.changes.openGraph', command: 'openGraph' },
+    { id: 'lookGit.changes.pull', command: 'pull' },
+    { id: 'lookGit.changes.push', command: 'push' },
+    { id: 'lookGit.changes.clone', command: 'clone' },
+    { id: 'lookGit.changes.checkout', command: 'checkout' },
+    { id: 'lookGit.changes.fetch', command: 'fetch' },
+    { id: 'lookGit.changes.sync', command: 'sync' },
+    { id: 'lookGit.changes.pullRebase', command: 'pullRebase' },
+    { id: 'lookGit.changes.pullFrom', command: 'pullFrom' },
+    { id: 'lookGit.changes.pushForce', command: 'pushForce' },
+    { id: 'lookGit.changes.pushTo', command: 'pushTo' },
+    { id: 'lookGit.changes.pushToForce', command: 'pushToForce' },
+    { id: 'lookGit.changes.fetchPrune', command: 'fetchPrune' },
+    { id: 'lookGit.changes.fetchAll', command: 'fetchAll' },
+    { id: 'lookGit.changes.undoLastCommit', command: 'undoLastCommit' },
+    { id: 'lookGit.changes.abortRebase', command: 'abortRebase' },
+    { id: 'lookGit.changes.mergeBranch', command: 'mergeBranch' },
+    { id: 'lookGit.changes.rebaseBranch', command: 'rebaseBranch' },
+    { id: 'lookGit.changes.createBranch', command: 'createBranch' },
+    { id: 'lookGit.changes.createBranchFrom', command: 'createBranchFrom' },
+    { id: 'lookGit.changes.renameBranch', command: 'renameBranch' },
+    { id: 'lookGit.changes.deleteBranch', command: 'deleteBranch' },
+    { id: 'lookGit.changes.deleteRemoteBranch', command: 'deleteRemoteBranch' },
+    { id: 'lookGit.changes.publishBranch', command: 'publishBranch' },
+    { id: 'lookGit.changes.addRemote', command: 'addRemote' },
+    { id: 'lookGit.changes.removeRemote', command: 'removeRemote' },
+    { id: 'lookGit.changes.stash', command: 'stash' },
+    { id: 'lookGit.changes.stashIncludeUntracked', command: 'stashIncludeUntracked' },
+    { id: 'lookGit.changes.stashStaged', command: 'stashStaged' },
+    { id: 'lookGit.changes.applyLatestStash', command: 'applyLatestStash' },
+    { id: 'lookGit.changes.applyStash', command: 'applyStash' },
+    { id: 'lookGit.changes.popLatestStash', command: 'popLatestStash' },
+    { id: 'lookGit.changes.popStash', command: 'popStash' },
+    { id: 'lookGit.changes.dropStash', command: 'dropStash' },
+    { id: 'lookGit.changes.dropAllStashes', command: 'dropAllStashes' },
+    { id: 'lookGit.changes.viewStash', command: 'viewStash' },
+    { id: 'lookGit.changes.createTag', command: 'createTag' },
+    { id: 'lookGit.changes.deleteTag', command: 'deleteTag' },
+    { id: 'lookGit.changes.deleteRemoteTag', command: 'deleteRemoteTag' },
+    { id: 'lookGit.changes.pushTags', command: 'pushTags' },
+    { id: 'lookGit.changes.showGitOutput', command: 'showGitOutput' },
+];
+
+const CHANGES_VIEW_COMMANDS: readonly { readonly id: string; readonly viewMode: ChangesViewPreference }[] = [
+    { id: 'lookGit.changes.viewAsList', viewMode: 'list' },
+    { id: 'lookGit.changes.viewAsTree', viewMode: 'tree' },
+];
+
+const CHANGES_SORT_COMMANDS: readonly { readonly id: string; readonly sortMode: ChangesSortPreference }[] = [
+    { id: 'lookGit.changes.sortByName', sortMode: 'name' },
+    { id: 'lookGit.changes.sortByPath', sortMode: 'path' },
+    { id: 'lookGit.changes.sortByStatus', sortMode: 'status' },
+];
+
+const CHANGES_BULK_COMMANDS: readonly { readonly id: string; readonly message: ChangesWebviewToExtensionMessage }[] = [
+    { id: 'lookGit.changes.stageAllChanges', message: { type: 'changes/stageAll' } },
+    { id: 'lookGit.changes.unstageAllChanges', message: { type: 'changes/unstageAll' } },
+    { id: 'lookGit.changes.discardAllChanges', message: { type: 'changes/discardAll' } },
+];
 
 export class ChangesViewProvider implements vscode.WebviewViewProvider {
     static readonly viewType = 'lookGit.changesView';
@@ -48,11 +109,58 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         });
 
         void this.commands.executeCommand('setContext', 'lookGit.viewAsTree', this.viewAsTree);
+        void this.commands.executeCommand('setContext', 'lookGit.changesViewAsTree', this.viewAsTree);
+        void this.commands.executeCommand('setContext', 'lookGit.changesSortMode', 'path');
         this.scheduleRefresh();
     }
 
     // Injected to allow mocking in tests
     private get commands() { return vscode.commands; }
+
+    registerNativeContextCommands(): readonly vscode.Disposable[] {
+        return [
+            vscode.commands.registerCommand('lookGit.changes.refresh', () => this.refresh()),
+            ...CHANGES_TOOLBAR_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runToolbarCommand(command))),
+            ...CHANGES_VIEW_COMMANDS.map(({ id, viewMode }) => vscode.commands.registerCommand(id, () => this.applyViewMode(viewMode))),
+            ...CHANGES_SORT_COMMANDS.map(({ id, sortMode }) => vscode.commands.registerCommand(id, () => this.applySortMode(sortMode))),
+            ...CHANGES_BULK_COMMANDS.map(({ id, message }) => vscode.commands.registerCommand(id, () => this.runChangesCommand(message))),
+            vscode.commands.registerCommand('lookGit.changes.commit', () => this.focusCommitComposer()),
+            vscode.commands.registerCommand('lookGit.changes.commitStaged', () => this.focusCommitComposer()),
+            vscode.commands.registerCommand('lookGit.changes.commitAll', () => this.stageAllThenFocusCommitComposer()),
+            vscode.commands.registerCommand('lookGit.changes.commitAmend', () => this.focusCommitComposer()),
+            vscode.commands.registerCommand('lookGit.changes.commitStagedAmend', () => this.focusCommitComposer()),
+            vscode.commands.registerCommand('lookGit.changes.commitAllAmend', () => this.stageAllThenFocusCommitComposer()),
+        ];
+    }
+
+    private async runToolbarCommand(command: ChangesToolbarCommand): Promise<void> {
+        await this.router?.handleToolbarCommand(command);
+    }
+
+    private async runChangesCommand(message: ChangesWebviewToExtensionMessage): Promise<void> {
+        await this.router?.handle(message);
+    }
+
+    private async applyViewMode(viewMode: ChangesViewPreference): Promise<void> {
+        this.viewAsTree = viewMode === 'tree';
+        await this.commands.executeCommand('setContext', 'lookGit.viewAsTree', this.viewAsTree);
+        await this.commands.executeCommand('setContext', 'lookGit.changesViewAsTree', this.viewAsTree);
+        this.view?.webview.postMessage({ type: 'changes/applyViewMode', viewMode });
+    }
+
+    private async applySortMode(sortMode: ChangesSortPreference): Promise<void> {
+        await this.commands.executeCommand('setContext', 'lookGit.changesSortMode', sortMode);
+        this.view?.webview.postMessage({ type: 'changes/applySortMode', sortMode });
+    }
+
+    private focusCommitComposer(): void {
+        this.view?.webview.postMessage({ type: 'changes/focusCommitComposer' });
+    }
+
+    private async stageAllThenFocusCommitComposer(): Promise<void> {
+        await this.router?.handle({ type: 'changes/stageAll' });
+        this.focusCommitComposer();
+    }
 
     async refresh(): Promise<void> {
         if (!this.view) { return; }

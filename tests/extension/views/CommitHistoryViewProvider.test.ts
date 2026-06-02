@@ -453,6 +453,26 @@ describe('CommitHistoryViewProvider error propagation', () => {
         disposables.forEach((disposable) => disposable.dispose());
     });
 
+    it('runs native view title commands without webview toolbar buttons', async () => {
+        const repo = makeRepositoryMock();
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+
+        provider.resolveWebviewView(view);
+        await vi.waitFor(() => expect(repo.getLog).toHaveBeenCalledWith(51, 0));
+        vi.mocked(repo.getLog).mockClear();
+
+        await vscode.commands.executeCommand('lookGit.history.viewAsList');
+        await vscode.commands.executeCommand('lookGit.history.viewAsTree');
+        await vscode.commands.executeCommand('lookGit.history.refresh');
+
+        expect(view.messages).toContainEqual({ type: 'history/applyFileViewMode', mode: 'list' });
+        expect(view.messages).toContainEqual({ type: 'history/applyFileViewMode', mode: 'tree' });
+        await vi.waitFor(() => expect(repo.getLog).toHaveBeenCalledWith(51, 0));
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
     it('posts a protocol error when history refresh fails', async () => {
         const repo = makeRepositoryMock({
             getLog: vi.fn(async () => { throw new Error('history failed'); }),

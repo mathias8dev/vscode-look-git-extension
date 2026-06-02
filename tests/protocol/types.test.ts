@@ -52,6 +52,9 @@ describe('protocol discriminated unions', () => {
                 case 'changes/stashFiles': return msg.files satisfies readonly unknown[];
                 case 'changes/submoduleStatusData': return msg.data.unstaged satisfies readonly unknown[];
                 case 'changes/submoduleStashFiles': return msg.path satisfies string;
+                case 'changes/applyViewMode': return msg.viewMode satisfies string;
+                case 'changes/applySortMode': return msg.sortMode satisfies string;
+                case 'changes/focusCommitComposer': return;
                 case 'changes/error': return msg.error.recoverable satisfies boolean;
                 case 'error': return msg.error.message satisfies string;
             }
@@ -67,6 +70,7 @@ describe('protocol discriminated unions', () => {
                 case 'history/dataResponse': return msg.requestId satisfies string;
                 case 'history/commitDetailsResponse': return msg.details.files satisfies readonly unknown[];
                 case 'history/selectCommit': return msg.hash satisfies string;
+                case 'history/applyFileViewMode': return msg.mode satisfies string;
                 case 'history/error': return msg.error.recoverable satisfies boolean;
                 case 'error': return msg.error.message satisfies string;
             }
@@ -94,6 +98,7 @@ describe('protocol discriminated unions', () => {
             switch (msg.type) {
                 case 'changes/ready': return;
                 case 'changes/viewModeChanged': return msg.asTree satisfies boolean;
+                case 'changes/toolbarCommand': return msg.command satisfies string;
                 case 'changes/stageFile': return msg.filePath satisfies string;
                 case 'changes/unstageFile': return msg.filePath satisfies string;
                 case 'changes/stageFiles': return msg.filePaths satisfies readonly string[];

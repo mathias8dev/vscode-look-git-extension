@@ -48,5 +48,7 @@ describe('ChangesApp', () => {
         expect(markup).toContain('Merge in progress');
         expect(markup).toContain('Continue');
         expect(markup).toContain('Abort');
+        expect(markup).not.toContain('<h1>Changes</h1>');
+        expect(markup).not.toContain('Refresh Changes');
     });
 });

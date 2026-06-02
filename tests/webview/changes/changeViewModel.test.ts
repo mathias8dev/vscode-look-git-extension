@@ -36,7 +36,13 @@ describe('changeViewModel', () => {
         expect(flattenedItems(filtered).map((item) => item.entry.filePath)).toEqual(['src/new-name.ts']);
     });
 
-    it('sorts changes by path, status, and directory in the UI layer', () => {
+    it('sorts changes by name, path, status, and directory in the UI layer', () => {
+        expect(flattenedItems(filterAndSortSections(sections, '', ChangesSortMode.Name)).map((item) => item.entry.filePath)).toEqual([
+            'src/new.ts',
+            'README.md',
+            'src/app.ts',
+            'docs/old.md',
+        ]);
         expect(flattenedItems(filterAndSortSections(sections, '', ChangesSortMode.Path)).map((item) => item.entry.filePath)).toEqual([
             'README.md',
             'src/new.ts',

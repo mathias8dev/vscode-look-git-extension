@@ -1,4 +1,4 @@
-import type { ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
+import type { ChangesToolbarCommand, ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
 import type { CodiconName } from '../../shared/Codicon';
 import { ChangeSectionId, type ChangeListItem, type ChangeSection } from './changeTree';
 
@@ -140,4 +140,11 @@ export function messageForBulkAction(action: ChangeBulkAction): ChangesWebviewTo
         case ChangeBulkAction.AcceptAllTheirs:
             return { type: 'changes/acceptAllTheirs' };
     }
+}
+
+export function messageForChangesToolbarCommand(command: ChangesToolbarCommand): ChangesWebviewToExtensionMessage {
+    return {
+        type: 'changes/toolbarCommand',
+        command,
+    };
 }

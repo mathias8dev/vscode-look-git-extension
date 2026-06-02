@@ -8,6 +8,7 @@ interface CommitComposerProps {
     readonly stagedCount: number;
     readonly conflictState: ConflictState;
     readonly feedback: CommitFeedback | undefined;
+    readonly focusRequest: number;
     readonly onCommit: (message: string, mode: CommitMode) => void;
 }
 
@@ -23,9 +24,10 @@ const MORE_OPTIONS: readonly CommitOption[] = [
     { mode: CommitMode.CommitSync, label: 'Commit & Sync', icon: 'repo-sync' },
 ];
 
-export function CommitComposer({ stagedCount, conflictState, feedback, onCommit }: CommitComposerProps) {
+export function CommitComposer({ stagedCount, conflictState, feedback, focusRequest, onCommit }: CommitComposerProps) {
     const [message, setMessage] = useState('');
     const [showMore, setShowMore] = useState(false);
+    const textAreaRef = useRef<HTMLTextAreaElement>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
@@ -38,6 +40,11 @@ export function CommitComposer({ stagedCount, conflictState, feedback, onCommit 
         const firstButton = dropdownRef.current?.querySelector<HTMLElement>('button:not(:disabled)');
         firstButton?.focus();
     }, [showMore]);
+
+    useEffect(() => {
+        if (focusRequest === 0) { return; }
+        textAreaRef.current?.focus();
+    }, [focusRequest]);
 
     useEffect(() => {
         if (!showMore) { return; }
@@ -84,6 +91,7 @@ export function CommitComposer({ stagedCount, conflictState, feedback, onCommit 
     return (
         <section className="commit-composer" aria-label="Commit composer">
             <textarea
+                ref={textAreaRef}
                 className="commit-message-input"
                 value={message}
                 rows={3}

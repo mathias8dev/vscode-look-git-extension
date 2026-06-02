@@ -43,6 +43,8 @@ function sortItems(items: readonly ChangeListItem[], sortMode: ChangesSortMode):
 
 function compareItems(left: ChangeListItem, right: ChangeListItem, sortMode: ChangesSortMode): number {
     switch (sortMode) {
+        case ChangesSortMode.Name:
+            return byName(left, right) || byPath(left, right);
         case ChangesSortMode.Status:
             return byStatus(left, right) || byPath(left, right);
         case ChangesSortMode.Directory:
@@ -64,8 +66,16 @@ function byPath(left: ChangeListItem, right: ChangeListItem): number {
     return left.entry.filePath.localeCompare(right.entry.filePath);
 }
 
+function byName(left: ChangeListItem, right: ChangeListItem): number {
+    return fileName(left.entry.filePath).localeCompare(fileName(right.entry.filePath));
+}
+
 function directoryName(filePath: string): string {
     const parts = filePath.split('/');
     parts.pop();
     return parts.join('/');
+}
+
+function fileName(filePath: string): string {
+    return filePath.split('/').pop() ?? filePath;
 }

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import type { GitRepository } from '../../core/git/GitRepository';
 import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
-import type { ChangesWebviewToExtensionMessage, ChangesExtensionToWebviewMessage } from '../../protocol/changes/messages';
+import type { ChangesToolbarCommand, ChangesWebviewToExtensionMessage, ChangesExtensionToWebviewMessage } from '../../protocol/changes/messages';
 import { CommitMode, ConflictState, RepositoryState } from '../../protocol/changes/types';
 import type { StatusData, StatusEntry } from '../../protocol/changes/types';
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
@@ -52,6 +52,10 @@ export class ChangesMessageRouter {
 
             case 'changes/viewModeChanged':
                 await vscode.commands.executeCommand('setContext', 'lookGit.viewAsTree', msg.asTree);
+                return;
+
+            case 'changes/toolbarCommand':
+                await this.handleToolbarCommand(msg.command);
                 return;
         }
 
@@ -602,6 +606,281 @@ export class ChangesMessageRouter {
         }
     }
 
+    async handleToolbarCommand(command: ChangesToolbarCommand): Promise<void> {
+        if (command === 'openGraph') {
+            await vscode.commands.executeCommand('lookGit.graphView.focus');
+            return;
+        }
+        if (command === 'clone') {
+            await vscode.commands.executeCommand('git.clone');
+            return;
+        }
+        if (command === 'showGitOutput') {
+            await vscode.commands.executeCommand('workbench.action.output.toggleOutput');
+            return;
+        }
+
+        const repo = this.repositories.requireRepository();
+        switch (command) {
+            case 'pull':
+                await repo.pull();
+                await this.refresh();
+                return;
+            case 'push':
+                await repo.push();
+                await this.refresh();
+                return;
+            case 'fetch':
+                await repo.exec(['fetch']);
+                await this.refresh();
+                return;
+            case 'fetchAll':
+                await repo.fetchAll();
+                await this.refresh();
+                return;
+            case 'sync':
+                await repo.pullAndPush();
+                await this.refresh();
+                return;
+            case 'pullRebase':
+                await repo.exec(['pull', '--rebase']);
+                await this.refresh();
+                return;
+            case 'pullFrom': {
+                const remote = await pickRemote(repo, 'Pull from remote');
+                if (!remote) { return; }
+                await repo.exec(['pull', remote]);
+                await this.refresh();
+                return;
+            }
+            case 'pushForce':
+                await repo.exec(['push', '--force-with-lease']);
+                await this.refresh();
+                return;
+            case 'pushTo': {
+                const remote = await pickRemote(repo, 'Push to remote');
+                if (!remote) { return; }
+                await repo.pushBranch(remote, await repo.getCurrentBranch());
+                await this.refresh();
+                return;
+            }
+            case 'pushToForce': {
+                const remote = await pickRemote(repo, 'Force push to remote');
+                if (!remote) { return; }
+                await repo.exec(['push', '--force-with-lease', remote, await repo.getCurrentBranch()]);
+                await this.refresh();
+                return;
+            }
+            case 'fetchPrune':
+                await repo.exec(['fetch', '--prune']);
+                await this.refresh();
+                return;
+            case 'checkout': {
+                const branch = await pickBranch(repo, 'Checkout branch');
+                if (!branch) { return; }
+                await repo.checkout(branch);
+                await this.refresh();
+                return;
+            }
+            case 'undoLastCommit': {
+                const choice = await showModalWarningMessage('Undo the last commit and keep its changes staged?', 'Undo Commit');
+                if (choice !== 'Undo Commit') { return; }
+                await repo.exec(['reset', '--soft', 'HEAD~1']);
+                await this.refresh();
+                return;
+            }
+            case 'abortRebase': {
+                const choice = await showModalWarningMessage('Abort the current rebase?', 'Abort Rebase');
+                if (choice !== 'Abort Rebase') { return; }
+                await repo.rebaseAbort();
+                await this.refresh();
+                return;
+            }
+            case 'mergeBranch': {
+                const branch = await pickBranch(repo, 'Merge branch');
+                if (!branch) { return; }
+                await repo.merge(branch);
+                await this.refresh();
+                return;
+            }
+            case 'rebaseBranch': {
+                const branch = await pickBranch(repo, 'Rebase current branch onto');
+                if (!branch) { return; }
+                await repo.rebase(branch);
+                await this.refresh();
+                return;
+            }
+            case 'createBranch': {
+                const branch = await inputText('Create branch');
+                if (!branch) { return; }
+                await repo.checkoutNewBranch(branch);
+                await this.refresh();
+                return;
+            }
+            case 'createBranchFrom': {
+                const branch = await inputText('Create branch');
+                if (!branch) { return; }
+                const startPoint = await pickRef(repo, 'Create branch from');
+                if (!startPoint) { return; }
+                await repo.checkoutNewBranch(branch, startPoint);
+                await this.refresh();
+                return;
+            }
+            case 'renameBranch': {
+                const current = await repo.getCurrentBranch();
+                const oldName = await pickLocalBranch(repo, 'Rename branch', current);
+                if (!oldName) { return; }
+                const newName = await inputText('New branch name', oldName);
+                if (!newName || newName === oldName) { return; }
+                await repo.renameBranch(oldName, newName);
+                await this.refresh();
+                return;
+            }
+            case 'deleteBranch': {
+                const branch = await pickLocalBranch(repo, 'Delete branch');
+                if (!branch) { return; }
+                const choice = await showModalWarningMessage(`Delete branch "${branch}"?`, 'Delete');
+                if (choice !== 'Delete') { return; }
+                await repo.deleteBranch(branch);
+                await this.refresh();
+                return;
+            }
+            case 'deleteRemoteBranch': {
+                const branch = await pickRemoteBranch(repo, 'Delete remote branch');
+                if (!branch) { return; }
+                const remoteBranch = await splitRemoteBranch(repo, branch);
+                const choice = await showModalWarningMessage(`Delete remote branch "${branch}"?`, 'Delete');
+                if (choice !== 'Delete') { return; }
+                await repo.deleteRemoteBranch(remoteBranch.remote, remoteBranch.branch);
+                await this.refresh();
+                return;
+            }
+            case 'publishBranch': {
+                const remote = await pickRemote(repo, 'Publish branch to remote');
+                if (!remote) { return; }
+                await repo.pushBranch(remote, await repo.getCurrentBranch());
+                await this.refresh();
+                return;
+            }
+            case 'addRemote': {
+                const name = await inputText('Remote name');
+                if (!name) { return; }
+                const url = await inputText('Remote URL');
+                if (!url) { return; }
+                await repo.exec(['remote', 'add', name, url]);
+                await this.refresh();
+                return;
+            }
+            case 'removeRemote': {
+                const remote = await pickRemote(repo, 'Remove remote');
+                if (!remote) { return; }
+                const choice = await showModalWarningMessage(`Remove remote "${remote}"?`, 'Remove');
+                if (choice !== 'Remove') { return; }
+                await repo.exec(['remote', 'remove', remote]);
+                await this.refresh();
+                return;
+            }
+            case 'stash':
+                await repo.stash();
+                await this.refresh();
+                return;
+            case 'stashIncludeUntracked':
+                await repo.exec(['stash', 'push', '-u']);
+                await this.refresh();
+                return;
+            case 'stashStaged':
+                await repo.stashStaged();
+                await this.refresh();
+                return;
+            case 'applyLatestStash':
+                await repo.stashApply(0);
+                await this.refresh();
+                return;
+            case 'applyStash': {
+                const index = await pickStash(repo, 'Apply stash');
+                if (index === undefined) { return; }
+                await repo.stashApply(index);
+                await this.refresh();
+                return;
+            }
+            case 'popLatestStash':
+                await repo.stashPop(0);
+                await this.refresh();
+                return;
+            case 'popStash': {
+                const index = await pickStash(repo, 'Pop stash');
+                if (index === undefined) { return; }
+                await repo.stashPop(index);
+                await this.refresh();
+                return;
+            }
+            case 'dropStash': {
+                const index = await pickStash(repo, 'Drop stash');
+                if (index === undefined) { return; }
+                const choice = await showModalWarningMessage(`Drop stash@{${index}}? This cannot be undone.`, 'Drop');
+                if (choice !== 'Drop') { return; }
+                await repo.stashDrop(index);
+                await this.refresh();
+                return;
+            }
+            case 'dropAllStashes': {
+                const confirmed = await confirmTypedPhrase('Drop all stashes? This cannot be undone.', 'DROP ALL STASHES');
+                if (!confirmed) { return; }
+                const stashes = await repo.stashList();
+                for (const stash of stashes) {
+                    await repo.stashDrop(stash.index);
+                }
+                await this.refresh();
+                return;
+            }
+            case 'viewStash': {
+                const index = await pickStash(repo, 'View stash');
+                if (index === undefined) { return; }
+                const content = await repo.exec(['stash', 'show', '--stat', `stash@{${index}}`]);
+                const document = await vscode.workspace.openTextDocument({
+                    content: content || `stash@{${index}}`,
+                    language: 'plaintext',
+                });
+                await vscode.window.showTextDocument(document);
+                return;
+            }
+            case 'createTag': {
+                const tag = await inputText('Create tag');
+                if (!tag) { return; }
+                await repo.exec(['tag', tag]);
+                await this.refresh();
+                return;
+            }
+            case 'deleteTag': {
+                const tag = await pickTag(repo, 'Delete tag');
+                if (!tag) { return; }
+                const choice = await showModalWarningMessage(`Delete tag "${tag}"?`, 'Delete');
+                if (choice !== 'Delete') { return; }
+                await repo.exec(['tag', '-d', tag]);
+                await this.refresh();
+                return;
+            }
+            case 'deleteRemoteTag': {
+                const remote = await pickRemote(repo, 'Delete remote tag from');
+                if (!remote) { return; }
+                const tag = await pickTag(repo, 'Delete remote tag');
+                if (!tag) { return; }
+                const choice = await showModalWarningMessage(`Delete remote tag "${tag}" from "${remote}"?`, 'Delete');
+                if (choice !== 'Delete') { return; }
+                await repo.exec(['push', remote, `:refs/tags/${tag}`]);
+                await this.refresh();
+                return;
+            }
+            case 'pushTags': {
+                const remote = await pickRemote(repo, 'Push tags to remote');
+                if (!remote) { return; }
+                await repo.exec(['push', remote, '--tags']);
+                await this.refresh();
+                return;
+            }
+        }
+    }
+
     private postChangesError(
         error: unknown,
         options: { readonly requestId?: RequestId; readonly operation: string; readonly code: ErrorCode },
@@ -640,6 +919,76 @@ function errorCodeFor(msg: ChangesWebviewToExtensionMessage): ErrorCode {
         default:
             return 'gitOperationFailed';
     }
+}
+
+async function inputText(placeHolder: string, value?: string): Promise<string | undefined> {
+    const input = await vscode.window.showInputBox({ placeHolder, value });
+    const trimmed = input?.trim();
+    return trimmed || undefined;
+}
+
+async function pickBranch(repo: GitRepository, placeHolder: string): Promise<string | undefined> {
+    const branches = await repo.getAllBranches();
+    return vscode.window.showQuickPick(branches.map((branch) => branch.name), { placeHolder });
+}
+
+async function pickLocalBranch(repo: GitRepository, placeHolder: string, preferred?: string): Promise<string | undefined> {
+    const branches = (await repo.getAllBranches())
+        .filter((branch) => !branch.isRemote)
+        .map((branch) => branch.name);
+    const ordered = preferred && branches.includes(preferred)
+        ? [preferred, ...branches.filter((branch) => branch !== preferred)]
+        : branches;
+    return vscode.window.showQuickPick(ordered, { placeHolder });
+}
+
+async function pickRemoteBranch(repo: GitRepository, placeHolder: string): Promise<string | undefined> {
+    const branches = (await repo.getAllBranches())
+        .filter((branch) => branch.isRemote)
+        .map((branch) => branch.name);
+    return vscode.window.showQuickPick(branches, { placeHolder });
+}
+
+async function pickRemote(repo: GitRepository, placeHolder: string): Promise<string | undefined> {
+    const remotes = await repo.getRemotes();
+    if (remotes.length === 1) { return remotes[0]; }
+    return vscode.window.showQuickPick(remotes, { placeHolder });
+}
+
+async function pickRef(repo: GitRepository, placeHolder: string): Promise<string | undefined> {
+    const [branches, tags] = await Promise.all([
+        repo.getAllBranches(),
+        repo.getAllTags(),
+    ]);
+    return vscode.window.showQuickPick([
+        ...branches.map((branch) => branch.name),
+        ...tags.map((tag) => tag.name),
+    ], { placeHolder });
+}
+
+async function pickTag(repo: GitRepository, placeHolder: string): Promise<string | undefined> {
+    const tags = await repo.getAllTags();
+    return vscode.window.showQuickPick(tags.map((tag) => tag.name), { placeHolder });
+}
+
+async function pickStash(repo: GitRepository, placeHolder: string): Promise<number | undefined> {
+    const stashes = await repo.stashList();
+    const items = stashes.map((stash) => `stash@{${stash.index}} ${stash.message}`);
+    const selected = await vscode.window.showQuickPick(items, { placeHolder });
+    if (!selected) { return undefined; }
+    const match = selected.match(/^stash@\{(\d+)\}/);
+    return match?.[1] ? parseInt(match[1], 10) : undefined;
+}
+
+async function splitRemoteBranch(repo: GitRepository, branch: string): Promise<{ readonly remote: string; readonly branch: string }> {
+    const remotes = [...await repo.getRemotes()].sort((left, right) => right.length - left.length);
+    const remote = remotes.find((entry) => branch.startsWith(`${entry}/`));
+    if (remote) {
+        return { remote, branch: branch.substring(remote.length + 1) };
+    }
+    const slash = branch.indexOf('/');
+    if (slash === -1) { throw new Error(`Cannot determine remote for branch: ${branch}`); }
+    return { remote: branch.substring(0, slash), branch: branch.substring(slash + 1) };
 }
 
 interface StatusDiffInput {

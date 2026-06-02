@@ -4,6 +4,7 @@ import {
     ChangeRowAction,
     bulkActionsFor,
     messageForBulkAction,
+    messageForChangesToolbarCommand,
     messageForRowAction,
     rowActionsFor,
 } from '../../../src/webview/features/changes/changeCommands';
@@ -99,6 +100,11 @@ describe('changeCommands', () => {
         expect(messageForBulkAction(ChangeBulkAction.StageAll)).toEqual({ type: 'changes/stageAll' });
         expect(messageForBulkAction(ChangeBulkAction.UnstageAll)).toEqual({ type: 'changes/unstageAll' });
         expect(messageForBulkAction(ChangeBulkAction.DiscardAll)).toEqual({ type: 'changes/discardAll' });
+    });
+
+    it('creates protocol messages for toolbar commands', () => {
+        expect(messageForChangesToolbarCommand('openGraph')).toEqual({ type: 'changes/toolbarCommand', command: 'openGraph' });
+        expect(messageForChangesToolbarCommand('fetchAll')).toEqual({ type: 'changes/toolbarCommand', command: 'fetchAll' });
     });
 
     it('offers section bulk actions only where they make sense', () => {
