@@ -179,7 +179,7 @@ h1 {
 .commit-composer {
     display: grid;
     gap: 6px;
-    padding: 8px 0;
+    padding: 8px;
     border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border, #3c3c3c));
 }
 
