@@ -1,17 +1,46 @@
+# Version control
 .git/**
 .github/**
+.gitignore
+.nvmrc
+
+# Editor / IDE
 .vscode/**
+.claude/**
+
+# Dev tools & config
 node_modules/**
+.vscode-test/**
+.wdio-vscode/**
+.look-git-fixtures
+
+# Source (only dist is shipped)
 src/**
 tests/**
 out/**
-.vscode-test/**
-.wdio-vscode/**
-*.tsbuildinfo
-*.vsix
-index.html
+scripts/**
+docs/**
+
+# Build config
 vite.config.ts
 tsconfig.json
 tsconfig.test.json
+tsconfig.test.js
 esbuild.js
-.look-git-fixtures
+eslint.config.mjs
+vitest.config.ts
+index.html
+
+# Artifacts
+*.tsbuildinfo
+*.vsix
+
+# Internal docs
+AGENTS.md
+
+# Dev scripts (not part of the extension)
+lookGit
+lookX
+
+# Source maps (optional — remove this line to keep them)
+dist/**/*.map

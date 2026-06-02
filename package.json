@@ -1,13 +1,14 @@
 {
   "name": "look-git",
   "displayName": "Look Git",
-  "description": "Experimental React-based VS Code extension shell.",
-  "version": "0.0.1",
+  "description": "A modern Git extension with visual commit graph, changes panel, stash management, and commit history.",
+  "version": "0.1.0",
   "publisher": "mathias8dev",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
+    "SCM Providers",
     "Other"
   ],
   "icon": "resources/look-git-icon.png",
@@ -1626,6 +1627,7 @@
     "watch:extension": "node esbuild.js --watch",
     "watch:webview": "vite build --watch",
     "package": "npm run check-types && npm run build:webview && node esbuild.js --production",
+    "vsix": "node scripts/package-vsix.ts",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "test:integration": "npm run compile && npm run compile:tests && node ./out/tests/integration/runTest.js",
@@ -1664,5 +1666,27 @@
     "vite": "^7.2.4",
     "vitest": "^4.1.7",
     "zustand": "^5.0.14"
+  },
+  "keywords": [
+    "git",
+    "source control",
+    "graph",
+    "commit history",
+    "stash",
+    "diff",
+    "worktree"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mathias8dev/vscode-look-git-extension"
+  },
+  "bugs": {
+    "url": "https://github.com/mathias8dev/vscode-look-git-extension/issues"
+  },
+  "homepage": "https://github.com/mathias8dev/vscode-look-git-extension#readme",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
   }
 }

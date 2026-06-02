@@ -19,10 +19,7 @@ body,
     height: 100%;
     margin: 0;
     padding: 0;
-}
-
-body {
-    min-width: 320px;
+    overflow-x: hidden;
 }
 
 .app-shell {
@@ -273,7 +270,7 @@ h1 {
     position: absolute;
     right: 0;
     bottom: calc(100% + 6px);
-    min-width: 210px;
+    min-width: min(210px, calc(100vw - 16px));
     border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border, #454545));
     border-radius: 6px;
     background: var(--vscode-menu-background, var(--vscode-editor-background, #252526));
@@ -342,10 +339,14 @@ h1 {
 
 .stash-panel-header h2 {
     flex: 1;
+    min-width: 0;
     margin: 0;
     font-size: 0.82em;
     font-weight: 600;
     text-transform: uppercase;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .stash-panel-header span {
@@ -427,8 +428,7 @@ h1 {
 }
 
 .stash-item-header {
-    display: grid;
-    grid-template-columns: auto minmax(80px, 1fr) auto;
+    display: flex;
     align-items: center;
     gap: 8px;
     min-height: 28px;
@@ -436,12 +436,20 @@ h1 {
     cursor: pointer;
 }
 
+.stash-title {
+    flex: 1;
+    min-width: 0;
+}
+
+.stash-actions {
+    flex: none;
+}
+
 .stash-item-header:hover {
     background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
 }
 
 .stash-title {
-    min-width: 0;
     display: grid;
     gap: 2px;
 }
@@ -508,14 +516,21 @@ h1 {
     position: sticky;
     top: 0;
     z-index: 1;
-    display: grid;
-    grid-template-columns: auto minmax(60px, 1fr) auto;
+    display: flex;
     align-items: center;
     gap: 6px;
     min-height: 28px;
     padding: 0 8px;
     background: var(--vscode-sideBarSectionHeader-background, var(--vscode-sideBar-background, #252526));
     cursor: pointer;
+}
+
+.change-section-header h2 {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .change-section-header:hover {
@@ -528,6 +543,7 @@ h1 {
 }
 
 .section-actions {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 2px;
