@@ -2,6 +2,19 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [0.3.0] - 2026-06-03
+
+### Added
+
+#### Look Graph
+- Add reusable resizable panels for the branch panel, commit details panel, and commit message sub-panel
+- Add file search to the commit details panel
+- Increase the branch panel resize limit for long branch names
+
+#### Webview
+- Reuse a shared search input across branch search, commit details file search, commit history search, and graph text/hash search
+- Add file icons for `Fastfile`, `.bin`, and `.properties` files
+
 ## [0.2.3] - 2026-06-03
 
 ### Fixed
