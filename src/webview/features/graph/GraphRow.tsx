@@ -14,13 +14,14 @@ interface GraphRowProps {
     readonly childHash: string | undefined;
     readonly parentHash: string | undefined;
     readonly canUndoCommit: boolean;
+    readonly rowHeight?: number;
     readonly style: CSSProperties;
     readonly onSelect: (hash: string, mode: CommitSelectMode) => void;
     readonly onOpenContextMenu: (commit: GraphCommit) => void;
     readonly onBranchDoubleClick: (branch: string, isRemote: boolean) => void;
 }
 
-export function GraphCommitRow({ row, branches, selected, childHash, parentHash, canUndoCommit, style, onSelect, onOpenContextMenu, onBranchDoubleClick }: GraphRowProps) {
+export function GraphCommitRow({ row, branches, selected, childHash, parentHash, canUndoCommit, rowHeight, style, onSelect, onOpenContextMenu, onBranchDoubleClick }: GraphRowProps) {
     const { commit, laneData } = row;
     const refs = parseRefs(commit.refs, branches);
     const messageOffset = (getLaneDataMaxLane(laneData) + 1) * LANE_WIDTH + 4;
@@ -56,7 +57,7 @@ export function GraphCommitRow({ row, branches, selected, childHash, parentHash,
             }}
         >
             <div className="graph-lane-cell">
-                <GraphLaneCell laneData={laneData} merge={commit.parentHashes.length > 1} />
+                <GraphLaneCell laneData={laneData} merge={commit.parentHashes.length > 1} rowHeight={rowHeight} />
             </div>
             <div className="graph-message-cell">
                 {refs.map((ref) => (

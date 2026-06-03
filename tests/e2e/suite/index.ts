@@ -8,6 +8,7 @@ import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepos
 import { ChangesMessageRouter } from '../../../src/extension/messaging/ChangesMessageRouter';
 import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessageRouter';
 import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
+import { getConfiguredWebviewFontSize, registerWebviewFontSizeSync } from '../../../src/extension/views/webview-font';
 import type { ChangesExtensionToWebviewMessage } from '../../../src/protocol/changes/messages';
 import { ConflictState } from '../../../src/protocol/changes/types';
 import type { GraphDataResponse, GraphExtensionToWebviewMessage, WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
@@ -29,6 +30,12 @@ export function run(): Promise<void> {
                 const commands = await vscode.commands.getCommands(true);
                 assert.ok(commands.includes('lookGit.changesView.focus'));
                 assert.ok(commands.includes('lookGit.commitHistory.focus'));
+            },
+        },
+        {
+            name: 'updates Look Git webview font size when configuration changes',
+            run: async () => {
+                await runWebviewFontSizeConfigurationE2E();
             },
         },
         {
@@ -267,11 +274,53 @@ export function run(): Promise<void> {
                 assert.match(styles, /@font-face\{font-family:codicon/);
                 assert.match(styles, /url\(\.\/codicon\.ttf\?/);
                 assert.doesNotMatch(styles, /url\(\/codicon\.ttf/);
+                assert.match(styles, /--look-git-row-min-height/);
+                assert.match(styles, /--look-git-control-min-height/);
+                assert.match(styles, /--look-git-graph-row-height/);
                 assert.match(styles, /\.submodule-panel/);
                 assert.match(styles, /\.submodule-badge-dirty/);
             },
         },
     ]);
+}
+
+async function runWebviewFontSizeConfigurationE2E(): Promise<void> {
+    await vscode.commands.executeCommand('workbench.view.extension.look-git');
+    await vscode.commands.executeCommand('lookGit.changesView.focus');
+    await vscode.commands.executeCommand('lookGit.commitHistory.focus');
+    await vscode.commands.executeCommand('lookGit.graphView.focus');
+
+    const observedFontSizes: number[] = [];
+    const disposable = registerWebviewFontSizeSync([{
+        notifyFontSizeChanged() {
+            observedFontSizes.push(getConfiguredWebviewFontSize());
+        },
+    }]);
+
+    const configuration = vscode.workspace.getConfiguration();
+    const originalLookGitFontSize = configuration.inspect('lookGit.fontSize')?.globalValue;
+    const originalEditorFontSize = configuration.inspect('editor.fontSize')?.globalValue;
+
+    try {
+        await configuration.update('lookGit.fontSize', 19, vscode.ConfigurationTarget.Global);
+        await waitForCondition(
+            () => observedFontSizes.includes(19),
+            () => `Expected lookGit.fontSize update to notify webviews. Observed: ${observedFontSizes.join(', ')}`,
+        );
+        assert.equal(getConfiguredWebviewFontSize(), 19);
+
+        await configuration.update('lookGit.fontSize', 0, vscode.ConfigurationTarget.Global);
+        await configuration.update('editor.fontSize', 17, vscode.ConfigurationTarget.Global);
+        await waitForCondition(
+            () => observedFontSizes.includes(17),
+            () => `Expected editor.fontSize fallback update to notify webviews. Observed: ${observedFontSizes.join(', ')}`,
+        );
+        assert.equal(getConfiguredWebviewFontSize(), 17);
+    } finally {
+        disposable.dispose();
+        await configuration.update('lookGit.fontSize', originalLookGitFontSize, vscode.ConfigurationTarget.Global);
+        await configuration.update('editor.fontSize', originalEditorFontSize, vscode.ConfigurationTarget.Global);
+    }
 }
 
 async function runFloatingGraphNodeLayoutE2E(): Promise<void> {
@@ -1466,6 +1515,14 @@ async function waitForTabLabel(label: string): Promise<void> {
         .flatMap((group) => group.tabs)
         .map((tab) => tab.label);
     assert.fail(`Expected an open diff tab containing "${label}". Open tabs: ${openLabels.join(', ')}`);
+}
+
+async function waitForCondition(predicate: () => boolean, failureMessage: () => string): Promise<void> {
+    for (let attempt = 0; attempt < 40; attempt++) {
+        if (predicate()) { return; }
+        await sleep(100);
+    }
+    assert.fail(failureMessage());
 }
 
 async function sleep(ms: number): Promise<void> {

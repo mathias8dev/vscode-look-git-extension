@@ -4,6 +4,19 @@
     color-scheme: light dark;
     font-family: var(--vscode-font-family, system-ui, sans-serif);
     font-size: var(--look-git-font-size, var(--vscode-font-size, inherit));
+    line-height: var(--look-git-line-height);
+    --look-git-line-height: 1.38;
+    --look-git-space-xxs: 0.15em;
+    --look-git-space-xs: 0.3em;
+    --look-git-space-sm: 0.45em;
+    --look-git-space-md: 0.6em;
+    --look-git-space-lg: 0.8em;
+    --look-git-control-min-height: max(1.9em, 24px);
+    --look-git-row-min-height: max(1.65em, 22px);
+    --look-git-row-comfortable-min-height: max(2.8em, 36px);
+    --look-git-icon-button-size: max(1.65em, 22px);
+    --look-git-toolbar-button-size: max(1.85em, 24px);
+    --look-git-graph-row-height: max(1.75em, 24px);
     color: var(--vscode-foreground, #cccccc);
     background: var(--vscode-editor-background, #1e1e1e);
 }
@@ -19,6 +32,8 @@ body,
     height: 100%;
     margin: 0;
     padding: 0;
+    font-size: inherit;
+    line-height: inherit;
     overflow-x: hidden;
 }
 
@@ -2278,4 +2293,139 @@ h1 {
     font-size: 0.88em;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     font-style: italic;
+}
+
+/* ── Font-scaled Density Overrides ───────────────────────────────────────── */
+
+.changes-toolbar input,
+.changes-toolbar select,
+.stash-create input,
+.stash-prompt input,
+.history-search input,
+.branch-search-input,
+.graph-search-input,
+.graph-filter-select,
+.graph-filter-input {
+    min-height: var(--look-git-control-min-height);
+    padding-inline: var(--look-git-space-sm);
+    line-height: var(--look-git-line-height);
+}
+
+.operation-actions button,
+.selection-actions button,
+.show-more-changes,
+.history-load-more,
+.commit-main-button,
+.commit-more-trigger,
+.segmented button {
+    min-height: var(--look-git-control-min-height);
+    padding-inline: var(--look-git-space-md);
+    line-height: var(--look-git-line-height);
+}
+
+.commit-composer,
+.history-details,
+.graph-details-meta {
+    gap: var(--look-git-space-sm);
+    padding: var(--look-git-space-md);
+}
+
+.commit-message-input {
+    min-height: max(4.6em, 60px);
+    padding: var(--look-git-space-sm) var(--look-git-space-md);
+}
+
+.change-section-header,
+.stash-panel-header,
+.stash-item-header,
+.submodule-panel-header,
+.submodule-item-header,
+.history-file-loading,
+.history-file-empty {
+    min-height: var(--look-git-control-min-height);
+    gap: var(--look-git-space-sm);
+    padding-inline: var(--look-git-space-md);
+}
+
+.change-row,
+.stash-file-row,
+.history-file-tree-row,
+.branch-group-header,
+.branch-node,
+.graph-resource-row,
+.commit-file-node {
+    min-height: var(--look-git-row-min-height);
+    gap: var(--look-git-space-sm);
+}
+
+.change-row {
+    padding-block: var(--look-git-space-xxs);
+    padding-right: var(--look-git-space-md);
+}
+
+.history-row {
+    min-height: var(--look-git-row-comfortable-min-height);
+    gap: var(--look-git-space-sm);
+    padding: var(--look-git-space-xs) var(--look-git-space-md);
+}
+
+.history-row-main,
+.stash-title,
+.changes-banner div:first-child {
+    gap: var(--look-git-space-xxs);
+}
+
+.history-file-tree,
+.changes-content,
+.branch-list,
+.graph-details-file-tree {
+    padding-block: var(--look-git-space-xs);
+}
+
+.icon-button,
+.section-toggle,
+.stash-toggle,
+.graph-details-close {
+    flex-basis: var(--look-git-icon-button-size);
+    width: var(--look-git-icon-button-size);
+    height: var(--look-git-icon-button-size);
+}
+
+.graph-toolbar-btn,
+.graph-resource-action {
+    width: var(--look-git-toolbar-button-size);
+    height: var(--look-git-toolbar-button-size);
+}
+
+.graph-table-header,
+.graph-row,
+.graph-lane-cell,
+.graph-load-more {
+    height: var(--look-git-graph-row-height);
+}
+
+.graph-table-header,
+.graph-row {
+    padding-inline: var(--look-git-space-xs);
+}
+
+.graph-message-cell,
+.history-row-title,
+.history-row-meta,
+.submodule-title,
+.file-info {
+    gap: var(--look-git-space-sm);
+}
+
+.ref-badge,
+.history-ref-badge,
+.branch-tracking-indicator,
+.submodule-badge,
+.change-section-header span,
+.stash-panel-header span,
+.submodule-panel-header span,
+.history-file-count,
+.commit-file-count {
+    padding-inline: var(--look-git-space-sm);
+    line-height: 1.35;
 }

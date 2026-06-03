@@ -95,7 +95,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
             enableScripts: true,
             localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')],
         };
-        webviewView.webview.html = getWebviewHtml(webviewView.webview, this.extensionUri, 'graph');
+        this.renderWebviewHtml(webviewView);
 
         this.router?.dispose();
         this.router = new GraphMessageRouter(this.repositories, (msg) => {
@@ -173,5 +173,9 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         if (target?.kind === 'worktree') {
             void this.view?.webview.postMessage({ type: 'graph/selectWorktree', path: target.path });
         }
+    }
+
+    private renderWebviewHtml(webviewView: vscode.WebviewView): void {
+        webviewView.webview.html = getWebviewHtml(webviewView.webview, this.extensionUri, 'graph');
     }
 }

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { GraphLaneCell } from '../../../src/webview/features/graph/GraphLaneCell';
+import { rowHeightForFontSize } from '../../../src/webview/features/graph/graphRowSizing';
 import type { LaneData } from '../../../src/webview/features/graph/layout/assignGraphLanes';
 
 describe('GraphLaneCell', () => {
@@ -48,6 +49,31 @@ describe('GraphLaneCell', () => {
         expect(markup).toContain('width="32"');
         expect(markup).toContain('M 8 12');
         expect(markup).toContain('24 24');
+    });
+
+    it('scales vertical geometry with the measured graph row height', () => {
+        const laneData: LaneData = {
+            lane: 0,
+            color: '#fff',
+            isPrimary: false,
+            lines: [{
+                fromLane: 0,
+                toLane: 0,
+                color: '#fff',
+                type: 'straight',
+                role: 'first-parent',
+                startY: 'center',
+                endY: 'bottom',
+            }],
+        };
+
+        const rowHeight = rowHeightForFontSize(20);
+        const markup = renderToStaticMarkup(<GraphLaneCell laneData={laneData} rowHeight={rowHeight} />);
+
+        expect(rowHeight).toBe(35);
+        expect(markup).toContain('height="35"');
+        expect(markup).toContain('y1="17.5"');
+        expect(markup).toContain('y2="35"');
     });
 
     it('renders merge commits with a double circle marker', () => {

@@ -12,4 +12,11 @@ describe('GraphTable', () => {
             lastVisible: 18,
         });
     });
+
+    it('uses measured row height for large-font graph virtualization', () => {
+        expect(getVisibleGraphRowRange(50, 0, 240, 35)).toEqual({
+            firstVisible: 0,
+            lastVisible: 15,
+        });
+    });
 });

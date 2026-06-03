@@ -8,8 +8,14 @@ export interface WebviewFontSizeTarget {
 }
 
 export function getConfiguredWebviewFontSize(): number {
-    const lookGitFontSize = positiveFontSize(vscode.workspace.getConfiguration('lookGit').get('fontSize'));
-    return lookGitFontSize ?? normalizeWebviewFontSize(vscode.workspace.getConfiguration('editor').get('fontSize'));
+    const rootConfiguration = vscode.workspace.getConfiguration();
+    const lookGitFontSize =
+        positiveFontSize(rootConfiguration.get('lookGit.fontSize'))
+        ?? positiveFontSize(vscode.workspace.getConfiguration('lookGit').get('fontSize'));
+    const editorFontSize =
+        positiveFontSize(rootConfiguration.get('editor.fontSize'))
+        ?? positiveFontSize(vscode.workspace.getConfiguration('editor').get('fontSize'));
+    return lookGitFontSize ?? normalizeWebviewFontSize(editorFontSize);
 }
 
 export function normalizeWebviewFontSize(value: unknown): number {
@@ -29,7 +35,7 @@ export function webviewFontSizeMessage(): WebviewFontSizeChangedPush {
 
 export function registerWebviewFontSizeSync(targets: readonly WebviewFontSizeTarget[]): vscode.Disposable {
     return vscode.workspace.onDidChangeConfiguration((event) => {
-        if (!event.affectsConfiguration('lookGit.fontSize') && !event.affectsConfiguration('editor.fontSize')) { return; }
+        if (!affectsWebviewFontSize(event)) { return; }
         for (const target of targets) {
             target.notifyFontSizeChanged();
         }
@@ -37,7 +43,17 @@ export function registerWebviewFontSizeSync(targets: readonly WebviewFontSizeTar
 }
 
 function positiveFontSize(value: unknown): number | undefined {
-    return typeof value === 'number' && Number.isFinite(value) && value > 0
-        ? value
-        : undefined;
+    if (typeof value === 'number') {
+        return Number.isFinite(value) && value > 0 ? value : undefined;
+    }
+    if (typeof value !== 'string' || value.trim() === '') { return undefined; }
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : undefined;
+}
+
+function affectsWebviewFontSize(event: vscode.ConfigurationChangeEvent): boolean {
+    return event.affectsConfiguration('lookGit')
+        || event.affectsConfiguration('lookGit.fontSize')
+        || event.affectsConfiguration('editor')
+        || event.affectsConfiguration('editor.fontSize');
 }

@@ -24,6 +24,13 @@ describe('webview font size', () => {
         expect(webviewFontSizeStyle()).toBe(':root { --look-git-font-size: 18px; }');
     });
 
+    it('accepts numeric font size values from settings JSON', () => {
+        workspace.values.set('editor.fontSize', 15);
+        workspace.values.set('lookGit.fontSize', '20');
+
+        expect(getConfiguredWebviewFontSize()).toBe(20);
+    });
+
     it('falls back to VS Code editor font size when Look Git font size is auto', () => {
         workspace.values.set('editor.fontSize', 16);
         workspace.values.set('lookGit.fontSize', 0);
@@ -47,14 +54,15 @@ describe('webview font size', () => {
         workspace.fireConfigurationChanged('files.autoSave');
         expect(target.notifyFontSizeChanged).not.toHaveBeenCalled();
 
+        workspace.fireConfigurationChanged('lookGit');
         workspace.fireConfigurationChanged('editor.fontSize');
         workspace.fireConfigurationChanged('lookGit.fontSize');
 
-        expect(target.notifyFontSizeChanged).toHaveBeenCalledTimes(2);
+        expect(target.notifyFontSizeChanged).toHaveBeenCalledTimes(3);
         disposable.dispose();
 
         workspace.fireConfigurationChanged('lookGit.fontSize');
-        expect(target.notifyFontSizeChanged).toHaveBeenCalledTimes(2);
+        expect(target.notifyFontSizeChanged).toHaveBeenCalledTimes(3);
     });
 
     it('emits updated font size when configuration update fires', async () => {

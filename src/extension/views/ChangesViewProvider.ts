@@ -99,7 +99,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             enableScripts: true,
             localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')],
         };
-        webviewView.webview.html = getWebviewHtml(webviewView.webview, this.extensionUri, 'changes');
+        this.renderWebviewHtml(webviewView);
 
         this.router = new ChangesMessageRouter(this.repositories, (msg) => {
             webviewView.webview.postMessage(msg);
@@ -241,5 +241,9 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     notifyFontSizeChanged(): void {
         void this.view?.webview.postMessage(webviewFontSizeMessage());
+    }
+
+    private renderWebviewHtml(webviewView: vscode.WebviewView): void {
+        webviewView.webview.html = getWebviewHtml(webviewView.webview, this.extensionUri, 'changes');
     }
 }

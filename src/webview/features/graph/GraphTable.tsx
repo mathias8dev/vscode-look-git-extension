@@ -3,7 +3,7 @@ import type { BranchInfo, GraphContextTarget } from '../../../protocol/graph/typ
 import type { GraphRow } from './layout/assignGraphLanes';
 import { GraphCommitRow, type CommitSelectMode } from './GraphRow';
 import { GraphWIPRow } from './GraphWIPRow';
-import { ROW_HEIGHT } from './GraphLaneCell';
+import { ROW_HEIGHT, rowHeightForFontSize } from './graphRowSizing';
 import { getVisibleGraphRowRange } from './graphVirtualization';
 import type { DisplayRow } from './graphState';
 
@@ -39,11 +39,13 @@ export function GraphTable({
     const wrapperRef = useRef<HTMLDivElement>(null);
     const [scrollTop, setScrollTop] = useState(0);
     const [viewportHeight, setViewportHeight] = useState(400);
-    const totalHeight = displayRows.length * ROW_HEIGHT + (hasMore ? ROW_HEIGHT : 0);
+    const [rowHeight, setRowHeight] = useState(ROW_HEIGHT);
+    const totalHeight = displayRows.length * rowHeight + (hasMore ? rowHeight : 0);
 
     const measureViewport = useCallback(() => {
         const el = wrapperRef.current;
         if (!el) { return; }
+        setRowHeight(measuredGraphRowHeight(el));
         setViewportHeight(el.clientHeight);
         setScrollTop(el.scrollTop);
     }, []);
@@ -60,10 +62,12 @@ export function GraphTable({
         });
         observer.observe(el);
         window.addEventListener('resize', measureViewport);
+        window.addEventListener('lookGitFontSizeChanged', measureViewport);
         measureViewport();
         return () => {
             observer.disconnect();
             window.removeEventListener('resize', measureViewport);
+            window.removeEventListener('lookGitFontSizeChanged', measureViewport);
         };
     }, [measureViewport]);
 
@@ -75,11 +79,11 @@ export function GraphTable({
 
     useEffect(() => {
         if (!hasMore || loadingMore) { return; }
-        const nearBottom = scrollTop + viewportHeight >= totalHeight - ROW_HEIGHT * 5;
+        const nearBottom = scrollTop + viewportHeight >= totalHeight - rowHeight * 5;
         if (nearBottom) { onLoadMore(); }
-    }, [scrollTop, viewportHeight, totalHeight, hasMore, loadingMore, onLoadMore]);
+    }, [scrollTop, viewportHeight, totalHeight, hasMore, loadingMore, onLoadMore, rowHeight]);
 
-    const { firstVisible, lastVisible } = getVisibleGraphRowRange(displayRows.length, scrollTop, viewportHeight);
+    const { firstVisible, lastVisible } = getVisibleGraphRowRange(displayRows.length, scrollTop, viewportHeight, rowHeight);
 
     const visibleDisplayRows = displayRows.slice(firstVisible, lastVisible + 1);
     const selectedHashSet = useMemo(() => new Set(selectedHashes), [selectedHashes]);
@@ -113,8 +117,8 @@ export function GraphTable({
             >
                 <div style={{ height: totalHeight, position: 'relative' }}>
                     {visibleDisplayRows.map((displayRow, i) => {
-                        const top = (firstVisible + i) * ROW_HEIGHT;
-                        const rowStyle = { position: 'absolute' as const, top, left: 0, right: 0 };
+                        const top = (firstVisible + i) * rowHeight;
+                        const rowStyle = { position: 'absolute' as const, top, left: 0, right: 0, height: rowHeight };
                         if (displayRow.kind === 'wip') {
                             return (
                                 <GraphWIPRow
@@ -122,6 +126,7 @@ export function GraphTable({
                                     wip={displayRow.wip}
                                     laneData={displayRow.laneData}
                                     style={rowStyle}
+                                    rowHeight={rowHeight}
                                     selected={displayRow.wip.path === selectedWorktreePath}
                                     onSelect={onSelectWorktree}
                                 />
@@ -138,6 +143,7 @@ export function GraphTable({
                                 parentHash={parentHash(rows, row.commit.hash)}
                                 canUndoCommit={rows[0]?.commit.hash === row.commit.hash}
                                 style={rowStyle}
+                                rowHeight={rowHeight}
                                 onSelect={onSelectCommit}
                                 onOpenContextMenu={(commit) => handleOpenContextMenu(commit.hash)}
                                 onBranchDoubleClick={onBranchDoubleClick}
@@ -150,9 +156,10 @@ export function GraphTable({
                             className="graph-load-more"
                             style={{
                                 position: 'absolute',
-                                top: displayRows.length * ROW_HEIGHT,
+                                top: displayRows.length * rowHeight,
                                 left: 0,
                                 right: 0,
+                                height: rowHeight,
                             }}
                             disabled={loadingMore}
                             onClick={onLoadMore}
@@ -164,6 +171,11 @@ export function GraphTable({
             </div>
         </div>
     );
+}
+
+function measuredGraphRowHeight(element: HTMLElement): number {
+    const fontSize = Number.parseFloat(window.getComputedStyle(element).fontSize);
+    return rowHeightForFontSize(fontSize);
 }
 
 function parentHash(rows: readonly GraphRow[], hash: string): string | undefined {

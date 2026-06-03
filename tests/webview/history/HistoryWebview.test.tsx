@@ -8,6 +8,9 @@ import { createMockVsCodeApi, sendToWebview } from '../../helpers/webviewRuntime
 describe('HistoryWebview', () => {
     beforeEach(() => {
         vi.resetModules();
+        document.documentElement.removeAttribute('style');
+        document.body.removeAttribute('style');
+        document.body.innerHTML = '<div id="root"></div>';
     });
 
     it('announces readiness and renders pushed commits', async () => {
@@ -26,6 +29,19 @@ describe('HistoryWebview', () => {
 
         await waitFor(() => expect(screen.getByText('feat: render commit history')).toBeInTheDocument());
         expect(api.messages).toContainEqual({ type: 'history/ready' });
+    });
+
+    it('applies live Look Git font-size changes', async () => {
+        createMockVsCodeApi();
+        const { HistoryWebview } = await import('../../../src/webview/history/HistoryWebview');
+
+        render(<HistoryWebview />);
+        sendToWebview({ type: 'ui/fontSizeChanged', fontSize: 22 });
+
+        await waitFor(() => expect(document.documentElement.style.getPropertyValue('--look-git-font-size')).toBe('22px'));
+        expect(document.documentElement.style.fontSize).toBe('22px');
+        expect(document.body.style.fontSize).toBe('22px');
+        expect(document.getElementById('root')?.style.fontSize).toBe('22px');
     });
 
     it('requests the next page when loading more commits', async () => {

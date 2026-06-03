@@ -1,7 +1,7 @@
 import { getLaneDataMaxLane, type LaneData, type LineDef } from './layout/assignGraphLanes';
+import { ROW_HEIGHT } from './graphRowSizing';
 
 export const LANE_WIDTH = 16;
-export const ROW_HEIGHT = 24;
 const DOT_RADIUS = 4;
 const LINE_WIDTH = 2;
 
@@ -9,23 +9,24 @@ interface GraphLaneCellProps {
     readonly laneData: LaneData;
     readonly merge?: boolean;
     readonly wip?: boolean;
+    readonly rowHeight?: number;
 }
 
-export function GraphLaneCell({ laneData, merge = false, wip = false }: GraphLaneCellProps) {
+export function GraphLaneCell({ laneData, merge = false, wip = false, rowHeight = ROW_HEIGHT }: GraphLaneCellProps) {
     const width = (getLaneDataMaxLane(laneData) + 1) * LANE_WIDTH;
     const cx = (laneData.lane + 0.5) * LANE_WIDTH;
-    const cy = ROW_HEIGHT / 2;
+    const cy = rowHeight / 2;
 
     return (
         <svg
             className="graph-lane-svg"
             width={width}
-            height={ROW_HEIGHT}
+            height={rowHeight}
             aria-hidden="true"
             style={{ minWidth: width }}
         >
             {laneData.lines.map((line, i) => (
-                <LaneLine key={i} line={line} />
+                <LaneLine key={i} line={line} rowHeight={rowHeight} />
             ))}
             {wip ? (
                 <circle
@@ -68,12 +69,12 @@ export function GraphLaneCell({ laneData, merge = false, wip = false }: GraphLan
     );
 }
 
-function LaneLine({ line }: { line: LineDef }) {
+function LaneLine({ line, rowHeight }: { readonly line: LineDef; readonly rowHeight: number }) {
     const { fromLane, toLane, color, type, startY, endY } = line;
     const x1 = (fromLane + 0.5) * LANE_WIDTH;
     const x2 = (toLane + 0.5) * LANE_WIDTH;
-    const y1 = yPosition(startY);
-    const y2 = yPosition(endY);
+    const y1 = yPosition(startY, rowHeight);
+    const y2 = yPosition(endY, rowHeight);
 
     if (type === 'straight') {
         return (
@@ -101,13 +102,13 @@ function LaneLine({ line }: { line: LineDef }) {
     );
 }
 
-function yPosition(position: 'top' | 'center' | 'bottom'): number {
+function yPosition(position: 'top' | 'center' | 'bottom', rowHeight: number): number {
     switch (position) {
         case 'top':
             return 0;
         case 'center':
-            return ROW_HEIGHT / 2;
+            return rowHeight / 2;
         case 'bottom':
-            return ROW_HEIGHT;
+            return rowHeight;
     }
 }

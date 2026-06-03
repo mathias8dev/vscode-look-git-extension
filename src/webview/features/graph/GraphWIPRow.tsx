@@ -7,11 +7,12 @@ interface GraphWIPRowProps {
     readonly wip: WorktreeWip;
     readonly laneData: LaneData;
     readonly style: CSSProperties;
+    readonly rowHeight?: number;
     readonly selected: boolean;
     readonly onSelect: (path: string) => void;
 }
 
-export function GraphWIPRow({ wip, laneData, style, selected, onSelect }: GraphWIPRowProps) {
+export function GraphWIPRow({ wip, laneData, style, rowHeight, selected, onSelect }: GraphWIPRowProps) {
     const dirName = wip.path.split(/[\\/]/).filter(Boolean).at(-1) ?? wip.path;
     const messageOffset = (getLaneDataMaxLane(laneData) + 1) * LANE_WIDTH + 4;
     const rowStyle: CSSProperties & { readonly '--graph-row-message-offset': string } = {
@@ -35,7 +36,7 @@ export function GraphWIPRow({ wip, laneData, style, selected, onSelect }: GraphW
             }}
         >
             <div className="graph-lane-cell">
-                <GraphLaneCell laneData={laneData} wip />
+                <GraphLaneCell laneData={laneData} wip rowHeight={rowHeight} />
             </div>
             <div className="graph-message-cell graph-wip-message">
                 <span className="wip-label">WIP</span>

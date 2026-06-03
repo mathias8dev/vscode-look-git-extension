@@ -9,6 +9,9 @@ import { createMockVsCodeApi, sendToWebview } from '../../helpers/webviewRuntime
 describe('ChangesWebview', () => {
     beforeEach(() => {
         vi.resetModules();
+        document.documentElement.removeAttribute('style');
+        document.body.removeAttribute('style');
+        document.body.innerHTML = '<div id="root"></div>';
     });
 
     it('announces readiness without rendering a duplicate toolbar', async () => {
@@ -25,6 +28,19 @@ describe('ChangesWebview', () => {
         expect(screen.queryByLabelText('Refresh Changes')).not.toBeInTheDocument();
         expect(screen.queryByLabelText('Open Git Graph')).not.toBeInTheDocument();
         expect(screen.queryByLabelText('More Actions')).not.toBeInTheDocument();
+    });
+
+    it('applies live Look Git font-size changes', async () => {
+        createMockVsCodeApi();
+        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+        render(<ChangesWebview />);
+        sendToWebview({ type: 'ui/fontSizeChanged', fontSize: 21 });
+
+        await waitFor(() => expect(document.documentElement.style.getPropertyValue('--look-git-font-size')).toBe('21px'));
+        expect(document.documentElement.style.fontSize).toBe('21px');
+        expect(document.body.style.fontSize).toBe('21px');
+        expect(document.getElementById('root')?.style.fontSize).toBe('21px');
     });
 
     it('applies native view-title mode and commit-focus messages', async () => {

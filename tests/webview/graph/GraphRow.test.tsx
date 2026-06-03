@@ -57,6 +57,26 @@ describe('GraphCommitRow', () => {
         expect(markup).toContain('r="5.5"');
         expect(markup).toContain('r="2.5"');
     });
+
+    it('passes the measured row height to the lane renderer', () => {
+        const markup = renderToStaticMarkup(
+            <GraphCommitRow
+                row={rowWithLane(0)}
+                branches={[]}
+                selected={false}
+                childHash={undefined}
+                parentHash={undefined}
+                canUndoCommit={false}
+                rowHeight={35}
+                style={{ height: 35 }}
+                onSelect={() => undefined}
+                onOpenContextMenu={() => undefined}
+                onBranchDoubleClick={() => undefined}
+            />,
+        );
+
+        expect(markup).toContain('height="35"');
+    });
 });
 
 function rowWithLane(lane: number): GraphRow {

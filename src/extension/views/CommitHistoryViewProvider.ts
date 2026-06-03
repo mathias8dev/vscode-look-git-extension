@@ -74,7 +74,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             enableScripts: true,
             localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')],
         };
-        webviewView.webview.html = getWebviewHtml(webviewView.webview, this.extensionUri, 'history');
+        this.renderWebviewHtml(webviewView);
 
         webviewView.webview.onDidReceiveMessage((msg: HistoryWebviewToExtensionMessage) => {
             void this.handleMessage(msg);
@@ -391,6 +391,10 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private postMessage(message: HistoryExtensionToWebviewMessage): void {
         void this.view?.webview.postMessage(message);
+    }
+
+    private renderWebviewHtml(webviewView: vscode.WebviewView): void {
+        webviewView.webview.html = getWebviewHtml(webviewView.webview, this.extensionUri, 'history');
     }
 }
 

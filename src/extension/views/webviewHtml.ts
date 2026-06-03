@@ -1,6 +1,6 @@
 import * as crypto from 'crypto';
 import * as vscode from 'vscode';
-import { webviewFontSizeStyle } from './webview-font';
+import { getConfiguredWebviewFontSize, webviewFontSizeStyle } from './webview-font';
 
 const WEBVIEW_CONTEXT = JSON.stringify({ preventDefaultContextMenuItems: true });
 
@@ -30,7 +30,29 @@ export function getWebviewHtml(
 </head>
 <body data-vscode-context='${WEBVIEW_CONTEXT}'>
   <div id="root"></div>
+  <script nonce="${nonce}">${webviewFontSizeBootstrapScript(getConfiguredWebviewFontSize())}</script>
   <script nonce="${nonce}" type="module" src="${scriptUri}"></script>
 </body>
 </html>`;
+}
+
+function webviewFontSizeBootstrapScript(initialFontSize: number): string {
+    return `(() => {
+  const applyElementFontSize = (element, value) => {
+    if (element) { element.style.fontSize = value; }
+  };
+  const applyFontSize = (fontSize) => {
+    if (typeof fontSize !== 'number' || !Number.isFinite(fontSize) || fontSize <= 0) { return; }
+    const value = fontSize + 'px';
+    document.documentElement.style.setProperty('--look-git-font-size', value);
+    applyElementFontSize(document.documentElement, value);
+    applyElementFontSize(document.body, value);
+    applyElementFontSize(document.getElementById('root'), value);
+    window.dispatchEvent(new CustomEvent('lookGitFontSizeChanged'));
+  };
+  applyFontSize(${initialFontSize});
+  window.addEventListener('message', (event) => {
+    if (event.data?.type === 'ui/fontSizeChanged') { applyFontSize(event.data.fontSize); }
+  });
+})();`;
 }

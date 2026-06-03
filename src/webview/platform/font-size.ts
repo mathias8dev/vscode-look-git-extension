@@ -11,5 +11,12 @@ export function isWebviewFontSizeMessage(message: unknown): message is WebviewFo
 
 export function applyWebviewFontSize(fontSize: number): void {
     if (!Number.isFinite(fontSize) || fontSize <= 0) { return; }
-    document.documentElement.style.setProperty('--look-git-font-size', `${fontSize}px`);
+    const value = `${fontSize}px`;
+    document.documentElement.style.setProperty('--look-git-font-size', value);
+    document.documentElement.style.fontSize = value;
+    if (document.body) {
+        document.body.style.fontSize = value;
+    }
+    document.getElementById('root')?.style.setProperty('font-size', value);
+    window.dispatchEvent(new CustomEvent('lookGitFontSizeChanged'));
 }
