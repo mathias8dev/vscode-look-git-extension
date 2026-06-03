@@ -1,5 +1,6 @@
 import defaultFile from '@iconify/icons-vscode-icons/default-file';
 import fileTypeAstro from '@iconify/icons-vscode-icons/file-type-astro';
+import fileTypeBinary from '@iconify/icons-vscode-icons/file-type-binary';
 import fileTypeC from '@iconify/icons-vscode-icons/file-type-c';
 import fileTypeConfig from '@iconify/icons-vscode-icons/file-type-config';
 import fileTypeCpp from '@iconify/icons-vscode-icons/file-type-cpp';
@@ -13,6 +14,7 @@ import fileTypeGo from '@iconify/icons-vscode-icons/file-type-go';
 import fileTypeGraphql from '@iconify/icons-vscode-icons/file-type-graphql';
 import fileTypeHtml from '@iconify/icons-vscode-icons/file-type-html';
 import fileTypeImage from '@iconify/icons-vscode-icons/file-type-image';
+import fileTypeIni from '@iconify/icons-vscode-icons/file-type-ini';
 import fileTypeJava from '@iconify/icons-vscode-icons/file-type-java';
 import fileTypeJsOfficial from '@iconify/icons-vscode-icons/file-type-js-official';
 import fileTypeJson from '@iconify/icons-vscode-icons/file-type-json';
@@ -54,6 +56,8 @@ export function iconForFileKind(kind: WebviewFileIconKind): IconifySvgData {
             return fileTypeHtml;
         case 'image':
             return fileTypeImage;
+        case 'binary':
+            return fileTypeBinary;
         case 'dart':
             return fileTypeDartlang;
         case 'flutter':
@@ -113,6 +117,8 @@ export function iconForFileKind(kind: WebviewFileIconKind): IconifySvgData {
             return fileTypeGit;
         case 'config':
             return fileTypeConfig;
+        case 'properties':
+            return fileTypeIni;
         case 'file':
             return defaultFile;
     }

@@ -9,6 +9,9 @@ describe('graphFileIconModel', () => {
         expect(iconKindForCommitFile(file('src/service.py'))).toBe('python');
         expect(iconKindForCommitFile(file('Dockerfile'))).toBe('docker');
         expect(iconKindForCommitFile(file('schema.prisma'))).toBe('prisma');
+        expect(iconKindForCommitFile(file('fastlane/Fastfile'))).toBe('ruby');
+        expect(iconKindForCommitFile(file('bin/tool.bin'))).toBe('binary');
+        expect(iconKindForCommitFile(file('src/main/resources/files.properties'))).toBe('properties');
     });
 });
 

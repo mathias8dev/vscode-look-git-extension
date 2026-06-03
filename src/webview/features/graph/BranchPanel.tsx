@@ -5,6 +5,7 @@ import type { BranchInfo, GraphContextTarget, WorktreeInfo } from '../../../prot
 import { buildBranchTree, buildRemoteBranchTree } from './graphBranchTree';
 import { BranchTreeNode, type BranchTreeExpansionRequest } from './BranchTreeNode';
 import { IconButton } from '../../shared/IconButton';
+import { SearchInput } from '../../shared/SearchInput';
 import { selectBranchFilter } from './graphBranchSelection';
 
 interface BranchPanelProps {
@@ -176,17 +177,12 @@ export function BranchPanel({
 
                 <div className="graph-branch-content">
                     <div className="branch-search">
-                        <div className="branch-search-wrapper">
-                            <i className="codicon codicon-search branch-search-icon" aria-hidden="true" />
-                            <input
-                                type="search"
-                                className="branch-search-input"
-                                value={search}
-                                placeholder="Branch or tag"
-                                aria-label="Search branches"
-                                onChange={(e) => setSearch(e.currentTarget.value)}
-                            />
-                        </div>
+                        <SearchInput
+                            value={search}
+                            placeholder="Branch or tag"
+                            ariaLabel="Search branches"
+                            onChange={setSearch}
+                        />
                     </div>
 
                     <div className="branch-list">

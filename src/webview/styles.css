@@ -939,32 +939,7 @@ h1 {
 }
 
 .history-search {
-    display: flex;
-    align-items: center;
-    gap: 4px;
     margin: 6px 8px;
-    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, #3c3c3c));
-    border-radius: 3px;
-    padding: 0 6px;
-    background: var(--vscode-input-background, transparent);
-}
-
-.history-search-icon {
-    font-size: inherit;
-    color: var(--vscode-descriptionForeground, #9d9d9d);
-    flex-shrink: 0;
-}
-
-.history-search input {
-    flex: 1;
-    min-width: 0;
-    min-height: 24px;
-    border: none;
-    outline: none;
-    color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
-    background: transparent;
-    font: inherit;
-    font-size: inherit;
 }
 
 .history-list {
@@ -1584,7 +1559,7 @@ h1 {
 .graph-branch-panel {
     width: 260px;
     min-width: 120px;
-    max-width: 560px;
+    max-width: 960px;
     flex-shrink: 0;
     border-right: none;
     display: flex;
@@ -1592,18 +1567,27 @@ h1 {
     overflow: hidden;
 }
 
-.graph-panel-resize-handle {
+.resizable-panel-handle {
     flex-shrink: 0;
-    width: 5px;
-    cursor: col-resize;
     background: transparent;
-    border-left: 1px solid var(--vscode-panel-border, #3c3c3c);
     position: relative;
     transition: background 0.15s;
     z-index: 2;
 }
 
-.graph-panel-resize-handle::after {
+.resizable-panel-handle-horizontal {
+    width: 5px;
+    cursor: col-resize;
+    border-left: 1px solid var(--vscode-panel-border, #3c3c3c);
+}
+
+.resizable-panel-handle-vertical {
+    height: 5px;
+    cursor: row-resize;
+    border-top: 1px solid var(--vscode-panel-border, #3c3c3c);
+}
+
+.resizable-panel-handle-horizontal::after {
     content: '';
     position: absolute;
     top: 0;
@@ -1612,14 +1596,34 @@ h1 {
     bottom: 0;
 }
 
-.graph-panel-resize-handle:hover,
-.graph-panel-resize-handle:active,
-.graph-panel-resize-handle:focus-visible {
+.resizable-panel-handle-vertical::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: 0;
+    right: 0;
+    bottom: -3px;
+}
+
+.resizable-panel-handle:hover,
+.resizable-panel-handle:active,
+.resizable-panel-handle:focus-visible {
     background: var(--vscode-focusBorder, #007fd4);
+}
+
+.resizable-panel-handle-horizontal:hover,
+.resizable-panel-handle-horizontal:active,
+.resizable-panel-handle-horizontal:focus-visible {
     border-left-color: var(--vscode-focusBorder, #007fd4);
 }
 
-.graph-panel-resize-handle:focus-visible {
+.resizable-panel-handle-vertical:hover,
+.resizable-panel-handle-vertical:active,
+.resizable-panel-handle-vertical:focus-visible {
+    border-top-color: var(--vscode-focusBorder, #007fd4);
+}
+
+.resizable-panel-handle:focus-visible {
     outline: 1px solid var(--vscode-focusBorder, #007fd4);
     outline-offset: -1px;
 }
@@ -1662,35 +1666,36 @@ h1 {
 }
 
 .branch-search {
-    padding: 4px 6px;
+    padding: var(--look-git-space-xs) var(--look-git-space-sm);
     border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
 }
 
-.branch-search-wrapper {
+.search-field {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--look-git-space-xs);
     border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, #3c3c3c));
     border-radius: 3px;
-    padding: 0 6px;
+    padding: 0 var(--look-git-space-sm);
     background: var(--vscode-input-background, transparent);
 }
 
-.branch-search-icon {
+.search-field-icon {
     font-size: inherit;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     flex-shrink: 0;
 }
 
-.branch-search-input {
+.search-field-input {
     flex: 1;
     min-width: 0;
-    min-height: 24px;
+    min-height: var(--look-git-control-min-height);
     border: none;
     background: transparent;
     color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
     font: inherit;
     font-size: inherit;
+    line-height: var(--look-git-line-height);
     outline: none;
 }
 
@@ -1892,33 +1897,8 @@ h1 {
 }
 
 .graph-toolbar-search {
-    display: flex;
-    align-items: center;
-    gap: 4px;
     flex: 1;
     min-width: 80px;
-    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, #3c3c3c));
-    border-radius: 3px;
-    padding: 0 6px;
-    background: var(--vscode-input-background, transparent);
-}
-
-.graph-search-icon {
-    font-size: inherit;
-    color: var(--vscode-descriptionForeground, #9d9d9d);
-    flex-shrink: 0;
-}
-
-.graph-search-input {
-    flex: 1;
-    min-width: 0;
-    min-height: 22px;
-    border: none;
-    background: transparent;
-    color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
-    font: inherit;
-    font-size: inherit;
-    outline: none;
 }
 
 .graph-filter-select,
@@ -2117,7 +2097,7 @@ h1 {
 .graph-details-panel {
     width: 320px;
     flex-shrink: 0;
-    border-left: 1px solid var(--vscode-panel-border, #3c3c3c);
+    border-left: none;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -2161,16 +2141,28 @@ h1 {
     white-space: nowrap;
 }
 
+.graph-details-file-search {
+    padding: var(--look-git-space-xs) var(--look-git-space-sm);
+    border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
+    flex-shrink: 0;
+}
+
 .graph-details-file-tree {
     flex: 1;
     overflow-y: auto;
     padding: 4px 0;
 }
 
+.graph-details-file-empty {
+    padding: var(--look-git-space-lg);
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: inherit;
+}
+
 .graph-details-meta {
     padding: 8px;
-    border-top: 1px solid var(--vscode-panel-border, #3c3c3c);
     flex-shrink: 0;
+    overflow: auto;
 }
 
 .graph-details-message {
@@ -2341,9 +2333,7 @@ h1 {
 .changes-toolbar select,
 .stash-create input,
 .stash-prompt input,
-.history-search input,
-.branch-search-input,
-.graph-search-input,
+.search-field-input,
 .graph-filter-select,
 .graph-filter-input {
     min-height: var(--look-git-control-min-height);

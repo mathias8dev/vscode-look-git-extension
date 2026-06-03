@@ -4,6 +4,7 @@ import { CommitHistoryFileList } from './CommitHistoryFileList';
 import { CommitHistoryRow } from './CommitHistoryRow';
 import { filterHistoryCommits, formatHistoryDate, historyEmptyLabel, parseCommitMessage, formatRelativeDate } from './historyModel';
 import { ErrorNotice } from '../../shared/ErrorNotice';
+import { SearchInput } from '../../shared/SearchInput';
 
 interface CommitHistoryAppProps {
     readonly state: HistoryState;
@@ -32,15 +33,13 @@ export function CommitHistoryApp({
 
     return (
         <main className="history-shell">
-            <div className="history-search">
-                <i className="codicon codicon-search history-search-icon" aria-hidden="true" />
-                <input
-                    value={query}
-                    placeholder="Search commits"
-                    aria-label="Search commits"
-                    onChange={(event) => onQueryChange(event.currentTarget.value)}
-                />
-            </div>
+            <SearchInput
+                className="history-search"
+                value={query}
+                placeholder="Search commits"
+                ariaLabel="Search commits"
+                onChange={onQueryChange}
+            />
 
             <ErrorNotice error={state.error} />
 

@@ -6,6 +6,7 @@ export type WebviewFileIconKind =
     | 'css'
     | 'html'
     | 'image'
+    | 'binary'
     | 'dart'
     | 'flutter'
     | 'python'
@@ -33,6 +34,7 @@ export type WebviewFileIconKind =
     | 'prisma'
     | 'tailwind'
     | 'config'
+    | 'properties'
     | 'package'
     | 'git'
     | 'submodule'
@@ -43,6 +45,8 @@ export function iconKindForPath(filePath: string): WebviewFileIconKind {
     const extension = name.includes('.') ? name.split('.').pop() ?? '' : '';
 
     if (name === 'package.json') { return 'package'; }
+    if (name === 'fastfile') { return 'ruby'; }
+    if (name === 'bin') { return 'binary'; }
     if (name.startsWith('.git') || name === 'gitignore' || name === 'gitattributes') { return 'git'; }
     if (name === 'pubspec.yaml' || name === 'pubspec.yml' || name === 'pubspec.lock') { return 'flutter'; }
     if (name === 'dockerfile' || name.startsWith('dockerfile.') || name === 'docker-compose.yml' || name === 'docker-compose.yaml') { return 'docker'; }
@@ -73,6 +77,10 @@ export function iconKindForPath(filePath: string): WebviewFileIconKind {
         case 'html':
         case 'htm':
             return 'html';
+        case 'bin':
+            return 'binary';
+        case 'properties':
+            return 'properties';
         case 'dart':
             return 'dart';
         case 'py':

@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import type { BranchInfo, GraphFilters } from '../../../protocol/graph/types';
+import { SearchInput } from '../../shared/SearchInput';
 
 interface GraphToolbarProps {
     readonly filters: GraphFilters;
@@ -22,18 +23,14 @@ export function GraphToolbar({
 
     return (
         <div className="graph-toolbar">
-            <div className="graph-toolbar-search">
-                <i className="codicon codicon-search graph-search-icon" aria-hidden="true" />
-                <input
-                    ref={searchRef}
-                    type="search"
-                    className="graph-search-input"
-                    value={filters.search ?? ''}
-                    placeholder="Text or hash"
-                    aria-label="Search commits"
-                    onChange={(e) => onFiltersChange({ search: e.currentTarget.value || undefined })}
-                />
-            </div>
+            <SearchInput
+                className="graph-toolbar-search"
+                inputRef={searchRef}
+                value={filters.search ?? ''}
+                placeholder="Text or hash"
+                ariaLabel="Search commits"
+                onChange={(value) => onFiltersChange({ search: value || undefined })}
+            />
 
             <select
                 className="graph-filter-select"

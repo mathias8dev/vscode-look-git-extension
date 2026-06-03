@@ -10,6 +10,9 @@ describe('fileIconModel', () => {
         expect(iconKindForPath('.gitignore')).toBe('git');
         expect(iconKindForPath('vite.config.ts')).toBe('config');
         expect(iconKindForPath('assets/logo.svg')).toBe('image');
+        expect(iconKindForPath('vendor/tool.bin')).toBe('binary');
+        expect(iconKindForPath('resources/files.properties')).toBe('properties');
+        expect(iconKindForPath('fastlane/Fastfile')).toBe('ruby');
         expect(iconKindForPath('lib/main.dart')).toBe('dart');
         expect(iconKindForPath('pubspec.yaml')).toBe('flutter');
         expect(iconKindForPath('scripts/build.py')).toBe('python');

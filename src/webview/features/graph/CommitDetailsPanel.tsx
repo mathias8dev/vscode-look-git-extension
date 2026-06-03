@@ -1,21 +1,24 @@
+import type { CSSProperties } from 'react';
 import type { CommitFileChange } from '../../../protocol/graph/types';
 import type { CommitDetails } from './graphState';
-import { CommitFileTree } from './CommitFileTree';
+import { CommitDetailsContent } from './CommitDetailsContent';
 
 interface CommitDetailsPanelProps {
+    readonly style?: CSSProperties;
     readonly details: CommitDetails | undefined;
     readonly loading: boolean;
     readonly onClose: () => void;
     readonly onDiff: (file: CommitFileChange) => void;
 }
 
-export function CommitDetailsPanel({ details, loading, onClose, onDiff }: CommitDetailsPanelProps) {
+export function CommitDetailsPanel({ style, details, loading, onClose, onDiff }: CommitDetailsPanelProps) {
     const title = details?.kind === 'worktree'
         ? details.branch ?? worktreeName(details.path ?? details.hash)
         : details?.hash.slice(0, 8);
+    const detailsKey = details ? `${details.kind}:${details.path ?? details.hash}` : undefined;
 
     return (
-        <div className="graph-details-panel">
+        <div className="graph-details-panel" style={style}>
             <header className="graph-details-header">
                 <button
                     type="button"
@@ -41,15 +44,7 @@ export function CommitDetailsPanel({ details, loading, onClose, onDiff }: Commit
             )}
 
             {!loading && details && (
-                <>
-                    <div className="graph-details-file-tree">
-                        <CommitFileTree files={details.files} onDiff={onDiff} />
-                    </div>
-                    <div className="graph-details-meta">
-                        <p className="graph-details-message">{details.fullMessage}</p>
-                        <p className="graph-details-hash-full">{details.hash}</p>
-                    </div>
-                </>
+                <CommitDetailsContent key={detailsKey} details={details} onDiff={onDiff} />
             )}
 
             {!loading && !details && (

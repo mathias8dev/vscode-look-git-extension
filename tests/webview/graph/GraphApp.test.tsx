@@ -37,7 +37,7 @@ describe('GraphApp', () => {
         expect(separator).toHaveAttribute('tabindex', '0');
         expect(separator).toHaveAttribute('aria-orientation', 'vertical');
         expect(separator).toHaveAttribute('aria-valuemin', '120');
-        expect(separator).toHaveAttribute('aria-valuemax', '560');
+        expect(separator).toHaveAttribute('aria-valuemax', '960');
         expect(separator).toHaveAttribute('aria-valuenow', '260');
 
         fireEvent.keyDown(separator, { key: 'ArrowRight' });
@@ -49,8 +49,8 @@ describe('GraphApp', () => {
         expect(localStorage.getItem('lookGit.branchPanelWidth')).toBe('120');
 
         fireEvent.keyDown(separator, { key: 'End' });
-        await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', '560'));
-        expect(localStorage.getItem('lookGit.branchPanelWidth')).toBe('560');
+        await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', '960'));
+        expect(localStorage.getItem('lookGit.branchPanelWidth')).toBe('960');
     });
 
     it('restores document styles and persists the branch panel width after pointer resize', async () => {
@@ -90,6 +90,23 @@ describe('GraphApp', () => {
 
         expect(document.body.style.cursor).toBe('');
         expect(document.body.style.userSelect).toBe('');
+    });
+
+    it('exposes a resizable separator for the commit details panel', async () => {
+        createMockVsCodeApi();
+        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+
+        render(<GraphApp />);
+        sendToWebview({ type: 'graph/selectCommit', hash: 'abcdef1234567890' });
+
+        const separator = await screen.findByRole('separator', { name: 'Resize commit details panel' });
+        expect(separator).toHaveAttribute('aria-valuemin', '180');
+        expect(separator).toHaveAttribute('aria-valuemax', '720');
+        expect(separator).toHaveAttribute('aria-valuenow', '320');
+
+        fireEvent.keyDown(separator, { key: 'ArrowLeft' });
+        await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', '336'));
+        expect(localStorage.getItem('lookGit.commitDetailsPanelWidth')).toBe('336');
     });
 });
 
