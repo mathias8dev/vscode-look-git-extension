@@ -2,6 +2,13 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [0.2.1] - 2026-06-03
+
+### Fixed
+
+#### Commit History
+- Delegate fetch, pull, and push toolbar actions to VS Code Git so HTTPS remotes can use the normal credential and authentication flow instead of failing in headless CLI mode
+
 ## [0.2.0] - 2026-06-02
 
 ### Added
