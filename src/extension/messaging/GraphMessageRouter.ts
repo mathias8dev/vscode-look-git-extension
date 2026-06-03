@@ -13,6 +13,8 @@ import { parseDiffNameStatus } from '../../core/parsing/parse-diff-name-status';
 import { parsePorcelainStatus, summarizePorcelainStatus } from '../../core/parsing/parseStatus';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import { toProtocolBranch, toProtocolGraphCommit, toProtocolWorktree } from '../mapping/toProtocol';
+import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
+import { CliRemoteCommandKind, VscodeRemoteCommand, type RemoteCommandBackend } from '../git/remote-command-backend';
 import { showModalWarningMessage } from '../utils/confirmation';
 import { openReadonlyDiffDocument } from '../utils/readonly-diff-documents';
 import { createErrorPayload, isAbortError } from './errorSerialization';
@@ -27,6 +29,7 @@ export class GraphMessageRouter {
         private readonly repositories: ActiveRepositoryAccessor,
         private readonly postMessage: PostMessage,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
+        private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
     ) {}
 
     dispose(): void {
@@ -245,7 +248,7 @@ export class GraphMessageRouter {
         const repo = this.repositories.requireRepository();
         switch (command) {
             case 'fetch':
-                await repo.fetchAll();
+                await this.remoteCommands.runVscode(repo, VscodeRemoteCommand.FetchAll);
                 break;
         }
         await this.refreshAfterRepositoryChange();
@@ -313,13 +316,13 @@ export class GraphMessageRouter {
             }
             case 'push':
                 if (isRemote) { throw new Error('Push is only available for local branches.'); }
-                await pushBranch(repo, branch);
+                await pushBranch(repo, branch, this.remoteCommands);
                 break;
             case 'pullBranchWorktree':
-                await branchWorktreeGit(repo, branch, isRemote, ['pull']);
+                await branchWorktreeGit(repo, branch, isRemote, ['pull'], this.remoteCommands);
                 break;
             case 'pushBranchWorktree':
-                await pushBranchWorktree(repo, branch, isRemote);
+                await pushBranchWorktree(repo, branch, isRemote, this.remoteCommands);
                 break;
             case 'lockBranchWorktree':
                 await lockBranchWorktree(repo, branch, isRemote);
@@ -332,7 +335,7 @@ export class GraphMessageRouter {
                 break;
             case 'update': {
                 if (isRemote) { throw new Error('Update selected branch is only available for local branches.'); }
-                await updateSelectedLocalBranch(repo, branch, currentBranch);
+                await updateSelectedLocalBranch(repo, branch, currentBranch, this.remoteCommands);
                 break;
             }
             case 'rebaseOnto':
@@ -372,13 +375,28 @@ export class GraphMessageRouter {
                 await showDiffWithMainWorktree(repo, requireWorktreePath(wtPath));
                 return;
             case 'fetch':
-                await repo.exec(['-C', requireWorktreePath(wtPath), 'fetch']);
+                await this.remoteCommands.runCli(repo, {
+                    kind: CliRemoteCommandKind.Args,
+                    cwd: requireWorktreePath(wtPath),
+                    args: ['fetch'],
+                    title: 'Look Git Remote: Worktree',
+                });
                 break;
             case 'pull':
-                await repo.exec(['-C', requireWorktreePath(wtPath), 'pull']);
+                await this.remoteCommands.runCli(repo, {
+                    kind: CliRemoteCommandKind.Args,
+                    cwd: requireWorktreePath(wtPath),
+                    args: ['pull'],
+                    title: 'Look Git Remote: Worktree',
+                });
                 break;
             case 'push':
-                await repo.exec(['-C', requireWorktreePath(wtPath), 'push']);
+                await this.remoteCommands.runCli(repo, {
+                    kind: CliRemoteCommandKind.Args,
+                    cwd: requireWorktreePath(wtPath),
+                    args: ['push'],
+                    title: 'Look Git Remote: Worktree',
+                });
                 break;
             case 'commit':
                 if (!await commitWorktree(repo, requireWorktreePath(wtPath))) { return; }
@@ -440,7 +458,7 @@ export class GraphMessageRouter {
 
     private async handleCommitCommand(command: CommitCommand, hash: string, hashes: readonly string[]): Promise<void> {
         const repo = this.repositories.requireRepository();
-        const shouldRefresh = await runCommitCommand(repo, command, hash, hashes);
+        const shouldRefresh = await runCommitCommand(repo, command, hash, hashes, this.remoteCommands);
         if (shouldRefresh) { await this.refreshAfterRepositoryChange(); }
     }
 
@@ -494,7 +512,13 @@ export class GraphMessageRouter {
     }
 }
 
-export async function runCommitCommand(repo: GitRepository, command: CommitCommand, hash: string, hashes: readonly string[]): Promise<boolean> {
+export async function runCommitCommand(
+    repo: GitRepository,
+    command: CommitCommand,
+    hash: string,
+    hashes: readonly string[],
+    remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
+): Promise<boolean> {
     const selected = normalizeSelectedHashes(hash, hashes);
     switch (command) {
         case 'copyRevisionNumber':
@@ -542,7 +566,7 @@ export async function runCommitCommand(repo: GitRepository, command: CommitComma
             openGitTerminal(repo.cwd, `git rebase --autostash -i ${shellQuote(hash)}`);
             return false;
         case 'pushAllUpToHere':
-            await pushAllUpToHere(repo, hash);
+            await pushAllUpToHere(repo, hash, remoteCommands);
             return true;
         case 'newBranch':
             await createBranchAtCommit(repo, hash);
@@ -706,21 +730,47 @@ async function compareRefWithPickedWorktree(repo: GitRepository, ref: string, ti
     return true;
 }
 
-async function branchWorktreeGit(repo: GitRepository, branch: string, isRemote: boolean, args: readonly string[]): Promise<void> {
+async function branchWorktreeGit(
+    repo: GitRepository,
+    branch: string,
+    isRemote: boolean,
+    args: readonly string[],
+    remoteCommands: RemoteCommandBackend,
+): Promise<void> {
     const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
-    await repo.exec(['-C', worktree.path, ...args]);
+    await remoteCommands.runCli(repo, {
+        kind: CliRemoteCommandKind.Args,
+        cwd: worktree.path,
+        args,
+        title: `Look Git Remote: ${branch}`,
+    });
 }
 
-async function pushBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean): Promise<void> {
+async function pushBranchWorktree(
+    repo: GitRepository,
+    branch: string,
+    isRemote: boolean,
+    remoteCommands: RemoteCommandBackend,
+): Promise<void> {
     const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
     const upstream = (await repo.execRaw(['-C', worktree.path, 'for-each-ref', '--format=%(upstream:short)', `refs/heads/${branch}`])).trim();
     if (upstream) {
         const { remote, branchName } = await resolveRemoteBranch(repo, upstream);
-        await repo.exec(['-C', worktree.path, 'push', remote, `${branch}:refs/heads/${branchName}`]);
+        await remoteCommands.runCli(repo, {
+            kind: CliRemoteCommandKind.Args,
+            cwd: worktree.path,
+            args: ['push', remote, `${branch}:refs/heads/${branchName}`],
+            title: `Look Git Remote: ${branch}`,
+        });
         return;
     }
     const remote = await defaultRemote(repo);
-    await repo.exec(['-C', worktree.path, 'push', '-u', remote, branch]);
+    await remoteCommands.runCli(repo, {
+        kind: CliRemoteCommandKind.Args,
+        cwd: worktree.path,
+        args: ['push', '-u', remote, branch],
+        title: `Look Git Remote: ${branch}`,
+    });
 }
 
 async function lockBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean): Promise<void> {
@@ -882,15 +932,23 @@ async function localBranchTrackingRemote(repo: GitRepository, remoteBranch: stri
     return undefined;
 }
 
-async function pushBranch(repo: GitRepository, branch: string): Promise<void> {
+async function pushBranch(repo: GitRepository, branch: string, remoteCommands: RemoteCommandBackend): Promise<void> {
     const upstream = (await repo.execRaw(['for-each-ref', '--format=%(upstream:short)', `refs/heads/${branch}`])).trim();
     if (upstream) {
         const { remote, branchName } = await resolveRemoteBranch(repo, upstream);
-        await repo.exec(['push', remote, `${branch}:refs/heads/${branchName}`]);
+        await remoteCommands.runCli(repo, {
+            kind: CliRemoteCommandKind.Args,
+            args: ['push', remote, `${branch}:refs/heads/${branchName}`],
+            title: `Look Git Remote: ${branch}`,
+        });
         return;
     }
     const remote = await defaultRemote(repo);
-    await repo.exec(['push', '-u', remote, branch]);
+    await remoteCommands.runCli(repo, {
+        kind: CliRemoteCommandKind.Args,
+        args: ['push', '-u', remote, branch],
+        title: `Look Git Remote: ${branch}`,
+    });
 }
 
 async function defaultRemote(repo: GitRepository): Promise<string> {
@@ -916,9 +974,14 @@ async function updateTargetForLocalBranch(repo: GitRepository, branch: string): 
     return resolveRemoteBranch(repo, upstream || branch);
 }
 
-async function updateSelectedLocalBranch(repo: GitRepository, branch: string, currentBranch: string): Promise<void> {
+async function updateSelectedLocalBranch(
+    repo: GitRepository,
+    branch: string,
+    currentBranch: string,
+    remoteCommands: RemoteCommandBackend,
+): Promise<void> {
     const { remote, branchName } = await updateTargetForLocalBranch(repo, branch);
-    await repo.fetchBranch(remote, branchName);
+    await remoteCommands.runVscode(repo, VscodeRemoteCommand.FetchAll);
     const upstreamRef = `${remote}/${branchName}`;
     if (branch === currentBranch) {
         await repo.exec(['merge', '--ff-only', upstreamRef]);
@@ -1191,14 +1254,18 @@ function openGitTerminal(cwd: string, command: string): void {
     terminal.sendText(command);
 }
 
-async function pushAllUpToHere(repo: GitRepository, hash: string): Promise<void> {
+async function pushAllUpToHere(repo: GitRepository, hash: string, remoteCommands: RemoteCommandBackend): Promise<void> {
     const remotes = await repo.getRemotes();
     const remote = remotes[0];
     if (!remote) { throw new Error('No Git remote configured.'); }
     const branch = await repo.getCurrentBranch();
     const choice = await showModalWarningMessage(`Push ${hash.substring(0, 7)} to ${remote}/${branch}?`, 'Push');
     if (choice !== 'Push') { return; }
-    await repo.exec(['push', remote, `${hash}:refs/heads/${branch}`]);
+    await remoteCommands.runCli(repo, {
+        kind: CliRemoteCommandKind.Args,
+        args: ['push', remote, `${hash}:refs/heads/${branch}`],
+        title: `Look Git Remote: ${branch}`,
+    });
 }
 
 async function createBranchAtCommit(repo: GitRepository, hash: string): Promise<void> {

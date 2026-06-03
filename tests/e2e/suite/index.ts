@@ -194,14 +194,15 @@ export function run(): Promise<void> {
                     fixture.git(['remote', 'add', 'origin', remote.cwd]);
                     const router = routerFor(fixture.cwd, messages);
 
-                    await withPatchedVscode({ inputBoxValues: ['branch-at-base', 'tag-at-head'], warningChoices: ['Push'] }, async () => {
+                    const pushCapture = await withPatchedVscode({ inputBoxValues: ['branch-at-base', 'tag-at-head'], warningChoices: ['Push'], interceptTerminal: true }, async (capture) => {
                         await router.handle({ type: 'graph/commitCommand', command: 'newBranch', hash: base, hashes: [base] });
                         await router.handle({ type: 'graph/commitCommand', command: 'newTag', hash: head, hashes: [head] });
                         await router.handle({ type: 'graph/commitCommand', command: 'pushAllUpToHere', hash: base, hashes: [base] });
+                        return capture;
                     });
                     assert.equal(git(fixture.cwd, ['rev-parse', 'branch-at-base']), base);
                     assert.equal(git(fixture.cwd, ['rev-parse', 'tag-at-head']), head);
-                    assert.equal(git(remote.cwd, ['rev-parse', 'refs/heads/main']), base);
+                    assert.deepEqual(pushCapture.terminalTexts, [`git 'push' 'origin' '${base}:refs/heads/main'`]);
 
                     await router.handle({ type: 'graph/commitCommand', command: 'checkoutRevision', hash: base, hashes: [base] });
                     assert.equal(git(fixture.cwd, ['rev-parse', 'HEAD']), base);
@@ -613,8 +614,12 @@ async function runWorktreeContextActionsE2E(): Promise<void> {
             .filter((call) => call.command === 'vscode.openFolder')
             .map((call) => Boolean((call.args[1] as { forceNewWindow?: boolean } | undefined)?.forceNewWindow)), [false, true]);
 
-        await router.handle({ type: 'graph/worktreeCommand', command: 'fetch', path: worktreePath });
-        await router.handle({ type: 'graph/worktreeCommand', command: 'pull', path: worktreePath });
+        const syncCapture = await withPatchedVscode({ interceptTerminal: true }, async (capture) => {
+            await router.handle({ type: 'graph/worktreeCommand', command: 'fetch', path: worktreePath });
+            await router.handle({ type: 'graph/worktreeCommand', command: 'pull', path: worktreePath });
+            return capture;
+        });
+        assert.deepEqual(syncCapture.terminalTexts, [`git 'fetch'`, `git 'pull'`]);
 
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
         fs.writeFileSync(path.join(worktreePath, 'base.txt'), 'base from worktree\n');
@@ -633,8 +638,11 @@ async function runWorktreeContextActionsE2E(): Promise<void> {
         assert.equal(git(worktreePath, ['log', '-1', '--format=%s']), 'feat(worktrees): commit from context action');
         assert.equal(gitStatus(worktreePath), '');
 
-        await router.handle({ type: 'graph/worktreeCommand', command: 'push', path: worktreePath });
-        assert.equal(git(remote.cwd, ['rev-parse', 'feature/worktree-context']), git(worktreePath, ['rev-parse', 'HEAD']));
+        const pushCapture = await withPatchedVscode({ interceptTerminal: true }, async (capture) => {
+            await router.handle({ type: 'graph/worktreeCommand', command: 'push', path: worktreePath });
+            return capture;
+        });
+        assert.deepEqual(pushCapture.terminalTexts, [`git 'push'`]);
 
         fs.writeFileSync(path.join(worktreePath, 'stashed.txt'), 'stashed\n');
         await withPatchedVscode({ inputBoxValues: ['wip(worktrees): context stash'] }, async () => {
@@ -715,8 +723,15 @@ async function runWorktreeAwareCommitAndBranchMenusE2E(): Promise<void> {
         assert.equal(fsPathOf(capture.commandCalls[0]?.args[0]), branchWorktreePath);
         assert.equal(fsPathOf(capture.commandCalls[1]?.args[0]), branchWorktreePath);
 
-        await router.handle({ type: 'graph/branchCommand', command: 'pullBranchWorktree', branch: 'feature/menu-source', isRemote: false });
-        await router.handle({ type: 'graph/branchCommand', command: 'pushBranchWorktree', branch: 'feature/menu-source', isRemote: false });
+        const remoteCapture = await withPatchedVscode({ interceptTerminal: true }, async (patched) => {
+            await router.handle({ type: 'graph/branchCommand', command: 'pullBranchWorktree', branch: 'feature/menu-source', isRemote: false });
+            await router.handle({ type: 'graph/branchCommand', command: 'pushBranchWorktree', branch: 'feature/menu-source', isRemote: false });
+            return patched;
+        });
+        assert.deepEqual(remoteCapture.terminalTexts, [
+            `git 'pull'`,
+            `git 'push' 'origin' 'feature/menu-source:refs/heads/feature/menu-source'`,
+        ]);
         await router.handle({ type: 'graph/branchCommand', command: 'lockBranchWorktree', branch: 'feature/menu-source', isRemote: false });
         assert.match(git(fixture.cwd, ['worktree', 'list', '--porcelain']), /locked/);
         await router.handle({ type: 'graph/branchCommand', command: 'unlockBranchWorktree', branch: 'feature/menu-source', isRemote: false });
@@ -935,8 +950,14 @@ async function runBranchPushAndRemoteDeleteE2E(): Promise<void> {
         fixture.commitFile('feature.txt', 'feature\n', 'feat: feature');
         const router = routerFor(fixture.cwd, messages);
 
-        await withPatchedVscode({ warningChoices: ['Delete Remote'] }, async () => {
+        const pushCapture = await withPatchedVscode({ interceptTerminal: true }, async (capture) => {
             await router.handle({ type: 'graph/branchCommand', command: 'push', branch: 'feature/push', isRemote: false });
+            return capture;
+        });
+        assert.deepEqual(pushCapture.terminalTexts, [`git 'push' '-u' 'origin' 'feature/push'`]);
+
+        fixture.git(['push', '-q', 'origin', 'feature/push:feature/push']);
+        await withPatchedVscode({ warningChoices: ['Delete Remote'] }, async () => {
             await router.handle({ type: 'graph/branchCommand', command: 'delete', branch: 'origin/feature/push', isRemote: true });
         });
 

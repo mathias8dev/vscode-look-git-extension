@@ -315,7 +315,7 @@ describe('ChangesViewProvider', () => {
         }));
     });
 
-    it('toolbar pull push and fetch run repository operations then refresh', async () => {
+    it('toolbar pull push and fetch delegate to VS Code Git then refresh', async () => {
         const repo = makeRepo();
         const provider = makeProvider(repo);
         const view = makeWebviewView();
@@ -325,13 +325,18 @@ describe('ChangesViewProvider', () => {
         view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'push' });
         view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'fetch' });
 
-        await vi.waitFor(() => expect(repo.pull).toHaveBeenCalledOnce());
-        await vi.waitFor(() => expect(repo.push).toHaveBeenCalledOnce());
-        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith(['fetch']));
-        expect(repo.getStatus).toHaveBeenCalled();
+        await vi.waitFor(() => expect(getCommandCalls().map((call) => call.command)).toEqual(expect.arrayContaining([
+            'git.pull',
+            'git.push',
+            'git.fetch',
+        ])));
+        expect(repo.pull).not.toHaveBeenCalled();
+        expect(repo.push).not.toHaveBeenCalled();
+        expect(repo.exec).not.toHaveBeenCalledWith(['fetch']);
+        await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
     });
 
-    it('toolbar fetch all uses all remotes semantics', async () => {
+    it('toolbar fetch all delegates to VS Code Git all-remotes semantics', async () => {
         const repo = makeRepo();
         const onRepositoryUpdated = vi.fn(async () => {});
         const provider = new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), onRepositoryUpdated);
@@ -340,7 +345,8 @@ describe('ChangesViewProvider', () => {
 
         view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'fetchAll' });
 
-        await vi.waitFor(() => expect(repo.fetchAll).toHaveBeenCalledOnce());
+        await vi.waitFor(() => expect(getCommandCalls()).toContainEqual({ command: 'git.fetchAll', args: [] }));
+        expect(repo.fetchAll).not.toHaveBeenCalled();
         await vi.waitFor(() => expect(onRepositoryUpdated).toHaveBeenCalledOnce());
     });
 
@@ -365,27 +371,16 @@ describe('ChangesViewProvider', () => {
         await vi.waitFor(() => expect(repo.checkout).toHaveBeenCalledWith('feature/menu'));
     });
 
-    it('toolbar delete remote branch resolves the selected remote name', async () => {
-        setQuickPickValue('upstream/feature/menu');
-        setWarningChoice('Delete');
-        const repo = makeRepo({
-            getRemotes: vi.fn(async () => ['upstream']),
-            getAllBranches: vi.fn(async () => [{
-                name: 'upstream/feature/menu',
-                isRemote: true,
-                isCurrent: false,
-                hash: 'remote123',
-                ahead: 0,
-                behind: 0,
-            }]),
-        });
+    it('toolbar delete remote branch delegates to VS Code Git', async () => {
+        const repo = makeRepo();
         const provider = makeProvider(repo);
         const view = makeWebviewView();
         provider.resolveWebviewView(view);
 
         view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'deleteRemoteBranch' });
 
-        await vi.waitFor(() => expect(repo.deleteRemoteBranch).toHaveBeenCalledWith('upstream', 'feature/menu'));
+        await vi.waitFor(() => expect(getCommandCalls()).toContainEqual({ command: 'git.deleteRemoteBranch', args: [] }));
+        expect(repo.deleteRemoteBranch).not.toHaveBeenCalled();
     });
 
     it('batch file commands call git once per file and refresh once', async () => {
@@ -647,6 +642,23 @@ describe('ChangesViewProvider', () => {
         await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({ type: 'changes/commitResult', success: true })));
     });
 
+    it('commit push and sync delegate remote steps to VS Code Git', async () => {
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/commit', message: 'feat: push thing', mode: 'commitPush' });
+        view.messageHandler?.({ type: 'changes/commit', message: 'feat: sync thing', mode: 'commitSync' });
+
+        await vi.waitFor(() => expect(repo.commit).toHaveBeenCalledWith('feat: push thing'));
+        await vi.waitFor(() => expect(repo.commit).toHaveBeenCalledWith('feat: sync thing'));
+        await vi.waitFor(() => expect(getCommandCalls().map((call) => call.command)).toEqual(expect.arrayContaining([
+            'git.push',
+            'git.sync',
+        ])));
+    });
+
     it('commits staged changes inside a submodule', async () => {
         const repo = makeRepo({
             getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
@@ -673,6 +685,38 @@ describe('ChangesViewProvider', () => {
             path: 'modules/lib',
             success: true,
         }));
+    });
+
+    it('submodule commit push uses an integrated terminal for the remote step', async () => {
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/submoduleCommit',
+            submodulePath: 'modules/lib',
+            message: 'feat: inner push',
+            mode: 'commitPush',
+        });
+
+        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith([
+            '-C',
+            '/workspace/modules/lib',
+            'commit',
+            '-m',
+            'feat: inner push',
+        ]));
+        await vi.waitFor(() => expect(mockWindow.terminals).toContainEqual(expect.objectContaining({
+            name: 'Look Git Remote: modules/lib',
+            cwd: '/workspace/modules/lib',
+            hideFromUser: true,
+            isTransient: true,
+            texts: ["git 'push'"],
+            visible: false,
+        })));
     });
 
     it('commit with empty message posts commitResult failure without calling git', async () => {

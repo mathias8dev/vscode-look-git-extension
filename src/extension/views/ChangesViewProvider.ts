@@ -4,6 +4,8 @@ import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryR
 import type { ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
 import type { SerializedRepoContext } from '../../protocol/shared/repo';
 import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '../messaging/ChangesMessageRouter';
+import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
+import type { RemoteCommandBackend } from '../git/remote-command-backend';
 import { createErrorPayload, isAbortError } from '../messaging/errorSerialization';
 import { getWebviewHtml } from './webviewHtml';
 
@@ -84,6 +86,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         private readonly extensionUri: vscode.Uri,
         private readonly repositories: ActiveRepositoryAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
+        private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -97,7 +100,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
         this.router = new ChangesMessageRouter(this.repositories, (msg) => {
             webviewView.webview.postMessage(msg);
-        }, () => this.refresh(), this.onRepositoryUpdated);
+        }, () => this.refresh(), this.onRepositoryUpdated, this.remoteCommands);
 
         webviewView.webview.onDidReceiveMessage((msg: ChangesWebviewToExtensionMessage) => {
             void this.router!.handle(msg);

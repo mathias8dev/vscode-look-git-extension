@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { GraphViewProvider } from '../../../src/extension/views/GraphViewProvider';
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
-import { env } from '../../mocks/vscode';
+import { commands, env } from '../../mocks/vscode';
 
 interface GraphDataPushLike {
     readonly type: 'graph/dataPush' | 'graph/dataResponse';
@@ -174,9 +174,10 @@ describe('GraphViewProvider', () => {
         provider.resolveWebviewView(view);
         view.messageHandler?.({ type: 'graph/repositoryCommand', command: 'fetch' });
 
-        await vi.waitFor(() => expect(repo.fetchAll).toHaveBeenCalledOnce());
-        expect(view.messages).toContainEqual({ type: 'graph/refreshRequested' });
-        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
+        await vi.waitFor(() => expect(commands.calls).toContainEqual({ command: 'git.fetchAll', args: [] }));
+        expect(repo.fetchAll).not.toHaveBeenCalled();
+        await vi.waitFor(() => expect(view.messages).toContainEqual({ type: 'graph/refreshRequested' }));
+        await vi.waitFor(() => expect(onRepositoryUpdated).toHaveBeenCalledOnce());
     });
 
     it('runs native graph context commands against the latest webview target', async () => {

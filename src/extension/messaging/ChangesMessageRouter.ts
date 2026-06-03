@@ -9,6 +9,8 @@ import type { StatusData, StatusEntry } from '../../protocol/changes/types';
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import { SubmoduleStatus } from '../../protocol/shared/repo';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
+import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
+import { CliRemoteCommandKind, VscodeRemoteCommand, type RemoteCommandBackend } from '../git/remote-command-backend';
 import { confirmTypedPhrase, showModalWarningMessage } from '../utils/confirmation';
 import { openReadonlyDiffDocument } from '../utils/readonly-diff-documents';
 import { toProtocolSubmoduleStatus } from '../mapping/toProtocol';
@@ -28,6 +30,7 @@ export class ChangesMessageRouter {
         private readonly postMessage: PostMessage,
         private readonly refresh: RefreshCallback,
         private readonly onRepositoryUpdated: RepositoryUpdatedCallback = async () => {},
+        private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
     ) {}
 
     setKnownSubmodulePaths(paths: readonly string[]): void {
@@ -223,8 +226,8 @@ export class ChangesMessageRouter {
                 try {
                     switch (msg.mode) {
                         case CommitMode.Amend:      await repo.commitAmend(message); break;
-                        case CommitMode.CommitPush: await repo.commit(message); await repo.push(); break;
-                        case CommitMode.CommitSync: await repo.commit(message); await repo.pullAndPush(); break;
+                        case CommitMode.CommitPush: await repo.commit(message); await this.remoteCommands.runVscode(repo, VscodeRemoteCommand.Push); break;
+                        case CommitMode.CommitSync: await repo.commit(message); await this.remoteCommands.runVscode(repo, VscodeRemoteCommand.Sync); break;
                         default:                    await repo.commit(message); break;
                     }
                     this.postMessage({ type: 'changes/commitResult', success: true });
@@ -268,12 +271,21 @@ export class ChangesMessageRouter {
                             break;
                         case CommitMode.CommitPush:
                             await repo.exec(['-C', submoduleCwd, 'commit', '-m', message]);
-                            await repo.exec(['-C', submoduleCwd, 'push']);
+                            await this.remoteCommands.runCli(repo, {
+                                kind: CliRemoteCommandKind.Args,
+                                cwd: submoduleCwd,
+                                args: ['push'],
+                                title: `Look Git Remote: ${submodulePath}`,
+                            });
                             break;
                         case CommitMode.CommitSync:
                             await repo.exec(['-C', submoduleCwd, 'commit', '-m', message]);
-                            await repo.exec(['-C', submoduleCwd, 'pull', '--rebase']);
-                            await repo.exec(['-C', submoduleCwd, 'push']);
+                            await this.remoteCommands.runCli(repo, {
+                                kind: CliRemoteCommandKind.CommandLine,
+                                cwd: submoduleCwd,
+                                commandLine: 'git pull --rebase && git push',
+                                title: `Look Git Remote: ${submodulePath}`,
+                            });
                             break;
                         default:
                             await repo.exec(['-C', submoduleCwd, 'commit', '-m', message]);
@@ -667,57 +679,37 @@ export class ChangesMessageRouter {
         const repo = this.repositories.requireRepository();
         switch (command) {
             case 'pull':
-                await repo.pull();
-                await this.refreshAfterRepositoryUpdate();
+                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Pull);
                 return;
             case 'push':
-                await repo.push();
-                await this.refreshAfterRepositoryUpdate();
+                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Push);
                 return;
             case 'fetch':
-                await repo.exec(['fetch']);
-                await this.refreshAfterRepositoryUpdate();
+                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Fetch);
                 return;
             case 'fetchAll':
-                await repo.fetchAll();
-                await this.refreshAfterRepositoryUpdate();
+                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.FetchAll);
                 return;
             case 'sync':
-                await repo.pullAndPush();
-                await this.refreshAfterRepositoryUpdate();
+                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Sync);
                 return;
             case 'pullRebase':
-                await repo.exec(['pull', '--rebase']);
-                await this.refreshAfterRepositoryUpdate();
+                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PullRebase);
                 return;
-            case 'pullFrom': {
-                const remote = await pickRemote(repo, 'Pull from remote');
-                if (!remote) { return; }
-                await repo.exec(['pull', remote]);
-                await this.refreshAfterRepositoryUpdate();
+            case 'pullFrom':
+                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PullFrom);
                 return;
-            }
             case 'pushForce':
-                await repo.exec(['push', '--force-with-lease']);
-                await this.refreshAfterRepositoryUpdate();
+                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PushForce);
                 return;
-            case 'pushTo': {
-                const remote = await pickRemote(repo, 'Push to remote');
-                if (!remote) { return; }
-                await repo.pushBranch(remote, await repo.getCurrentBranch());
-                await this.refreshAfterRepositoryUpdate();
+            case 'pushTo':
+                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PushTo);
                 return;
-            }
-            case 'pushToForce': {
-                const remote = await pickRemote(repo, 'Force push to remote');
-                if (!remote) { return; }
-                await repo.exec(['push', '--force-with-lease', remote, await repo.getCurrentBranch()]);
-                await this.refreshAfterRepositoryUpdate();
+            case 'pushToForce':
+                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PushToForce);
                 return;
-            }
             case 'fetchPrune':
-                await repo.exec(['fetch', '--prune']);
-                await this.refreshAfterRepositoryUpdate();
+                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.FetchPrune);
                 return;
             case 'checkout': {
                 const branch = await pickBranch(repo, 'Checkout branch');
@@ -790,20 +782,11 @@ export class ChangesMessageRouter {
                 return;
             }
             case 'deleteRemoteBranch': {
-                const branch = await pickRemoteBranch(repo, 'Delete remote branch');
-                if (!branch) { return; }
-                const remoteBranch = await splitRemoteBranch(repo, branch);
-                const choice = await showModalWarningMessage(`Delete remote branch "${branch}"?`, 'Delete');
-                if (choice !== 'Delete') { return; }
-                await repo.deleteRemoteBranch(remoteBranch.remote, remoteBranch.branch);
-                await this.refresh();
+                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.DeleteRemoteBranch);
                 return;
             }
             case 'publishBranch': {
-                const remote = await pickRemote(repo, 'Publish branch to remote');
-                if (!remote) { return; }
-                await repo.pushBranch(remote, await repo.getCurrentBranch());
-                await this.refresh();
+                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Publish);
                 return;
             }
             case 'addRemote': {
@@ -905,24 +888,19 @@ export class ChangesMessageRouter {
                 return;
             }
             case 'deleteRemoteTag': {
-                const remote = await pickRemote(repo, 'Delete remote tag from');
-                if (!remote) { return; }
-                const tag = await pickTag(repo, 'Delete remote tag');
-                if (!tag) { return; }
-                const choice = await showModalWarningMessage(`Delete remote tag "${tag}" from "${remote}"?`, 'Delete');
-                if (choice !== 'Delete') { return; }
-                await repo.exec(['push', remote, `:refs/tags/${tag}`]);
-                await this.refresh();
+                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.DeleteRemoteTag);
                 return;
             }
             case 'pushTags': {
-                const remote = await pickRemote(repo, 'Push tags to remote');
-                if (!remote) { return; }
-                await repo.exec(['push', remote, '--tags']);
-                await this.refresh();
+                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PushTags);
                 return;
             }
         }
+    }
+
+    private async runVscodeRemoteToolbarCommand(repo: GitRepository, command: VscodeRemoteCommand): Promise<void> {
+        await this.remoteCommands.runVscode(repo, command);
+        await this.refreshAfterRepositoryUpdate();
     }
 
     private async refreshAfterRepositoryUpdate(): Promise<void> {
@@ -1008,13 +986,6 @@ async function pickLocalBranch(repo: GitRepository, placeHolder: string, preferr
     return vscode.window.showQuickPick(ordered, { placeHolder });
 }
 
-async function pickRemoteBranch(repo: GitRepository, placeHolder: string): Promise<string | undefined> {
-    const branches = (await repo.getAllBranches())
-        .filter((branch) => branch.isRemote)
-        .map((branch) => branch.name);
-    return vscode.window.showQuickPick(branches, { placeHolder });
-}
-
 async function pickRemote(repo: GitRepository, placeHolder: string): Promise<string | undefined> {
     const remotes = await repo.getRemotes();
     if (remotes.length === 1) { return remotes[0]; }
@@ -1044,17 +1015,6 @@ async function pickStash(repo: GitRepository, placeHolder: string): Promise<numb
     if (!selected) { return undefined; }
     const match = selected.match(/^stash@\{(\d+)\}/);
     return match?.[1] ? parseInt(match[1], 10) : undefined;
-}
-
-async function splitRemoteBranch(repo: GitRepository, branch: string): Promise<{ readonly remote: string; readonly branch: string }> {
-    const remotes = [...await repo.getRemotes()].sort((left, right) => right.length - left.length);
-    const remote = remotes.find((entry) => branch.startsWith(`${entry}/`));
-    if (remote) {
-        return { remote, branch: branch.substring(remote.length + 1) };
-    }
-    const slash = branch.indexOf('/');
-    if (slash === -1) { throw new Error(`Cannot determine remote for branch: ${branch}`); }
-    return { remote: branch.substring(0, slash), branch: branch.substring(slash + 1) };
 }
 
 interface StatusDiffInput {

@@ -123,7 +123,14 @@ export const window = {
     warningChoice: undefined as string | undefined,
     warningChoices: [] as string[],
     shownDocuments: [] as unknown[],
-    terminals: [] as Array<{ name: string; cwd: string | undefined; texts: string[]; visible: boolean }>,
+    terminals: [] as Array<{
+        name: string;
+        cwd: string | undefined;
+        hideFromUser: boolean | undefined;
+        isTransient: boolean | undefined;
+        texts: string[];
+        visible: boolean;
+    }>,
     showErrorMessage(message: string) { this.errorMessages.push(message); return Promise.resolve(undefined); },
     showInformationMessage(message: string) { this.infoMessages.push(message); return Promise.resolve(undefined); },
     showWarningMessage(message: string, _opts?: unknown, ...items: string[]) {
@@ -137,10 +144,12 @@ export const window = {
     showQuickPick() { return Promise.resolve(this.quickPickValue); },
     showSaveDialog(options: unknown) { this.saveDialogOptions.push(options); return Promise.resolve(this.saveDialogValue); },
     showTextDocument(document: unknown) { this.shownDocuments.push(document); return Promise.resolve(undefined); },
-    createTerminal(options: { name: string; cwd?: string }) {
+    createTerminal(options: { name: string; cwd?: string; hideFromUser?: boolean; isTransient?: boolean }) {
         const terminal = {
             name: options.name,
             cwd: options.cwd,
+            hideFromUser: options.hideFromUser,
+            isTransient: options.isTransient,
             texts: [] as string[],
             visible: false,
             show() { this.visible = true; },

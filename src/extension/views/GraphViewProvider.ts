@@ -4,6 +4,8 @@ import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, Work
 import type { GraphContextTarget } from '../../protocol/graph/types';
 import type { SerializedRepoContext } from '../../protocol/shared/repo';
 import { GraphMessageRouter } from '../messaging/GraphMessageRouter';
+import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
+import type { RemoteCommandBackend } from '../git/remote-command-backend';
 import { getWebviewHtml } from './webviewHtml';
 
 const GRAPH_COMMIT_COMMANDS: readonly { readonly id: string; readonly command: CommitCommand }[] = [
@@ -81,6 +83,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         private readonly extensionUri: vscode.Uri,
         private readonly repositories: ActiveRepositoryAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
+        private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -95,7 +98,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         this.router?.dispose();
         this.router = new GraphMessageRouter(this.repositories, (msg) => {
             webviewView.webview.postMessage(msg);
-        }, this.onRepositoryUpdated);
+        }, this.onRepositoryUpdated, this.remoteCommands);
 
         webviewView.webview.onDidReceiveMessage((msg: GraphWebviewToExtensionMessage) => {
             if (msg.type === 'graph/contextTarget') {

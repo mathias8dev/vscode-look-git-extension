@@ -6,6 +6,7 @@ import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessag
 import type { GraphExtensionToWebviewMessage } from '../../../src/protocol/graph/messages';
 import { makeRepositoryAccessor } from '../../helpers/repositoryMock';
 import { createBareGitRepo, createTempGitRepo, type TempGitRepo } from '../../helpers/gitRepo';
+import { executingRemoteCommandBackend } from '../../helpers/executing-remote-command-backend';
 import { commands, resetMockVscode, setInputBoxValue, setWarningChoice, window } from '../../mocks/vscode';
 
 describe('Graph branch commands against real git repos', () => {
@@ -380,5 +381,5 @@ function routerFor(
     onRepositoryUpdated: () => Promise<void> = async () => {},
 ): GraphMessageRouter {
     const repo = new GitProcessRepository(cwd);
-    return new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); }, onRepositoryUpdated);
+    return new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); }, onRepositoryUpdated, executingRemoteCommandBackend);
 }

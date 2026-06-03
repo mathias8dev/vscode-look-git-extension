@@ -5,6 +5,7 @@ import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepos
 import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessageRouter';
 import type { GraphExtensionToWebviewMessage } from '../../../src/protocol/graph/messages';
 import { addLinkedWorktree, createBareGitRepo, createTempGitRepo, type TempGitRepo } from '../../helpers/gitRepo';
+import { executingRemoteCommandBackend } from '../../helpers/executing-remote-command-backend';
 import { makeRepositoryAccessor } from '../../helpers/repositoryMock';
 import { commands, resetMockVscode, setInputBoxValue, setQuickPickValue, setWarningChoice, setWarningChoices } from '../../mocks/vscode';
 
@@ -113,5 +114,5 @@ describe('Graph worktree context commands against real git repos', () => {
 
 function routerFor(cwd: string, messages: GraphExtensionToWebviewMessage[] = []): GraphMessageRouter {
     const repo = new GitProcessRepository(cwd);
-    return new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+    return new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); }, async () => {}, executingRemoteCommandBackend);
 }

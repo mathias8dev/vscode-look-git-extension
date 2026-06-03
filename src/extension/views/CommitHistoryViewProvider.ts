@@ -11,6 +11,8 @@ import type { HistoryCommitDetails, HistoryCommitRef, HistoryContextTarget, Hist
 import type { HistoryCommitDetailsRequest, HistoryDataRequest, HistoryExtensionToWebviewMessage, HistoryOpenDiffRequest, HistoryToolbarCommand, HistoryWebviewToExtensionMessage } from '../../protocol/history/messages';
 import { runCommitCommand } from '../messaging/GraphMessageRouter';
 import { createErrorPayload } from '../messaging/errorSerialization';
+import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
+import { VscodeRemoteCommand, type RemoteCommandBackend } from '../git/remote-command-backend';
 import { getWebviewHtml } from './webviewHtml';
 
 const DEFAULT_PAGE: Pagination = { offset: 0, limit: 50 };
@@ -60,6 +62,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         private readonly extensionUri: vscode.Uri,
         private readonly repositories: ActiveRepositoryAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
+        private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -188,13 +191,13 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 await this.goToCurrentHistoryItem();
                 return;
             case 'fetchAll':
-                await this.runNativeGitToolbarOperation('fetchAll', 'git.fetchAll');
+                await this.runVscodeGitToolbarOperation('fetchAll', VscodeRemoteCommand.FetchAll);
                 return;
             case 'pull':
-                await this.runNativeGitToolbarOperation('pull', 'git.pull');
+                await this.runVscodeGitToolbarOperation('pull', VscodeRemoteCommand.Pull);
                 return;
             case 'push':
-                await this.runNativeGitToolbarOperation('push', 'git.push');
+                await this.runVscodeGitToolbarOperation('push', VscodeRemoteCommand.Push);
                 return;
         }
     }
@@ -227,10 +230,10 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async runNativeGitToolbarOperation(operation: 'fetchAll' | 'pull' | 'push', command: string): Promise<void> {
+    private async runVscodeGitToolbarOperation(operation: 'fetchAll' | 'pull' | 'push', command: VscodeRemoteCommand): Promise<void> {
         try {
-            this.repositories.requireRepository();
-            await vscode.commands.executeCommand(command);
+            const repo = this.repositories.requireRepository();
+            await this.remoteCommands.runVscode(repo, command);
             await Promise.all([
                 this.onRepositoryUpdated(),
                 this.refresh(),
@@ -318,7 +321,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
         try {
             const repo = this.repositories.requireRepository();
-            const shouldRefresh = await runCommitCommand(repo, command, target.hash, target.hashes);
+            const shouldRefresh = await runCommitCommand(repo, command, target.hash, target.hashes, this.remoteCommands);
             if (shouldRefresh) { await this.refresh(); }
         } catch (error) {
             this.postHistoryError(error, `history/${command}`, 'gitOperationFailed');

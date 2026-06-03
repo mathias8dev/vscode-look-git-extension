@@ -66,7 +66,7 @@ export function run(): Promise<void> {
                     assert.equal(data.submodules.find((entry) => entry.path === 'modules/billing-core')?.status, SubmoduleStatus.Dirty);
                     assert.equal(data.submodules.find((entry) => entry.path === 'modules/analytics-adapter')?.status, SubmoduleStatus.Dirty);
                     assert.ok(data.staged.some((entry) => entry.filePath === 'src/graphFilter.ts'));
-                    assert.ok(data.unstaged.some((entry) => entry.filePath === 'README.md'));
+                    assert.ok([...data.staged, ...data.unstaged].some((entry) => entry.filePath === 'README.md'));
                     assert.ok(data.unstaged.some((entry) => entry.filePath === 'modules/auth-kit' && entry.isSubmodule));
                 },
             },

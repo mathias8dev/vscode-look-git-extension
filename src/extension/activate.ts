@@ -4,6 +4,7 @@ import { ActiveRepositoryRegistry } from './repositories/ActiveRepositoryRegistr
 import { ChangesViewProvider } from './views/ChangesViewProvider';
 import { CommitHistoryViewProvider } from './views/CommitHistoryViewProvider';
 import { GraphViewProvider } from './views/GraphViewProvider';
+import { defaultRemoteCommandBackend } from './git/hybrid-remote-command-backend';
 import { getBuiltInGitApi } from './utils/gitExtension';
 import { registerReadonlyDiffDocumentProvider } from './utils/readonly-diff-documents';
 
@@ -18,13 +19,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         gitApi.repositories.find((r) => r.ui.selected) ?? gitApi.repositories[0];
 
     const repositories = new ActiveRepositoryRegistry();
+    const remoteCommands = defaultRemoteCommandBackend;
     const graphRepositoryRefreshers: Array<() => Promise<void>> = [];
     const graphProvider = new GraphViewProvider(context.extensionUri, repositories, async () => {
         await Promise.all(graphRepositoryRefreshers.map((refresh) => refresh()));
-    });
+    }, remoteCommands);
     const refreshGraph = () => graphProvider.refresh();
-    const changesProvider = new ChangesViewProvider(context.extensionUri, repositories, refreshGraph);
-    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshGraph);
+    const changesProvider = new ChangesViewProvider(context.extensionUri, repositories, refreshGraph, remoteCommands);
+    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshGraph, remoteCommands);
     graphRepositoryRefreshers.push(() => changesProvider.refresh(), () => commitHistoryProvider.refresh());
 
     context.subscriptions.push(

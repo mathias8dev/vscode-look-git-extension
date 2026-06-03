@@ -208,9 +208,11 @@ describe('GraphMessageRouter graph data', () => {
         await router.handle({ type: 'graph/worktreeCommand', command: 'lock', path: '/repo/.worktrees/a' });
         await router.handle({ type: 'graph/worktreeCommand', command: 'unlock', path: '/repo/.worktrees/a' });
 
-        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'fetch']);
-        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'pull']);
-        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'push']);
+        expect(window.terminals.slice(0, 3)).toEqual([
+            expect.objectContaining({ name: 'Look Git Remote: Worktree', cwd: '/repo/.worktrees/a', hideFromUser: true, isTransient: true, texts: ["git 'fetch'"], visible: false }),
+            expect.objectContaining({ name: 'Look Git Remote: Worktree', cwd: '/repo/.worktrees/a', hideFromUser: true, isTransient: true, texts: ["git 'pull'"], visible: false }),
+            expect.objectContaining({ name: 'Look Git Remote: Worktree', cwd: '/repo/.worktrees/a', hideFromUser: true, isTransient: true, texts: ["git 'push'"], visible: false }),
+        ]);
         expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'status', '--porcelain=v1', '-z', '-u']);
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'commit', '-m', 'feat: worktree commit']);
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'stash', 'push', '-u', '-m', 'wip: worktree stash']);
@@ -502,7 +504,8 @@ describe('GraphMessageRouter branch commands', () => {
 
         await router.handle({ type: 'graph/repositoryCommand', command: 'fetch' });
 
-        expect(vi.mocked(repo.fetchAll)).toHaveBeenCalledOnce();
+        expect(commands.calls).toContainEqual({ command: 'git.fetchAll', args: [] });
+        expect(vi.mocked(repo.fetchAll)).not.toHaveBeenCalled();
         expect(messages).toContainEqual({ type: 'graph/refreshRequested' });
         expect(onRepositoryUpdated).toHaveBeenCalledOnce();
     });
@@ -572,7 +575,8 @@ describe('GraphMessageRouter branch commands', () => {
         await router.handle({ type: 'graph/branchCommand', command: 'update', branch: 'topic', isRemote: false });
 
         expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['for-each-ref', '--format=%(upstream:short)', 'refs/heads/topic']);
-        expect(vi.mocked(repo.fetchBranch)).toHaveBeenCalledWith('origin', 'review/topic');
+        expect(commands.calls).toContainEqual({ command: 'git.fetchAll', args: [] });
+        expect(vi.mocked(repo.fetchBranch)).not.toHaveBeenCalled();
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['merge-base', '--is-ancestor', 'topic', 'origin/review/topic']);
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['branch', '-f', 'topic', 'origin/review/topic']);
         expect(messages).toContainEqual({ type: 'graph/refreshRequested' });
@@ -599,7 +603,14 @@ describe('GraphMessageRouter branch commands', () => {
 
         await router.handle({ type: 'graph/branchCommand', command: 'push', branch: 'topic', isRemote: false });
 
-        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['push', 'origin', 'topic:refs/heads/review/topic']);
+        expect(window.terminals).toContainEqual(expect.objectContaining({
+            name: 'Look Git Remote: topic',
+            cwd: '/workspace',
+            hideFromUser: true,
+            isTransient: true,
+            texts: ["git 'push' 'origin' 'topic:refs/heads/review/topic'"],
+            visible: false,
+        }));
     });
 
     it('pushes a new local branch to the first remote with upstream tracking', async () => {
@@ -611,7 +622,14 @@ describe('GraphMessageRouter branch commands', () => {
 
         await router.handle({ type: 'graph/branchCommand', command: 'push', branch: 'topic', isRemote: false });
 
-        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['push', '-u', 'upstream', 'topic']);
+        expect(window.terminals).toContainEqual(expect.objectContaining({
+            name: 'Look Git Remote: topic',
+            cwd: '/workspace',
+            hideFromUser: true,
+            isTransient: true,
+            texts: ["git 'push' '-u' 'upstream' 'topic'"],
+            visible: false,
+        }));
     });
 
     it('creates a worktree from a branch that is not already checked out', async () => {
@@ -697,8 +715,24 @@ describe('GraphMessageRouter branch commands', () => {
             { command: 'vscode.changes', args: ['Diff feature/a with a', changesResourcesAt(2)] },
         ]);
         expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', '--name-status', '-z', 'feature/a', '--']);
-        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'pull']);
-        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'push', '-u', 'origin', 'feature/a']);
+        expect(window.terminals).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                name: 'Look Git Remote: feature/a',
+                cwd: '/repo/.worktrees/a',
+                hideFromUser: true,
+                isTransient: true,
+                texts: ["git 'pull'"],
+                visible: false,
+            }),
+            expect.objectContaining({
+                name: 'Look Git Remote: feature/a',
+                cwd: '/repo/.worktrees/a',
+                hideFromUser: true,
+                isTransient: true,
+                texts: ["git 'push' '-u' 'origin' 'feature/a'"],
+                visible: false,
+            }),
+        ]));
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['worktree', 'lock', '/repo/.worktrees/a']);
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['worktree', 'unlock', '/repo/.worktrees/a']);
         expect(vi.mocked(repo.removeWorktree)).toHaveBeenCalledWith('/repo/.worktrees/a', false);
@@ -715,7 +749,14 @@ describe('GraphMessageRouter branch commands', () => {
 
         await router.handle({ type: 'graph/branchCommand', command: 'pushBranchWorktree', branch: 'feature/a', isRemote: false });
 
-        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'push', 'origin', 'feature/a:refs/heads/review/a']);
+        expect(window.terminals).toContainEqual(expect.objectContaining({
+            name: 'Look Git Remote: feature/a',
+            cwd: '/repo/.worktrees/a',
+            hideFromUser: true,
+            isTransient: true,
+            texts: ["git 'push' 'origin' 'feature/a:refs/heads/review/a'"],
+            visible: false,
+        }));
     });
 
     it('compares a branch with a chosen worktree', async () => {

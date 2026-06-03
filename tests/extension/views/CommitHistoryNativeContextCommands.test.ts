@@ -7,6 +7,7 @@ import type { HistoryCommitContextTarget, HistoryContextTarget, HistoryFileConte
 import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
 import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHistoryViewProvider';
 import { createBareGitRepo, createTempGitRepo, removeDirSyncWithRetry, type TempGitRepo } from '../../helpers/gitRepo';
+import { executingRemoteCommandBackend } from '../../helpers/executing-remote-command-backend';
 import { makeWebviewView, resetVscodeMock, type MockWebviewView } from '../../helpers/providerRuntime';
 import { makeRepositoryAccessor } from '../../helpers/repositoryMock';
 import { env, getCommandCalls, setInputBoxValue, setInputBoxValues, setQuickPickValue, setWarningChoice, window } from '../../mocks/vscode';
@@ -218,7 +219,7 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
 
     async function createHistoryHarness(cwd: string): Promise<{ readonly view: MockWebviewView }> {
         const repo = new GitProcessRepository(cwd);
-        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo), async () => {}, executingRemoteCommandBackend);
         const view = makeWebviewView();
 
         disposables.push(...provider.registerNativeContextCommands());
