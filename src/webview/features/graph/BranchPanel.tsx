@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { BranchCommand } from '../../../protocol/graph/messages';
-import type { BranchInfo, GraphContextTarget, WorktreeInfo } from '../../../protocol/graph/types';
+import type { BranchInfo, GraphContextTarget, GraphRepositoryScope, GraphSubmoduleInfo, WorktreeInfo } from '../../../protocol/graph/types';
 import { buildBranchTree, buildRemoteBranchTree } from './graphBranchTree';
 import { BranchTreeNode, type BranchTreeExpansionRequest } from './BranchTreeNode';
+import { GraphSubmoduleNode } from './GraphSubmoduleNode';
 import { IconButton } from '../../shared/IconButton';
 import { SearchInput } from '../../shared/SearchInput';
 import { selectBranchFilter } from './graphBranchSelection';
@@ -12,10 +13,14 @@ interface BranchPanelProps {
     readonly style?: CSSProperties;
     readonly branches: readonly BranchInfo[];
     readonly worktrees: readonly WorktreeInfo[];
+    readonly submodules: readonly GraphSubmoduleInfo[];
+    readonly repositoryScope?: GraphRepositoryScope;
     readonly currentBranch: string;
     readonly selectedBranchFilter: string | undefined;
     readonly selectedWorktreePath: string | undefined;
     readonly onSelectBranch: (branch: string | undefined) => void;
+    readonly onSelectMainRepository?: () => void;
+    readonly onSelectSubmoduleBranch?: (submodulePath: string, submoduleLabel: string, branch: string) => void;
     readonly onBranchCommand: (command: BranchCommand, branch: string, isRemote: boolean) => void;
     readonly onFetch: () => void;
     readonly onSelectWorktree: (path: string) => void;
@@ -28,10 +33,14 @@ export function BranchPanel({
     style,
     branches,
     worktrees,
+    submodules,
+    repositoryScope = { kind: 'main' },
     currentBranch,
     selectedBranchFilter,
     selectedWorktreePath,
     onSelectBranch,
+    onSelectMainRepository = () => undefined,
+    onSelectSubmoduleBranch = () => undefined,
     onBranchCommand,
     onFetch,
     onSelectWorktree,
@@ -43,14 +52,19 @@ export function BranchPanel({
     const [localCollapsed, setLocalCollapsed] = useState(false);
     const [remoteCollapsed, setRemoteCollapsed] = useState(false);
     const [worktreesCollapsed, setWorktreesCollapsed] = useState(false);
+    const [submodulesCollapsed, setSubmodulesCollapsed] = useState(false);
     const [treeExpansionRequest, setTreeExpansionRequest] = useState<BranchTreeExpansionRequest>({
         mode: 'expanded',
         version: 0,
     });
 
-    const filtered = search
-        ? branches.filter((b) => b.name.toLowerCase().includes(search.toLowerCase()))
+    const normalizedSearch = search.trim().toLowerCase();
+    const filtered = normalizedSearch
+        ? branches.filter((b) => b.name.toLowerCase().includes(normalizedSearch))
         : branches;
+    const filteredSubmodules = normalizedSearch
+        ? submodules.filter((submodule) => submoduleMatchesSearch(submodule, normalizedSearch))
+        : submodules;
 
     const localBranches = filtered.filter((b) => !b.isRemote);
     const remoteBranches = filtered.filter((b) => b.isRemote);
@@ -179,13 +193,28 @@ export function BranchPanel({
                     <div className="branch-search">
                         <SearchInput
                             value={search}
-                            placeholder="Branch or tag"
-                            ariaLabel="Search branches"
+                            placeholder="Branch, worktree, submodule"
+                            ariaLabel="Search branches, worktrees, and submodules"
                             onChange={setSearch}
                         />
                     </div>
 
                     <div className="branch-list">
+                        {repositoryScope.kind === 'submodule' ? (
+                            <button
+                                type="button"
+                                className="graph-resource-row graph-resource-row-clickable graph-scope-back-row"
+                                title={`Show main repository from ${repositoryScope.path ?? repositoryScope.label ?? 'submodule'}`}
+                                onClick={onSelectMainRepository}
+                            >
+                                <i className="codicon codicon-arrow-left branch-leaf-icon" aria-hidden="true" />
+                                <span className="branch-node-name">Main repository</span>
+                                <span className="graph-resource-badge">
+                                    {repositoryScope.label ?? repositoryScope.path ?? 'submodule'}
+                                </span>
+                            </button>
+                        ) : null}
+
                         {localTree.length > 0 && (
                             <div className="branch-group">
                                 <button
@@ -310,6 +339,33 @@ export function BranchPanel({
                             ))}
                         </div>
 
+                        {filteredSubmodules.length > 0 && (
+                            <div className="branch-group">
+                                <button
+                                    type="button"
+                                    className="branch-group-header"
+                                    onClick={() => setSubmodulesCollapsed(!submodulesCollapsed)}
+                                >
+                                    <i
+                                        className={`codicon codicon-chevron-${submodulesCollapsed ? 'right' : 'down'}`}
+                                        aria-hidden="true"
+                                    />
+                                    <span>Submodules</span>
+                                    <span className="graph-resource-count">{filteredSubmodules.length}</span>
+                                </button>
+                                {!submodulesCollapsed && filteredSubmodules.map((submodule) => (
+                                    <GraphSubmoduleNode
+                                        key={submodule.path}
+                                        submodule={submodule}
+                                        selectedSubmodulePath={repositoryScope.kind === 'submodule' ? repositoryScope.path : undefined}
+                                        selectedBranch={selectedBranchFilter}
+                                        expansionRequest={treeExpansionRequest}
+                                        forceExpanded={normalizedSearch.length > 0}
+                                        onSelectBranch={onSelectSubmoduleBranch}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -319,4 +375,15 @@ export function BranchPanel({
 
 function shortWorktreeBranch(branch: string | undefined): string | undefined {
     return branch?.replace(/^refs\/heads\//, '');
+}
+
+function submoduleMatchesSearch(submodule: GraphSubmoduleInfo, normalizedSearch: string): boolean {
+    return submodule.path.toLowerCase().includes(normalizedSearch)
+        || submodule.name.toLowerCase().includes(normalizedSearch)
+        || submodule.status.toLowerCase().includes(normalizedSearch)
+        || submodule.branches.some((branch) => branch.name.toLowerCase().includes(normalizedSearch))
+        || submodule.worktrees.some((worktree) => (
+            worktree.path.toLowerCase().includes(normalizedSearch)
+            || (worktree.branch?.toLowerCase().includes(normalizedSearch) ?? false)
+        ));
 }

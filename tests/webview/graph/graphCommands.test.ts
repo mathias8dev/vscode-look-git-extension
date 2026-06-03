@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { messageForBranchCommand, messageForCommitCommand, messageForGraphContextTarget, messageForGraphRepositoryCommand } from '../../../src/webview/features/graph/graphCommands';
+import { messageForBranchCommand, messageForCommitCommand, messageForCommitDetails, messageForGraphContextTarget, messageForGraphDataRequest, messageForGraphRepositoryCommand, messageForOpenDiff } from '../../../src/webview/features/graph/graphCommands';
 
 describe('graphCommands', () => {
     it('sends commit command selections', () => {
@@ -31,6 +31,32 @@ describe('graphCommands', () => {
         expect(messageForGraphRepositoryCommand('fetch')).toEqual({
             type: 'graph/repositoryCommand',
             command: 'fetch',
+        });
+    });
+
+    it('carries repository scope for graph and commit detail requests', () => {
+        const scope = { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' } as const;
+
+        expect(messageForGraphDataRequest('repo', {}, { offset: 0, limit: 20 }, scope)).toEqual(expect.objectContaining({
+            type: 'graph/dataRequest',
+            repoId: 'repo',
+            filters: {},
+            page: { offset: 0, limit: 20 },
+            repositoryScope: scope,
+        }));
+        expect(messageForCommitDetails('abc123', scope)).toEqual(expect.objectContaining({
+            type: 'graph/commitDetailsRequest',
+            hash: 'abc123',
+            repositoryScope: scope,
+        }));
+        expect(messageForOpenDiff('src/file.ts', 'abc123', 'M', undefined, undefined, scope)).toEqual({
+            type: 'graph/openDiff',
+            filePath: 'src/file.ts',
+            commitHash: 'abc123',
+            status: 'M',
+            origPath: undefined,
+            parentHash: undefined,
+            repositoryScope: scope,
         });
     });
 });

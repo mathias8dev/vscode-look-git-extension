@@ -1,4 +1,5 @@
 import type { Pagination } from '../shared/base';
+import type { SubmoduleStatus } from '../shared/repo';
 
 export interface GraphFilters {
     readonly search?: string;
@@ -10,6 +11,12 @@ export interface GraphFilters {
 }
 
 export type GraphPage = Pagination;
+
+export interface GraphRepositoryScope {
+    readonly kind: 'main' | 'submodule';
+    readonly path?: string;
+    readonly label?: string;
+}
 
 export interface GraphCommit {
     readonly hash: string;
@@ -58,7 +65,16 @@ export interface WorktreeWip {
     readonly conflicts: number;
 }
 
+export interface GraphSubmoduleInfo {
+    readonly path: string;
+    readonly name: string;
+    readonly status: SubmoduleStatus;
+    readonly branches: readonly BranchInfo[];
+    readonly worktrees: readonly WorktreeInfo[];
+}
+
 export interface GraphData {
+    readonly repositoryScope?: GraphRepositoryScope;
     readonly branches: readonly BranchInfo[];
     readonly tags: readonly TagInfo[];
     readonly commits: readonly GraphCommit[];
@@ -71,6 +87,7 @@ export interface GraphData {
     readonly repositoryWebUrl?: string;
     readonly worktrees: readonly WorktreeInfo[];
     readonly worktreeWips: readonly WorktreeWip[];
+    readonly submodules: readonly GraphSubmoduleInfo[];
     readonly currentBranchCommitHashes?: readonly string[];
 }
 
@@ -85,6 +102,7 @@ export interface GraphCommitContextTarget {
     readonly kind: 'commit';
     readonly hash: string;
     readonly hashes: readonly string[];
+    readonly repositoryScope?: GraphRepositoryScope;
     readonly childHash?: string;
     readonly parentHash?: string;
     readonly canUndoCommit: boolean;
@@ -94,11 +112,13 @@ export interface GraphBranchContextTarget {
     readonly kind: 'branch';
     readonly branch: string;
     readonly isRemote: boolean;
+    readonly repositoryScope?: GraphRepositoryScope;
 }
 
 export interface GraphWorktreeContextTarget {
     readonly kind: 'worktree';
     readonly path: string;
+    readonly repositoryScope?: GraphRepositoryScope;
 }
 
 export type GraphContextTarget =

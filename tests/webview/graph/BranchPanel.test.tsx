@@ -4,7 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { BranchCommand } from '../../../src/protocol/graph/messages';
-import type { BranchInfo } from '../../../src/protocol/graph/types';
+import type { BranchInfo, GraphSubmoduleInfo } from '../../../src/protocol/graph/types';
+import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 import { BranchPanel } from '../../../src/webview/features/graph/BranchPanel';
 
 describe('BranchPanel', () => {
@@ -13,6 +14,7 @@ describe('BranchPanel', () => {
             <BranchPanel
                 branches={[branch('feature/not-pushed', { isCurrent: true, ahead: 3, behind: 2, upstream: 'origin/feature/not-pushed' })]}
                 worktrees={[]}
+                submodules={[]}
                 currentBranch="feature/not-pushed"
                 selectedBranchFilter={undefined}
                 selectedWorktreePath={undefined}
@@ -49,6 +51,7 @@ describe('BranchPanel', () => {
                     isDetached: false,
                     isLocked: false,
                 }]}
+                submodules={[]}
                 currentBranch="main"
                 selectedBranchFilter={undefined}
                 selectedWorktreePath={undefined}
@@ -74,6 +77,7 @@ describe('BranchPanel', () => {
                     branch('feature/topic'),
                 ]}
                 worktrees={[]}
+                submodules={[]}
                 currentBranch="main"
                 selectedBranchFilter="feature/topic"
                 selectedWorktreePath={undefined}
@@ -109,6 +113,7 @@ describe('BranchPanel', () => {
                     branch('feature/topic'),
                 ]}
                 worktrees={[]}
+                submodules={[]}
                 currentBranch="main"
                 selectedBranchFilter="feature/topic"
                 selectedWorktreePath={undefined}
@@ -145,6 +150,7 @@ describe('BranchPanel', () => {
                     branch('origin/feature/topic', { isRemote: true }),
                 ]}
                 worktrees={[]}
+                submodules={[]}
                 currentBranch="main"
                 selectedBranchFilter="origin/feature/topic"
                 selectedWorktreePath={undefined}
@@ -170,6 +176,7 @@ describe('BranchPanel', () => {
                     branch('feature/topic'),
                 ]}
                 worktrees={[]}
+                submodules={[]}
                 currentBranch="main"
                 selectedBranchFilter={undefined}
                 selectedWorktreePath={undefined}
@@ -201,6 +208,7 @@ describe('BranchPanel', () => {
                     branch('feature/other'),
                 ]}
                 worktrees={[]}
+                submodules={[]}
                 currentBranch="main"
                 selectedBranchFilter={undefined}
                 selectedWorktreePath={undefined}
@@ -219,6 +227,75 @@ describe('BranchPanel', () => {
         expect(screen.queryByLabelText('View as List')).not.toBeInTheDocument();
         expect(screen.getByLabelText('Expand Branches')).not.toBeDisabled();
     });
+
+    it('renders expandable submodules with their own branches and worktrees', () => {
+        const onSelectSubmoduleBranch = vi.fn<(submodulePath: string, submoduleLabel: string, branch: string) => void>();
+
+        render(
+            <BranchPanel
+                branches={[branch('main', { isCurrent: true })]}
+                worktrees={[]}
+                submodules={[submodule('modules/auth-kit')]}
+                currentBranch="main"
+                selectedBranchFilter={undefined}
+                selectedWorktreePath={undefined}
+                onSelectBranch={() => undefined}
+                onSelectSubmoduleBranch={onSelectSubmoduleBranch}
+                onBranchCommand={() => undefined}
+                onFetch={() => undefined}
+                onSelectWorktree={() => undefined}
+                onOpenWorktree={() => undefined}
+                onAddWorktree={() => undefined}
+                onContextTarget={() => undefined}
+            />,
+        );
+
+        expect(screen.getByText('Submodules')).toBeInTheDocument();
+        expect(screen.getByText('auth-kit')).toBeInTheDocument();
+        expect(screen.getByText('dirty')).toBeInTheDocument();
+        expect(screen.getByTitle('2 branches')).toHaveTextContent('2b');
+        expect(screen.getByTitle('1 worktrees')).toHaveTextContent('1w');
+
+        fireEvent.click(screen.getByTitle('modules/auth-kit'));
+
+        expect(screen.getAllByText('Local')).toHaveLength(2);
+        expect(screen.getByTitle('feature/oauth')).toBeInTheDocument();
+        expect(screen.getByText('Remote')).toBeInTheDocument();
+        expect(screen.getByTitle('origin/release/1.4')).toBeInTheDocument();
+        expect(screen.getAllByText('Worktrees')).toHaveLength(2);
+        expect(screen.getByText('oauth-sandbox')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByTitle('feature/oauth'));
+        expect(onSelectSubmoduleBranch).toHaveBeenCalledWith('modules/auth-kit', 'auth-kit', 'feature/oauth');
+    });
+
+    it('renders a main repository action while scoped to a submodule', () => {
+        const onSelectMainRepository = vi.fn<() => void>();
+
+        render(
+            <BranchPanel
+                branches={[branch('feature/oauth', { isCurrent: true })]}
+                worktrees={[]}
+                submodules={[]}
+                repositoryScope={{ kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' }}
+                currentBranch="feature/oauth"
+                selectedBranchFilter="feature/oauth"
+                selectedWorktreePath={undefined}
+                onSelectBranch={() => undefined}
+                onSelectMainRepository={onSelectMainRepository}
+                onBranchCommand={() => undefined}
+                onFetch={() => undefined}
+                onSelectWorktree={() => undefined}
+                onOpenWorktree={() => undefined}
+                onAddWorktree={() => undefined}
+                onContextTarget={() => undefined}
+            />,
+        );
+
+        fireEvent.click(screen.getByText('Main repository'));
+
+        expect(onSelectMainRepository).toHaveBeenCalledOnce();
+    });
 });
 
 function branch(name: string, overrides: Partial<BranchInfo> = {}): BranchInfo {
@@ -228,5 +305,25 @@ function branch(name: string, overrides: Partial<BranchInfo> = {}): BranchInfo {
         isCurrent: false,
         hash: 'abc1234',
         ...overrides,
+    };
+}
+
+function submodule(path: string): GraphSubmoduleInfo {
+    return {
+        path,
+        name: path.split('/').at(-1) ?? path,
+        status: SubmoduleStatus.Dirty,
+        branches: [
+            branch('feature/oauth', { isCurrent: true }),
+            branch('origin/release/1.4', { isRemote: true }),
+        ],
+        worktrees: [{
+            path: '/repo/modules/auth-kit/.worktrees/oauth-sandbox',
+            head: 'def4567',
+            branch: 'refs/heads/oauth-sandbox',
+            isMain: false,
+            isDetached: false,
+            isLocked: false,
+        }],
     };
 }

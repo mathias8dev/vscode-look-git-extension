@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { GraphCommit, GraphData, WorktreeWip } from '../../../src/protocol/graph/types';
-import { buildDisplayRows, createInitialGraphState, reduceGraphState } from '../../../src/webview/features/graph/graphState';
+import type { BranchInfo, GraphCommit, GraphData, WorktreeWip } from '../../../src/protocol/graph/types';
+import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
+import { buildDisplayRows, createInitialGraphState, graphRequestId, reduceGraphState } from '../../../src/webview/features/graph/graphState';
 import type { GraphRow, LaneData } from '../../../src/webview/features/graph/layout/assignGraphLanes';
 
 function commit(hash: string, parents: readonly string[] = []): GraphCommit {
@@ -29,6 +30,16 @@ function graphData(commits: readonly GraphCommit[], loadedCount: number, hasMore
         hasRemotes: false,
         worktrees: [],
         worktreeWips: [],
+        submodules: [],
+    };
+}
+
+function branch(name: string): BranchInfo {
+    return {
+        name,
+        isRemote: false,
+        isCurrent: false,
+        hash: `${name}-hash`,
     };
 }
 
@@ -63,7 +74,7 @@ describe('graphState', () => {
             type: 'message',
             message: {
                 type: 'graph/dataResponse',
-                requestId: 'graph-1',
+                requestId: graphRequestId(0, 'replace'),
                 data: graphData([commit('b', ['a'])], 1, true),
             },
         });
@@ -75,7 +86,7 @@ describe('graphState', () => {
             type: 'message',
             message: {
                 type: 'graph/dataResponse',
-                requestId: 'graph-2',
+                requestId: graphRequestId(0, 'more', 1),
                 data: graphData([commit('b', ['a']), commit('a')], 2, false),
             },
         });
@@ -91,7 +102,7 @@ describe('graphState', () => {
             type: 'message',
             message: {
                 type: 'graph/dataResponse',
-                requestId: 'graph-loaded',
+                requestId: graphRequestId(0, 'replace'),
                 data: graphData([commit('b', ['a']), commit('a')], 2, true),
             },
         });
@@ -189,6 +200,7 @@ describe('graphState', () => {
             type: 'message',
             message: {
                 type: 'graph/error',
+                requestId: graphRequestId(0, 'replace'),
                 message: 'Graph failed',
                 error: {
                     code: 'gitOperationFailed',
@@ -202,7 +214,309 @@ describe('graphState', () => {
         const cleared = reduceGraphState(failed, { type: 'clearError' });
 
         expect(failed.error?.message).toBe('Graph failed');
+        expect(failed.activeGraphRequestId).toBeUndefined();
         expect(cleared.error).toBeUndefined();
+    });
+
+    it('keeps graph loading active for optional uncorrelated warnings', () => {
+        const warned = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/error',
+                message: 'Submodule branches unavailable',
+                error: {
+                    code: 'optionalDataUnavailable',
+                    message: 'Submodule branches unavailable',
+                    operation: 'graph/submoduleBranches',
+                    recoverable: true,
+                },
+            },
+        });
+
+        expect(warned.loading).toBe(true);
+        expect(warned.activeGraphRequestId).toBe(graphRequestId(0, 'replace'));
+        expect(warned.error?.code).toBe('optionalDataUnavailable');
+    });
+
+    it('ignores stale graph responses after a newer refresh response has completed', () => {
+        const refreshing = reduceGraphState(createInitialGraphState(), { type: 'refreshRequested' });
+        const fresh = reduceGraphState(refreshing, {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(1, 'replace'),
+                data: {
+                    ...graphData([commit('fresh')], 1, false),
+                    branches: [branch('main')],
+                    currentBranch: 'main',
+                },
+            },
+        });
+        const stale = reduceGraphState(fresh, {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: {
+                    ...graphData([commit('stale')], 1, false),
+                    branches: [branch('old')],
+                    currentBranch: 'old',
+                },
+            },
+        });
+
+        expect(stale.branches).toEqual([branch('main')]);
+        expect(stale.currentBranch).toBe('main');
+        expect(stale.rows.map((row) => row.commit.hash)).toEqual(['fresh']);
+    });
+
+    it('ignores graph errors correlated to an older request', () => {
+        const refreshing = reduceGraphState(createInitialGraphState(), { type: 'refreshRequested' });
+        const staleError = reduceGraphState(refreshing, {
+            type: 'message',
+            message: {
+                type: 'graph/error',
+                requestId: graphRequestId(0, 'replace'),
+                message: 'Old graph failed',
+                error: {
+                    code: 'gitOperationFailed',
+                    message: 'Old graph failed',
+                    operation: 'graph/dataRequest',
+                    recoverable: true,
+                },
+            },
+        });
+
+        expect(staleError.loading).toBe(true);
+        expect(staleError.activeGraphRequestId).toBe(graphRequestId(1, 'replace'));
+        expect(staleError.error).toBeUndefined();
+    });
+
+    it('stores graph submodule summaries from graph data', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: {
+                    ...graphData([commit('a')], 1, false),
+                    submodules: [{
+                        path: 'modules/auth-kit',
+                        name: 'auth-kit',
+                        status: SubmoduleStatus.Dirty,
+                        branches: [],
+                        worktrees: [],
+                    }],
+                },
+            },
+        });
+
+        expect(loaded.submodules).toEqual([{
+            path: 'modules/auth-kit',
+            name: 'auth-kit',
+            status: SubmoduleStatus.Dirty,
+            branches: [],
+            worktrees: [],
+        }]);
+    });
+
+    it('hydrates submodule summaries without recalculating graph rows', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: {
+                    ...graphData([commit('a')], 1, false),
+                    submodules: [{
+                        path: 'modules/auth-kit',
+                        name: 'auth-kit',
+                        status: SubmoduleStatus.Dirty,
+                        branches: [],
+                        worktrees: [],
+                    }],
+                },
+            },
+        });
+        const hydrated = reduceGraphState(loaded, {
+            type: 'message',
+            message: {
+                type: 'graph/submodulesPush',
+                repoId: '/repo',
+                repositoryScope: { kind: 'main' },
+                submodules: [{
+                    path: 'modules/auth-kit',
+                    name: 'auth-kit',
+                    status: SubmoduleStatus.Dirty,
+                    branches: [branch('feature/oauth')],
+                    worktrees: [],
+                }],
+            },
+        });
+
+        expect(hydrated.rows).toBe(loaded.rows);
+        expect(hydrated.displayRows).toBe(loaded.displayRows);
+        expect(hydrated.submodules[0]?.branches).toEqual([branch('feature/oauth')]);
+    });
+
+    it('preserves hydrated submodule summaries while loading more commits', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: {
+                    ...graphData([commit('b', ['a'])], 1, true),
+                    submodules: [{
+                        path: 'modules/auth-kit',
+                        name: 'auth-kit',
+                        status: SubmoduleStatus.Dirty,
+                        branches: [branch('feature/oauth')],
+                        worktrees: [],
+                    }],
+                },
+            },
+        });
+        const loadingMore = reduceGraphState(loaded, { type: 'startLoadMore' });
+        const next = reduceGraphState(loadingMore, {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'more', 1),
+                data: {
+                    ...graphData([commit('b', ['a']), commit('a')], 2, false),
+                    submodules: [{
+                        path: 'modules/auth-kit',
+                        name: 'auth-kit',
+                        status: SubmoduleStatus.Dirty,
+                        branches: [],
+                        worktrees: [],
+                    }],
+                },
+            },
+        });
+
+        expect(next.submodules[0]?.branches).toEqual([branch('feature/oauth')]);
+    });
+
+    it('switches graph requests to a selected submodule branch', () => {
+        const selected = reduceGraphState(
+            reduceGraphState(createInitialGraphState(), { type: 'selectCommit', hash: 'parent-hash' }),
+            {
+                type: 'selectSubmoduleBranch',
+                submodulePath: 'modules/auth-kit',
+                submoduleLabel: 'auth-kit',
+                branch: 'feature/oauth',
+            },
+        );
+
+        expect(selected.repositoryScope).toEqual({
+            kind: 'submodule',
+            path: 'modules/auth-kit',
+            label: 'auth-kit',
+        });
+        expect(selected.selectedBranchFilter).toBe('feature/oauth');
+        expect(selected.filters.branches).toEqual(['feature/oauth']);
+        expect(selected.loading).toBe(true);
+        expect(selected.selectedHash).toBeUndefined();
+        expect(selected.commitDetails).toBeUndefined();
+    });
+
+    it('returns from a submodule graph scope to the main repository', () => {
+        const scoped = reduceGraphState(createInitialGraphState(), {
+            type: 'selectSubmoduleBranch',
+            submodulePath: 'modules/auth-kit',
+            submoduleLabel: 'auth-kit',
+            branch: 'feature/oauth',
+        });
+        const main = reduceGraphState(scoped, { type: 'selectMainRepository' });
+
+        expect(main.repositoryScope).toEqual({ kind: 'main' });
+        expect(main.selectedBranchFilter).toBeUndefined();
+        expect(main.filters.branches).toBeUndefined();
+        expect(main.loading).toBe(true);
+    });
+
+    it('ignores stale graph responses for another repository scope', () => {
+        const scoped = reduceGraphState(createInitialGraphState(), {
+            type: 'selectSubmoduleBranch',
+            submodulePath: 'modules/auth-kit',
+            submoduleLabel: 'auth-kit',
+            branch: 'feature/oauth',
+        });
+        const loaded = reduceGraphState(scoped, {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(1, 'replace'),
+                data: {
+                    ...graphData([commit('submodule-head')], 1, false),
+                    repositoryScope: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
+                    branches: [branch('feature/oauth')],
+                    currentBranch: 'feature/oauth',
+                },
+            },
+        });
+        const refreshing = reduceGraphState(loaded, { type: 'refreshRequested' });
+        const stale = reduceGraphState(refreshing, {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: 'old-main-request',
+                data: {
+                    ...graphData([], 0, false),
+                    repositoryScope: { kind: 'main' },
+                    branches: [],
+                    currentBranch: 'main',
+                },
+            },
+        });
+
+        expect(stale.branches).toEqual([branch('feature/oauth')]);
+        expect(stale.currentBranch).toBe('feature/oauth');
+        expect(stale.repositoryScope).toEqual({ kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' });
+        expect(stale.loading).toBe(true);
+    });
+
+    it('does not replace submodule branch data with main repository data pushes', () => {
+        const scoped = reduceGraphState(createInitialGraphState(), {
+            type: 'selectSubmoduleBranch',
+            submodulePath: 'modules/auth-kit',
+            submoduleLabel: 'auth-kit',
+            branch: 'feature/oauth',
+        });
+        const loaded = reduceGraphState(scoped, {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(1, 'replace'),
+                data: {
+                    ...graphData([commit('submodule-head')], 1, false),
+                    repositoryScope: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
+                    branches: [branch('feature/oauth')],
+                    currentBranch: 'feature/oauth',
+                },
+            },
+        });
+        const pushed = reduceGraphState(loaded, {
+            type: 'message',
+            message: {
+                type: 'graph/dataPush',
+                repoId: '/repo',
+                data: {
+                    ...graphData([], 0, false),
+                    repositoryScope: { kind: 'main' },
+                    branches: [],
+                    currentBranch: 'main',
+                },
+            },
+        });
+
+        expect(pushed.branches).toEqual([branch('feature/oauth')]);
+        expect(pushed.currentBranch).toBe('feature/oauth');
+        expect(pushed.repositoryScope).toEqual({ kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' });
+        expect(pushed.loading).toBe(true);
+        expect(pushed.refreshVersion).toBe(2);
     });
 
     it('keeps multiple worktree WIP rows that point at the same commit', () => {

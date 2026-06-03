@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer } from 'react';
 import type { GraphExtensionToWebviewMessage } from '../../protocol/graph/messages';
-import type { CommitFileChange, GraphContextTarget } from '../../protocol/graph/types';
+import type { CommitFileChange, GraphContextTarget, GraphRepositoryScope } from '../../protocol/graph/types';
 import { BranchPanel } from '../features/graph/BranchPanel';
 import { CommitDetailsPanel } from '../features/graph/CommitDetailsPanel';
 import { GraphTable } from '../features/graph/GraphTable';
@@ -58,24 +58,39 @@ export function GraphApp() {
 
     useEffect(() => {
         if (!state.selectedHash) { return; }
-        vscodeApi.postMessage(messageForCommitDetails(state.selectedHash));
-    }, [state.selectedHash]);
+        vscodeApi.postMessage(messageForCommitDetails(state.selectedHash, state.repositoryScope));
+    }, [state.repositoryScope, state.selectedHash]);
 
     useEffect(() => {
         if (!state.selectedWorktreePath) { return; }
-        vscodeApi.postMessage(messageForWorktreeDetails(state.selectedWorktreePath));
-    }, [state.selectedWorktreePath]);
+        vscodeApi.postMessage(messageForWorktreeDetails(state.selectedWorktreePath, state.repositoryScope));
+    }, [state.repositoryScope, state.selectedWorktreePath]);
 
     useEffect(() => {
-        if (!state.loading) { return; }
+        if (!state.loading || !state.activeGraphRequestId) { return; }
         const repoId = state.repoId ?? 'default';
         const limit = Math.max(PAGE_LIMIT, state.loadedCount || PAGE_LIMIT);
-        vscodeApi.postMessage(messageForGraphDataRequest(
+        const message = messageForGraphDataRequest(
             repoId,
             state.filters,
             { offset: 0, limit },
+            state.repositoryScope,
+            state.activeGraphRequestId,
+        );
+        vscodeApi.postMessage(message);
+    }, [state.activeGraphRequestId, state.filters, state.loading, state.repoId, state.loadedCount, state.repositoryScope]);
+
+    useEffect(() => {
+        if (!state.loadingMore || !state.activeGraphRequestId) { return; }
+        const repoId = state.repoId ?? 'default';
+        vscodeApi.postMessage(messageForLoadMore(
+            repoId,
+            state.filters,
+            { offset: state.loadedCount, limit: PAGE_LIMIT },
+            state.repositoryScope,
+            state.activeGraphRequestId,
         ));
-    }, [state.filters, state.loading, state.repoId, state.loadedCount, state.refreshVersion]);
+    }, [state.activeGraphRequestId, state.filters, state.loadedCount, state.loadingMore, state.repoId, state.repositoryScope]);
 
     useEffect(() => {
         if (!state.error) { return; }
@@ -86,13 +101,7 @@ export function GraphApp() {
     const handleLoadMore = useCallback(() => {
         if (!state.hasMore || state.loading || state.loadingMore) { return; }
         dispatch({ type: 'startLoadMore' });
-        const repoId = state.repoId ?? 'default';
-        vscodeApi.postMessage(messageForLoadMore(
-            repoId,
-            state.filters,
-            { offset: state.loadedCount, limit: PAGE_LIMIT },
-        ));
-    }, [state.hasMore, state.loading, state.loadingMore, state.repoId, state.filters, state.loadedCount]);
+    }, [state.hasMore, state.loading, state.loadingMore]);
 
     const handleDiff = useCallback((file: CommitFileChange) => {
         if (state.commitDetails?.kind === 'worktree' && state.commitDetails.path) {
@@ -101,6 +110,7 @@ export function GraphApp() {
                 file.filePath,
                 file.status,
                 file.origPath,
+                state.repositoryScope,
             ));
             return;
         }
@@ -111,8 +121,9 @@ export function GraphApp() {
             file.status,
             file.origPath,
             file.parentHash,
+            state.repositoryScope,
         ));
-    }, [state.commitDetails, state.selectedHash]);
+    }, [state.commitDetails, state.repositoryScope, state.selectedHash]);
 
     const handleSelectCommit = useCallback((hash: string, mode: 'replace' | 'toggle' | 'range') => {
         if (mode === 'toggle') {
@@ -131,8 +142,8 @@ export function GraphApp() {
     }, []);
 
     const handleContextTarget = useCallback((target: GraphContextTarget) => {
-        vscodeApi.postMessage(messageForGraphContextTarget(target));
-    }, []);
+        vscodeApi.postMessage(messageForGraphContextTarget(contextTargetForScope(target, state.repositoryScope)));
+    }, [state.repositoryScope]);
 
     return (
         <div className="graph-shell">
@@ -151,15 +162,19 @@ export function GraphApp() {
                         style={style}
                         branches={state.branches}
                         worktrees={state.worktrees}
+                        submodules={state.submodules}
+                        repositoryScope={state.repositoryScope}
                         currentBranch={state.currentBranch}
                         selectedBranchFilter={state.selectedBranchFilter}
                         selectedWorktreePath={state.selectedWorktreePath}
                         onSelectBranch={(branch) => dispatch({ type: 'setBranchFilter', branch })}
-                        onBranchCommand={(command, branch, isRemote) => vscodeApi.postMessage(messageForBranchCommand(command, branch, isRemote))}
-                        onFetch={() => vscodeApi.postMessage(messageForGraphRepositoryCommand('fetch'))}
+                        onSelectMainRepository={() => dispatch({ type: 'selectMainRepository' })}
+                        onSelectSubmoduleBranch={(submodulePath, submoduleLabel, branch) => dispatch({ type: 'selectSubmoduleBranch', submodulePath, submoduleLabel, branch })}
+                        onBranchCommand={(command, branch, isRemote) => vscodeApi.postMessage(messageForBranchCommand(command, branch, isRemote, state.repositoryScope))}
+                        onFetch={() => vscodeApi.postMessage(messageForGraphRepositoryCommand('fetch', state.repositoryScope))}
                         onSelectWorktree={handleSelectWorktree}
-                        onOpenWorktree={(path) => vscodeApi.postMessage(messageForWorktreeCommand('openInNewWindow', path))}
-                        onAddWorktree={() => vscodeApi.postMessage(messageForWorktreeCommand('add'))}
+                        onOpenWorktree={(path) => vscodeApi.postMessage(messageForWorktreeCommand('openInNewWindow', path, state.repositoryScope))}
+                        onAddWorktree={() => vscodeApi.postMessage(messageForWorktreeCommand('add', undefined, state.repositoryScope))}
                         onContextTarget={handleContextTarget}
                     />
                 )}
@@ -196,7 +211,7 @@ export function GraphApp() {
                     onSelectWorktree={handleSelectWorktree}
                     onContextTarget={handleContextTarget}
                     onLoadMore={handleLoadMore}
-                    onBranchDoubleClick={(branch, isRemote) => vscodeApi.postMessage(messageForBranchCheckout(branch, isRemote))}
+                    onBranchDoubleClick={(branch, isRemote) => vscodeApi.postMessage(messageForBranchCheckout(branch, isRemote, state.repositoryScope))}
                 />
             </div>
 
@@ -233,4 +248,9 @@ function selectedRangeHashes(hashes: readonly string[], anchorHash: string, focu
     const start = Math.min(anchorIndex, focusIndex);
     const end = Math.max(anchorIndex, focusIndex);
     return hashes.slice(start, end + 1);
+}
+
+function contextTargetForScope(target: GraphContextTarget, repositoryScope: GraphRepositoryScope): GraphContextTarget {
+    if (repositoryScope.kind === 'main') { return target; }
+    return { ...target, repositoryScope };
 }

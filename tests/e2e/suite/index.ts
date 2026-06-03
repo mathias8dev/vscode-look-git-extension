@@ -11,9 +11,9 @@ import type { ActiveRepositoryAccessor } from '../../../src/extension/repositori
 import { getConfiguredWebviewFontSize, registerWebviewFontSizeSync } from '../../../src/extension/views/webview-font';
 import type { ChangesExtensionToWebviewMessage } from '../../../src/protocol/changes/messages';
 import { ConflictState } from '../../../src/protocol/changes/types';
-import type { GraphDataResponse, GraphExtensionToWebviewMessage, WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
+import type { GraphDataResponse, GraphExtensionToWebviewMessage, GraphSubmodulesPush, WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
 import type { GraphRow } from '../../../src/webview/features/graph/layout/assignGraphLanes';
-import { createInitialGraphState, reduceGraphState } from '../../../src/webview/features/graph/graphState';
+import { createInitialGraphState, reduceGraphState, type GraphState } from '../../../src/webview/features/graph/graphState';
 import { addLinkedWorktree, createBareGitRepo, createTempGitRepo, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
 import { getFixtureRepoPath, gitFixtureOutput } from '../../helpers/fixtureRepo';
 import { findAdjacentDisconnectedSameLaneIssues, findCommitLanePassThroughIssues, findFloatingNodeIssues, findLaneContinuityIssues, findNonVisibleLineTargetIssues } from '../../helpers/graphLayoutAssertions';
@@ -73,6 +73,12 @@ export function run(): Promise<void> {
                 await vscode.commands.executeCommand('lookGit.graphView.focus');
                 const commands = await vscode.commands.getCommands(true);
                 assert.ok(commands.includes('lookGit.graphView.focus'));
+            },
+        },
+        {
+            name: 'keeps graph branches visible across user refresh stories',
+            run: async () => {
+                await runGraphBranchRefreshStoriesE2E();
             },
         },
         {
@@ -323,25 +329,128 @@ async function runWebviewFontSizeConfigurationE2E(): Promise<void> {
     }
 }
 
+async function runGraphBranchRefreshStoriesE2E(): Promise<void> {
+    await runLocalAndRemoteBranchRefreshStoryE2E();
+    await runSubmoduleBranchRefreshStoryE2E();
+}
+
+async function runLocalAndRemoteBranchRefreshStoryE2E(): Promise<void> {
+    const fixture = createTempGitRepo();
+    const remote = createBareGitRepo();
+    const messages: GraphExtensionToWebviewMessage[] = [];
+
+    try {
+        fixture.commitFile('README.md', '# Branch refresh\n', 'docs(graph): add branch refresh fixture');
+        fixture.git(['remote', 'add', 'origin', remote.cwd]);
+        fixture.git(['push', '-u', 'origin', 'main']);
+        fixture.git(['checkout', '-q', '-b', 'feature/existing']);
+        fixture.commitFile('feature.txt', 'feature\n', 'feat(graph): add existing feature branch');
+        fixture.git(['push', '-u', 'origin', 'feature/existing']);
+        fixture.git(['checkout', '-q', 'main']);
+        fixture.git(['fetch', '-q', 'origin']);
+
+        const router = routerFor(fixture.cwd, messages);
+        let state = createInitialGraphState();
+        const initialResponse = await requestGraphDataForState(router, messages, state, 'branch-refresh-local');
+        state = reduceGraphState(state, { type: 'message', message: initialResponse });
+        assertBranchNamesInclude(state, ['main', 'feature/existing', 'origin/main', 'origin/feature/existing'], 'initial local/remote branch refresh story');
+
+        const firstRefresh = reduceGraphState(state, { type: 'refreshRequested' });
+        const staleResponse = await requestGraphDataForState(router, messages, firstRefresh, 'branch-refresh-local');
+
+        fixture.git(['branch', 'feature/created-after-refresh']);
+        const secondRefresh = reduceGraphState(firstRefresh, { type: 'refreshRequested' });
+        const freshResponse = await requestGraphDataForState(router, messages, secondRefresh, 'branch-refresh-local');
+        state = reduceGraphState(secondRefresh, { type: 'message', message: freshResponse });
+
+        assertBranchNamesInclude(state, ['main', 'feature/existing', 'feature/created-after-refresh', 'origin/main', 'origin/feature/existing'], 'fresh local/remote branch refresh story');
+        const branchNamesAfterFreshRefresh = branchNames(state);
+
+        state = reduceGraphState(state, { type: 'message', message: staleResponse });
+
+        assert.deepEqual(branchNames(state), branchNamesAfterFreshRefresh, 'A late older graph response must not remove branches from the branch panel state.');
+        assertNoGraphError(messages);
+    } finally {
+        fixture.cleanup();
+        remote.cleanup();
+    }
+}
+
+async function runSubmoduleBranchRefreshStoryE2E(): Promise<void> {
+    const source = createTempGitRepo();
+    const parent = createTempGitRepo();
+    const messages: GraphExtensionToWebviewMessage[] = [];
+
+    try {
+        source.commitFile('README.md', '# Auth Kit\n', 'docs(auth-kit): add module readme');
+        source.git(['checkout', '-q', '-b', 'feature/oauth']);
+        source.commitFile('src/oauth.ts', 'export const oauth = true;\n', 'feat(auth-kit): add oauth support');
+        source.git(['checkout', '-q', 'main']);
+
+        parent.commitFile('README.md', '# Parent\n', 'docs(submodules): add parent readme');
+        parent.git(['-c', 'protocol.file.allow=always', 'submodule', 'add', source.cwd, 'modules/auth-kit']);
+        parent.git(['-C', 'modules/auth-kit', 'checkout', '-q', '-b', 'feature/oauth', 'origin/feature/oauth']);
+        parent.commit('feat(submodules): add auth-kit module');
+
+        const router = routerFor(parent.cwd, messages);
+        let state = createInitialGraphState();
+        const parentResponse = await requestGraphDataForState(router, messages, state, 'submodule-branch-refresh');
+        state = reduceGraphState(state, { type: 'message', message: parentResponse });
+
+        const submodule = state.submodules.find((candidate) => candidate.path === 'modules/auth-kit');
+        assert.ok(submodule, 'Expected the parent graph data to expose the auth-kit submodule.');
+
+        const submodulesPush = await waitForGraphSubmodulesPush(messages, 'modules/auth-kit');
+        state = reduceGraphState(state, { type: 'message', message: submodulesPush });
+
+        const hydratedSubmodule = state.submodules.find((candidate) => candidate.path === 'modules/auth-kit');
+        assert.ok(hydratedSubmodule?.branches.some((branch) => branch.name === 'feature/oauth'), 'Expected hydrated submodule branch list to include feature/oauth.');
+
+        state = reduceGraphState(state, {
+            type: 'selectSubmoduleBranch',
+            submodulePath: 'modules/auth-kit',
+            submoduleLabel: 'auth-kit',
+            branch: 'feature/oauth',
+        });
+        const scopedResponse = await requestGraphDataForState(router, messages, state, 'submodule-branch-refresh');
+        state = reduceGraphState(state, { type: 'message', message: scopedResponse });
+
+        assert.equal(state.repositoryScope.kind, 'submodule');
+        assertBranchNamesInclude(state, ['feature/oauth'], 'selected submodule branch refresh story');
+        const submoduleBranchNames = branchNames(state);
+
+        await router.pushGraphData({}, undefined);
+        state = reduceGraphState(state, { type: 'message', message: lastGraphDataPush(messages) });
+
+        assert.equal(state.repositoryScope.kind, 'submodule');
+        assert.deepEqual(branchNames(state), submoduleBranchNames, 'A parent repository data push must not replace the selected submodule branch list.');
+        assert.equal(state.loading, true);
+
+        const refreshedScopedResponse = await requestGraphDataForState(router, messages, state, 'submodule-branch-refresh');
+        state = reduceGraphState(state, { type: 'message', message: refreshedScopedResponse });
+
+        assert.equal(state.repositoryScope.kind, 'submodule');
+        assertBranchNamesInclude(state, ['feature/oauth'], 'refreshed selected submodule branch story');
+        assertNoGraphError(messages);
+    } finally {
+        parent.cleanup();
+        source.cleanup();
+    }
+}
+
 async function runFloatingGraphNodeLayoutE2E(): Promise<void> {
     const fixture = createTempGitRepo();
     const messages: GraphExtensionToWebviewMessage[] = [];
     try {
         createFloatingNodeGraphFixture(fixture);
         const router = routerFor(fixture.cwd, messages);
-        await router.handle({
-            type: 'graph/dataRequest',
-            requestId: 'floating-layout',
-            repoId: 'floating-layout',
-            filters: {},
-            page: { offset: 0, limit: 50 },
-        });
+        let state = createInitialGraphState();
+        const response = await requestGraphDataForState(router, messages, state, 'floating-layout', 50);
 
         assertNoGraphError(messages);
-        const response = graphDataResponse(messages, 'floating-layout');
         assert.equal(response.data.commits.some((commit) => commit.refs.includes('refs/stash')), false);
         assert.equal(response.data.commits.some((commit) => commit.message.includes('stash graph fixture')), false);
-        const state = reduceGraphState(createInitialGraphState(), { type: 'message', message: response });
+        state = reduceGraphState(state, { type: 'message', message: response });
         assertGraphLayout(state.rows, 'crossing graph fixture');
     } finally {
         fixture.cleanup();
@@ -352,17 +461,11 @@ async function runFloatingGraphNodeLayoutE2E(): Promise<void> {
     try {
         createLargeOctopusGraphFixture(largeFixture);
         const router = routerFor(largeFixture.cwd, largeMessages);
-        await router.handle({
-            type: 'graph/dataRequest',
-            requestId: 'large-floating-layout',
-            repoId: 'large-floating-layout',
-            filters: {},
-            page: { offset: 0, limit: 100 },
-        });
+        let state = createInitialGraphState();
+        const response = await requestGraphDataForState(router, largeMessages, state, 'large-floating-layout', 100);
 
         assertNoGraphError(largeMessages);
-        const response = graphDataResponse(largeMessages, 'large-floating-layout');
-        const state = reduceGraphState(createInitialGraphState(), { type: 'message', message: response });
+        state = reduceGraphState(state, { type: 'message', message: response });
         const topicRows = state.rows.filter((row) => row.commit.message.startsWith('feat(graph): add octopus topic'));
         const baseRow = state.rows.find((row) => row.commit.message === 'feat(graph): add octopus base');
         assert.ok(Math.max(...topicRows.map((row) => row.laneData.lane)) >= 12, 'Expected the fixture to open many graph lanes.');
@@ -373,35 +476,25 @@ async function runFloatingGraphNodeLayoutE2E(): Promise<void> {
     }
 
     const filteredFixture = createTempGitRepo();
-    const filteredMessages: GraphExtensionToWebviewMessage[] = [];
     try {
         createFilteredHistoryGraphFixture(filteredFixture);
-        const router = routerFor(filteredFixture.cwd, filteredMessages);
-        await router.handle({
-            type: 'graph/dataRequest',
-            requestId: 'path-filtered-layout',
-            repoId: 'path-filtered-layout',
-            filters: { path: 'graph/selected.txt' },
-            page: { offset: 0, limit: 80 },
-        });
+        const pathMessages: GraphExtensionToWebviewMessage[] = [];
+        const pathRouter = routerFor(filteredFixture.cwd, pathMessages);
+        let pathFilteredState = reduceGraphState(createInitialGraphState(), { type: 'setFilters', filters: { path: 'graph/selected.txt' } });
+        const pathFilteredResponse = await requestGraphDataForState(pathRouter, pathMessages, pathFilteredState, 'path-filtered-layout', 80);
 
-        assertNoGraphError(filteredMessages);
-        const pathFilteredResponse = graphDataResponse(filteredMessages, 'path-filtered-layout');
-        const pathFilteredState = reduceGraphState(createInitialGraphState(), { type: 'message', message: pathFilteredResponse });
+        assertNoGraphError(pathMessages);
+        pathFilteredState = reduceGraphState(pathFilteredState, { type: 'message', message: pathFilteredResponse });
         assert.ok(pathFilteredState.rows.length >= 8, 'Expected path-filtered graph to include sparse selected-path commits.');
         assertGraphLayout(pathFilteredState.rows, 'path-filtered sparse graph fixture');
 
-        await router.handle({
-            type: 'graph/dataRequest',
-            requestId: 'search-filtered-layout',
-            repoId: 'search-filtered-layout',
-            filters: { search: 'needle' },
-            page: { offset: 0, limit: 80 },
-        });
+        const searchMessages: GraphExtensionToWebviewMessage[] = [];
+        const searchRouter = routerFor(filteredFixture.cwd, searchMessages);
+        let searchFilteredState = reduceGraphState(createInitialGraphState(), { type: 'setFilters', filters: { search: 'needle' } });
+        const searchFilteredResponse = await requestGraphDataForState(searchRouter, searchMessages, searchFilteredState, 'search-filtered-layout', 80);
 
-        assertNoGraphError(filteredMessages);
-        const searchFilteredResponse = graphDataResponse(filteredMessages, 'search-filtered-layout');
-        const searchFilteredState = reduceGraphState(createInitialGraphState(), { type: 'message', message: searchFilteredResponse });
+        assertNoGraphError(searchMessages);
+        searchFilteredState = reduceGraphState(searchFilteredState, { type: 'message', message: searchFilteredResponse });
         assert.ok(searchFilteredState.rows.some((row) => row.commit.message.includes('needle')), 'Expected search-filtered graph to include matching commits.');
         assertGraphLayout(searchFilteredState.rows, 'search-filtered non-contiguous graph fixture');
     } finally {
@@ -413,32 +506,19 @@ async function runFloatingGraphNodeLayoutE2E(): Promise<void> {
     try {
         createLargeOctopusGraphFixture(pagedFixture);
         const router = routerFor(pagedFixture.cwd, pagedMessages);
-        await router.handle({
-            type: 'graph/dataRequest',
-            requestId: 'paged-layout-first',
-            repoId: 'paged-layout',
-            filters: {},
-            page: { offset: 0, limit: 6 },
-        });
+        let state = createInitialGraphState();
+        const firstResponse = await requestGraphDataForState(router, pagedMessages, state, 'paged-layout', 6);
 
         assertNoGraphError(pagedMessages);
-        const firstResponse = graphDataResponse(pagedMessages, 'paged-layout-first');
-        let state = reduceGraphState(createInitialGraphState(), { type: 'message', message: firstResponse });
+        state = reduceGraphState(state, { type: 'message', message: firstResponse });
         const lockedLanes = new Map(state.rows.map((row) => [row.commit.hash, row.laneData.lane]));
         assert.ok(state.hasMore, 'Expected first graph page to have more commits.');
         assertGraphLayout(state.rows, 'first paged graph fixture');
 
         state = reduceGraphState(state, { type: 'startLoadMore' });
-        await router.handle({
-            type: 'graph/loadMore',
-            requestId: 'paged-layout-more',
-            repoId: 'paged-layout',
-            filters: {},
-            page: { offset: state.loadedCount, limit: 40 },
-        });
+        const moreResponse = await requestGraphLoadMoreForState(router, pagedMessages, state, 'paged-layout', 40);
 
         assertNoGraphError(pagedMessages);
-        const moreResponse = graphDataResponse(pagedMessages, 'paged-layout-more');
         state = reduceGraphState(state, { type: 'message', message: moreResponse });
         for (const [hash, lane] of lockedLanes) {
             const row = state.rows.find((candidate) => candidate.commit.hash === hash);
@@ -454,17 +534,11 @@ async function runFloatingGraphNodeLayoutE2E(): Promise<void> {
     try {
         createPathologicalMergeGraphFixture(pathologicalFixture);
         const router = routerFor(pathologicalFixture.cwd, pathologicalMessages);
-        await router.handle({
-            type: 'graph/dataRequest',
-            requestId: 'pathological-merge-layout',
-            repoId: 'pathological-merge-layout',
-            filters: {},
-            page: { offset: 0, limit: 120 },
-        });
+        let state = createInitialGraphState();
+        const response = await requestGraphDataForState(router, pathologicalMessages, state, 'pathological-merge-layout', 120);
 
         assertNoGraphError(pathologicalMessages);
-        const response = graphDataResponse(pathologicalMessages, 'pathological-merge-layout');
-        const state = reduceGraphState(createInitialGraphState(), { type: 'message', message: response });
+        state = reduceGraphState(state, { type: 'message', message: response });
         assert.ok(Math.max(...state.rows.map((row) => row.laneData.lane)) >= 3, 'Expected pathological merge fixture to open several lanes.');
         assertGraphLayout(state.rows, 'pathological merge graph fixture');
     } finally {
@@ -484,61 +558,36 @@ async function runFloatingGraphNodeLayoutE2E(): Promise<void> {
 
         const fullMessages: GraphExtensionToWebviewMessage[] = [];
         const fullRouter = routerFor(repoPath, fullMessages);
-        await fullRouter.handle({
-            type: 'graph/dataRequest',
-            requestId: 'graph-heavy-full-layout',
-            repoId: 'graph-heavy-full-layout',
-            filters: {},
-            page: { offset: 0, limit: 700 },
-        });
+        let fullState = createInitialGraphState();
+        const fullResponse = await requestGraphDataForState(fullRouter, fullMessages, fullState, 'graph-heavy-full-layout', 700);
 
         assertNoGraphError(fullMessages);
-        const fullResponse = graphDataResponse(fullMessages, 'graph-heavy-full-layout');
-        const fullState = reduceGraphState(createInitialGraphState(), { type: 'message', message: fullResponse });
+        fullState = reduceGraphState(fullState, { type: 'message', message: fullResponse });
         assert.ok(fullState.rows.length >= 500, 'Expected graph-heavy fixture to render a very large history.');
         assert.ok(Math.max(...fullState.rows.map((row) => row.laneData.lane)) >= 8, 'Expected graph-heavy fixture to open many lanes.');
         assertGraphLayout(fullState.rows, 'lookGit graph-heavy full fixture');
 
         const pathMessages: GraphExtensionToWebviewMessage[] = [];
         const pathRouter = routerFor(repoPath, pathMessages);
-        await pathRouter.handle({
-            type: 'graph/dataRequest',
-            requestId: 'graph-heavy-path-layout',
-            repoId: 'graph-heavy-path-layout',
-            filters: { path: 'src/graph/shared-filter.ts' },
-            page: { offset: 0, limit: 120 },
-        });
+        let pathState = reduceGraphState(createInitialGraphState(), { type: 'setFilters', filters: { path: 'src/graph/shared-filter.ts' } });
+        const pathResponse = await requestGraphDataForState(pathRouter, pathMessages, pathState, 'graph-heavy-path-layout', 120);
 
         assertNoGraphError(pathMessages);
-        const pathResponse = graphDataResponse(pathMessages, 'graph-heavy-path-layout');
-        const pathState = reduceGraphState(createInitialGraphState(), { type: 'message', message: pathResponse });
+        pathState = reduceGraphState(pathState, { type: 'message', message: pathResponse });
         assert.ok(pathState.rows.length >= 20, 'Expected graph-heavy path filter to render a sparse selected-path history.');
         assertGraphLayout(pathState.rows, 'lookGit graph-heavy path-filter fixture');
 
         const pagedMessages: GraphExtensionToWebviewMessage[] = [];
         const pagedRouter = routerFor(repoPath, pagedMessages);
-        await pagedRouter.handle({
-            type: 'graph/dataRequest',
-            requestId: 'graph-heavy-paged-first',
-            repoId: 'graph-heavy-paged',
-            filters: {},
-            page: { offset: 0, limit: 80 },
-        });
+        let pagedState = createInitialGraphState();
+        const firstResponse = await requestGraphDataForState(pagedRouter, pagedMessages, pagedState, 'graph-heavy-paged', 80);
         assertNoGraphError(pagedMessages);
-        const firstResponse = graphDataResponse(pagedMessages, 'graph-heavy-paged-first');
-        let pagedState = reduceGraphState(createInitialGraphState(), { type: 'message', message: firstResponse });
+        pagedState = reduceGraphState(pagedState, { type: 'message', message: firstResponse });
         const lockedLanes = new Map(pagedState.rows.map((row) => [row.commit.hash, row.laneData.lane]));
 
         pagedState = reduceGraphState(pagedState, { type: 'startLoadMore' });
-        await pagedRouter.handle({
-            type: 'graph/loadMore',
-            requestId: 'graph-heavy-paged-more',
-            repoId: 'graph-heavy-paged',
-            filters: {},
-            page: { offset: pagedState.loadedCount, limit: 420 },
-        });
+        const moreResponse = await requestGraphLoadMoreForState(pagedRouter, pagedMessages, pagedState, 'graph-heavy-paged', 420);
         assertNoGraphError(pagedMessages);
-        const moreResponse = graphDataResponse(pagedMessages, 'graph-heavy-paged-more');
         pagedState = reduceGraphState(pagedState, { type: 'message', message: moreResponse });
         for (const [hash, lane] of lockedLanes) {
             const row = pagedState.rows.find((candidate) => candidate.commit.hash === hash);
@@ -563,17 +612,10 @@ async function runWorktreeWipRowsE2E(): Promise<void> {
         const repoPath = path.join(outputRoot, 'worktrees');
         const messages: GraphExtensionToWebviewMessage[] = [];
         const router = routerFor(repoPath, messages);
-
-        await router.handle({
-            type: 'graph/dataRequest',
-            requestId: 'worktree-wips',
-            repoId: 'worktree-wips',
-            filters: {},
-            page: { offset: 0, limit: 120 },
-        });
+        let state = createInitialGraphState();
+        const response = await requestGraphDataForState(router, messages, state, 'worktree-wips');
 
         assertNoGraphError(messages);
-        const response = graphDataResponse(messages, 'worktree-wips');
         const wipsByName = new Map(response.data.worktreeWips.map((wip) => [path.basename(wip.path), wip]));
 
         assert.equal(response.data.worktrees.length, 6);
@@ -607,7 +649,7 @@ async function runWorktreeWipRowsE2E(): Promise<void> {
         }
         assert.ok(Array.from(heads.values()).some((count) => count > 1), 'Expected multiple dirty worktrees to share one head.');
 
-        const state = reduceGraphState(createInitialGraphState(), { type: 'message', message: response });
+        state = reduceGraphState(state, { type: 'message', message: response });
         assert.equal(state.displayRows.filter((row) => row.kind === 'wip').length, response.data.worktreeWips.length);
 
         const dirtyWorktree = wipsByName.get('fix-status-dirty');
@@ -1358,6 +1400,57 @@ function changesRouterFor(repoPath: string, messages: ChangesExtensionToWebviewM
     return new ChangesMessageRouter(accessor, (message) => { messages.push(message); }, async () => undefined);
 }
 
+async function requestGraphDataForState(
+    router: GraphMessageRouter,
+    messages: GraphExtensionToWebviewMessage[],
+    state: GraphState,
+    repoId: string,
+    limit = 120,
+): Promise<GraphDataResponse> {
+    const requestId = state.activeGraphRequestId;
+    assert.ok(requestId, 'Expected graph state to have an active graph request id.');
+    await router.handle({
+        type: 'graph/dataRequest',
+        requestId,
+        repoId,
+        filters: state.filters,
+        page: { offset: 0, limit },
+        repositoryScope: state.repositoryScope,
+    });
+    return graphDataResponse(messages, requestId);
+}
+
+async function requestGraphLoadMoreForState(
+    router: GraphMessageRouter,
+    messages: GraphExtensionToWebviewMessage[],
+    state: GraphState,
+    repoId: string,
+    limit: number,
+): Promise<GraphDataResponse> {
+    const requestId = state.activeGraphRequestId;
+    assert.ok(requestId, 'Expected graph state to have an active load-more request id.');
+    await router.handle({
+        type: 'graph/loadMore',
+        requestId,
+        repoId,
+        filters: state.filters,
+        page: { offset: state.loadedCount, limit },
+        repositoryScope: state.repositoryScope,
+    });
+    return graphDataResponse(messages, requestId);
+}
+
+function branchNames(state: GraphState): readonly string[] {
+    return state.branches.map((branch) => branch.name).sort();
+}
+
+function assertBranchNamesInclude(state: GraphState, expected: readonly string[], label: string): void {
+    const names = new Set(branchNames(state));
+    for (const branch of expected) {
+        assert.ok(names.has(branch), `Expected ${label} to include branch ${branch}. Actual branches: ${Array.from(names).join(', ')}`);
+    }
+}
+
 function assertGraphLayout(rows: readonly GraphRow[], label: string): void {
     const nonVisibleTargetIssues = findNonVisibleLineTargetIssues(rows);
     assert.deepEqual(nonVisibleTargetIssues, [], `Expected graph lines to target visible commits in ${label}. Issues: ${JSON.stringify(nonVisibleTargetIssues)}`);
@@ -1548,6 +1641,33 @@ function worktreeDetailsResponse(messages: readonly GraphExtensionToWebviewMessa
     ));
     assert.ok(response, `Expected graph/worktreeDetailsResponse for ${requestId}.`);
     return response;
+}
+
+function lastGraphDataPush(messages: readonly GraphExtensionToWebviewMessage[]): Extract<GraphExtensionToWebviewMessage, { readonly type: 'graph/dataPush' }> {
+    for (let index = messages.length - 1; index >= 0; index--) {
+        const message = messages[index];
+        if (message?.type === 'graph/dataPush') { return message; }
+    }
+    assert.fail('Expected graph/dataPush.');
+}
+
+async function waitForGraphSubmodulesPush(messages: readonly GraphExtensionToWebviewMessage[], submodulePath: string): Promise<GraphSubmodulesPush> {
+    await waitForCondition(
+        () => messages.some((message) => message.type === 'graph/submodulesPush'
+            && message.submodules.some((submodule) => submodule.path === submodulePath)),
+        () => `Expected graph/submodulesPush for ${submodulePath}.`,
+    );
+    return lastGraphSubmodulesPush(messages, submodulePath);
+}
+
+function lastGraphSubmodulesPush(messages: readonly GraphExtensionToWebviewMessage[], submodulePath: string): GraphSubmodulesPush {
+    for (let index = messages.length - 1; index >= 0; index--) {
+        const message = messages[index];
+        if (message?.type === 'graph/submodulesPush' && message.submodules.some((submodule) => submodule.path === submodulePath)) {
+            return message;
+        }
+    }
+    assert.fail(`Expected graph/submodulesPush for ${submodulePath}.`);
 }
 
 function assertNoChangesError(messages: readonly ChangesExtensionToWebviewMessage[]): void {

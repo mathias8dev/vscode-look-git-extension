@@ -2,16 +2,17 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
-import type { CommitCommand, GraphRepositoryCommand, GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse, WorktreeDetailsResponse, OpenDiffRequest, OpenWorktreeDiffRequest } from '../../protocol/graph/messages';
-import type { GraphData, GraphFilters } from '../../protocol/graph/types';
+import type { GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse, WorktreeDetailsResponse, OpenDiffRequest, OpenWorktreeDiffRequest } from '../../protocol/graph/messages';
+import type { GraphData, GraphFilters, GraphRepositoryScope, GraphSubmoduleInfo } from '../../protocol/graph/types';
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import type { GitRepository } from '../../application/ports/git-repository';
 import { GetGraphDataUseCase, type GraphDataResult } from '../../application/usecases/graph/get-graph-data';
 import { GetCommitDetailsUseCase } from '../../application/usecases/graph/get-commit-details';
 import { GetWorktreeDetailsUseCase } from '../../application/usecases/graph/get-worktree-details';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
-import { toProtocolBranch, toProtocolGraphCommit, toProtocolWorktree } from '../mapping/toProtocol';
+import { toProtocolBranch, toProtocolGraphCommit, toProtocolGraphSubmodule, toProtocolWorktree } from '../mapping/toProtocol';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
+import { ScopedGitRepository } from '../git/scoped-git-repository';
 import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { runCommitCommand } from '../commands/commit-commands';
 import { runBranchCommand } from '../commands/branch-commands';
@@ -65,14 +66,16 @@ export class GraphMessageRouter {
                 break;
 
             case 'graph/dataRequest': {
-                const key = msg.repoId;
+                const key = graphRequestKey(msg.repoId, msg.repositoryScope, 'replace');
+                this.abortPendingGraphSubmodules(msg.repoId, msg.repositoryScope);
                 this.pending.get(key)?.abort();
                 const ctrl = new AbortController();
                 this.pending.set(key, ctrl);
                 try {
-                    const data = await this.buildGraphData(msg.filters, msg.page.offset, msg.page.limit, ctrl.signal);
+                    const data = await this.buildGraphData(msg.filters, msg.page.offset, msg.page.limit, ctrl.signal, msg.repositoryScope, false);
                     const response: GraphDataResponse = { type: 'graph/dataResponse', requestId: msg.requestId, data };
                     this.postMessage(response);
+                    this.requestGraphSubmoduleHydration(msg.repoId, msg.repositoryScope, data);
                 } finally {
                     if (this.pending.get(key) === ctrl) { this.pending.delete(key); }
                 }
@@ -80,12 +83,12 @@ export class GraphMessageRouter {
             }
 
             case 'graph/loadMore': {
-                const key = `${msg.repoId}:more`;
+                const key = graphRequestKey(msg.repoId, msg.repositoryScope, 'more');
                 this.pending.get(key)?.abort();
                 const ctrl = new AbortController();
                 this.pending.set(key, ctrl);
                 try {
-                    const data = await this.buildGraphData(msg.filters, 0, msg.page.offset + msg.page.limit, ctrl.signal);
+                    const data = await this.buildGraphData(msg.filters, 0, msg.page.offset + msg.page.limit, ctrl.signal, msg.repositoryScope, false);
                     const response: GraphDataResponse = { type: 'graph/dataResponse', requestId: msg.requestId, data };
                     this.postMessage(response);
                 } finally {
@@ -95,7 +98,7 @@ export class GraphMessageRouter {
             }
 
             case 'graph/commitDetailsRequest': {
-                const repo = this.repositories.requireRepository();
+                const repo = await this.repositoryForScope(msg.repositoryScope);
                 const details = await this.getCommitDetails.execute(repo, msg.hash);
                 const response: CommitDetailsResponse = {
                     type: 'graph/commitDetailsResponse',
@@ -114,7 +117,7 @@ export class GraphMessageRouter {
             }
 
             case 'graph/worktreeDetailsRequest': {
-                const repo = this.repositories.requireRepository();
+                const repo = await this.repositoryForScope(msg.repositoryScope);
                 const details = await this.getWorktreeDetails.execute(repo, msg.path);
                 const response: WorktreeDetailsResponse = {
                     type: 'graph/worktreeDetailsResponse',
@@ -129,7 +132,7 @@ export class GraphMessageRouter {
             }
 
             case 'graph/repositoryCommand':
-                await this.handleRepositoryCommand(msg.command);
+                await this.handleRepositoryCommand(msg);
                 break;
 
             case 'graph/branchCommand':
@@ -141,18 +144,18 @@ export class GraphMessageRouter {
                 break;
 
             case 'graph/commitCommand':
-                await this.handleCommitCommand(msg.command, msg.hash, msg.hashes);
+                await this.handleCommitCommand(msg);
                 break;
 
             case 'graph/openDiff': {
-                const repo = this.repositories.requireRepository();
+                const repo = await this.repositoryForScope(msg.repositoryScope);
                 const { left, right } = await createDiffUris(repo.cwd, msg);
                 await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(msg.filePath)} (${msg.commitHash.substring(0, 7)})`);
                 break;
             }
 
             case 'graph/openWorktreeDiff': {
-                const repo = this.repositories.requireRepository();
+                const repo = await this.repositoryForScope(msg.repositoryScope);
                 const { left, right } = await createWorktreeDiffUris(repo, msg);
                 await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(msg.filePath)} (${path.basename(msg.worktreePath)})`);
                 break;
@@ -170,8 +173,9 @@ export class GraphMessageRouter {
                 this.postMessage({ type: 'graph/dataPush', repoId: '', data: emptyGraphData() });
                 return;
             }
-            const data = await this.buildGraphData(filters ?? {}, 0, 300, signal);
+            const data = await this.buildGraphData(filters ?? {}, 0, 300, signal, undefined, false);
             this.postMessage({ type: 'graph/dataPush', repoId: repo.cwd, data });
+            this.requestGraphSubmoduleHydration(repo.cwd, undefined, data);
         } catch (error) {
             if (isAbortError(error)) { return; }
             this.postGraphError(error, { operation: 'graph/refresh', code: 'refreshFailed' });
@@ -183,21 +187,82 @@ export class GraphMessageRouter {
         offset: number,
         limit: number,
         signal?: AbortSignal,
+        scope?: GraphRepositoryScope,
+        includeSubmoduleRepositories = true,
     ): Promise<GraphData> {
-        const repo = this.repositories.requireRepository();
-        const result = await this.getGraphData.execute(repo, filters, { offset, limit }, signal);
+        const repo = await this.repositoryForScope(scope, signal);
+        const result = await this.getGraphData.execute(repo, filters, { offset, limit }, signal, { includeSubmoduleRepositories });
         for (const warning of result.warnings) {
             this.postGraphError(warning.error, {
                 operation: warning.operation,
                 code: 'optionalDataUnavailable',
             });
         }
-        return toProtocolGraphData(result);
+        return toProtocolGraphData(result, normalizedScope(scope));
     }
 
-    private async handleRepositoryCommand(command: GraphRepositoryCommand): Promise<void> {
+    private abortPendingGraphSubmodules(repoId: string, scope: GraphRepositoryScope | undefined): void {
+        this.pending.get(graphRequestKey(repoId, scope, 'submodules'))?.abort();
+    }
+
+    private requestGraphSubmoduleHydration(repoId: string, scope: GraphRepositoryScope | undefined, data: GraphData): void {
+        if (data.submodules.length === 0) { return; }
+
+        const repositoryScope = normalizedScope(scope);
+        const key = graphRequestKey(repoId, repositoryScope, 'submodules');
+        this.pending.get(key)?.abort();
+        const ctrl = new AbortController();
+        this.pending.set(key, ctrl);
+
+        void this.buildGraphSubmodules(repositoryScope, ctrl.signal)
+            .then((submodules) => {
+                if (this.pending.get(key) !== ctrl || submodules.length === 0) { return; }
+                this.postMessage({
+                    type: 'graph/submodulesPush',
+                    repoId,
+                    repositoryScope,
+                    submodules,
+                });
+            })
+            .catch((error: unknown) => {
+                if (isAbortError(error)) { return; }
+                this.postGraphError(error, {
+                    operation: 'graph/submodulesHydration',
+                    code: 'optionalDataUnavailable',
+                });
+            })
+            .finally(() => {
+                if (this.pending.get(key) === ctrl) { this.pending.delete(key); }
+            });
+    }
+
+    private async buildGraphSubmodules(scope: GraphRepositoryScope, signal?: AbortSignal): Promise<readonly GraphSubmoduleInfo[]> {
+        const repo = await this.repositoryForScope(scope, signal);
+        const submoduleStatuses = await repo.getSubmoduleStatus(signal);
+        const result = await this.getGraphData.getSubmoduleRepositories(repo, submoduleStatuses, signal);
+        for (const warning of result.warnings) {
+            this.postGraphError(warning.error, {
+                operation: warning.operation,
+                code: 'optionalDataUnavailable',
+            });
+        }
+        return result.submodules.map(toProtocolGraphSubmodule);
+    }
+
+    private async repositoryForScope(scope: GraphRepositoryScope | undefined, signal?: AbortSignal): Promise<GitRepository> {
         const repo = this.repositories.requireRepository();
-        switch (command) {
+        const submodulePath = submodulePathForScope(scope);
+        if (!submodulePath) { return repo; }
+        const submodules = await repo.getSubmoduleStatus(signal);
+        if (!submodules.some((submodule) => submodule.path === submodulePath)) {
+            throw new Error(`Unknown submodule: ${submodulePath}`);
+        }
+        return new ScopedGitRepository(repo, submodulePath);
+    }
+
+    private async handleRepositoryCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/repositoryCommand' }>): Promise<void> {
+        const repo = await this.repositoryForScope(msg.repositoryScope);
+        switch (msg.command) {
             case 'fetch':
                 await this.remoteCommands.runVscode(repo, VscodeRemoteCommand.FetchAll);
                 break;
@@ -206,20 +271,20 @@ export class GraphMessageRouter {
     }
 
     private async handleBranchCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/branchCommand' }>): Promise<void> {
-        const repo = this.repositories.requireRepository();
+        const repo = await this.repositoryForScope(msg.repositoryScope);
         const shouldRefresh = await runBranchCommand(repo, msg.command, msg.branch, msg.isRemote, this.remoteCommands);
         if (shouldRefresh) { await this.refreshAfterRepositoryChange(); }
     }
 
     private async handleWorktreeCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/worktreeCommand' }>): Promise<void> {
-        const repo = this.repositories.requireRepository();
+        const repo = await this.repositoryForScope(msg.repositoryScope);
         const shouldRefresh = await runWorktreeCommand(repo, msg.command, msg.path, this.remoteCommands);
         if (shouldRefresh) { await this.refreshAfterRepositoryChange(); }
     }
 
-    private async handleCommitCommand(command: CommitCommand, hash: string, hashes: readonly string[]): Promise<void> {
-        const repo = this.repositories.requireRepository();
-        const shouldRefresh = await runCommitCommand(repo, command, hash, hashes, this.remoteCommands);
+    private async handleCommitCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/commitCommand' }>): Promise<void> {
+        const repo = await this.repositoryForScope(msg.repositoryScope);
+        const shouldRefresh = await runCommitCommand(repo, msg.command, msg.hash, msg.hashes, this.remoteCommands);
         if (shouldRefresh) { await this.refreshAfterRepositoryChange(); }
     }
 
@@ -263,8 +328,9 @@ export class GraphMessageRouter {
     }
 }
 
-function toProtocolGraphData(result: GraphDataResult): GraphData {
+function toProtocolGraphData(result: GraphDataResult, repositoryScope: GraphRepositoryScope): GraphData {
     return {
+        repositoryScope,
         branches: result.branches.map(toProtocolBranch),
         tags: result.tags.map((tag) => ({ name: tag.name, hash: tag.hash })),
         commits: result.commits.map(toProtocolGraphCommit),
@@ -276,7 +342,34 @@ function toProtocolGraphData(result: GraphDataResult): GraphData {
         hasRemotes: result.hasRemotes,
         worktrees: result.worktrees.map(toProtocolWorktree),
         worktreeWips: result.worktreeWips,
+        submodules: result.submodules.map(toProtocolGraphSubmodule),
     };
+}
+
+function normalizedScope(scope: GraphRepositoryScope | undefined): GraphRepositoryScope {
+    const submodulePath = submodulePathForScope(scope);
+    if (!submodulePath) { return { kind: 'main' }; }
+    return scope?.label
+        ? { kind: 'submodule', path: submodulePath, label: scope.label }
+        : { kind: 'submodule', path: submodulePath };
+}
+
+function submodulePathForScope(scope: GraphRepositoryScope | undefined): string | undefined {
+    if (!scope || scope.kind !== 'submodule') { return undefined; }
+    const submodulePath = scope.path?.trim();
+    if (!submodulePath || path.isAbsolute(submodulePath) || submodulePath.split(/[\\/]+/).includes('..')) {
+        throw new Error('Invalid submodule scope.');
+    }
+    return submodulePath;
+}
+
+function graphRequestKey(repoId: string, scope: GraphRepositoryScope | undefined, kind: 'replace' | 'more' | 'submodules'): string {
+    return `${repoId}:${graphScopeKey(scope)}:${kind}`;
+}
+
+function graphScopeKey(scope: GraphRepositoryScope | undefined): string {
+    if (!scope || scope.kind === 'main') { return 'main'; }
+    return `submodule:${scope.path ?? ''}`;
 }
 
 function requestIdOf(msg: GraphWebviewToExtensionMessage): RequestId | undefined {
@@ -399,6 +492,7 @@ function toGitUri(uri: vscode.Uri, ref: string): vscode.Uri {
 
 function emptyGraphData(): GraphData {
     return {
+        repositoryScope: { kind: 'main' },
         branches: [],
         tags: [],
         commits: [],
@@ -410,5 +504,6 @@ function emptyGraphData(): GraphData {
         hasRemotes: false,
         worktrees: [],
         worktreeWips: [],
+        submodules: [],
     };
 }

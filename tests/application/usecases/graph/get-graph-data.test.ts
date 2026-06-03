@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { GetGraphDataUseCase } from '../../../../src/application/usecases/graph/get-graph-data';
 import type { GitGraphCommit } from '../../../../src/core/git/domain/GitCommit';
 import type { GitBranch } from '../../../../src/core/git/domain/GitStatus';
-import type { GitWorktree } from '../../../../src/core/git/domain/GitWorktree';
+import type { GitSubmodule, GitWorktree } from '../../../../src/core/git/domain/GitWorktree';
 import { makeRepositoryMock } from '../../../helpers/repositoryMock';
 
 describe('GetGraphDataUseCase', () => {
@@ -70,6 +70,100 @@ describe('GetGraphDataUseCase', () => {
             conflicts: 0,
         }]);
     });
+
+    it('loads submodule branches and worktrees from the submodule repository', async () => {
+        const exec = vi.fn(async (args: readonly string[]) => {
+            if (args.join(' ') === '-C modules/auth-kit rev-parse --abbrev-ref HEAD') { return 'feature/oauth'; }
+            return '';
+        });
+        const execRaw = vi.fn(async (args: readonly string[]) => {
+            if (args[0] === '-C' && args[1] === 'modules/auth-kit' && args[2] === 'for-each-ref') {
+                return [
+                    'refs/heads/main\0a1\0\0',
+                    'refs/heads/feature/oauth\0b2\0origin/feature/oauth\0[ahead 1]',
+                    'refs/remotes/origin/main\0a1\0\0',
+                ].join('\n');
+            }
+            if (args.join(' ') === '-C modules/auth-kit worktree list --porcelain') {
+                return [
+                    'worktree /workspace/modules/auth-kit',
+                    'HEAD b2',
+                    'branch refs/heads/feature/oauth',
+                    '',
+                    'worktree /workspace/.worktrees/auth-release',
+                    'HEAD c3',
+                    'branch refs/heads/release/1.4',
+                ].join('\n');
+            }
+            return '';
+        });
+        const repo = makeRepositoryMock({
+            exec,
+            execRaw,
+            getGraphLog: vi.fn(async () => [commit('a1', 'feat(graph): base')]),
+            getAllBranches: vi.fn(async () => [branch('main', true)]),
+            getAllTags: vi.fn(async () => []),
+            getUserName: vi.fn(async () => 'Ada'),
+            listWorktrees: vi.fn(async () => []),
+            getSubmoduleStatus: vi.fn(async () => [
+                submodule('modules/auth-kit', '+'),
+                submodule('modules/not-initialized', '-'),
+            ]),
+        });
+
+        const result = await new GetGraphDataUseCase().execute(repo, {}, { offset: 0, limit: 20 });
+
+        expect(result.submodules).toHaveLength(2);
+        expect(result.submodules[0]).toMatchObject({
+            path: 'modules/auth-kit',
+            status: '+',
+            branches: [
+                { name: 'main', isCurrent: false, isRemote: false },
+                { name: 'feature/oauth', isCurrent: true, isRemote: false, ahead: 1 },
+                { name: 'origin/main', isCurrent: false, isRemote: true },
+            ],
+            worktrees: [
+                { path: '/workspace/modules/auth-kit', branch: 'refs/heads/feature/oauth', isMain: true },
+                { path: '/workspace/.worktrees/auth-release', branch: 'refs/heads/release/1.4', isMain: false },
+            ],
+        });
+        expect(result.submodules[1]).toEqual({
+            path: 'modules/not-initialized',
+            status: '-',
+            branches: [],
+            worktrees: [],
+        });
+        expect(execRaw).not.toHaveBeenCalledWith(expect.arrayContaining(['modules/not-initialized']), expect.anything());
+    });
+
+    it('can defer submodule branch and worktree loading', async () => {
+        const execRaw = vi.fn(async () => '');
+        const repo = makeRepositoryMock({
+            execRaw,
+            getGraphLog: vi.fn(async () => [commit('a1', 'feat(graph): base')]),
+            getAllBranches: vi.fn(async () => [branch('main', true)]),
+            getAllTags: vi.fn(async () => []),
+            getUserName: vi.fn(async () => 'Ada'),
+            listWorktrees: vi.fn(async () => []),
+            getSubmoduleStatus: vi.fn(async () => [submodule('modules/auth-kit', '+')]),
+        });
+
+        const result = await new GetGraphDataUseCase().execute(
+            repo,
+            {},
+            { offset: 0, limit: 20 },
+            undefined,
+            { includeSubmoduleRepositories: false },
+        );
+
+        expect(result.submodules).toEqual([{
+            path: 'modules/auth-kit',
+            status: '+',
+            branches: [],
+            worktrees: [],
+        }]);
+        expect(execRaw).not.toHaveBeenCalledWith(expect.arrayContaining(['-C', 'modules/auth-kit', 'for-each-ref']), expect.anything());
+    });
 });
 
 function commit(hash: string, message: string): GitGraphCommit {
@@ -105,4 +199,8 @@ function worktree(path: string, head: string, branchName: string): GitWorktree {
         isDetached: false,
         isLocked: false,
     };
+}
+
+function submodule(path: string, status: GitSubmodule['status']): GitSubmodule {
+    return { path, status };
 }

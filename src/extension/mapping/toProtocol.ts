@@ -3,7 +3,7 @@ import type { GitGraphCommit } from '../../core/git/domain/GitCommit';
 import type { GitBranch } from '../../core/git/domain/GitStatus';
 import type { GitWorktree, GitSubmodule } from '../../core/git/domain/GitWorktree';
 import { RepoKind, type RepoContext } from '../../core/git/domain/RepoContext';
-import type { BranchInfo, GraphCommit, WorktreeInfo } from '../../protocol/graph/types';
+import type { BranchInfo, GraphCommit, GraphSubmoduleInfo, WorktreeInfo } from '../../protocol/graph/types';
 import { SubmoduleStatus, type SerializedRepoContext } from '../../protocol/shared/repo';
 
 export function toProtocolGraphCommit(commit: GitGraphCommit): GraphCommit {
@@ -41,6 +41,23 @@ export function toProtocolWorktree(w: GitWorktree): WorktreeInfo {
         isDetached: w.isDetached,
         isLocked: w.isLocked,
         lockReason: w.lockReason,
+    };
+}
+
+export function toProtocolGraphSubmodule(
+    submodule: {
+        readonly path: string;
+        readonly status: GitSubmodule['status'];
+        readonly branches: readonly GitBranch[];
+        readonly worktrees: readonly GitWorktree[];
+    },
+): GraphSubmoduleInfo {
+    return {
+        path: submodule.path,
+        name: submodule.path.split(/[\\/]/).at(-1) ?? submodule.path,
+        status: toProtocolSubmoduleStatus(submodule.status),
+        branches: submodule.branches.map(toProtocolBranch),
+        worktrees: submodule.worktrees.map(toProtocolWorktree),
     };
 }
 

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 import { createMockVsCodeApi, sendToWebview } from '../../helpers/webviewRuntime';
 
 describe('GraphApp', () => {
@@ -19,7 +20,7 @@ describe('GraphApp', () => {
         const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
 
         render(<GraphApp />);
-        sendToWebview({ type: 'ui/fontSizeChanged', fontSize: 23 });
+        await act(async () => sendToWebview({ type: 'ui/fontSizeChanged', fontSize: 23 }));
 
         await waitFor(() => expect(document.documentElement.style.getPropertyValue('--look-git-font-size')).toBe('23px'));
         expect(document.documentElement.style.fontSize).toBe('23px');
@@ -97,7 +98,7 @@ describe('GraphApp', () => {
         const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
 
         render(<GraphApp />);
-        sendToWebview({ type: 'graph/selectCommit', hash: 'abcdef1234567890' });
+        await act(async () => sendToWebview({ type: 'graph/selectCommit', hash: 'abcdef1234567890' }));
 
         const separator = await screen.findByRole('separator', { name: 'Resize commit details panel' });
         expect(separator).toHaveAttribute('aria-valuemin', '180');
@@ -108,10 +109,180 @@ describe('GraphApp', () => {
         await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', '336'));
         expect(localStorage.getItem('lookGit.commitDetailsPanelWidth')).toBe('336');
     });
+
+    it('requests graph data in a submodule scope when a submodule branch is clicked', async () => {
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+
+        render(<GraphApp />);
+        await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
+        const initialRequest = latestGraphDataRequest(api.messages);
+
+        await act(async () => sendToWebview({
+            type: 'graph/dataResponse',
+            requestId: initialRequest.requestId,
+            data: {
+                branches: [{ name: 'main', isRemote: false, isCurrent: true, hash: 'main-head' }],
+                tags: [],
+                commits: [],
+                currentBranch: 'main',
+                currentUser: 'Test User',
+                hasMore: false,
+                loadedCount: 0,
+                totalCount: 0,
+                hasRemotes: false,
+                worktrees: [],
+                worktreeWips: [],
+                submodules: [{
+                    path: 'modules/auth-kit',
+                    name: 'auth-kit',
+                    status: SubmoduleStatus.Clean,
+                    branches: [{ name: 'feature/oauth', isRemote: false, isCurrent: true, hash: 'submodule-head' }],
+                    worktrees: [],
+                }],
+            },
+        }));
+
+        fireEvent.click(await screen.findByTitle('modules/auth-kit'));
+        fireEvent.click(await screen.findByTitle('feature/oauth'));
+
+        await waitFor(() => expect(api.messages).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                type: 'graph/dataRequest',
+                filters: expect.objectContaining({ branches: ['feature/oauth'] }),
+                repositoryScope: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
+            }),
+        ])));
+    });
+
+    it('keeps scoped submodule branches visible when a main repository data push arrives', async () => {
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+
+        render(<GraphApp />);
+        await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
+        const initialRequest = latestGraphDataRequest(api.messages);
+
+        await act(async () => sendToWebview({
+            type: 'graph/dataResponse',
+            requestId: initialRequest.requestId,
+            data: mainGraphDataWithAuthKitSubmodule(),
+        }));
+        fireEvent.click(await screen.findByTitle('modules/auth-kit'));
+        fireEvent.click(await screen.findByTitle('feature/oauth'));
+
+        await waitFor(() => expect(graphDataRequests(api.messages).some((request) => (
+            isSubmoduleScope(request.repositoryScope, 'modules/auth-kit')
+        ))).toBe(true));
+        const scopedRequest = latestGraphDataRequest(api.messages);
+
+        await act(async () => sendToWebview({
+            type: 'graph/dataResponse',
+            requestId: scopedRequest.requestId,
+            data: {
+                branches: [{ name: 'feature/oauth', isRemote: false, isCurrent: true, hash: 'submodule-head' }],
+                tags: [],
+                commits: [],
+                currentBranch: 'feature/oauth',
+                currentUser: 'Test User',
+                hasMore: false,
+                loadedCount: 0,
+                totalCount: 0,
+                hasRemotes: false,
+                worktrees: [],
+                worktreeWips: [],
+                submodules: [],
+                repositoryScope: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
+            },
+        }));
+
+        expect(await screen.findByTitle('feature/oauth')).toBeInTheDocument();
+        const requestsBeforePush = graphDataRequests(api.messages).length;
+        await act(async () => sendToWebview({
+            type: 'graph/dataPush',
+            repoId: '/repo',
+            data: {
+                branches: [],
+                tags: [],
+                commits: [],
+                currentBranch: 'main',
+                currentUser: 'Test User',
+                hasMore: false,
+                loadedCount: 0,
+                totalCount: 0,
+                hasRemotes: false,
+                worktrees: [],
+                worktreeWips: [],
+                submodules: [],
+                repositoryScope: { kind: 'main' },
+            },
+        }));
+
+        expect(screen.getByTitle('feature/oauth')).toBeInTheDocument();
+        await waitFor(() => expect(graphDataRequests(api.messages).length).toBeGreaterThan(requestsBeforePush));
+        expect(isSubmoduleScope(latestGraphDataRequest(api.messages).repositoryScope, 'modules/auth-kit')).toBe(true);
+    });
 });
 
 class MockResizeObserver implements ResizeObserver {
     disconnect(): void {}
     observe(): void {}
     unobserve(): void {}
+}
+
+function latestGraphDataRequest(messages: readonly unknown[]): GraphDataRequestLike {
+    const request = messages.filter(isGraphDataRequest).at(-1);
+    if (!request) { throw new Error('Expected a graph data request.'); }
+    return request;
+}
+
+function isGraphDataRequest(value: unknown): value is GraphDataRequestLike {
+    return typeof value === 'object'
+        && value !== null
+        && 'type' in value
+        && value.type === 'graph/dataRequest'
+        && 'requestId' in value
+        && typeof value.requestId === 'string';
+}
+
+interface GraphDataRequestLike {
+    readonly type: 'graph/dataRequest';
+    readonly requestId: string;
+    readonly repositoryScope?: unknown;
+}
+
+function graphDataRequests(messages: readonly unknown[]): readonly GraphDataRequestLike[] {
+    return messages.filter(isGraphDataRequest);
+}
+
+function isSubmoduleScope(value: unknown, path: string): boolean {
+    return typeof value === 'object'
+        && value !== null
+        && 'kind' in value
+        && value.kind === 'submodule'
+        && 'path' in value
+        && value.path === path;
+}
+
+function mainGraphDataWithAuthKitSubmodule() {
+    return {
+        branches: [{ name: 'main', isRemote: false, isCurrent: true, hash: 'main-head' }],
+        tags: [],
+        commits: [],
+        currentBranch: 'main',
+        currentUser: 'Test User',
+        hasMore: false,
+        loadedCount: 0,
+        totalCount: 0,
+        hasRemotes: false,
+        worktrees: [],
+        worktreeWips: [],
+        submodules: [{
+            path: 'modules/auth-kit',
+            name: 'auth-kit',
+            status: SubmoduleStatus.Clean,
+            branches: [{ name: 'feature/oauth', isRemote: false, isCurrent: true, hash: 'submodule-head' }],
+            worktrees: [],
+        }],
+    };
 }

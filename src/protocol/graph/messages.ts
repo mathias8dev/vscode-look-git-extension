@@ -1,7 +1,7 @@
 import type { RequestId, ErrorMessage, ProtocolError } from '../shared/base';
 import type { SerializedRepoContext } from '../shared/repo';
 import type { WebviewFontSizeChangedPush } from '../shared/ui';
-import type { GraphContextTarget, GraphData, GraphFilters, GraphPage, CommitFileChange } from './types';
+import type { GraphContextTarget, GraphData, GraphFilters, GraphPage, CommitFileChange, GraphRepositoryScope, GraphSubmoduleInfo } from './types';
 
 // ── Extension → Webview (push — no requestId) ──────────────────────────────
 
@@ -14,6 +14,13 @@ export interface GraphDataPush {
     readonly type: 'graph/dataPush';
     readonly repoId: string;
     readonly data: GraphData;
+}
+
+export interface GraphSubmodulesPush {
+    readonly type: 'graph/submodulesPush';
+    readonly repoId: string;
+    readonly repositoryScope: GraphRepositoryScope;
+    readonly submodules: readonly GraphSubmoduleInfo[];
 }
 
 export interface GraphRefreshRequestedPush {
@@ -70,6 +77,7 @@ export interface GraphDataRequest {
     readonly repoId: string;
     readonly filters: GraphFilters;
     readonly page: GraphPage;
+    readonly repositoryScope?: GraphRepositoryScope;
 }
 
 export interface LoadMoreGraphRequest {
@@ -78,6 +86,7 @@ export interface LoadMoreGraphRequest {
     readonly repoId: string;
     readonly filters: GraphFilters;
     readonly page: GraphPage;
+    readonly repositoryScope?: GraphRepositoryScope;
 }
 
 export interface CommitDetailsRequest {
@@ -85,12 +94,14 @@ export interface CommitDetailsRequest {
     readonly requestId: RequestId;
     readonly hash: string;
     readonly selectedHashes?: readonly string[];
+    readonly repositoryScope?: GraphRepositoryScope;
 }
 
 export interface WorktreeDetailsRequest {
     readonly type: 'graph/worktreeDetailsRequest';
     readonly requestId: RequestId;
     readonly path: string;
+    readonly repositoryScope?: GraphRepositoryScope;
 }
 
 // ── Webview → Extension (commands — no response expected) ──────────────────
@@ -116,6 +127,7 @@ export interface BranchCommandRequest {
     readonly command: BranchCommand;
     readonly branch: string;
     readonly isRemote: boolean;
+    readonly repositoryScope?: GraphRepositoryScope;
 }
 
 export type WorktreeCommand =
@@ -141,6 +153,7 @@ export interface WorktreeCommandRequest {
     readonly type: 'graph/worktreeCommand';
     readonly command: WorktreeCommand;
     readonly path?: string;
+    readonly repositoryScope?: GraphRepositoryScope;
 }
 
 export type CommitCommand =
@@ -169,6 +182,7 @@ export interface CommitCommandRequest {
     readonly command: CommitCommand;
     readonly hash: string;
     readonly hashes: readonly string[];
+    readonly repositoryScope?: GraphRepositoryScope;
 }
 
 export interface OpenDiffRequest {
@@ -178,6 +192,7 @@ export interface OpenDiffRequest {
     readonly status: string;
     readonly origPath?: string;
     readonly parentHash?: string;
+    readonly repositoryScope?: GraphRepositoryScope;
 }
 
 export interface OpenWorktreeDiffRequest {
@@ -186,6 +201,7 @@ export interface OpenWorktreeDiffRequest {
     readonly filePath: string;
     readonly status: string;
     readonly origPath?: string;
+    readonly repositoryScope?: GraphRepositoryScope;
 }
 
 export interface GraphReadyMessage {
@@ -206,6 +222,7 @@ export type GraphRepositoryCommand = 'fetch';
 export interface GraphRepositoryCommandRequest {
     readonly type: 'graph/repositoryCommand';
     readonly command: GraphRepositoryCommand;
+    readonly repositoryScope?: GraphRepositoryScope;
 }
 
 // ── Union types ─────────────────────────────────────────────────────────────
@@ -215,6 +232,7 @@ export type GraphExtensionToWebviewMessage =
     | WebviewFontSizeChangedPush
     | GraphRefreshRequestedPush
     | GraphDataPush
+    | GraphSubmodulesPush
     | GraphDataResponse
     | CommitDetailsResponse
     | WorktreeDetailsResponse

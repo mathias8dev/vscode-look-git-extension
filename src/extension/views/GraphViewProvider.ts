@@ -146,19 +146,19 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     private async runCommitContextCommand(command: CommitCommand): Promise<void> {
         const target = this.contextTarget;
         if (target?.kind !== 'commit') { return; }
-        await this.router?.handle({ type: 'graph/commitCommand', command, hash: target.hash, hashes: target.hashes });
+        await this.router?.handle({ type: 'graph/commitCommand', command, hash: target.hash, hashes: target.hashes, repositoryScope: target.repositoryScope });
     }
 
     private async runBranchContextCommand(command: BranchCommand): Promise<void> {
         const target = this.contextTarget;
         if (target?.kind !== 'branch') { return; }
-        await this.router?.handle({ type: 'graph/branchCommand', command, branch: target.branch, isRemote: target.isRemote });
+        await this.router?.handle({ type: 'graph/branchCommand', command, branch: target.branch, isRemote: target.isRemote, repositoryScope: target.repositoryScope });
     }
 
     private async runWorktreeContextCommand(command: WorktreeCommand): Promise<void> {
         const target = this.contextTarget;
         if (target?.kind !== 'worktree') { return; }
-        await this.router?.handle({ type: 'graph/worktreeCommand', command, path: target.path });
+        await this.router?.handle({ type: 'graph/worktreeCommand', command, path: target.path, repositoryScope: target.repositoryScope });
     }
 
     private selectContextCommit(direction: 'child' | 'parent'): void {

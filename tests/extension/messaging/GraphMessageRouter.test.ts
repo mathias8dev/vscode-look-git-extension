@@ -3,9 +3,13 @@ import * as os from 'os';
 import * as path from 'path';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { GitGraphCommit } from '../../../src/core/git/domain/GitCommit';
-import type { GitWorktree } from '../../../src/core/git/domain/GitWorktree';
+import type { GitSubmodule, GitWorktree } from '../../../src/core/git/domain/GitWorktree';
+import { LOG_FIELD_SEP, LOG_RECORD_SEP } from '../../../src/core/parsing/parseLog';
+import type { GitRepository } from '../../../src/application/ports/git-repository';
+import { GetGraphDataUseCase, type GraphDataResult } from '../../../src/application/usecases/graph/get-graph-data';
 import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessageRouter';
-import type { GraphDataResponse, GraphExtensionToWebviewMessage, WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
+import type { GraphDataResponse, GraphExtensionToWebviewMessage, GraphSubmodulesPush, WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
+import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
 import { commands, env, resetMockVscode, setInputBoxValue, setInputBoxValues, setQuickPickValue, setWarningChoice, setWarningChoices, Uri, window, workspace } from '../../mocks/vscode';
 
@@ -88,6 +92,244 @@ describe('GraphMessageRouter graph data', () => {
             recoverable: true,
         });
         expect(graphDataResponse(messages, 'graph-worktree-error').data.worktreeWips).toEqual([]);
+    });
+
+    it('returns graph data before hydrating submodule branch and worktree summaries', async () => {
+        const repo = makeRepositoryMock({
+            getGraphLog: vi.fn(async () => [graphCommit('abc1234567890abcdef')]),
+            getSubmoduleStatus: vi.fn(async () => [submodule('modules/auth-kit', '+')]),
+            exec: vi.fn(async (args) => args.join(' ') === '-C modules/auth-kit rev-parse --abbrev-ref HEAD' ? 'feature/oauth' : ''),
+            execRaw: vi.fn(async (args) => {
+                if (args[0] === '-C' && args[1] === 'modules/auth-kit' && args[2] === 'for-each-ref') {
+                    return [
+                        'refs/heads/feature/oauth\0branch-head\0\0',
+                        'refs/remotes/origin/main\0remote-head\0\0',
+                    ].join('\n');
+                }
+                if (args.join(' ') === '-C modules/auth-kit worktree list --porcelain') {
+                    return [
+                        'worktree /repo/modules/auth-kit',
+                        'HEAD branch-head',
+                        'branch refs/heads/feature/oauth',
+                    ].join('\n');
+                }
+                return '';
+            }),
+        });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph-submodules',
+            repoId: 'repo',
+            filters: {},
+            page: { offset: 0, limit: 50 },
+        });
+
+        expect(graphDataResponse(messages, 'graph-submodules').data.submodules).toEqual([{
+            path: 'modules/auth-kit',
+            name: 'auth-kit',
+            status: SubmoduleStatus.OutOfSync,
+            branches: [],
+            worktrees: [],
+        }]);
+
+        await vi.waitFor(() => expect(graphSubmodulesPush(messages, 'repo').submodules).toEqual([{
+            path: 'modules/auth-kit',
+            name: 'auth-kit',
+            status: SubmoduleStatus.OutOfSync,
+            branches: [
+                { name: 'feature/oauth', isRemote: false, isCurrent: true, hash: 'branch-head', upstream: undefined, ahead: undefined, behind: undefined },
+                { name: 'origin/main', isRemote: true, isCurrent: false, hash: 'remote-head', upstream: undefined, ahead: undefined, behind: undefined },
+            ],
+            worktrees: [{
+                path: '/repo/modules/auth-kit',
+                head: 'branch-head',
+                branch: 'refs/heads/feature/oauth',
+                isMain: true,
+                isDetached: false,
+                isLocked: false,
+                lockReason: undefined,
+            }],
+        }]));
+    });
+
+    it('does not block the graph response on slow submodule branch queries', async () => {
+        let resolveSubmoduleBranches: ((output: string) => void) | undefined;
+        const repo = makeRepositoryMock({
+            getGraphLog: vi.fn(async () => [graphCommit('abc1234567890abcdef')]),
+            getSubmoduleStatus: vi.fn(async () => [submodule('modules/auth-kit', '+')]),
+            exec: vi.fn(async (args) => args.join(' ') === '-C modules/auth-kit rev-parse --abbrev-ref HEAD' ? 'feature/oauth' : ''),
+            execRaw: vi.fn(async (args) => {
+                if (args[0] === '-C' && args[1] === 'modules/auth-kit' && args[2] === 'for-each-ref') {
+                    return new Promise<string>((resolve) => { resolveSubmoduleBranches = resolve; });
+                }
+                if (args.join(' ') === '-C modules/auth-kit worktree list --porcelain') {
+                    return '';
+                }
+                return '';
+            }),
+        });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph-slow-submodules',
+            repoId: 'repo',
+            filters: {},
+            page: { offset: 0, limit: 50 },
+        });
+
+        expect(graphDataResponse(messages, 'graph-slow-submodules').data.submodules).toEqual([{
+            path: 'modules/auth-kit',
+            name: 'auth-kit',
+            status: SubmoduleStatus.OutOfSync,
+            branches: [],
+            worktrees: [],
+        }]);
+        expect(messages.some((message) => message.type === 'graph/submodulesPush')).toBe(false);
+
+        resolveSubmoduleBranches?.('refs/heads/feature/oauth\0branch-head\0\0');
+
+        await vi.waitFor(() => expect(graphSubmodulesPush(messages, 'repo').submodules[0]?.branches).toEqual([
+            { name: 'feature/oauth', isRemote: false, isCurrent: true, hash: 'branch-head', upstream: undefined, ahead: undefined, behind: undefined },
+        ]));
+    });
+
+    it('loads graph data in the selected submodule repository scope', async () => {
+        const repo = makeRepositoryMock({
+            getSubmoduleStatus: vi.fn(async () => [submodule('modules/auth-kit', ' ')]),
+            exec: vi.fn(async (args) => {
+                if (args.join(' ') === '-C modules/auth-kit rev-parse --abbrev-ref HEAD') { return 'feature/oauth'; }
+                if (args.join(' ') === '-C modules/auth-kit config user.name') { return 'Submodule User'; }
+                return '';
+            }),
+            execRaw: vi.fn(async (args) => {
+                if (args[0] === '-C' && args[1] === 'modules/auth-kit' && args[2] === 'log') {
+                    return graphLogRecord('submodule-head', 'feat(auth): support scoped graph');
+                }
+                if (args[0] === '-C' && args[1] === 'modules/auth-kit' && args[2] === 'for-each-ref') {
+                    return 'refs/heads/feature/oauth\0submodule-head\0\0';
+                }
+                return '';
+            }),
+        });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph-submodule-scope',
+            repoId: 'repo',
+            filters: { branches: ['feature/oauth'] },
+            page: { offset: 0, limit: 50 },
+            repositoryScope: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
+        });
+
+        const response = graphDataResponse(messages, 'graph-submodule-scope');
+        expect(response.data.repositoryScope).toEqual({ kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' });
+        expect(response.data.currentBranch).toBe('feature/oauth');
+        expect(response.data.currentUser).toBe('Submodule User');
+        expect(response.data.commits).toEqual([expect.objectContaining({
+            hash: 'submodule-head',
+            message: 'feat(auth): support scoped graph',
+        })]);
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(expect.arrayContaining(['-C', 'modules/auth-kit', 'log', expect.stringContaining('--max-count=')]), expect.any(AbortSignal));
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(expect.arrayContaining(['-C', 'modules/auth-kit', 'for-each-ref']), expect.any(AbortSignal));
+    });
+
+    it('keeps concurrent graph data requests isolated by repository scope', async () => {
+        const pending: CapturedGraphRequest[] = [];
+        const getGraphData = new CapturingGraphDataUseCase(pending);
+        const repo = makeRepositoryMock({
+            cwd: '/workspace',
+            getSubmoduleStatus: vi.fn(async () => [submodule('modules/auth-kit', ' ')]),
+        });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(
+            makeRepositoryAccessor(repo),
+            (message) => { messages.push(message); },
+            async () => {},
+            undefined,
+            getGraphData,
+        );
+
+        const mainRequest = router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'main-request',
+            repoId: 'repo',
+            filters: {},
+            page: { offset: 0, limit: 50 },
+            repositoryScope: { kind: 'main' },
+        });
+        await vi.waitFor(() => expect(pending).toHaveLength(1));
+
+        const submoduleRequest = router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'submodule-request',
+            repoId: 'repo',
+            filters: {},
+            page: { offset: 0, limit: 50 },
+            repositoryScope: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
+        });
+        await vi.waitFor(() => expect(pending).toHaveLength(2));
+
+        pending[0]?.resolve();
+        pending[1]?.resolve();
+        await Promise.all([mainRequest, submoduleRequest]);
+
+        expect(messages).toContainEqual(expect.objectContaining({
+            type: 'graph/dataResponse',
+            requestId: 'main-request',
+            data: expect.objectContaining({
+                repositoryScope: { kind: 'main' },
+                currentBranch: 'main',
+            }),
+        }));
+        expect(messages).toContainEqual(expect.objectContaining({
+            type: 'graph/dataResponse',
+            requestId: 'submodule-request',
+            data: expect.objectContaining({
+                repositoryScope: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
+                currentBranch: 'feature/oauth',
+            }),
+        }));
+        expect(pending[0]?.signal?.aborted).toBe(false);
+        expect(pending[1]?.signal?.aborted).toBe(false);
+    });
+
+    it('loads commit details in the selected submodule repository scope', async () => {
+        const repo = makeRepositoryMock({
+            getSubmoduleStatus: vi.fn(async () => [submodule('modules/auth-kit', ' ')]),
+            exec: vi.fn(async (args) => args.join(' ') === '-C modules/auth-kit log -1 --format=%B submodule-head'
+                ? 'feat(auth): support scoped graph'
+                : ''),
+            execRaw: vi.fn(async (args) => {
+                if (args.join(' ') === '-C modules/auth-kit rev-list --parents -n 1 submodule-head') { return 'submodule-head'; }
+                if (args.includes('--name-status')) { return 'M\0src/auth.ts\0'; }
+                return '';
+            }),
+        });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+
+        await router.handle({
+            type: 'graph/commitDetailsRequest',
+            requestId: 'submodule-commit-details',
+            hash: 'submodule-head',
+            repositoryScope: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
+        });
+
+        expect(messages).toContainEqual({
+            type: 'graph/commitDetailsResponse',
+            requestId: 'submodule-commit-details',
+            hash: 'submodule-head',
+            fullMessage: 'feat(auth): support scoped graph',
+            files: [{ status: 'M', filePath: 'src/auth.ts', origPath: undefined, parentHash: undefined }],
+        });
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', 'modules/auth-kit', 'rev-list', '--parents', '-n', '1', 'submodule-head'], undefined);
     });
 
     it('loads worktree detail files from porcelain status', async () => {
@@ -445,6 +687,24 @@ describe('GraphMessageRouter commit commands', () => {
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['reset', '--soft', 'HEAD~1']);
         expect(commands.calls).toEqual([]);
     });
+
+    it('runs commit commands inside the selected submodule scope', async () => {
+        const repo = makeRepositoryMock({
+            getSubmoduleStatus: vi.fn(async () => [submodule('modules/auth-kit', ' ')]),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        setInputBoxValue('feature/from-submodule-commit');
+        await router.handle({
+            type: 'graph/commitCommand',
+            command: 'newBranch',
+            hash: 'submodule-head',
+            hashes: ['submodule-head'],
+            repositoryScope: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
+        });
+
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', 'modules/auth-kit', 'branch', 'feature/from-submodule-commit', 'submodule-head'], undefined);
+    });
 });
 
 function graphCommit(hash: string): GitGraphCommit {
@@ -460,6 +720,84 @@ function graphCommit(hash: string): GitGraphCommit {
     };
 }
 
+interface CapturedGraphRequest {
+    readonly signal: AbortSignal | undefined;
+    resolve(): void;
+}
+
+class CapturingGraphDataUseCase extends GetGraphDataUseCase {
+    constructor(private readonly pending: CapturedGraphRequest[]) {
+        super();
+    }
+
+    override execute(repo: GitRepository, _filters: Parameters<GetGraphDataUseCase['execute']>[1], _page: Parameters<GetGraphDataUseCase['execute']>[2], signal?: AbortSignal): Promise<GraphDataResult> {
+        return captureGraphRequest(this.pending, repo, signal);
+    }
+}
+
+function captureGraphRequest(
+    pending: CapturedGraphRequest[],
+    repo: GitRepository,
+    signal: AbortSignal | undefined,
+): Promise<GraphDataResult> {
+    let resolveResult: ((value: GraphDataResult) => void) | undefined;
+    let rejectResult: ((reason: unknown) => void) | undefined;
+    const promise = new Promise<GraphDataResult>((resolve, reject) => {
+        resolveResult = resolve;
+        rejectResult = reject;
+    });
+    const abort = () => rejectResult?.(abortError());
+    signal?.addEventListener('abort', abort, { once: true });
+    pending.push({
+        signal,
+        resolve() {
+            signal?.removeEventListener('abort', abort);
+            resolveResult?.(graphResultForRepo(repo.cwd));
+        },
+    });
+    return promise;
+}
+
+function graphResultForRepo(cwd: string): GraphDataResult {
+    const isSubmodule = cwd.endsWith('/modules/auth-kit');
+    const branchName = isSubmodule ? 'feature/oauth' : 'main';
+    const hash = isSubmodule ? 'submodule-head' : 'main-head';
+    return {
+        branches: [{ name: branchName, isRemote: false, isCurrent: true, hash, ahead: 0, behind: 0 }],
+        tags: [],
+        commits: [graphCommit(hash)],
+        currentBranch: branchName,
+        currentUser: isSubmodule ? 'Submodule User' : 'Main User',
+        hasMore: false,
+        loadedCount: 1,
+        totalCount: 1,
+        hasRemotes: false,
+        worktrees: [],
+        worktreeWips: [],
+        submodules: [],
+        warnings: [],
+    };
+}
+
+function abortError(): Error {
+    const error = new Error('Aborted');
+    error.name = 'AbortError';
+    return error;
+}
+
+function graphLogRecord(hash: string, message: string): string {
+    return [
+        hash,
+        hash.substring(0, 7),
+        message,
+        'Submodule User',
+        'submodule@example.com',
+        '2024-01-01T00:00:00Z',
+        '',
+        'HEAD -> feature/oauth',
+    ].join(LOG_FIELD_SEP) + LOG_RECORD_SEP;
+}
+
 function worktree(path: string, head: string, branch: string): GitWorktree {
     return {
         path,
@@ -471,11 +809,23 @@ function worktree(path: string, head: string, branch: string): GitWorktree {
     };
 }
 
+function submodule(path: string, status: GitSubmodule['status']): GitSubmodule {
+    return { path, status };
+}
+
 function graphDataResponse(messages: readonly GraphExtensionToWebviewMessage[], requestId: string): GraphDataResponse {
     const response = messages.find((message): message is GraphDataResponse => (
         message.type === 'graph/dataResponse' && message.requestId === requestId
     ));
     if (!response) { throw new Error(`Expected graph/dataResponse for ${requestId}.`); }
+    return response;
+}
+
+function graphSubmodulesPush(messages: readonly GraphExtensionToWebviewMessage[], repoId: string): GraphSubmodulesPush {
+    const response = messages.find((message): message is GraphSubmodulesPush => (
+        message.type === 'graph/submodulesPush' && message.repoId === repoId
+    ));
+    if (!response) { throw new Error(`Expected graph/submodulesPush for ${repoId}.`); }
     return response;
 }
 
@@ -518,6 +868,23 @@ describe('GraphMessageRouter branch commands', () => {
 
         expect(vi.mocked(repo.checkout)).toHaveBeenCalledWith('feature/ui');
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['rebase', 'main']);
+    });
+
+    it('runs branch commands inside the selected submodule scope', async () => {
+        const repo = makeRepositoryMock({
+            getSubmoduleStatus: vi.fn(async () => [submodule('modules/auth-kit', ' ')]),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        await router.handle({
+            type: 'graph/branchCommand',
+            command: 'checkout',
+            branch: 'feature/oauth',
+            isRemote: false,
+            repositoryScope: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
+        });
+
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['-C', 'modules/auth-kit', 'checkout', 'feature/oauth'], undefined);
     });
 
     it('compares the selected branch with the current branch', async () => {

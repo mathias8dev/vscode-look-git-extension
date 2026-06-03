@@ -1,5 +1,5 @@
 import type { GraphExtensionToWebviewMessage } from '../../../protocol/graph/messages';
-import type { BranchInfo, CommitFileChange, GraphData, GraphFilters, TagInfo, WorktreeInfo, WorktreeWip } from '../../../protocol/graph/types';
+import type { BranchInfo, CommitFileChange, GraphData, GraphFilters, GraphRepositoryScope, GraphSubmoduleInfo, TagInfo, WorktreeInfo, WorktreeWip } from '../../../protocol/graph/types';
 import type { ProtocolError } from '../../../protocol/shared/base';
 import { assignLanes, type GraphRow, type LaneData, type LineDef } from './layout/assignGraphLanes';
 
@@ -76,11 +76,13 @@ export interface CommitDetails {
 }
 
 export interface GraphState {
+    readonly repositoryScope: GraphRepositoryScope;
     readonly rows: readonly GraphRow[];
     readonly displayRows: readonly DisplayRow[];
     readonly branches: readonly BranchInfo[];
     readonly tags: readonly TagInfo[];
     readonly worktrees: readonly WorktreeInfo[];
+    readonly submodules: readonly GraphSubmoduleInfo[];
     readonly currentBranch: string;
     readonly currentUser: string;
     readonly hasMore: boolean;
@@ -98,12 +100,15 @@ export interface GraphState {
     readonly repoId: string | undefined;
     readonly loadingMore: boolean;
     readonly refreshVersion: number;
+    readonly activeGraphRequestId: string | undefined;
 }
 
 export type GraphAction =
     | { readonly type: 'message'; readonly message: GraphExtensionToWebviewMessage }
     | { readonly type: 'setFilters'; readonly filters: Partial<GraphFilters> }
     | { readonly type: 'setBranchFilter'; readonly branch: string | undefined }
+    | { readonly type: 'selectMainRepository' }
+    | { readonly type: 'selectSubmoduleBranch'; readonly submodulePath: string; readonly submoduleLabel: string; readonly branch: string }
     | { readonly type: 'selectCommit'; readonly hash: string }
     | { readonly type: 'selectWorktree'; readonly path: string }
     | { readonly type: 'toggleCommitSelection'; readonly hash: string }
@@ -115,11 +120,13 @@ export type GraphAction =
 
 export function createInitialGraphState(): GraphState {
     return {
+        repositoryScope: mainRepositoryScope(),
         rows: [],
         displayRows: [],
         branches: [],
         tags: [],
         worktrees: [],
+        submodules: [],
         currentBranch: '',
         currentUser: '',
         hasMore: false,
@@ -137,6 +144,7 @@ export function createInitialGraphState(): GraphState {
         repoId: undefined,
         loadingMore: false,
         refreshVersion: 0,
+        activeGraphRequestId: graphRequestId(0, 'replace'),
     };
 }
 
@@ -145,27 +153,56 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
         case 'message':
             return reduceMessage(state, action.message);
         case 'setFilters':
-            return {
+            return startGraphReload({
                 ...state,
                 filters: { ...state.filters, ...action.filters },
-                loading: true,
-                loadingMore: false,
                 loadedCount: 0,
-                refreshVersion: state.refreshVersion + 1,
-            };
+            }, state.refreshVersion + 1);
         case 'setBranchFilter':
-            return {
+            return startGraphReload({
                 ...state,
                 selectedBranchFilter: action.branch,
                 filters: {
                     ...state.filters,
                     branches: action.branch ? [action.branch] : undefined,
                 },
-                loading: true,
-                loadingMore: false,
                 loadedCount: 0,
-                refreshVersion: state.refreshVersion + 1,
-            };
+            }, state.refreshVersion + 1);
+        case 'selectMainRepository':
+            return startGraphReload({
+                ...state,
+                repositoryScope: mainRepositoryScope(),
+                selectedBranchFilter: undefined,
+                filters: { ...state.filters, branches: undefined },
+                loadedCount: 0,
+                selectedHash: undefined,
+                selectedWorktreePath: undefined,
+                selectedHashes: [],
+                selectionAnchorHash: undefined,
+                commitDetails: undefined,
+                detailsLoading: false,
+            }, state.refreshVersion + 1);
+        case 'selectSubmoduleBranch':
+            return startGraphReload({
+                ...state,
+                repositoryScope: {
+                    kind: 'submodule',
+                    path: action.submodulePath,
+                    label: action.submoduleLabel,
+                },
+                selectedBranchFilter: action.branch,
+                filters: {
+                    ...state.filters,
+                    branches: [action.branch],
+                },
+                loadedCount: 0,
+                selectedHash: undefined,
+                selectedWorktreePath: undefined,
+                selectedHashes: [],
+                selectionAnchorHash: undefined,
+                commitDetails: undefined,
+                detailsLoading: false,
+            }, state.refreshVersion + 1);
         case 'selectCommit':
             return selectCommit(state, action.hash, [action.hash], action.hash);
         case 'selectWorktree':
@@ -179,10 +216,10 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
         case 'clearError':
             return { ...state, error: undefined };
         case 'refreshRequested':
-            return { ...state, loading: true, loadingMore: false, refreshVersion: state.refreshVersion + 1 };
+            return startGraphReload(state, state.refreshVersion + 1);
         case 'startLoadMore':
             return state.hasMore && !state.loading && !state.loadingMore
-                ? { ...state, loadingMore: true }
+                ? { ...state, loadingMore: true, activeGraphRequestId: graphRequestId(state.refreshVersion, 'more', state.loadedCount) }
                 : state;
     }
 }
@@ -230,10 +267,13 @@ function toggleCommitSelection(state: GraphState, hash: string): GraphState {
 function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessage): GraphState {
     switch (message.type) {
         case 'graph/dataPush':
-            return applyGraphData(state, message.data, message.repoId);
+            return reduceGraphDataPush(state, message.data, message.repoId);
+        case 'graph/submodulesPush':
+            return reduceGraphSubmodulesPush(state, message.repositoryScope, message.submodules, message.repoId);
         case 'graph/refreshRequested':
-            return { ...state, loading: true, loadingMore: false, refreshVersion: state.refreshVersion + 1 };
+            return startGraphReload(state, state.refreshVersion + 1);
         case 'graph/dataResponse':
+            if (!isExpectedGraphResponse(state, message.requestId, message.data.repositoryScope)) { return state; }
             return applyGraphData(state, message.data, state.repoId);
         case 'graph/commitDetailsResponse':
             if (message.hash !== state.selectedHash) { return state; }
@@ -266,13 +306,50 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
         case 'graph/selectWorktree':
             return selectWorktree(state, message.path);
         case 'graph/error':
+            if (!isExpectedGraphError(state, message.requestId)) { return state; }
+            return message.requestId
+                ? { ...state, loading: false, loadingMore: false, activeGraphRequestId: undefined, error: message.error }
+                : { ...state, error: message.error };
         case 'error':
-            return { ...state, loading: false, loadingMore: false, error: message.error };
+            return { ...state, loading: false, loadingMore: false, activeGraphRequestId: undefined, error: message.error };
         case 'repo/contextChanged':
             return { ...createInitialGraphState(), repoId: undefined };
         case 'ui/fontSizeChanged':
             return state;
     }
+}
+
+function reduceGraphDataPush(state: GraphState, data: GraphData, repoId: string | undefined): GraphState {
+    if (state.activeGraphRequestId) { return state; }
+    if (!sameRepositoryScope(data.repositoryScope, state.repositoryScope)) {
+        return startGraphReload(state, state.refreshVersion + 1);
+    }
+    return applyGraphData(state, data, repoId);
+}
+
+function reduceGraphSubmodulesPush(
+    state: GraphState,
+    repositoryScope: GraphRepositoryScope,
+    submodules: readonly GraphSubmoduleInfo[],
+    repoId: string | undefined,
+): GraphState {
+    if (state.activeGraphRequestId) { return state; }
+    if (!sameRepositoryScope(repositoryScope, state.repositoryScope)) { return state; }
+    return {
+        ...state,
+        submodules,
+        repoId: repoId ?? state.repoId,
+    };
+}
+
+function isExpectedGraphResponse(state: GraphState, requestId: string, responseScope: GraphRepositoryScope | undefined): boolean {
+    if (state.activeGraphRequestId !== requestId) { return false; }
+    return sameRepositoryScope(responseScope, state.repositoryScope);
+}
+
+function isExpectedGraphError(state: GraphState, requestId: string | undefined): boolean {
+    if (!requestId) { return true; }
+    return state.activeGraphRequestId === requestId;
 }
 
 function applyGraphData(state: GraphState, data: GraphData, repoId: string | undefined): GraphState {
@@ -282,6 +359,9 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
         lockedLanes: state.loadingMore ? lockedLanesForRows(state.rows) : undefined,
     });
     const displayRows = buildDisplayRows(rows, data.worktreeWips ?? []);
+    const submodules = state.loadingMore && sameRepositoryScope(data.repositoryScope, state.repositoryScope)
+        ? state.submodules
+        : data.submodules;
     return {
         ...state,
         rows,
@@ -289,6 +369,8 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
         branches: data.branches,
         tags: data.tags,
         worktrees: data.worktrees,
+        submodules,
+        repositoryScope: data.repositoryScope ?? state.repositoryScope,
         currentBranch,
         currentUser: data.currentUser,
         hasMore: data.hasMore,
@@ -297,7 +379,35 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
         loadingMore: false,
         error: undefined,
         repoId: repoId ?? state.repoId,
+        activeGraphRequestId: undefined,
     };
+}
+
+function mainRepositoryScope(): GraphRepositoryScope {
+    return { kind: 'main' };
+}
+
+function startGraphReload(state: GraphState, refreshVersion: number): GraphState {
+    return {
+        ...state,
+        loading: true,
+        loadingMore: false,
+        activeGraphRequestId: graphRequestId(refreshVersion, 'replace'),
+        refreshVersion,
+    };
+}
+
+export function graphRequestId(refreshVersion: number, kind: 'replace' | 'more', offset = 0): string {
+    return `graph:${kind}:${refreshVersion}:${offset}`;
+}
+
+function sameRepositoryScope(a: GraphRepositoryScope | undefined, b: GraphRepositoryScope | undefined): boolean {
+    return repositoryScopeKey(a) === repositoryScopeKey(b);
+}
+
+function repositoryScopeKey(scope: GraphRepositoryScope | undefined): string {
+    if (!scope || scope.kind === 'main') { return 'main'; }
+    return `submodule:${scope.path ?? ''}`;
 }
 
 function lockedLanesForRows(rows: readonly GraphRow[]): ReadonlyMap<string, number> {

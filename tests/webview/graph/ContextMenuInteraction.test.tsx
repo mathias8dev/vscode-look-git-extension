@@ -26,6 +26,7 @@ describe('graph native context menu targets', () => {
             <BranchPanel
                 branches={[branch('feature/a')]}
                 worktrees={[worktree('/repo/.worktrees/a', 'refs/heads/feature/a')]}
+                submodules={[]}
                 currentBranch="main"
                 selectedBranchFilter={undefined}
                 selectedWorktreePath={undefined}
@@ -58,6 +59,7 @@ describe('graph native context menu targets', () => {
             <BranchPanel
                 branches={[]}
                 worktrees={[worktree('/repo/.worktrees/a', 'refs/heads/feature/a')]}
+                submodules={[]}
                 currentBranch="main"
                 selectedBranchFilter={undefined}
                 selectedWorktreePath={undefined}

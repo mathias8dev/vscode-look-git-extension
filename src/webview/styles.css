@@ -1845,10 +1845,15 @@ h1 {
     display: flex;
     align-items: center;
     gap: 5px;
+    width: 100%;
     min-height: 22px;
+    border: none;
     padding: 0 4px 0 20px;
     color: var(--vscode-foreground, #cccccc);
+    background: transparent;
+    font: inherit;
     font-size: inherit;
+    text-align: left;
 }
 
 .graph-resource-row:hover {
@@ -1883,6 +1888,55 @@ h1 {
 .graph-resource-action {
     width: 20px;
     height: 20px;
+}
+
+.graph-submodule-row {
+    padding-left: 8px;
+}
+
+.graph-scope-back-row {
+    margin-bottom: var(--look-git-space-xs);
+    padding-left: 8px;
+}
+
+.graph-submodule-status-clean {
+    color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+    background: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground, #81b88b) 14%, transparent);
+}
+
+.graph-submodule-status-dirty,
+.graph-submodule-status-out-of-sync {
+    color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
+    background: color-mix(in srgb, var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d) 14%, transparent);
+}
+
+.graph-submodule-status-not-initialized {
+    color: var(--vscode-disabledForeground, #7a7a7a);
+    background: var(--vscode-badge-background, rgba(128, 128, 128, 0.18));
+}
+
+.graph-submodule-detail-title {
+    min-height: var(--look-git-row-min-height);
+    padding: 0 8px 0 28px;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.9em;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+}
+
+.graph-submodule-worktree-row {
+    cursor: default;
+}
+
+.graph-submodule-worktree-row {
+    padding-left: 32px;
+}
+
+.graph-submodule-empty {
+    padding: var(--look-git-space-xs) var(--look-git-space-md) var(--look-git-space-xs) 32px;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.92em;
 }
 
 /* ── Graph Center ────────────────────────────────────────────────────────── */
