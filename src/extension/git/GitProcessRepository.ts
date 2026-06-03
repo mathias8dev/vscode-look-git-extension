@@ -1,7 +1,8 @@
-import { execFile } from 'child_process';
+import * as fs from 'fs/promises';
 import * as path from 'path';
-import { promisify } from 'util';
-import type { GitExec, GitRepository, GraphLogFilters } from '../../core/git/GitRepository';
+import type { GitBackend } from '../../application/ports/git-backend';
+import type { GitExec } from '../../core/git/git-exec';
+import type { GitRepository, GraphLogFilters } from '../../application/ports/git-repository';
 import type { GitCommit, GitGraphCommit, GitFileChange } from '../../core/git/domain/GitCommit';
 import type { GitStatus, GitStash, GitBranch, GitTag } from '../../core/git/domain/GitStatus';
 import type { GitWorktree, GitSubmodule } from '../../core/git/domain/GitWorktree';
@@ -9,31 +10,14 @@ import { queryStatus, querySubmodulePaths, queryStashList, queryStashFiles } fro
 import { queryGraphLog, queryCommitLog, queryAllBranches, queryAllTags, queryCurrentBranch, queryUserName, queryRemotes, queryCommitFiles, queryCommitMessage } from '../../core/queries/queryGraph';
 import { queryWorktrees, addWorktree, removeWorktree } from '../../core/queries/queryWorktrees';
 import { querySubmoduleStatus, updateSubmodule, updateAllSubmodules } from '../../core/queries/querySubmodules';
+import { detectConflictStateFromFiles } from '../../core/parsing/parseStatus';
+import { GitCliBackend } from './git-cli-backend';
 
-const execFileAsync = promisify(execFile);
-const MAX_BUFFER = 10 * 1024 * 1024;
-const MAX_LOCK_RETRIES = 5;
-
-function isIndexLockError(error: unknown): boolean {
-    const msg = error instanceof Error ? error.message : String(error);
-    const stderr = typeof error === 'object' && error !== null
-        && typeof (error as { stderr?: unknown }).stderr === 'string'
-        ? (error as { stderr: string }).stderr : '';
-    const combined = `${msg}\n${stderr}`;
-    return combined.includes('index.lock')
-        || (combined.includes('Unable to create') && combined.includes('File exists'));
-}
-
-async function sleep(ms: number): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Concrete GitRepository — the ONLY file that calls child_process.execFile.
- * Delegates to pure query functions in src/core/queries/.
- */
 export class GitProcessRepository implements GitRepository {
-    constructor(public readonly cwd: string) {}
+    constructor(
+        public readonly cwd: string,
+        private readonly backend: GitBackend = new GitCliBackend(cwd),
+    ) {}
 
     // ── Low-level execution ───────────────────────────────────────────────
 
@@ -58,22 +42,7 @@ export class GitProcessRepository implements GitRepository {
     }
 
     private async run(args: readonly string[], env?: Record<string, string>, signal?: AbortSignal): Promise<string> {
-        let delayMs = 80;
-        for (let attempt = 0; ; attempt++) {
-            signal?.throwIfAborted();
-            try {
-                const { stdout } = await execFileAsync('git', [...args], {
-                    cwd: this.cwd, maxBuffer: MAX_BUFFER,
-                    env: { ...process.env, ...env },
-                    signal,
-                });
-                return stdout;
-            } catch (error) {
-                if (attempt >= MAX_LOCK_RETRIES || !isIndexLockError(error)) { throw error; }
-                await sleep(delayMs);
-                delayMs *= 2;
-            }
-        }
+        return this.backend.run(args, { env, signal });
     }
 
     // ── Bound GitExec helpers (passed to query functions) ─────────────────
@@ -89,8 +58,9 @@ export class GitProcessRepository implements GitRepository {
         return path.isAbsolute(gitDir) ? gitDir : path.resolve(this.cwd, gitDir);
     }
 
-    getStatus(signal?: AbortSignal): Promise<GitStatus> {
-        return queryStatus(this.roRaw, this.getGitDir.bind(this), signal);
+    async getStatus(signal?: AbortSignal): Promise<GitStatus> {
+        const status = await queryStatus(this.roRaw, signal);
+        return { ...status, conflictState: await this.detectConflictState() };
     }
     getSubmodulePaths(signal?: AbortSignal): Promise<ReadonlySet<string>> {
         return querySubmodulePaths(this.roRaw, signal);
@@ -190,4 +160,14 @@ export class GitProcessRepository implements GitRepository {
     async fetchBranch(remote: string, branch: string): Promise<void> { await this.exec(['fetch', remote, branch]); }
     async fetchAll(): Promise<void>                     { await this.exec(['fetch', '--all']); }
     async pull(): Promise<void>                         { await this.exec(['pull']); }
+
+    private async detectConflictState(): Promise<GitStatus['conflictState']> {
+        try {
+            const gitDir = await this.getGitDir();
+            const entries = await fs.readdir(gitDir);
+            return detectConflictStateFromFiles(entries);
+        } catch {
+            return 'none';
+        }
+    }
 }

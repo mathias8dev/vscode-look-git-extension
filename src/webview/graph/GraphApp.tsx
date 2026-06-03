@@ -20,6 +20,7 @@ import {
     messageForGraphRepositoryCommand,
     messageForWorktreeCommand,
     messageForWorktreeDetails,
+    messageForBranchCheckout,
 } from '../features/graph/graphCommands';
 import { ErrorNotice } from '../shared/ErrorNotice';
 import { vscodeApi } from '../platform/vscodeHost';
@@ -165,7 +166,7 @@ export function GraphApp() {
                     onSelectWorktree={handleSelectWorktree}
                     onContextTarget={handleContextTarget}
                     onLoadMore={handleLoadMore}
-                    onPostMessage={(msg) => vscodeApi.postMessage(msg)}
+                    onBranchDoubleClick={(branch, isRemote) => vscodeApi.postMessage(messageForBranchCheckout(branch, isRemote))}
                 />
             </div>
 

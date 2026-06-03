@@ -2,18 +2,19 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
-import type { GitBranch, GitCommit, GitFileChange, GitRepository, GitTag } from '../../core/git/GitRepository';
+import type { GitBranch, GitCommit, GitFileChange, GitRepository, GitTag } from '../../application/ports/git-repository';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import type { ErrorCode, Pagination } from '../../protocol/shared/base';
-import type { SerializedRepoContext } from '../../protocol/shared/repo';
+import type { RepoContext } from '../../core/git/domain/RepoContext';
 import type { CommitCommand } from '../../protocol/graph/messages';
 import type { HistoryCommitDetails, HistoryCommitRef, HistoryContextTarget, HistoryData } from '../../protocol/history/types';
 import type { HistoryCommitDetailsRequest, HistoryDataRequest, HistoryExtensionToWebviewMessage, HistoryOpenDiffRequest, HistoryToolbarCommand, HistoryWebviewToExtensionMessage } from '../../protocol/history/messages';
-import { runCommitCommand } from '../messaging/GraphMessageRouter';
+import { runCommitCommand } from '../commands/commit-commands';
 import { createErrorPayload } from '../messaging/errorSerialization';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
-import { VscodeRemoteCommand, type RemoteCommandBackend } from '../git/remote-command-backend';
+import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { getWebviewHtml } from './webviewHtml';
+import { toSerializedRepoContext } from '../mapping/toProtocol';
 
 const DEFAULT_PAGE: Pagination = { offset: 0, limit: 50 };
 const MAX_PAGE_LIMIT = 300;
@@ -376,10 +377,10 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         });
     }
 
-    async notifyRepoChanged(context: SerializedRepoContext): Promise<void> {
+    async notifyRepoChanged(context: RepoContext): Promise<void> {
         this.selectedHistoryRef = undefined;
         this.refCache = undefined;
-        this.view?.webview.postMessage({ type: 'repo/contextChanged', context });
+        this.view?.webview.postMessage({ type: 'repo/contextChanged', context: toSerializedRepoContext(context) });
         await this.refresh();
     }
 

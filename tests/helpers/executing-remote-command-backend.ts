@@ -1,5 +1,5 @@
-import type { GitRepository } from '../../src/core/git/GitRepository';
-import { CliRemoteCommandKind, VscodeRemoteCommand, type CliRemoteCommand, type RemoteCommandBackend } from '../../src/extension/git/remote-command-backend';
+import type { GitRepository } from '../../src/application/ports/git-repository';
+import { CliRemoteCommandKind, VscodeRemoteCommand, type CliRemoteCommand, type RemoteCommandBackend } from '../../src/application/ports/remote-command-backend';
 
 export const executingRemoteCommandBackend: RemoteCommandBackend = {
     async runVscode(repo: GitRepository, command: VscodeRemoteCommand): Promise<void> {

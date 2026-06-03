@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import type { GitRepository } from '../../src/core/git/GitRepository';
+import type { GitRepository } from '../../src/application/ports/git-repository';
 import type { ActiveRepositoryAccessor } from '../../src/extension/repositories/ActiveRepositoryRegistry';
 
 export function makeRepositoryMock(overrides: Partial<GitRepository> = {}): GitRepository {

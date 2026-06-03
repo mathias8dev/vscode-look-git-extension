@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GitExec } from '../../../src/core/git/GitRepository';
+import type { GitExec } from '../../../src/core/git/git-exec';
 import { queryRemotes } from '../../../src/core/queries/queryGraph';
 import { queryStashList } from '../../../src/core/queries/queryStatus';
 import { querySubmoduleStatus } from '../../../src/core/queries/querySubmodules';

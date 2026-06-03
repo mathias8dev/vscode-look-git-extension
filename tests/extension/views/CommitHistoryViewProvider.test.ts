@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
-import type { GitFileChange } from '../../../src/core/git/GitRepository';
+import type { GitFileChange } from '../../../src/application/ports/git-repository';
+import { RepoKind } from '../../../src/core/git/domain/RepoContext';
 import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHistoryViewProvider';
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
@@ -366,7 +367,7 @@ describe('CommitHistoryViewProvider error propagation', () => {
         vi.mocked(repo.getLog).mockClear();
         vi.mocked(repo.getLogForRef).mockClear();
 
-        await provider.notifyRepoChanged({ id: 'next', cwd: '/next', kind: 'main', label: 'next' });
+        await provider.notifyRepoChanged({ id: 'next', cwd: '/next', kind: RepoKind.Main, label: 'next' });
 
         expect(repo.getLogForRef).not.toHaveBeenCalled();
         expect(repo.getLog).toHaveBeenCalledWith(51, 0);

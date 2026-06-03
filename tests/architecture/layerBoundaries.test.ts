@@ -13,9 +13,10 @@ interface BoundaryRule {
 }
 
 const RULES: readonly BoundaryRule[] = [
-    { layer: 'core', forbiddenLayers: ['protocol', 'extension', 'webview'], forbiddenPackages: ['vscode', 'react', 'react-dom', 'react-dom/client'] },
-    { layer: 'protocol', forbiddenLayers: ['core', 'extension', 'webview'], forbiddenPackages: ['vscode', 'react', 'react-dom', 'react-dom/client'] },
-    { layer: 'webview', forbiddenLayers: ['core', 'extension'], forbiddenPackages: ['vscode'] },
+    { layer: 'core', forbiddenLayers: ['application', 'protocol', 'extension', 'webview'], forbiddenPackages: ['vscode', 'react', 'react-dom', 'react-dom/client', 'fs', 'fs/promises', 'node:fs', 'node:fs/promises', 'child_process', 'node:child_process'] },
+    { layer: 'application', forbiddenLayers: ['protocol', 'extension', 'webview'], forbiddenPackages: ['vscode', 'react', 'react-dom', 'react-dom/client', 'child_process', 'node:child_process'] },
+    { layer: 'protocol', forbiddenLayers: ['core', 'application', 'extension', 'webview'], forbiddenPackages: ['vscode', 'react', 'react-dom', 'react-dom/client'] },
+    { layer: 'webview', forbiddenLayers: ['core', 'application', 'extension'], forbiddenPackages: ['vscode'] },
     { layer: 'extension', forbiddenLayers: ['webview'], forbiddenPackages: ['react', 'react-dom', 'react-dom/client'] },
 ];
 

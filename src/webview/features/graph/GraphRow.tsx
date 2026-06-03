@@ -4,7 +4,6 @@ import { getLaneDataMaxLane, type GraphRow } from './layout/assignGraphLanes';
 import { GraphLaneCell, LANE_WIDTH } from './GraphLaneCell';
 import { RefBadge } from './RefBadge';
 import { parseRefs } from './refModel';
-import { messageForBranchCheckout } from './graphCommands';
 
 export type CommitSelectMode = 'replace' | 'toggle' | 'range';
 
@@ -18,10 +17,10 @@ interface GraphRowProps {
     readonly style: CSSProperties;
     readonly onSelect: (hash: string, mode: CommitSelectMode) => void;
     readonly onOpenContextMenu: (commit: GraphCommit) => void;
-    readonly onPostMessage: (msg: unknown) => void;
+    readonly onBranchDoubleClick: (branch: string, isRemote: boolean) => void;
 }
 
-export function GraphCommitRow({ row, branches, selected, childHash, parentHash, canUndoCommit, style, onSelect, onOpenContextMenu, onPostMessage }: GraphRowProps) {
+export function GraphCommitRow({ row, branches, selected, childHash, parentHash, canUndoCommit, style, onSelect, onOpenContextMenu, onBranchDoubleClick }: GraphRowProps) {
     const { commit, laneData } = row;
     const refs = parseRefs(commit.refs, branches);
     const messageOffset = (getLaneDataMaxLane(laneData) + 1) * LANE_WIDTH + 4;
@@ -65,7 +64,7 @@ export function GraphCommitRow({ row, branches, selected, childHash, parentHash,
                         key={ref.fullRef}
                         parsed={ref}
                         onDoubleClick={ref.kind === 'local'
-                            ? () => onPostMessage(messageForBranchCheckout(ref.label, false))
+                            ? () => onBranchDoubleClick(ref.label, false)
                             : undefined}
                     />
                 ))}

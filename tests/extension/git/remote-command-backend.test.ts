@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CliRemoteCommandBackend } from '../../../src/extension/git/cli-remote-command-backend';
 import { VscodeRemoteCommandBackend } from '../../../src/extension/git/vscode-remote-command-backend';
-import { CliRemoteCommandKind, VscodeRemoteCommand } from '../../../src/extension/git/remote-command-backend';
+import { CliRemoteCommandKind, VscodeRemoteCommand } from '../../../src/application/ports/remote-command-backend';
 import { makeRepositoryMock } from '../../helpers/repositoryMock';
 import { commands, resetMockVscode, window } from '../../mocks/vscode';
 

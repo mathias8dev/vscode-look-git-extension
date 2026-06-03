@@ -2,10 +2,11 @@ import * as vscode from 'vscode';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, WorktreeCommand } from '../../protocol/graph/messages';
 import type { GraphContextTarget } from '../../protocol/graph/types';
-import type { SerializedRepoContext } from '../../protocol/shared/repo';
+import type { RepoContext } from '../../core/git/domain/RepoContext';
+import { toSerializedRepoContext } from '../mapping/toProtocol';
 import { GraphMessageRouter } from '../messaging/GraphMessageRouter';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
-import type { RemoteCommandBackend } from '../git/remote-command-backend';
+import type { RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { getWebviewHtml } from './webviewHtml';
 
 const GRAPH_COMMIT_COMMANDS: readonly { readonly id: string; readonly command: CommitCommand }[] = [
@@ -129,8 +130,8 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     }
 
     /** Called by RepoRegistry when the active repo changes. */
-    async notifyRepoChanged(context: SerializedRepoContext): Promise<void> {
-        this.view?.webview.postMessage({ type: 'repo/contextChanged', context });
+    async notifyRepoChanged(context: RepoContext): Promise<void> {
+        this.view?.webview.postMessage({ type: 'repo/contextChanged', context: toSerializedRepoContext(context) });
     }
 
     async refresh(): Promise<void> {

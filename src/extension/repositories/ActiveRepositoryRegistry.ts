@@ -1,18 +1,18 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import type { GitRepository } from '../../core/git/GitRepository';
-import type { SerializedRepoContext } from '../../protocol/shared/repo';
+import type { GitRepository } from '../../application/ports/git-repository';
+import { RepoKind, type RepoContext } from '../../core/git/domain/RepoContext';
 import { GitProcessRepository } from '../git/GitProcessRepository';
 
 export interface ActiveRepositoryState {
     readonly repo: GitRepository | undefined;
-    readonly context: SerializedRepoContext | undefined;
+    readonly context: RepoContext | undefined;
 }
 
 export interface ActiveRepositoryAccessor {
     readonly currentRepository: GitRepository | undefined;
-    readonly currentContext: SerializedRepoContext | undefined;
+    readonly currentContext: RepoContext | undefined;
     requireRepository(): GitRepository;
 }
 
@@ -23,7 +23,7 @@ export class ActiveRepositoryRegistry implements ActiveRepositoryAccessor, vscod
     readonly onDidChange = this.onDidChangeEmitter.event;
 
     private repo: GitRepository | undefined;
-    private context: SerializedRepoContext | undefined;
+    private context: RepoContext | undefined;
 
     constructor(private readonly createRepository: GitRepositoryFactory = (cwd) => new GitProcessRepository(cwd)) {}
 
@@ -31,7 +31,7 @@ export class ActiveRepositoryRegistry implements ActiveRepositoryAccessor, vscod
         return this.repo;
     }
 
-    get currentContext(): SerializedRepoContext | undefined {
+    get currentContext(): RepoContext | undefined {
         return this.context;
     }
 
@@ -52,25 +52,25 @@ export class ActiveRepositoryRegistry implements ActiveRepositoryAccessor, vscod
             return;
         }
 
-        this.update(this.createRepository(cwd), serializeRepoContext(cwd));
+        this.update(this.createRepository(cwd), createRepoContext(cwd));
     }
 
     dispose(): void {
         this.onDidChangeEmitter.dispose();
     }
 
-    private update(repo: GitRepository | undefined, context: SerializedRepoContext | undefined): void {
+    private update(repo: GitRepository | undefined, context: RepoContext | undefined): void {
         this.repo = repo;
         this.context = context;
         this.onDidChangeEmitter.fire({ repo, context });
     }
 }
 
-export function serializeRepoContext(cwd: string): SerializedRepoContext {
+export function createRepoContext(cwd: string): RepoContext {
     return {
         id: crypto.createHash('sha256').update(cwd).digest('hex').substring(0, 16),
         cwd,
-        kind: 'main',
+        kind: RepoKind.Main,
         label: path.basename(cwd) || cwd,
     };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GitExec } from '../../../src/core/git/GitRepository';
+import type { GitExec } from '../../../src/core/git/git-exec';
 import { queryCommitLog, queryGraphLog } from '../../../src/core/queries/queryGraph';
 import { expectItem } from '../../helpers/assertions';
 

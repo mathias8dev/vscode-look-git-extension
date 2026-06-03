@@ -19,7 +19,7 @@ interface GraphTableProps {
     readonly onSelectWorktree: (path: string) => void;
     readonly onContextTarget: (target: GraphContextTarget) => void;
     readonly onLoadMore: () => void;
-    readonly onPostMessage: (msg: unknown) => void;
+    readonly onBranchDoubleClick: (branch: string, isRemote: boolean) => void;
 }
 
 export function GraphTable({
@@ -34,7 +34,7 @@ export function GraphTable({
     onSelectWorktree,
     onContextTarget,
     onLoadMore,
-    onPostMessage,
+    onBranchDoubleClick,
 }: GraphTableProps) {
     const wrapperRef = useRef<HTMLDivElement>(null);
     const [scrollTop, setScrollTop] = useState(0);
@@ -140,7 +140,7 @@ export function GraphTable({
                                 style={rowStyle}
                                 onSelect={onSelectCommit}
                                 onOpenContextMenu={(commit) => handleOpenContextMenu(commit.hash)}
-                                onPostMessage={onPostMessage}
+                                onBranchDoubleClick={onBranchDoubleClick}
                             />
                         );
                     })}

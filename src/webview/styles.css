@@ -3,7 +3,7 @@
 :root {
     color-scheme: light dark;
     font-family: var(--vscode-font-family, system-ui, sans-serif);
-    font-size: var(--vscode-font-size, 13px);
+    font-size: var(--vscode-font-size, inherit);
     color: var(--vscode-foreground, #cccccc);
     background: var(--vscode-editor-background, #1e1e1e);
 }
@@ -2038,7 +2038,7 @@ h1 {
 
 .ref-badge-head {
     background: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
-    color: #000;
+    color: var(--vscode-editor-background, #000);
 }
 
 .ref-badge-local {
@@ -2053,7 +2053,7 @@ h1 {
 
 .ref-badge-tag {
     background: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
-    color: #000;
+    color: var(--vscode-editor-background, #000);
 }
 
 /* ── Details Panel (right) ───────────────────────────────────────────────── */

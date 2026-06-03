@@ -16,7 +16,7 @@ describe('GraphCommitRow', () => {
                 style={{}}
                 onSelect={() => undefined}
                 onOpenContextMenu={() => undefined}
-                onPostMessage={() => undefined}
+                onBranchDoubleClick={() => undefined}
             />,
         );
         const wide = renderToStaticMarkup(
@@ -30,7 +30,7 @@ describe('GraphCommitRow', () => {
                 style={{}}
                 onSelect={() => undefined}
                 onOpenContextMenu={() => undefined}
-                onPostMessage={() => undefined}
+                onBranchDoubleClick={() => undefined}
             />,
         );
 
@@ -50,7 +50,7 @@ describe('GraphCommitRow', () => {
                 style={{}}
                 onSelect={() => undefined}
                 onOpenContextMenu={() => undefined}
-                onPostMessage={() => undefined}
+                onBranchDoubleClick={() => undefined}
             />,
         );
 

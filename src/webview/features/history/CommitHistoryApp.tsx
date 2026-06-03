@@ -14,6 +14,7 @@ interface CommitHistoryAppProps {
     readonly onOpenFileDiff: (hash: string, file: HistoryCommitFile) => void;
     readonly onContextTarget: (target: HistoryContextTarget) => void;
     readonly onLoadMore: () => void;
+    readonly onCopyHash: (hash: string) => void;
 }
 
 export function CommitHistoryApp({
@@ -25,6 +26,7 @@ export function CommitHistoryApp({
     onOpenFileDiff,
     onContextTarget,
     onLoadMore,
+    onCopyHash,
 }: CommitHistoryAppProps) {
     const commits = filterHistoryCommits(state.commits, query);
 
@@ -99,7 +101,7 @@ export function CommitHistoryApp({
                                                 type="button"
                                                 className="history-copy-hash"
                                                 title="Copy full hash"
-                                                onClick={() => navigator.clipboard.writeText(commit.hash).catch(() => {})}
+                                                onClick={() => onCopyHash(commit.hash)}
                                             >
                                                 {commit.shortHash}
                                                 <i className="codicon codicon-copy" aria-hidden="true" />

@@ -1,4 +1,4 @@
-import type { GitRepository } from '../../core/git/GitRepository';
+import type { GitRepository } from './git-repository';
 
 export enum VscodeRemoteCommand {
     Fetch = 'fetch',

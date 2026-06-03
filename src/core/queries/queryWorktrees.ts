@@ -1,4 +1,4 @@
-import type { GitExec } from '../git/GitRepository';
+import type { GitExec } from '../git/git-exec';
 import type { GitWorktree } from '../git/domain/GitWorktree';
 import { parseWorktreeList } from '../parsing/parseWorktreeList';
 

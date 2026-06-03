@@ -4,7 +4,7 @@ import * as path from 'path';
 import { ChangesViewProvider } from '../../../src/extension/views/ChangesViewProvider';
 import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
-import type { GitRepository } from '../../../src/core/git/GitRepository';
+import type { GitRepository } from '../../../src/application/ports/git-repository';
 import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
 import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
 import { createSubmoduleFixture } from '../../helpers/gitRepo';

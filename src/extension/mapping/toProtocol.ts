@@ -2,8 +2,9 @@
 import type { GitGraphCommit } from '../../core/git/domain/GitCommit';
 import type { GitBranch } from '../../core/git/domain/GitStatus';
 import type { GitWorktree, GitSubmodule } from '../../core/git/domain/GitWorktree';
+import { RepoKind, type RepoContext } from '../../core/git/domain/RepoContext';
 import type { BranchInfo, GraphCommit, WorktreeInfo } from '../../protocol/graph/types';
-import { SubmoduleStatus } from '../../protocol/shared/repo';
+import { SubmoduleStatus, type SerializedRepoContext } from '../../protocol/shared/repo';
 
 export function toProtocolGraphCommit(commit: GitGraphCommit): GraphCommit {
     return {
@@ -51,4 +52,22 @@ export function toProtocolSubmoduleStatus(status: GitSubmodule['status']): Submo
         'U': SubmoduleStatus.Dirty,
     };
     return statusMap[status];
+}
+
+export function toSerializedRepoContext(context: RepoContext): SerializedRepoContext {
+    return {
+        id: context.id,
+        cwd: context.cwd,
+        kind: toSerializedRepoKind(context.kind),
+        parentId: context.parentId,
+        label: context.label,
+    };
+}
+
+function toSerializedRepoKind(kind: RepoKind): SerializedRepoContext['kind'] {
+    switch (kind) {
+        case RepoKind.Main: return 'main';
+        case RepoKind.Worktree: return 'worktree';
+        case RepoKind.Submodule: return 'submodule';
+    }
 }

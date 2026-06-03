@@ -107,7 +107,7 @@ describe('graph native context menu targets', () => {
                 onSelectWorktree={() => undefined}
                 onContextTarget={onContextTarget}
                 onLoadMore={() => undefined}
-                onPostMessage={() => undefined}
+                onBranchDoubleClick={() => undefined}
             />,
         );
 

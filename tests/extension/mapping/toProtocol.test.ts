@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { GitGraphCommit } from '../../../src/core/git/domain/GitCommit';
 import type { GitBranch } from '../../../src/core/git/domain/GitStatus';
+import { RepoKind } from '../../../src/core/git/domain/RepoContext';
 import {
     toProtocolBranch,
     toProtocolGraphCommit,
+    toSerializedRepoContext,
     toProtocolSubmoduleStatus,
 } from '../../../src/extension/mapping/toProtocol';
 
@@ -54,5 +56,21 @@ describe('toProtocol mapping', () => {
         expect(toProtocolSubmoduleStatus('+')).toBe('out-of-sync');
         expect(toProtocolSubmoduleStatus('-')).toBe('not-initialized');
         expect(toProtocolSubmoduleStatus('U')).toBe('dirty');
+    });
+
+    it('maps domain repo context into serialized protocol context', () => {
+        expect(toSerializedRepoContext({
+            id: 'repo-id',
+            cwd: '/workspace/repo',
+            kind: RepoKind.Worktree,
+            parentId: 'parent-id',
+            label: 'repo',
+        })).toEqual({
+            id: 'repo-id',
+            cwd: '/workspace/repo',
+            kind: 'worktree',
+            parentId: 'parent-id',
+            label: 'repo',
+        });
     });
 });

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import type { GitRepository } from '../../core/git/GitRepository';
+import type { GitRepository } from '../../application/ports/git-repository';
 import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
 import type { ChangesToolbarCommand, ChangesWebviewToExtensionMessage, ChangesExtensionToWebviewMessage } from '../../protocol/changes/messages';
 import { CommitMode, ConflictState, RepositoryState } from '../../protocol/changes/types';
@@ -10,7 +10,7 @@ import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import { SubmoduleStatus } from '../../protocol/shared/repo';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
-import { CliRemoteCommandKind, VscodeRemoteCommand, type RemoteCommandBackend } from '../git/remote-command-backend';
+import { CliRemoteCommandKind, VscodeRemoteCommand, type RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { confirmTypedPhrase, showModalWarningMessage } from '../utils/confirmation';
 import { openReadonlyDiffDocument } from '../utils/readonly-diff-documents';
 import { toProtocolSubmoduleStatus } from '../mapping/toProtocol';

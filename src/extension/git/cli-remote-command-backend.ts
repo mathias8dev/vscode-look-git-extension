@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import type { GitRepository } from '../../core/git/GitRepository';
-import { CliRemoteCommandKind, type CliRemoteCommand, type CliRemoteCommandRunner } from './remote-command-backend';
+import type { GitRepository } from '../../application/ports/git-repository';
+import { CliRemoteCommandKind, type CliRemoteCommand, type CliRemoteCommandRunner } from '../../application/ports/remote-command-backend';
 
 export class CliRemoteCommandBackend implements CliRemoteCommandRunner {
     async run(repo: GitRepository, command: CliRemoteCommand): Promise<void> {

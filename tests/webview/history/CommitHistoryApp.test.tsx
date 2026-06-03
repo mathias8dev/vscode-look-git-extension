@@ -275,6 +275,7 @@ function renderApp(props: {
     readonly onOpenFileDiff?: (hash: string, file: HistoryCommitFile) => void;
     readonly onContextTarget?: (target: HistoryContextTarget) => void;
     readonly onLoadMore?: () => void;
+    readonly onCopyHash?: (hash: string) => void;
 }) {
     return render(
         <CommitHistoryApp
@@ -286,6 +287,7 @@ function renderApp(props: {
             onOpenFileDiff={props.onOpenFileDiff ?? (() => undefined)}
             onContextTarget={props.onContextTarget ?? (() => undefined)}
             onLoadMore={props.onLoadMore ?? (() => undefined)}
+            onCopyHash={props.onCopyHash ?? (() => undefined)}
         />,
     );
 }

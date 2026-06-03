@@ -1,4 +1,4 @@
-import type { GitExec } from '../git/GitRepository';
+import type { GitExec } from '../git/git-exec';
 import type { GitGraphCommit, GitFileChange, GitCommit } from '../git/domain/GitCommit';
 import type { GitBranch, GitTag } from '../git/domain/GitStatus';
 import { parseGraphLog, parseCommitLog, LOG_FIELD_SEP, LOG_RECORD_SEP } from '../parsing/parseLog';

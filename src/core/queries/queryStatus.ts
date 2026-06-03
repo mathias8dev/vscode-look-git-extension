@@ -1,14 +1,12 @@
-import * as fs from 'fs/promises';
-import type { GitExec } from '../git/GitRepository';
+import type { GitExec } from '../git/git-exec';
 import type { GitStatus, GitStash } from '../git/domain/GitStatus';
 import type { GitFileChange } from '../git/domain/GitCommit';
-import { parsePorcelainStatus, detectConflictStateFromFiles } from '../parsing/parseStatus';
+import { parsePorcelainStatus } from '../parsing/parseStatus';
 import { parseSubmodulePaths } from '../parsing/parseSubmoduleStatus';
 import { parseNameStatusZ } from '../parsing/parseNameStatus';
 
 export async function queryStatus(
     execRawReadonly: GitExec,
-    getGitDir: () => Promise<string>,
     signal?: AbortSignal,
 ): Promise<GitStatus> {
     const [output, submodulePaths] = await Promise.all([
@@ -17,8 +15,7 @@ export async function queryStatus(
     ]);
 
     const { staged, unstaged, conflicts } = parsePorcelainStatus(output, submodulePaths);
-    const conflictState = await detectConflictState(getGitDir);
-    return { staged, unstaged, conflicts, conflictState };
+    return { staged, unstaged, conflicts, conflictState: 'none' };
 }
 
 export async function querySubmodulePaths(
@@ -56,14 +53,4 @@ export async function queryStashFiles(
         signal,
     );
     return output ? parseNameStatusZ(output) : [];
-}
-
-async function detectConflictState(getGitDir: () => Promise<string>) {
-    try {
-        const gitDir = await getGitDir();
-        const entries = await fs.readdir(gitDir);
-        return detectConflictStateFromFiles(entries);
-    } catch {
-        return 'none' as const;
-    }
 }

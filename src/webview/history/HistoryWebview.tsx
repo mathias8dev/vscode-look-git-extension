@@ -70,6 +70,7 @@ export function HistoryWebview() {
             onOpenFileDiff={handleOpenFileDiff}
             onContextTarget={handleContextTarget}
             onLoadMore={handleLoadMore}
+            onCopyHash={(hash) => navigator.clipboard.writeText(hash).catch(() => {})}
         />
     );
 }

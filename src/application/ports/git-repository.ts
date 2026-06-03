@@ -1,8 +1,7 @@
-import type { GitCommit, GitGraphCommit, GitFileChange } from './domain/GitCommit';
-import type { GitStatus, GitStash, GitBranch, GitTag } from './domain/GitStatus';
-import type { GitWorktree, GitSubmodule } from './domain/GitWorktree';
-
-export type GitExec = (args: readonly string[], signal?: AbortSignal) => Promise<string>;
+import type { GitExec } from '../../core/git/git-exec';
+import type { GitCommit, GitGraphCommit, GitFileChange } from '../../core/git/domain/GitCommit';
+import type { GitStatus, GitStash, GitBranch, GitTag } from '../../core/git/domain/GitStatus';
+import type { GitWorktree, GitSubmodule } from '../../core/git/domain/GitWorktree';
 
 export interface GraphLogFilters {
     readonly search?: string;
@@ -19,37 +18,31 @@ export interface GitRepository {
     execWithEnv(args: readonly string[], env: Record<string, string>, signal?: AbortSignal): Promise<string>;
     getGitDir(): Promise<string>;
 
-    // Status
     getStatus(signal?: AbortSignal): Promise<GitStatus>;
     getSubmodulePaths(signal?: AbortSignal): Promise<ReadonlySet<string>>;
     stashList(signal?: AbortSignal): Promise<readonly GitStash[]>;
     getStashFiles(index: number, signal?: AbortSignal): Promise<readonly GitFileChange[]>;
 
-    // Commits
     getLog(limit: number, skip: number, signal?: AbortSignal): Promise<readonly GitCommit[]>;
     getLogForRef(ref: string, limit: number, skip: number, signal?: AbortSignal): Promise<readonly GitCommit[]>;
     getGraphLog(maxCount: number, branches?: readonly string[], pathFilter?: string, filters?: GraphLogFilters, signal?: AbortSignal): Promise<readonly GitGraphCommit[]>;
     getCommitFiles(commitHash: string, signal?: AbortSignal): Promise<readonly GitFileChange[]>;
     getCommitMessage(commitHash: string, signal?: AbortSignal): Promise<string>;
 
-    // Branches & tags
     getAllBranches(signal?: AbortSignal): Promise<readonly GitBranch[]>;
     getAllTags(signal?: AbortSignal): Promise<readonly GitTag[]>;
     getCurrentBranch(signal?: AbortSignal): Promise<string>;
     getUserName(signal?: AbortSignal): Promise<string>;
     getRemotes(signal?: AbortSignal): Promise<readonly string[]>;
 
-    // Worktrees
     listWorktrees(signal?: AbortSignal): Promise<readonly GitWorktree[]>;
     addWorktree(worktreePath: string, branch: string, createNew?: boolean, signal?: AbortSignal): Promise<void>;
     removeWorktree(worktreePath: string, force?: boolean, signal?: AbortSignal): Promise<void>;
 
-    // Submodules
     getSubmoduleStatus(signal?: AbortSignal): Promise<readonly GitSubmodule[]>;
     updateSubmodule(submodulePath: string, signal?: AbortSignal): Promise<void>;
     updateAllSubmodules(signal?: AbortSignal): Promise<void>;
 
-    // Mutations — no AbortSignal (write ops should complete once started)
     stageFile(filePath: string): Promise<void>;
     unstageFile(filePath: string): Promise<void>;
     stageAll(): Promise<void>;
@@ -83,5 +76,4 @@ export interface GitRepository {
     pull(): Promise<void>;
 }
 
-// Re-export domain types so consumers have one import path
-export type { GitCommit, GitGraphCommit, GitFileChange, GitStatus, GitStash, GitBranch, GitTag, GitWorktree, GitSubmodule };
+export type { GitExec, GitCommit, GitGraphCommit, GitFileChange, GitStatus, GitStash, GitBranch, GitTag, GitWorktree, GitSubmodule };

@@ -1,13 +1,14 @@
 import * as vscode from 'vscode';
-import type { GitRepository, GitSubmodule } from '../../core/git/GitRepository';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import type { ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
-import type { SerializedRepoContext } from '../../protocol/shared/repo';
+import type { RepoContext } from '../../core/git/domain/RepoContext';
 import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '../messaging/ChangesMessageRouter';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
-import type { RemoteCommandBackend } from '../git/remote-command-backend';
+import type { RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { createErrorPayload, isAbortError } from '../messaging/errorSerialization';
 import { getWebviewHtml } from './webviewHtml';
+import { GetChangesStatusUseCase } from '../../application/usecases/changes/get-changes-status';
+import { toSerializedRepoContext } from '../mapping/toProtocol';
 
 const CHANGES_TOOLBAR_COMMANDS: readonly { readonly id: string; readonly command: ChangesToolbarCommand }[] = [
     { id: 'lookGit.changes.openGraph', command: 'openGraph' },
@@ -87,6 +88,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         private readonly repositories: ActiveRepositoryAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
         private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
+        private readonly getChangesStatus = new GetChangesStatusUseCase(),
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -200,11 +202,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     continue;
                 }
 
-                const [status, stashes, submodules] = await Promise.all([
-                    repo.getStatus(controller.signal),
-                    repo.stashList(controller.signal),
-                    optionalSubmodules(repo, controller.signal),
-                ]);
+                const { status, stashes, submodules } = await this.getChangesStatus.execute(repo, controller.signal);
                 this.router?.setKnownSubmodulePaths(submodules.map((submodule) => submodule.path));
                 this.updateBadge(status.staged.length + status.unstaged.length + status.conflicts.length);
                 this.view.webview.postMessage(buildStatusData(status, stashes, submodules));
@@ -234,18 +232,9 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     }
 
     /** Called by RepoRegistry when the active repo changes. */
-    async notifyRepoChanged(context: SerializedRepoContext): Promise<void> {
+    async notifyRepoChanged(context: RepoContext): Promise<void> {
         this.router?.setKnownSubmodulePaths([]);
-        this.view?.webview.postMessage({ type: 'repo/contextChanged', context });
+        this.view?.webview.postMessage({ type: 'repo/contextChanged', context: toSerializedRepoContext(context) });
         this.scheduleRefresh();
-    }
-}
-
-async function optionalSubmodules(repo: GitRepository, signal: AbortSignal): Promise<readonly GitSubmodule[]> {
-    try {
-        return await repo.getSubmoduleStatus(signal);
-    } catch (error) {
-        if (isAbortError(error)) { throw error; }
-        return [];
     }
 }

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import type { GitRepository } from '../../core/git/GitRepository';
-import type { VscodeRemoteCommand, VscodeRemoteCommandRunner } from './remote-command-backend';
+import type { GitRepository } from '../../application/ports/git-repository';
+import type { VscodeRemoteCommand, VscodeRemoteCommandRunner } from '../../application/ports/remote-command-backend';
 
 export class VscodeRemoteCommandBackend implements VscodeRemoteCommandRunner {
     async run(_repo: GitRepository, command: VscodeRemoteCommand): Promise<void> {
