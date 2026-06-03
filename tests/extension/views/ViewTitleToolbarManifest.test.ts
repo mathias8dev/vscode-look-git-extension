@@ -30,6 +30,7 @@ describe('native view title toolbar manifest', () => {
         const viewTitle = pkg.contributes?.menus?.['view/title'] ?? [];
 
         for (const command of [
+            'lookGit.history.selectRepositoryScope',
             'lookGit.history.selectBranch',
             'lookGit.history.goToCurrent',
             'lookGit.history.fetchAll',
@@ -40,11 +41,11 @@ describe('native view title toolbar manifest', () => {
             'lookGit.history.viewAsTree',
         ]) {
             expect(commands.has(command)).toBe(true);
+            const expectedWhen = command === 'lookGit.history.selectRepositoryScope'
+                ? 'view == lookGit.commitHistory && lookGit.historyHasSubmodules'
+                : 'view == lookGit.commitHistory';
             expect(viewTitle).toEqual(expect.arrayContaining([
-                expect.objectContaining({
-                    command,
-                    when: 'view == lookGit.commitHistory',
-                }),
+                expect.objectContaining({ command, when: expectedWhen }),
             ]));
         }
     });

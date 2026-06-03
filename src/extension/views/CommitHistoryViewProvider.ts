@@ -16,9 +16,12 @@ import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../applicatio
 import { getWebviewHtml } from './webviewHtml';
 import { toSerializedRepoContext } from '../mapping/toProtocol';
 import { webviewFontSizeMessage } from './webview-font';
+import { ScopedGitRepository } from '../git/scoped-git-repository';
+import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
 
 const DEFAULT_PAGE: Pagination = { offset: 0, limit: 50 };
 const MAX_PAGE_LIMIT = 300;
+const MAIN_REPOSITORY_SCOPE_LABEL = 'Main Repository';
 const HISTORY_COMMIT_COMMANDS: readonly { readonly id: string; readonly command: CommitCommand }[] = [
     { id: 'lookGit.history.copyRevisionNumber', command: 'copyRevisionNumber' },
     { id: 'lookGit.history.createPatch', command: 'createPatch' },
@@ -41,6 +44,7 @@ const HISTORY_COMMIT_COMMANDS: readonly { readonly id: string; readonly command:
     { id: 'lookGit.history.newTag', command: 'newTag' },
 ];
 const HISTORY_TITLE_COMMANDS: readonly { readonly id: string; readonly command: HistoryToolbarCommand }[] = [
+    { id: 'lookGit.history.selectRepositoryScope', command: 'selectRepositoryScope' },
     { id: 'lookGit.history.selectBranch', command: 'selectBranch' },
     { id: 'lookGit.history.goToCurrent', command: 'goToCurrent' },
     { id: 'lookGit.history.fetchAll', command: 'fetchAll' },
@@ -58,6 +62,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     private view?: vscode.WebviewView;
     private contextTarget?: HistoryContextTarget;
     private selectedHistoryRef: string | undefined;
+    private selectedRepositoryScope: HistoryRepositoryScope | undefined;
     private refCache?: HistoryRefCache;
 
     constructor(
@@ -100,6 +105,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         if (!this.view) { return; }
         try {
             this.refCache = undefined;
+            await this.syncSubmoduleScopeContext();
             const data = await this.loadHistoryPage(DEFAULT_PAGE);
             this.postMessage({ type: 'history/data', data });
         } catch (error) {
@@ -162,7 +168,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private async loadHistoryPage(page: Pagination): Promise<HistoryData> {
         const normalizedPage = normalizePage(page);
-        const repo = this.repositories.currentRepository;
+        const repo = this.currentHistoryRepository();
         if (!repo) {
             return {
                 commits: [],
@@ -186,6 +192,9 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private async handleToolbarCommand(command: HistoryToolbarCommand): Promise<void> {
         switch (command) {
+            case 'selectRepositoryScope':
+                await this.selectRepositoryScope();
+                return;
             case 'selectBranch':
                 await this.selectHistoryBranch();
                 return;
@@ -206,7 +215,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private async selectHistoryBranch(): Promise<void> {
         try {
-            const repo = this.repositories.requireRepository();
+            const repo = this.requireHistoryRepository();
             const branches = await repo.getAllBranches();
             const branchNames = branches.map((branch) => branch.name);
             const selected = await vscode.window.showQuickPick(['Current Branch', ...branchNames], {
@@ -222,7 +231,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private async goToCurrentHistoryItem(): Promise<void> {
         try {
-            const repo = this.repositories.requireRepository();
+            const repo = this.requireHistoryRepository();
             const hash = await repo.exec(['rev-parse', 'HEAD']);
             this.selectedHistoryRef = undefined;
             await this.refresh();
@@ -234,7 +243,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private async runVscodeGitToolbarOperation(operation: 'fetchAll' | 'pull' | 'push', command: VscodeRemoteCommand): Promise<void> {
         try {
-            const repo = this.repositories.requireRepository();
+            const repo = this.requireHistoryRepository();
             await this.remoteCommands.runVscode(repo, command);
             await Promise.all([
                 this.onRepositoryUpdated(),
@@ -283,7 +292,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async loadCommitDetails(hash: string): Promise<HistoryCommitDetails> {
-        const repo = this.repositories.currentRepository;
+        const repo = this.currentHistoryRepository();
         if (!repo) { throw new Error('No active Git repository.'); }
 
         const [fullMessage, files] = await Promise.all([
@@ -299,7 +308,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private async handleOpenDiff(message: HistoryOpenDiffRequest): Promise<void> {
         try {
-            const repo = this.repositories.requireRepository();
+            const repo = this.requireHistoryRepository();
             const { left, right } = await createDiffUris(repo.cwd, message);
             await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(message.filePath)} (${message.commitHash.substring(0, 7)})`);
         } catch (error) {
@@ -322,7 +331,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         }
 
         try {
-            const repo = this.repositories.requireRepository();
+            const repo = this.requireHistoryRepository();
             const shouldRefresh = await runCommitCommand(repo, command, target.hash, target.hashes, this.remoteCommands);
             if (shouldRefresh) { await this.refresh(); }
         } catch (error) {
@@ -380,6 +389,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     async notifyRepoChanged(context: RepoContext): Promise<void> {
         this.selectedHistoryRef = undefined;
+        this.selectedRepositoryScope = undefined;
         this.refCache = undefined;
         this.view?.webview.postMessage({ type: 'repo/contextChanged', context: toSerializedRepoContext(context) });
         await this.refresh();
@@ -396,11 +406,91 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     private renderWebviewHtml(webviewView: vscode.WebviewView): void {
         webviewView.webview.html = getWebviewHtml(webviewView.webview, this.extensionUri, 'history');
     }
+
+    private currentHistoryRepository(): GitRepository | undefined {
+        const repo = this.repositories.currentRepository;
+        if (!repo) { return undefined; }
+        return this.repositoryForHistoryScope(repo);
+    }
+
+    private requireHistoryRepository(): GitRepository {
+        return this.repositoryForHistoryScope(this.repositories.requireRepository());
+    }
+
+    private repositoryForHistoryScope(repo: GitRepository): GitRepository {
+        return this.selectedRepositoryScope
+            ? new ScopedGitRepository(repo, this.selectedRepositoryScope.path)
+            : repo;
+    }
+
+    private async selectRepositoryScope(): Promise<void> {
+        try {
+            const repo = this.repositories.requireRepository();
+            const submodules = await this.loadSubmodules(repo);
+            await this.applySubmoduleScopeContext(submodules);
+            if (submodules.length === 0) {
+                await vscode.window.showInformationMessage('No submodules found in this repository.');
+                return;
+            }
+
+            const options = [
+                MAIN_REPOSITORY_SCOPE_LABEL,
+                ...submodules.map((submodule) => submoduleScopeOption(submodule.path)),
+            ];
+            const selected = await vscode.window.showQuickPick(options, {
+                placeHolder: 'Select repository for commit history actions',
+            });
+            if (!selected) { return; }
+
+            this.selectedRepositoryScope = selected === MAIN_REPOSITORY_SCOPE_LABEL
+                ? undefined
+                : { path: submodulePathFromOption(selected) };
+            this.selectedHistoryRef = undefined;
+            this.contextTarget = undefined;
+            this.refCache = undefined;
+            await this.refresh();
+        } catch (error) {
+            this.postHistoryError(error, 'history/selectRepositoryScope', 'gitOperationFailed');
+        }
+    }
+
+    private async syncSubmoduleScopeContext(): Promise<void> {
+        const repo = this.repositories.currentRepository;
+        if (!repo) {
+            this.selectedRepositoryScope = undefined;
+            await vscode.commands.executeCommand('setContext', 'lookGit.historyHasSubmodules', false);
+            return;
+        }
+        const submodules = await this.loadSubmodules(repo);
+        await this.applySubmoduleScopeContext(submodules);
+    }
+
+    private async applySubmoduleScopeContext(submodules: readonly GitSubmodule[]): Promise<void> {
+        await vscode.commands.executeCommand('setContext', 'lookGit.historyHasSubmodules', submodules.length > 0);
+        if (!this.selectedRepositoryScope) { return; }
+        if (submodules.some((submodule) => submodule.path === this.selectedRepositoryScope?.path)) { return; }
+        this.selectedRepositoryScope = undefined;
+        this.selectedHistoryRef = undefined;
+        this.contextTarget = undefined;
+        this.refCache = undefined;
+    }
+
+    private async loadSubmodules(repo: GitRepository): Promise<readonly GitSubmodule[]> {
+        try { return await repo.getSubmoduleStatus(); }
+        catch (error) {
+            this.postHistoryError(error, 'history/listSubmodules', 'gitOperationFailed');
+            return [];
+        }
+    }
 }
 
 interface HistoryRefCache {
     readonly branches: readonly GitBranch[];
     readonly tags: readonly GitTag[];
+}
+
+interface HistoryRepositoryScope {
+    readonly path: string;
 }
 
 function normalizePage(page: Pagination): Pagination {
@@ -469,6 +559,14 @@ function toHistoryCommitFile(file: GitFileChange) {
         parentHash: file.parentHash,
         isSubmodule: file.isSubmodule,
     };
+}
+
+function submoduleScopeOption(submodulePath: string): string {
+    return `Submodule: ${submodulePath}`;
+}
+
+function submodulePathFromOption(option: string): string {
+    return option.replace(/^Submodule: /, '');
 }
 
 async function createDiffUris(cwd: string, message: HistoryOpenDiffRequest): Promise<{ readonly left: vscode.Uri; readonly right: vscode.Uri }> {

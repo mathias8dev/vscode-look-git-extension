@@ -88,6 +88,7 @@ export interface HistoryContextTargetMessage {
 }
 
 export type HistoryToolbarCommand =
+    | 'selectRepositoryScope'
     | 'selectBranch'
     | 'goToCurrent'
     | 'fetchAll'

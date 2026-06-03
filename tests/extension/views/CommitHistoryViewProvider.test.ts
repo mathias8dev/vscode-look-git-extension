@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import type { GitFileChange } from '../../../src/application/ports/git-repository';
+import type { RemoteCommandBackend } from '../../../src/application/ports/remote-command-backend';
 import { RepoKind } from '../../../src/core/git/domain/RepoContext';
+import { LOG_FIELD_SEP, LOG_RECORD_SEP } from '../../../src/core/parsing/parseLog';
 import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHistoryViewProvider';
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
@@ -425,6 +427,82 @@ describe('CommitHistoryViewProvider error propagation', () => {
         expect(repo.getLog).toHaveBeenCalled();
     });
 
+    it('shows the history repository selector only when submodules are available', async () => {
+        const repo = makeRepositoryMock({
+            getSubmoduleStatus: vi.fn(async () => [{ path: 'modules/auth-kit', status: ' ' as const }]),
+        });
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+
+        await vi.waitFor(() => expect(getCommandCalls()).toContainEqual({
+            command: 'setContext',
+            args: ['lookGit.historyHasSubmodules', true],
+        }));
+    });
+
+    it('selects a submodule as the commit history repository scope', async () => {
+        setQuickPickValue('Submodule: modules/auth-kit');
+        const repo = makeRepositoryMock({
+            getSubmoduleStatus: vi.fn(async () => [{ path: 'modules/auth-kit', status: ' ' as const }]),
+            execRaw: vi.fn(async (args) => scopedHistoryOutput(args)),
+            exec: vi.fn(async (args) => {
+                if (args.join(' ') === '-C modules/auth-kit rev-parse --abbrev-ref HEAD') { return 'feature/auth'; }
+                if (args.join(' ') === '-C modules/auth-kit rev-parse HEAD') { return 'submodule-head'; }
+                return '';
+            }),
+        });
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'selectRepositoryScope' });
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'history/data',
+            data: expect.objectContaining({
+                commits: [expect.objectContaining({
+                    hash: 'submodule123456789',
+                    message: 'feat(auth): scoped history',
+                })],
+            }),
+        })));
+        expect(repo.execRaw).toHaveBeenCalledWith(expect.arrayContaining(['-C', 'modules/auth-kit', 'log']), undefined);
+
+        view.messages = [];
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'goToCurrent' });
+
+        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith(['-C', 'modules/auth-kit', 'rev-parse', 'HEAD'], undefined));
+        await vi.waitFor(() => expect(view.messages).toContainEqual({ type: 'history/selectCommit', hash: 'submodule-head' }));
+    });
+
+    it('runs history remote toolbar commands against the selected submodule scope', async () => {
+        setQuickPickValue('Submodule: modules/auth-kit');
+        const repo = makeRepositoryMock({
+            getSubmoduleStatus: vi.fn(async () => [{ path: 'modules/auth-kit', status: ' ' as const }]),
+            execRaw: vi.fn(async (args) => scopedHistoryOutput(args)),
+            exec: vi.fn(async (args) => args.join(' ') === '-C modules/auth-kit rev-parse --abbrev-ref HEAD' ? 'feature/auth' : ''),
+        });
+        const remoteCommands: RemoteCommandBackend = {
+            runVscode: vi.fn(async () => {}),
+            runCli: vi.fn(async () => {}),
+        };
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo), async () => {}, remoteCommands);
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'selectRepositoryScope' });
+        await vi.waitFor(() => expect(repo.execRaw).toHaveBeenCalledWith(expect.arrayContaining(['-C', 'modules/auth-kit', 'log']), undefined));
+
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'fetchAll' });
+
+        await vi.waitFor(() => expect(remoteCommands.runVscode).toHaveBeenCalledWith(
+            expect.objectContaining({ cwd: '/workspace/modules/auth-kit' }),
+            'fetchAll',
+        ));
+    });
+
     it('posts a recoverable toolbar error when a git operation fails', async () => {
         const repo = makeRepositoryMock();
         commands.failCommand('git.fetchAll', new Error('fetch all failed'));
@@ -599,6 +677,28 @@ function commit(hash: string, message: string) {
         authorDate: '2024-01-01T00:00:00Z',
         parentHashes: [],
     };
+}
+
+function scopedHistoryOutput(args: readonly string[]): string {
+    const command = args.join(' ');
+    if (command.startsWith('-C modules/auth-kit log ')) {
+        return [
+            'submodule123456789',
+            'submodu',
+            'feat(auth): scoped history',
+            'Ada',
+            'ada@example.com',
+            '2024-01-01T00:00:00Z',
+            '',
+        ].join(LOG_FIELD_SEP) + LOG_RECORD_SEP;
+    }
+    if (command.startsWith('-C modules/auth-kit for-each-ref ')) {
+        return '';
+    }
+    if (command === '-C modules/auth-kit tag --format=%(refname:short)%00%(objectname)') {
+        return '';
+    }
+    return '';
 }
 
 function isHistoryDataResponse(value: unknown, requestId: string): boolean {

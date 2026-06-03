@@ -8,10 +8,14 @@ import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepos
 import { ChangesMessageRouter } from '../../../src/extension/messaging/ChangesMessageRouter';
 import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessageRouter';
 import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
+import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHistoryViewProvider';
 import { getConfiguredWebviewFontSize, registerWebviewFontSizeSync } from '../../../src/extension/views/webview-font';
+import type { GitRepository } from '../../../src/application/ports/git-repository';
+import { VscodeRemoteCommand, type CliRemoteCommand, type RemoteCommandBackend } from '../../../src/application/ports/remote-command-backend';
 import type { ChangesExtensionToWebviewMessage } from '../../../src/protocol/changes/messages';
 import { ConflictState } from '../../../src/protocol/changes/types';
 import type { GraphDataResponse, GraphExtensionToWebviewMessage, GraphSubmodulesPush, WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
+import type { HistoryExtensionToWebviewMessage, HistoryWebviewToExtensionMessage } from '../../../src/protocol/history/messages';
 import type { GraphRow } from '../../../src/webview/features/graph/layout/assignGraphLanes';
 import { createInitialGraphState, reduceGraphState, type GraphState } from '../../../src/webview/features/graph/graphState';
 import { addLinkedWorktree, createBareGitRepo, createTempGitRepo, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
@@ -245,6 +249,12 @@ export function run(): Promise<void> {
             name: 'runs remote branch and commit context actions end to end',
             run: async () => {
                 await runRemoteContextActionsE2E();
+            },
+        },
+        {
+            name: 'scopes commit history toolbar actions to selected submodules',
+            run: async () => {
+                await runCommitHistorySubmoduleScopeE2E();
             },
         },
         {
@@ -1135,6 +1145,82 @@ function createRemoteOnlyBranchE2E(fixture: TempGitRepo, branch: string, startPo
     return head;
 }
 
+async function runCommitHistorySubmoduleScopeE2E(): Promise<void> {
+    await runCommitHistorySubmoduleReadNavigationStoryE2E();
+    await runCommitHistorySubmoduleRemoteToolbarStoryE2E();
+}
+
+async function runCommitHistorySubmoduleReadNavigationStoryE2E(): Promise<void> {
+    const fixture = createCommitHistorySubmoduleFixture();
+    try {
+        const { view } = await historyHarnessFor(fixture.parent.cwd);
+
+        await withPatchedVscode({ quickPickValues: ['Submodule: modules/auth-kit'] }, async () => {
+            sendHistoryMessage(view, { type: 'history/toolbarCommand', command: 'selectRepositoryScope' });
+            await waitForHistoryCommitMessage(view.messages, 'feat(auth-kit): add oauth support');
+        });
+        assert.doesNotMatch(historyMessages(lastHistoryData(view.messages)).join('\n'), /feat\(submodules\): add auth-kit module/);
+
+        view.messages = [];
+        sendHistoryMessage(view, { type: 'history/toolbarCommand', command: 'goToCurrent' });
+        await waitForHistorySelectCommit(view.messages, fixture.featureHead);
+
+        view.messages = [];
+        await withPatchedVscode({ quickPickValues: ['main'] }, async () => {
+            sendHistoryMessage(view, { type: 'history/toolbarCommand', command: 'selectBranch' });
+            await waitForHistoryCommitMessage(view.messages, 'docs(auth-kit): add module readme');
+        });
+        assert.doesNotMatch(historyMessages(lastHistoryData(view.messages)).join('\n'), /feat\(auth-kit\): add oauth support/);
+
+        view.messages = [];
+        sendHistoryMessage(view, { type: 'history/toolbarCommand', command: 'goToCurrent' });
+        await waitForHistorySelectCommit(view.messages, fixture.featureHead);
+        await waitForHistoryCommitMessage(view.messages, 'feat(auth-kit): add oauth support');
+    } finally {
+        fixture.cleanup();
+    }
+}
+
+async function runCommitHistorySubmoduleRemoteToolbarStoryE2E(): Promise<void> {
+    const fixture = createCommitHistorySubmoduleFixture();
+    const remoteBackend = capturingRemoteBackend();
+    let repositoryUpdateCount = 0;
+    try {
+        const { view } = await historyHarnessFor(
+            fixture.parent.cwd,
+            remoteBackend.backend,
+            async () => { repositoryUpdateCount++; },
+        );
+        const submoduleCwd = path.join(fixture.parent.cwd, 'modules', 'auth-kit');
+
+        await withPatchedVscode({ quickPickValues: ['Submodule: modules/auth-kit'] }, async () => {
+            sendHistoryMessage(view, { type: 'history/toolbarCommand', command: 'selectRepositoryScope' });
+            await waitForHistoryCommitMessage(view.messages, 'feat(auth-kit): add oauth support');
+        });
+
+        for (const command of ['fetchAll', 'pull', 'push'] as const) {
+            sendHistoryMessage(view, { type: 'history/toolbarCommand', command });
+            await waitForCondition(
+                () => remoteBackend.calls.some((call) => call.command === command),
+                () => `Expected commit history toolbar command ${command} to run.`,
+            );
+        }
+
+        assert.deepEqual(remoteBackend.calls.map((call) => ({ command: call.command, cwd: call.cwd })), [
+            { command: VscodeRemoteCommand.FetchAll, cwd: submoduleCwd },
+            { command: VscodeRemoteCommand.Pull, cwd: submoduleCwd },
+            { command: VscodeRemoteCommand.Push, cwd: submoduleCwd },
+        ]);
+        await waitForCondition(
+            () => repositoryUpdateCount === 3,
+            () => `Expected repository update callback after each remote action, got ${repositoryUpdateCount}.`,
+        );
+        await waitForHistoryCommitMessage(view.messages, 'feat(auth-kit): add oauth support');
+    } finally {
+        fixture.cleanup();
+    }
+}
+
 async function runResetActionE2E(): Promise<void> {
     await withTempCommitRepo(async ({ fixture, base, head, router, messages }) => {
         await withPatchedVscode({ quickPickValues: ['Mixed reset'] }, async () => {
@@ -1390,6 +1476,33 @@ function routerFor(repoPath: string, messages: GraphExtensionToWebviewMessage[])
     return new GraphMessageRouter(accessor, (message) => { messages.push(message); });
 }
 
+async function historyHarnessFor(
+    repoPath: string,
+    remoteCommands?: RemoteCommandBackend,
+    onRepositoryUpdated: () => Promise<void> = async () => {},
+): Promise<{ readonly view: HistoryE2eWebviewView; readonly provider: CommitHistoryViewProvider }> {
+    const repo = new GitProcessRepository(repoPath);
+    const accessor: ActiveRepositoryAccessor = {
+        currentRepository: repo,
+        currentContext: undefined,
+        requireRepository: () => repo,
+    };
+    const provider = new CommitHistoryViewProvider(
+        vscode.Uri.file(process.cwd()),
+        accessor,
+        onRepositoryUpdated,
+        remoteCommands,
+    );
+    const view = makeHistoryWebviewView();
+
+    provider.resolveWebviewView(view);
+    await waitForCondition(
+        () => view.messages.some((message) => message.type === 'history/data'),
+        () => 'Expected commit history provider to post initial history/data.',
+    );
+    return { view, provider };
+}
+
 function changesRouterFor(repoPath: string, messages: ChangesExtensionToWebviewMessage[]): ChangesMessageRouter {
     const repo = new GitProcessRepository(repoPath);
     const accessor: ActiveRepositoryAccessor = {
@@ -1398,6 +1511,102 @@ function changesRouterFor(repoPath: string, messages: ChangesExtensionToWebviewM
         requireRepository: () => repo,
     };
     return new ChangesMessageRouter(accessor, (message) => { messages.push(message); }, async () => undefined);
+}
+
+interface HistoryE2eWebviewView extends vscode.WebviewView {
+    messages: HistoryExtensionToWebviewMessage[];
+    messageHandler: ((message: HistoryWebviewToExtensionMessage) => void) | undefined;
+}
+
+function makeHistoryWebviewView(): HistoryE2eWebviewView {
+    const view: HistoryE2eWebviewView = {
+        viewType: 'lookGit.commitHistory',
+        webview: {
+            options: {},
+            html: '',
+            cspSource: 'vscode-webview:',
+            postMessage(message: unknown): Thenable<boolean> {
+                // The harness is wired only to CommitHistoryViewProvider.postMessage.
+                view.messages.push(message as HistoryExtensionToWebviewMessage);
+                return Promise.resolve(true);
+            },
+            onDidReceiveMessage(
+                listener: (message: unknown) => unknown,
+                _thisArgs?: unknown,
+                _disposables?: vscode.Disposable[],
+            ): vscode.Disposable {
+                view.messageHandler = (message) => { listener(message); };
+                return { dispose() {} };
+            },
+            asWebviewUri(uri: vscode.Uri): vscode.Uri { return uri; },
+        },
+        visible: true,
+        badge: undefined,
+        messages: [],
+        messageHandler: undefined,
+        onDidDispose(_listener: () => unknown): vscode.Disposable { return { dispose() {} }; },
+        onDidChangeVisibility(_listener: () => unknown): vscode.Disposable { return { dispose() {} }; },
+        show() {},
+    };
+    return view;
+}
+
+function sendHistoryMessage(view: HistoryE2eWebviewView, message: HistoryWebviewToExtensionMessage): void {
+    assert.ok(view.messageHandler, 'Expected history webview message handler to be registered.');
+    view.messageHandler(message);
+}
+
+interface CommitHistorySubmoduleFixture {
+    readonly parent: TempGitRepo;
+    readonly source: TempGitRepo;
+    readonly featureHead: string;
+    readonly mainHead: string;
+    cleanup(): void;
+}
+
+function createCommitHistorySubmoduleFixture(): CommitHistorySubmoduleFixture {
+    const source = createTempGitRepo();
+    const parent = createTempGitRepo();
+    try {
+        const mainHead = source.commitFile('README.md', '# Auth Kit\n', 'docs(auth-kit): add module readme');
+        source.git(['checkout', '-q', '-b', 'feature/oauth']);
+        const featureHead = source.commitFile('src/oauth.ts', 'export const oauth = true;\n', 'feat(auth-kit): add oauth support');
+        source.git(['checkout', '-q', 'main']);
+
+        parent.commitFile('README.md', '# Parent\n', 'docs(parent): add readme');
+        parent.git(['-c', 'protocol.file.allow=always', 'submodule', 'add', source.cwd, 'modules/auth-kit']);
+        parent.git(['-C', 'modules/auth-kit', 'checkout', '-q', '-b', 'feature/oauth', 'origin/feature/oauth']);
+        parent.commit('feat(submodules): add auth-kit module');
+
+        return {
+            parent,
+            source,
+            featureHead,
+            mainHead,
+            cleanup() {
+                parent.cleanup();
+                source.cleanup();
+            },
+        };
+    } catch (error) {
+        parent.cleanup();
+        source.cleanup();
+        throw error;
+    }
+}
+
+function capturingRemoteBackend(): {
+    readonly calls: Array<{ readonly command: VscodeRemoteCommand; readonly cwd: string }>;
+    readonly backend: RemoteCommandBackend;
+} {
+    const calls: Array<{ readonly command: VscodeRemoteCommand; readonly cwd: string }> = [];
+    const backend: RemoteCommandBackend = {
+        async runVscode(repo: GitRepository, command: VscodeRemoteCommand): Promise<void> {
+            calls.push({ command, cwd: repo.cwd });
+        },
+        async runCli(_repo: GitRepository, _command: CliRemoteCommand): Promise<void> {},
+    };
+    return { calls, backend };
 }
 
 async function requestGraphDataForState(
@@ -1641,6 +1850,39 @@ function worktreeDetailsResponse(messages: readonly GraphExtensionToWebviewMessa
     ));
     assert.ok(response, `Expected graph/worktreeDetailsResponse for ${requestId}.`);
     return response;
+}
+
+function lastHistoryData(messages: readonly HistoryExtensionToWebviewMessage[]): Extract<HistoryExtensionToWebviewMessage, { readonly type: 'history/data' }> {
+    for (let index = messages.length - 1; index >= 0; index--) {
+        const message = messages[index];
+        if (message?.type === 'history/data') { return message; }
+    }
+    assert.fail('Expected history/data.');
+}
+
+function historyMessages(message: Extract<HistoryExtensionToWebviewMessage, { readonly type: 'history/data' }>): readonly string[] {
+    return message.data.commits.map((commit) => commit.message);
+}
+
+async function waitForHistoryCommitMessage(
+    messages: readonly HistoryExtensionToWebviewMessage[],
+    expected: string,
+): Promise<void> {
+    await waitForCondition(
+        () => messages.some((message) => message.type === 'history/data'
+            && message.data.commits.some((commit) => commit.message === expected)),
+        () => `Expected commit history data to include "${expected}".`,
+    );
+}
+
+async function waitForHistorySelectCommit(
+    messages: readonly HistoryExtensionToWebviewMessage[],
+    hash: string,
+): Promise<void> {
+    await waitForCondition(
+        () => messages.some((message) => message.type === 'history/selectCommit' && message.hash === hash),
+        () => `Expected commit history to select ${hash}.`,
+    );
 }
 
 function lastGraphDataPush(messages: readonly GraphExtensionToWebviewMessage[]): Extract<GraphExtensionToWebviewMessage, { readonly type: 'graph/dataPush' }> {

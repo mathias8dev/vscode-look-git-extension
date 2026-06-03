@@ -188,6 +188,12 @@
         "icon": "$(diff)"
       },
       {
+        "command": "lookGit.history.selectRepositoryScope",
+        "title": "Select Repository Scope",
+        "category": "Look Git",
+        "icon": "$(file-submodule)"
+      },
+      {
         "command": "lookGit.history.selectBranch",
         "title": "Select Branch",
         "category": "Look Git",
@@ -881,6 +887,11 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "lookGit.history.selectRepositoryScope",
+          "when": "view == lookGit.commitHistory && lookGit.historyHasSubmodules",
+          "group": "navigation@0"
+        },
         {
           "command": "lookGit.history.selectBranch",
           "when": "view == lookGit.commitHistory",
