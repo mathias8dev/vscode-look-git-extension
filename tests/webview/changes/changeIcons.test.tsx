@@ -12,6 +12,15 @@ describe('change icons', () => {
         expect(markup).toContain('<path');
     });
 
+    it('renders a specific Dart file icon instead of the default fallback', () => {
+        const dart = renderToStaticMarkup(<FileTypeIcon kind="dart" />);
+        const fallback = renderToStaticMarkup(<FileTypeIcon kind="file" />);
+
+        expect(dart).toContain('class="file-type-icon"');
+        expect(dart).toContain('<path');
+        expect(dart).not.toBe(fallback);
+    });
+
     it('renders distinct closed and opened Iconify vscode-icons SVGs for folders', () => {
         const closed = renderToStaticMarkup(<FolderIcon name="src" expanded={false} />);
         const opened = renderToStaticMarkup(<FolderIcon name="src" expanded />);

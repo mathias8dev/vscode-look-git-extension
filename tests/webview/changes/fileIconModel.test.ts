@@ -10,6 +10,16 @@ describe('fileIconModel', () => {
         expect(iconKindForPath('.gitignore')).toBe('git');
         expect(iconKindForPath('vite.config.ts')).toBe('config');
         expect(iconKindForPath('assets/logo.svg')).toBe('image');
+        expect(iconKindForPath('lib/main.dart')).toBe('dart');
+        expect(iconKindForPath('pubspec.yaml')).toBe('flutter');
+        expect(iconKindForPath('scripts/build.py')).toBe('python');
+        expect(iconKindForPath('cmd/server.go')).toBe('go');
+        expect(iconKindForPath('src/lib.rs')).toBe('rust');
+        expect(iconKindForPath('Dockerfile')).toBe('docker');
+        expect(iconKindForPath('tailwind.config.ts')).toBe('tailwind');
+        expect(iconKindForPath('schema.prisma')).toBe('prisma');
+        expect(iconKindForPath('src/App.vue')).toBe('vue');
+        expect(iconKindForPath('src/App.svelte')).toBe('svelte');
     });
 
     it('marks submodule status entries explicitly', () => {
