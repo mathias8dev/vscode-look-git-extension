@@ -2,6 +2,19 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [0.4.0] - 2026-06-04
+
+### Added
+
+#### Commit History
+- Add a repository scope selector when submodules are available, so toolbar actions, commit details, diffs, and commit commands can run against the selected submodule
+- Add end-to-end coverage for commit history submodule scope workflows
+
+### Changed
+
+#### Look Graph
+- Show full commit dates with hours, minutes, and seconds in the graph date column
+
 ## [0.3.0] - 2026-06-03
 
 ### Added
