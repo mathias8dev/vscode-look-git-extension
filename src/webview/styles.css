@@ -1583,11 +1583,45 @@ h1 {
 
 .graph-branch-panel {
     width: 260px;
+    min-width: 120px;
+    max-width: 560px;
     flex-shrink: 0;
-    border-right: 1px solid var(--vscode-panel-border, #3c3c3c);
+    border-right: none;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+}
+
+.graph-panel-resize-handle {
+    flex-shrink: 0;
+    width: 5px;
+    cursor: col-resize;
+    background: transparent;
+    border-left: 1px solid var(--vscode-panel-border, #3c3c3c);
+    position: relative;
+    transition: background 0.15s;
+    z-index: 2;
+}
+
+.graph-panel-resize-handle::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -3px;
+    right: -3px;
+    bottom: 0;
+}
+
+.graph-panel-resize-handle:hover,
+.graph-panel-resize-handle:active,
+.graph-panel-resize-handle:focus-visible {
+    background: var(--vscode-focusBorder, #007fd4);
+    border-left-color: var(--vscode-focusBorder, #007fd4);
+}
+
+.graph-panel-resize-handle:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder, #007fd4);
+    outline-offset: -1px;
 }
 
 .graph-branch-panel-body {
@@ -1728,6 +1762,8 @@ h1 {
     padding: 0 8px;
     opacity: 0.7;
     font-size: 0.92em;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .branch-chevron,
@@ -1749,7 +1785,11 @@ h1 {
 .branch-current-name {
     font-size: inherit;
     color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
-    flex-shrink: 0;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .branch-current-indicator {

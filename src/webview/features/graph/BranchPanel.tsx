@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { BranchCommand } from '../../../protocol/graph/messages';
 import type { BranchInfo, GraphContextTarget, WorktreeInfo } from '../../../protocol/graph/types';
 import { buildBranchTree, buildRemoteBranchTree } from './graphBranchTree';
@@ -7,6 +8,7 @@ import { IconButton } from '../../shared/IconButton';
 import { selectBranchFilter } from './graphBranchSelection';
 
 interface BranchPanelProps {
+    readonly style?: CSSProperties;
     readonly branches: readonly BranchInfo[];
     readonly worktrees: readonly WorktreeInfo[];
     readonly currentBranch: string;
@@ -22,6 +24,7 @@ interface BranchPanelProps {
 }
 
 export function BranchPanel({
+    style,
     branches,
     worktrees,
     currentBranch,
@@ -122,7 +125,7 @@ export function BranchPanel({
     };
 
     return (
-        <div className="graph-branch-panel">
+        <div className="graph-branch-panel" style={style}>
             <div className="graph-branch-panel-body">
                 <div className="graph-branch-action-bar" aria-label="Branch actions">
                     <IconButton

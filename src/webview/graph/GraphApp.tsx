@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useReducer } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import type { GraphExtensionToWebviewMessage } from '../../protocol/graph/messages';
 import type { CommitFileChange, GraphContextTarget } from '../../protocol/graph/types';
 import { BranchPanel } from '../features/graph/BranchPanel';
@@ -28,9 +29,42 @@ import { applyWebviewFontSize, isWebviewFontSizeMessage } from '../platform/font
 
 const PAGE_LIMIT = 300;
 const ERROR_NOTICE_TIMEOUT_MS = 8000;
+const BRANCH_PANEL_MIN = 120;
+const BRANCH_PANEL_MAX = 560;
+const BRANCH_PANEL_DEFAULT = 260;
+const BRANCH_PANEL_KEYBOARD_STEP = 16;
+const BRANCH_PANEL_STORAGE_KEY = 'lookGit.branchPanelWidth';
+
+interface BranchPanelResizeDrag {
+    readonly pointerId: number;
+    readonly startX: number;
+    readonly startWidth: number;
+    readonly previousCursor: string;
+    readonly previousUserSelect: string;
+}
+
+function readSavedPanelWidth(): number {
+    try {
+        const raw = localStorage.getItem(BRANCH_PANEL_STORAGE_KEY);
+        const n = raw ? parseInt(raw, 10) : NaN;
+        return Number.isFinite(n) && n >= BRANCH_PANEL_MIN && n <= BRANCH_PANEL_MAX ? n : BRANCH_PANEL_DEFAULT;
+    } catch {
+        return BRANCH_PANEL_DEFAULT;
+    }
+}
+
+function clampBranchPanelWidth(width: number): number {
+    return Math.min(BRANCH_PANEL_MAX, Math.max(BRANCH_PANEL_MIN, width));
+}
+
+function saveBranchPanelWidth(width: number): void {
+    try { localStorage.setItem(BRANCH_PANEL_STORAGE_KEY, String(width)); } catch {}
+}
 
 export function GraphApp() {
     const [state, dispatch] = useReducer(reduceGraphState, undefined, createInitialGraphState);
+    const [branchPanelWidth, setBranchPanelWidth] = useState(readSavedPanelWidth);
+    const resizeDragRef = useRef<BranchPanelResizeDrag | undefined>(undefined);
 
     useEffect(() => {
         const onMessage = (event: MessageEvent<GraphExtensionToWebviewMessage>) => {
@@ -123,9 +157,90 @@ export function GraphApp() {
         vscodeApi.postMessage(messageForGraphContextTarget(target));
     }, []);
 
+    const finishPanelResize = useCallback((target?: HTMLDivElement, width?: number) => {
+        const drag = resizeDragRef.current;
+        if (!drag) { return; }
+        if (target && typeof target.hasPointerCapture === 'function' && target.hasPointerCapture(drag.pointerId)) {
+            target.releasePointerCapture(drag.pointerId);
+        }
+        document.body.style.cursor = drag.previousCursor;
+        document.body.style.userSelect = drag.previousUserSelect;
+        resizeDragRef.current = undefined;
+        if (width !== undefined) { saveBranchPanelWidth(width); }
+    }, []);
+
+    useEffect(() => () => finishPanelResize(), [finishPanelResize]);
+
+    const resizeWidthForClientX = useCallback((clientX: number) => {
+        const drag = resizeDragRef.current;
+        if (!drag) { return branchPanelWidth; }
+        return clampBranchPanelWidth(drag.startWidth + clientX - drag.startX);
+    }, [branchPanelWidth]);
+
+    const handlePanelResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        resizeDragRef.current = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startWidth: branchPanelWidth,
+            previousCursor: document.body.style.cursor,
+            previousUserSelect: document.body.style.userSelect,
+        };
+        if (typeof event.currentTarget.setPointerCapture === 'function') {
+            event.currentTarget.setPointerCapture(event.pointerId);
+        }
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    }, [branchPanelWidth]);
+
+    const handlePanelResizePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+        const drag = resizeDragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) { return; }
+        setBranchPanelWidth(resizeWidthForClientX(event.clientX));
+    }, [resizeWidthForClientX]);
+
+    const handlePanelResizePointerEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+        const drag = resizeDragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) { return; }
+        const width = resizeWidthForClientX(event.clientX);
+        setBranchPanelWidth(width);
+        finishPanelResize(event.currentTarget, width);
+    }, [finishPanelResize, resizeWidthForClientX]);
+
+    const handlePanelResizePointerCancel = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+        const drag = resizeDragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) { return; }
+        finishPanelResize(event.currentTarget);
+    }, [finishPanelResize]);
+
+    const handlePanelResizeKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+        let nextWidth: number | undefined;
+        const step = event.shiftKey ? BRANCH_PANEL_KEYBOARD_STEP * 2 : BRANCH_PANEL_KEYBOARD_STEP;
+        switch (event.key) {
+            case 'ArrowLeft':
+                nextWidth = clampBranchPanelWidth(branchPanelWidth - step);
+                break;
+            case 'ArrowRight':
+                nextWidth = clampBranchPanelWidth(branchPanelWidth + step);
+                break;
+            case 'Home':
+                nextWidth = BRANCH_PANEL_MIN;
+                break;
+            case 'End':
+                nextWidth = BRANCH_PANEL_MAX;
+                break;
+            default:
+                return;
+        }
+        event.preventDefault();
+        setBranchPanelWidth(nextWidth);
+        saveBranchPanelWidth(nextWidth);
+    }, [branchPanelWidth]);
+
     return (
         <div className="graph-shell">
             <BranchPanel
+                style={{ width: branchPanelWidth }}
                 branches={state.branches}
                 worktrees={state.worktrees}
                 currentBranch={state.currentBranch}
@@ -138,6 +253,23 @@ export function GraphApp() {
                 onOpenWorktree={(path) => vscodeApi.postMessage(messageForWorktreeCommand('openInNewWindow', path))}
                 onAddWorktree={() => vscodeApi.postMessage(messageForWorktreeCommand('add'))}
                 onContextTarget={handleContextTarget}
+            />
+            <div
+                className="graph-panel-resize-handle"
+                role="separator"
+                tabIndex={0}
+                aria-label="Resize branches panel"
+                aria-orientation="vertical"
+                aria-valuemin={BRANCH_PANEL_MIN}
+                aria-valuemax={BRANCH_PANEL_MAX}
+                aria-valuenow={branchPanelWidth}
+                aria-valuetext={`${branchPanelWidth}px`}
+                title="Drag or use arrow keys to resize branches panel"
+                onPointerDown={handlePanelResizePointerDown}
+                onPointerMove={handlePanelResizePointerMove}
+                onPointerUp={handlePanelResizePointerEnd}
+                onPointerCancel={handlePanelResizePointerCancel}
+                onKeyDown={handlePanelResizeKeyDown}
             />
 
             <div className="graph-center">
