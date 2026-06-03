@@ -191,6 +191,34 @@ describe('BranchPanel', () => {
         fireEvent.click(screen.getByLabelText('Expand Branches'));
         expect(screen.getByTitle('feature/topic')).toBeInTheDocument();
     });
+
+    it('keeps branch rendering as a tree only', () => {
+        render(
+            <BranchPanel
+                branches={[
+                    branch('main', { isCurrent: true }),
+                    branch('feature/topic'),
+                    branch('feature/other'),
+                ]}
+                worktrees={[]}
+                currentBranch="main"
+                selectedBranchFilter={undefined}
+                selectedWorktreePath={undefined}
+                onSelectBranch={() => undefined}
+                onBranchCommand={() => undefined}
+                onFetch={() => undefined}
+                onSelectWorktree={() => undefined}
+                onOpenWorktree={() => undefined}
+                onAddWorktree={() => undefined}
+                onContextTarget={() => undefined}
+            />,
+        );
+
+        expect(screen.getByText('feature')).toBeInTheDocument();
+        expect(screen.queryByText('feature/topic')).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('View as List')).not.toBeInTheDocument();
+        expect(screen.getByLabelText('Expand Branches')).not.toBeDisabled();
+    });
 });
 
 function branch(name: string, overrides: Partial<BranchInfo> = {}): BranchInfo {

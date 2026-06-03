@@ -1,7 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { CommitFileTree } from '../../../src/webview/features/graph/CommitFileTree';
 import { FileTreeNodeView } from '../../../src/webview/features/graph/FileTreeNode';
 import { buildFileTree } from '../../../src/webview/features/graph/commitFileTreeModel';
+import { ViewMode } from '../../../src/webview/shared/viewMode';
 import { expectItem } from '../../helpers/assertions';
 
 describe('commitFileTree', () => {
@@ -51,5 +53,17 @@ describe('commitFileTree', () => {
         const markup = renderToStaticMarkup(<FileTreeNodeView node={node} depth={0} onDiff={() => undefined} />);
 
         expect(markup).toContain('modules');
+    });
+
+    it('renders list mode file rows with full paths', () => {
+        const markup = renderToStaticMarkup(
+            <CommitFileTree
+                files={[{ status: 'M', filePath: 'src/app.ts' }]}
+                viewMode={ViewMode.List}
+                onDiff={() => undefined}
+            />,
+        );
+
+        expect(markup).toContain('src/app.ts');
     });
 });

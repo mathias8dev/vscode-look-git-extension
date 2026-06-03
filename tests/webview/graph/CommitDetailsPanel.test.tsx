@@ -66,6 +66,24 @@ describe('CommitDetailsPanel', () => {
         await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', '156'));
         expect(localStorage.getItem('lookGit.commitDetailsMessagePanelHeight')).toBe('156');
     });
+
+    it('switches changed files between tree and list modes', () => {
+        renderPanel(detailsFor('abcdef123456'));
+
+        expect(screen.getByText('src')).toBeTruthy();
+        expect(screen.queryByText('src/app.ts')).toBeNull();
+        const listToggle = screen.getByLabelText('View as List');
+        expect(listToggle).toHaveClass('view-mode-toggle');
+        expect(listToggle.querySelector('.codicon-list-unordered')).not.toBeNull();
+
+        fireEvent.click(screen.getByLabelText('View as List'));
+
+        expect(screen.getByText('src/app.ts')).toBeTruthy();
+        expect(screen.getByText('docs/README.md')).toBeTruthy();
+        expect(screen.getByLabelText('View as Tree')).toBeTruthy();
+        expect(screen.getByLabelText('View as Tree').querySelector('.codicon-list-tree')).not.toBeNull();
+        expect(localStorage.getItem('lookGit.commitDetailsFileViewMode')).toBe('list');
+    });
 });
 
 function renderPanel(details: CommitDetails) {

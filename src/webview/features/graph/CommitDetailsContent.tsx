@@ -4,6 +4,9 @@ import { ResizablePanel } from '../../shared/ResizablePanel';
 import { ResizeAxis } from '../../shared/resizeAxis';
 import { ResizeHandleSide } from '../../shared/resizeHandleSide';
 import { SearchInput } from '../../shared/SearchInput';
+import { ViewModeToggle } from '../../shared/ViewModeToggle';
+import { ViewMode } from '../../shared/viewMode';
+import { readViewMode, writeViewMode } from '../../shared/viewModeStorage';
 import { CommitFileTree } from './CommitFileTree';
 import { filterCommitDetailFiles } from './commitDetailsModel';
 import type { CommitDetails } from './graphState';
@@ -12,6 +15,7 @@ const COMMIT_MESSAGE_PANEL_MIN = 72;
 const COMMIT_MESSAGE_PANEL_MAX = 420;
 const COMMIT_MESSAGE_PANEL_DEFAULT = 140;
 const COMMIT_MESSAGE_PANEL_STORAGE_KEY = 'lookGit.commitDetailsMessagePanelHeight';
+const COMMIT_DETAILS_FILE_VIEW_MODE_STORAGE_KEY = 'lookGit.commitDetailsFileViewMode';
 
 interface CommitDetailsContentProps {
     readonly details: CommitDetails;
@@ -20,7 +24,13 @@ interface CommitDetailsContentProps {
 
 export function CommitDetailsContent({ details, onDiff }: CommitDetailsContentProps) {
     const [fileSearch, setFileSearch] = useState('');
+    const [fileViewMode, setFileViewMode] = useState(() => readViewMode(COMMIT_DETAILS_FILE_VIEW_MODE_STORAGE_KEY, ViewMode.Tree));
     const filteredFiles = filterCommitDetailFiles(details.files, fileSearch);
+
+    const changeFileViewMode = (nextViewMode: ViewMode) => {
+        setFileViewMode(nextViewMode);
+        writeViewMode(COMMIT_DETAILS_FILE_VIEW_MODE_STORAGE_KEY, nextViewMode);
+    };
 
     return (
         <>
@@ -31,10 +41,11 @@ export function CommitDetailsContent({ details, onDiff }: CommitDetailsContentPr
                     ariaLabel="Search changed files"
                     onChange={setFileSearch}
                 />
+                <ViewModeToggle viewMode={fileViewMode} onChange={changeFileViewMode} />
             </div>
             <div className="graph-details-file-tree">
                 {filteredFiles.length > 0 ? (
-                    <CommitFileTree files={filteredFiles} onDiff={onDiff} />
+                    <CommitFileTree files={filteredFiles} viewMode={fileViewMode} onDiff={onDiff} />
                 ) : (
                     <div className="graph-details-file-empty">No files match</div>
                 )}

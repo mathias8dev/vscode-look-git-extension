@@ -1653,6 +1653,10 @@ h1 {
     opacity: 0.35;
 }
 
+.view-mode-toggle.icon-button {
+    opacity: 1;
+}
+
 .graph-branch-action-separator {
     flex: 0 0 6px;
 }
@@ -1668,6 +1672,11 @@ h1 {
 .branch-search {
     padding: var(--look-git-space-xs) var(--look-git-space-sm);
     border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
+}
+
+.graph-details-file-search .search-field {
+    flex: 1;
+    min-width: 0;
 }
 
 .search-field {
@@ -2142,6 +2151,9 @@ h1 {
 }
 
 .graph-details-file-search {
+    display: flex;
+    align-items: center;
+    gap: var(--look-git-space-xs);
     padding: var(--look-git-space-xs) var(--look-git-space-sm);
     border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
     flex-shrink: 0;
