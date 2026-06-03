@@ -7,6 +7,7 @@ import { GraphViewProvider } from './views/GraphViewProvider';
 import { defaultRemoteCommandBackend } from './git/hybrid-remote-command-backend';
 import { getBuiltInGitApi } from './utils/gitExtension';
 import { registerReadonlyDiffDocumentProvider } from './utils/readonly-diff-documents';
+import { registerWebviewFontSizeSync } from './views/webview-font';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const gitApi = await getBuiltInGitApi();
@@ -41,6 +42,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.window.registerWebviewViewProvider(ChangesViewProvider.viewType, changesProvider, { webviewOptions: { retainContextWhenHidden: true } }),
         vscode.window.registerWebviewViewProvider(CommitHistoryViewProvider.viewType, commitHistoryProvider, { webviewOptions: { retainContextWhenHidden: true } }),
         vscode.window.registerWebviewViewProvider(GraphViewProvider.viewType, graphProvider, { webviewOptions: { retainContextWhenHidden: true } }),
+        registerWebviewFontSizeSync([changesProvider, commitHistoryProvider, graphProvider]),
         repositories.onDidChange(({ context: repoContext }) => {
             void vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', Boolean(repoContext));
             if (repoContext) {

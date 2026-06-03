@@ -4,6 +4,7 @@ import type { HistoryCommitFile, HistoryContextTarget } from '../../protocol/his
 import { CommitHistoryApp } from '../features/history/CommitHistoryApp';
 import { createInitialHistoryState, reduceHistoryState } from '../features/history/historyState';
 import { messageForHistoryCommitDetails, messageForHistoryContextTarget, messageForHistoryDataRequest, messageForHistoryOpenDiff, messageForHistoryReady } from '../features/history/historyCommands';
+import { applyWebviewFontSize, isWebviewFontSizeMessage } from '../platform/font-size';
 import { vscodeApi } from '../platform/vscodeHost';
 
 const PAGE_LIMIT = 50;
@@ -16,6 +17,10 @@ export function HistoryWebview() {
 
     useEffect(() => {
         const onMessage = (event: MessageEvent<HistoryExtensionToWebviewMessage>) => {
+            if (isWebviewFontSizeMessage(event.data)) {
+                applyWebviewFontSize(event.data.fontSize);
+                return;
+            }
             if (event.data.type === 'history/applyFileViewMode') {
                 setFileViewMode(event.data.mode);
                 return;

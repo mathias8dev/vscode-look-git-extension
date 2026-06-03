@@ -71,6 +71,8 @@ function reduceMessage(state: HistoryState, message: HistoryExtensionToWebviewMe
             return { ...state, loading: false, loadingMore: false, detailsLoadingHash: undefined, error: message.error };
         case 'repo/contextChanged':
             return createInitialHistoryState();
+        case 'ui/fontSizeChanged':
+            return state;
     }
 }
 

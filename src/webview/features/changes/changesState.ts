@@ -253,6 +253,8 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
             return { ...state, commitFocusRequest: state.commitFocusRequest + 1 };
         case 'repo/contextChanged':
             return state;
+        case 'ui/fontSizeChanged':
+            return state;
     }
 }
 

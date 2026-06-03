@@ -1,5 +1,6 @@
 import type { RequestId, ErrorMessage, ProtocolError } from '../shared/base';
 import type { SerializedRepoContext } from '../shared/repo';
+import type { WebviewFontSizeChangedPush } from '../shared/ui';
 import type { GraphContextTarget, GraphData, GraphFilters, GraphPage, CommitFileChange } from './types';
 
 // ── Extension → Webview (push — no requestId) ──────────────────────────────
@@ -211,6 +212,7 @@ export interface GraphRepositoryCommandRequest {
 
 export type GraphExtensionToWebviewMessage =
     | RepoContextChangedPush
+    | WebviewFontSizeChangedPush
     | GraphRefreshRequestedPush
     | GraphDataPush
     | GraphDataResponse

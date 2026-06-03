@@ -11,9 +11,9 @@ describe('BranchPanel', () => {
     it('renders unpushed commit counts on local branches', () => {
         const markup = renderToStaticMarkup(
             <BranchPanel
-                branches={[branch('feature/not-pushed', { ahead: 3, upstream: 'origin/feature/not-pushed' })]}
+                branches={[branch('feature/not-pushed', { isCurrent: true, ahead: 3, behind: 2, upstream: 'origin/feature/not-pushed' })]}
                 worktrees={[]}
-                currentBranch="main"
+                currentBranch="feature/not-pushed"
                 selectedBranchFilter={undefined}
                 selectedWorktreePath={undefined}
                 onSelectBranch={() => undefined}
@@ -30,6 +30,11 @@ describe('BranchPanel', () => {
         expect(markup).toContain('3 commits not pushed');
         expect(markup).toContain('codicon-cloud-upload');
         expect(markup).toContain('branch-ahead');
+        expect(markup).toContain('2 commits to pull');
+        expect(markup).toContain('codicon-cloud-download');
+        expect(markup).toContain('branch-behind');
+        expect(markup).toContain('current branch');
+        expect(markup).toContain('branch-current-indicator');
     });
 
     it('renders worktrees from graph data', () => {

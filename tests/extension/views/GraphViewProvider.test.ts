@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { GraphViewProvider } from '../../../src/extension/views/GraphViewProvider';
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
-import { commands, env } from '../../mocks/vscode';
+import { commands, env, workspace } from '../../mocks/vscode';
 
 interface GraphDataPushLike {
     readonly type: 'graph/dataPush' | 'graph/dataResponse';
@@ -22,6 +22,18 @@ function isGraphDataMessageLike(message: unknown): message is GraphDataPushLike 
 
 describe('GraphViewProvider', () => {
     beforeEach(resetVscodeMock);
+
+    it('posts configured font size updates to the graph webview', () => {
+        workspace.values.set('lookGit.fontSize', 21);
+        const provider = new GraphViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(makeRepositoryMock()));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messages = [];
+        provider.notifyFontSizeChanged();
+
+        expect(view.messages).toContainEqual({ type: 'ui/fontSizeChanged', fontSize: 21 });
+    });
 
     it('posts semantic graph data without backend rendering fields', async () => {
         const repo = makeRepositoryMock({

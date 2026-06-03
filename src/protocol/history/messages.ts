@@ -1,5 +1,6 @@
 import type { ErrorMessage, Pagination, ProtocolError, RequestId } from '../shared/base';
 import type { SerializedRepoContext } from '../shared/repo';
+import type { WebviewFontSizeChangedPush } from '../shared/ui';
 import type { HistoryCommitDetails, HistoryContextTarget, HistoryData } from './types';
 
 export interface RepoContextChangedPush {
@@ -43,6 +44,7 @@ export interface HistoryApplyFileViewModePush {
 
 export type HistoryExtensionToWebviewMessage =
     | RepoContextChangedPush
+    | WebviewFontSizeChangedPush
     | HistoryDataPush
     | HistoryDataResponse
     | HistoryCommitDetailsResponse

@@ -32,6 +32,7 @@ import {
     submoduleStatusRequestId,
     SubmoduleAction,
 } from '../features/changes/submoduleCommands';
+import { applyWebviewFontSize, isWebviewFontSizeMessage } from '../platform/font-size';
 import { vscodeApi } from '../platform/vscodeHost';
 
 export function ChangesWebview() {
@@ -43,6 +44,10 @@ export function ChangesWebview() {
 
     useEffect(() => {
         const onMessage = (event: MessageEvent<ChangesExtensionToWebviewMessage>) => {
+            if (isWebviewFontSizeMessage(event.data)) {
+                applyWebviewFontSize(event.data.fontSize);
+                return;
+            }
             dispatch({ type: 'message', message: event.data });
         };
         window.addEventListener('message', onMessage);

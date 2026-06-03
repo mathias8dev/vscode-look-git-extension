@@ -15,6 +15,7 @@ import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backen
 import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { getWebviewHtml } from './webviewHtml';
 import { toSerializedRepoContext } from '../mapping/toProtocol';
+import { webviewFontSizeMessage } from './webview-font';
 
 const DEFAULT_PAGE: Pagination = { offset: 0, limit: 50 };
 const MAX_PAGE_LIMIT = 300;
@@ -382,6 +383,10 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         this.refCache = undefined;
         this.view?.webview.postMessage({ type: 'repo/contextChanged', context: toSerializedRepoContext(context) });
         await this.refresh();
+    }
+
+    notifyFontSizeChanged(): void {
+        this.postMessage(webviewFontSizeMessage());
     }
 
     private postMessage(message: HistoryExtensionToWebviewMessage): void {

@@ -3,7 +3,7 @@
 :root {
     color-scheme: light dark;
     font-family: var(--vscode-font-family, system-ui, sans-serif);
-    font-size: var(--vscode-font-size, inherit);
+    font-size: var(--look-git-font-size, var(--vscode-font-size, inherit));
     color: var(--vscode-foreground, #cccccc);
     background: var(--vscode-editor-background, #1e1e1e);
 }
@@ -40,7 +40,7 @@ body,
 .eyebrow {
     margin: 0 0 8px;
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.86em;
+    font-size: inherit;
 }
 
 h1 {
@@ -74,7 +74,7 @@ h1 {
 
 .error-notice span {
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.86em;
+    font-size: inherit;
 }
 
 .changes-shell {
@@ -159,7 +159,7 @@ h1 {
 
 .changes-banner span {
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.86em;
+    font-size: inherit;
 }
 
 .operation-actions {
@@ -179,7 +179,7 @@ h1 {
     color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, #cccccc));
     background: var(--vscode-button-secondaryBackground, transparent);
     font: inherit;
-    font-size: 0.86em;
+    font-size: inherit;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -207,12 +207,12 @@ h1 {
     color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
     background: var(--vscode-input-background, transparent);
     font: inherit;
-    font-size: 0.9em;
+    font-size: inherit;
     line-height: 1.4;
 }
 
 .commit-hint {
-    font-size: 0.8em;
+    font-size: 0.92em;
     color: var(--vscode-descriptionForeground, #9d9d9d);
 }
 
@@ -240,7 +240,7 @@ h1 {
     color: var(--vscode-button-foreground, #ffffff);
     background: var(--vscode-button-background, #0e639c);
     font: inherit;
-    font-size: 0.9em;
+    font-size: inherit;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -313,7 +313,7 @@ h1 {
     background: transparent;
     color: var(--vscode-menu-foreground, var(--vscode-foreground, #cccccc));
     font: inherit;
-    font-size: 0.86em;
+    font-size: inherit;
     cursor: pointer;
     outline: none;
     overflow: hidden;
@@ -362,7 +362,7 @@ h1 {
     flex: 1 1 0;
     min-width: 0;
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.86em;
+    font-size: inherit;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -384,7 +384,7 @@ h1 {
     color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, #cccccc));
     background: var(--vscode-button-secondaryBackground, transparent);
     font: inherit;
-    font-size: 0.86em;
+    font-size: inherit;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -425,7 +425,7 @@ h1 {
     flex: 1;
     min-width: 0;
     margin: 0;
-    font-size: 0.8em;
+    font-size: 0.92em;
     font-weight: 700;
     text-transform: uppercase;
     overflow: hidden;
@@ -439,7 +439,7 @@ h1 {
     border-radius: 4px;
     color: var(--vscode-badge-foreground, #ffffff);
     background: var(--vscode-badge-background, #4d4d4d);
-    font-size: 0.78em;
+    font-size: 0.9em;
     line-height: 1;
     text-align: center;
 }
@@ -547,13 +547,13 @@ h1 {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 0.9em;
+    font-size: inherit;
     color: var(--vscode-foreground, #cccccc);
 }
 
 .stash-title-ref {
     font-family: var(--vscode-editor-font-family, monospace);
-    font-size: 0.75em;
+    font-size: 0.88em;
     color: var(--vscode-descriptionForeground, #9d9d9d);
 }
 
@@ -563,7 +563,7 @@ h1 {
     gap: 6px;
     margin: 6px 0;
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.86em;
+    font-size: inherit;
 }
 
 .stash-files {
@@ -702,7 +702,7 @@ h1 {
 
 .change-section-header h2 {
     margin: 0;
-    font-size: 0.8em;
+    font-size: 0.92em;
     font-weight: 700;
     text-transform: uppercase;
 }
@@ -726,7 +726,7 @@ h1 {
     color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
     background: var(--vscode-input-background, transparent);
     font: inherit;
-    font-size: 0.86em;
+    font-size: inherit;
     outline: none;
 }
 
@@ -740,7 +740,7 @@ h1 {
     border-radius: 4px;
     color: var(--vscode-badge-foreground, #ffffff);
     background: var(--vscode-badge-background, #4d4d4d);
-    font-size: 0.78em;
+    font-size: 0.9em;
     line-height: 1;
     text-align: center;
 }
@@ -846,9 +846,9 @@ h1 {
     flex: 0 0 1.2em;
     min-width: 1.2em;
     text-align: right;
-    font-size: 0.78em;
+    font-size: 0.9em;
     font-weight: 700;
-    letter-spacing: 0.02em;
+    letter-spacing: 0;
 }
 
 .status-letter-modified  { color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d); }
@@ -878,7 +878,7 @@ h1 {
     min-width: 0;
     overflow: hidden;
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.86em;
+    font-size: inherit;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -909,7 +909,7 @@ h1 {
 }
 
 .empty-state-subtitle {
-    font-size: 0.86em;
+    font-size: inherit;
 }
 
 /* ── Commit History ──────────────────────────────────────────────────────── */
@@ -935,7 +935,7 @@ h1 {
 }
 
 .history-search-icon {
-    font-size: 0.9em;
+    font-size: inherit;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     flex-shrink: 0;
 }
@@ -949,7 +949,7 @@ h1 {
     color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
     background: transparent;
     font: inherit;
-    font-size: 0.86em;
+    font-size: inherit;
 }
 
 .history-list {
@@ -997,7 +997,7 @@ h1 {
 
 .history-row-chevron {
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.9em;
+    font-size: inherit;
 }
 
 .history-row-main {
@@ -1023,7 +1023,7 @@ h1 {
 
 .history-row-message {
     flex: 1;
-    font-size: 0.9em;
+    font-size: inherit;
 }
 
 .history-row-refs {
@@ -1038,13 +1038,13 @@ h1 {
 .history-ref-badge {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
     min-width: 0;
     max-width: 11em;
-    border-radius: 3px;
-    padding: 1px 5px;
-    font-size: 0.72em;
-    line-height: 1.4;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.95em;
+    line-height: 1.35;
     white-space: nowrap;
     flex-shrink: 1;
 }
@@ -1080,7 +1080,7 @@ h1 {
     align-items: center;
     justify-content: space-between;
     gap: 6px;
-    font-size: 0.78em;
+    font-size: 0.9em;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     min-width: 0;
 }
@@ -1102,7 +1102,7 @@ h1 {
     max-width: 7.5em;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     font-family: var(--vscode-editor-font-family, monospace);
-    font-size: 0.78em;
+    font-size: 0.9em;
 }
 
 .history-file-tree {
@@ -1124,7 +1124,7 @@ h1 {
     color: var(--vscode-foreground, #cccccc);
     background: transparent;
     font: inherit;
-    font-size: 0.86em;
+    font-size: inherit;
     text-align: left;
 }
 
@@ -1165,7 +1165,7 @@ h1 {
 
 .history-file-status {
     justify-self: end;
-    font-size: 0.78em;
+    font-size: 0.9em;
     font-weight: 700;
 }
 
@@ -1193,7 +1193,7 @@ h1 {
     padding: 0 4px;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     background: var(--vscode-badge-background, #4d4d4d);
-    font-size: 0.75em;
+    font-size: 0.88em;
     text-align: center;
 }
 
@@ -1207,7 +1207,7 @@ h1 {
 
 .history-file-original {
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.9em;
+    font-size: inherit;
 }
 
 .history-file-loading,
@@ -1219,7 +1219,7 @@ h1 {
     padding: 4px 8px 5px 30px;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground, rgba(14, 99, 156, 0.4)) 16%, transparent);
-    font-size: 0.8em;
+    font-size: 0.92em;
 }
 
 .history-load-more {
@@ -1230,7 +1230,7 @@ h1 {
     color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, #cccccc));
     background: var(--vscode-button-secondaryBackground, transparent);
     font: inherit;
-    font-size: 0.86em;
+    font-size: inherit;
 }
 
 .history-load-more:hover:not(:disabled) {
@@ -1250,7 +1250,7 @@ h1 {
     gap: 8px;
     padding: 24px 12px;
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.86em;
+    font-size: inherit;
 }
 
 .history-empty-icon {
@@ -1278,7 +1278,7 @@ h1 {
 .history-item-subject {
     margin: 0;
     color: var(--vscode-foreground, #cccccc);
-    font-size: 0.86em;
+    font-size: inherit;
     font-weight: 500;
     line-height: 1.35;
     word-break: break-word;
@@ -1287,7 +1287,7 @@ h1 {
 .history-item-body {
     margin: 0;
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.8em;
+    font-size: 0.92em;
     line-height: 1.4;
     word-break: break-word;
     white-space: pre-wrap;
@@ -1299,7 +1299,7 @@ h1 {
     flex-wrap: wrap;
     gap: 4px;
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.78em;
+    font-size: 0.9em;
 }
 
 .history-item-author {
@@ -1327,7 +1327,7 @@ h1 {
 .history-details-subject {
     margin: 0;
     color: var(--vscode-foreground, #cccccc);
-    font-size: 0.86em;
+    font-size: inherit;
     font-weight: 500;
     line-height: 1.35;
     word-break: break-word;
@@ -1336,7 +1336,7 @@ h1 {
 .history-details-body {
     margin: 0;
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.8em;
+    font-size: 0.92em;
     line-height: 1.4;
     word-break: break-word;
     white-space: pre-wrap;
@@ -1351,7 +1351,7 @@ h1 {
     color: var(--vscode-foreground, #cccccc);
     font: inherit;
     font-family: var(--vscode-editor-font-family, monospace);
-    font-size: 0.78em;
+    font-size: 0.9em;
     cursor: pointer;
     padding: 1px 4px;
     border-radius: 3px;
@@ -1363,7 +1363,7 @@ h1 {
 }
 
 .history-copy-hash .codicon {
-    font-size: 0.9em;
+    font-size: inherit;
     opacity: 0.7;
 }
 
@@ -1386,7 +1386,7 @@ h1 {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 0.78em;
+    font-size: 0.9em;
 }
 
 .history-details dt {
@@ -1420,7 +1420,7 @@ h1 {
     flex: 1;
     min-width: 0;
     margin: 0;
-    font-size: 0.8em;
+    font-size: 0.92em;
     font-weight: 700;
     text-transform: uppercase;
     overflow: hidden;
@@ -1434,7 +1434,7 @@ h1 {
     border-radius: 4px;
     color: var(--vscode-badge-foreground, #ffffff);
     background: var(--vscode-badge-background, #4d4d4d);
-    font-size: 0.78em;
+    font-size: 0.9em;
     line-height: 1;
     text-align: center;
 }
@@ -1492,7 +1492,7 @@ h1 {
     flex: 0 1 auto;
     min-width: 0;
     max-width: 50%;
-    font-size: 0.9em;
+    font-size: inherit;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1501,7 +1501,7 @@ h1 {
 .submodule-path {
     flex: 1 1 0;
     min-width: 0;
-    font-size: 0.78em;
+    font-size: 0.9em;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     white-space: nowrap;
     overflow: hidden;
@@ -1519,7 +1519,7 @@ h1 {
     flex: 0 1 auto;
     min-width: 0;
     max-width: 8em;
-    font-size: 0.72em;
+    font-size: 0.88em;
     font-weight: 600;
     padding: 1px 7px;
     border-radius: 10px;
@@ -1628,7 +1628,7 @@ h1 {
 }
 
 .branch-search-icon {
-    font-size: 0.9em;
+    font-size: inherit;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     flex-shrink: 0;
 }
@@ -1641,7 +1641,7 @@ h1 {
     background: transparent;
     color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
     font: inherit;
-    font-size: 0.86em;
+    font-size: inherit;
     outline: none;
 }
 
@@ -1672,10 +1672,10 @@ h1 {
     background: transparent;
     color: var(--vscode-foreground, #cccccc);
     font: inherit;
-    font-size: 0.78em;
+    font-size: 0.9em;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0;
     cursor: pointer;
     text-align: left;
 }
@@ -1694,7 +1694,7 @@ h1 {
     background: transparent;
     color: var(--vscode-foreground, #cccccc);
     font: inherit;
-    font-size: 0.86em;
+    font-size: inherit;
     cursor: pointer;
     text-align: left;
     overflow: hidden;
@@ -1712,7 +1712,7 @@ h1 {
 .branch-head-item {
     padding: 0 8px;
     opacity: 0.7;
-    font-size: 0.8em;
+    font-size: 0.92em;
 }
 
 .branch-chevron,
@@ -1732,14 +1732,14 @@ h1 {
 }
 
 .branch-current-name {
-    font-size: 0.8em;
+    font-size: inherit;
     color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
     flex-shrink: 0;
 }
 
 .branch-current-indicator {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     background: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
     flex-shrink: 0;
@@ -1748,17 +1748,18 @@ h1 {
 .branch-tracking-indicator {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    gap: 5px;
     min-width: 0;
-    border-radius: 3px;
-    padding: 0 4px;
-    font-size: 0.75em;
-    line-height: 1.35;
+    min-height: 1.5em;
+    border-radius: 5px;
+    padding: 2px 6px;
+    font-size: 1em;
+    line-height: 1.25;
     flex-shrink: 0;
 }
 
 .branch-tracking-indicator .codicon {
-    font-size: 1em;
+    font-size: 1.05em;
 }
 
 .branch-ahead {
@@ -1778,7 +1779,7 @@ h1 {
     min-height: 22px;
     padding: 0 4px 0 20px;
     color: var(--vscode-foreground, #cccccc);
-    font-size: 0.86em;
+    font-size: inherit;
 }
 
 .graph-resource-row:hover {
@@ -1806,7 +1807,7 @@ h1 {
     border-radius: 3px;
     padding: 0 4px;
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.78em;
+    font-size: 0.9em;
     white-space: nowrap;
 }
 
@@ -1848,7 +1849,7 @@ h1 {
 }
 
 .graph-search-icon {
-    font-size: 0.9em;
+    font-size: inherit;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     flex-shrink: 0;
 }
@@ -1861,7 +1862,7 @@ h1 {
     background: transparent;
     color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
     font: inherit;
-    font-size: 0.86em;
+    font-size: inherit;
     outline: none;
 }
 
@@ -1874,7 +1875,7 @@ h1 {
     color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
     background: var(--vscode-input-background, transparent);
     font: inherit;
-    font-size: 0.8em;
+    font-size: 0.92em;
     max-width: 120px;
 }
 
@@ -1915,11 +1916,11 @@ h1 {
     padding: 0 4px;
     background: var(--vscode-sideBarSectionHeader-background, var(--vscode-sideBar-background, #252526));
     border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
-    font-size: 0.78em;
+    font-size: 0.9em;
     font-weight: 600;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0;
     flex-shrink: 0;
 }
 
@@ -1981,11 +1982,11 @@ h1 {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 0.9em;
+    font-size: inherit;
 }
 
 .graph-author-cell {
-    font-size: 0.86em;
+    font-size: inherit;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1994,7 +1995,7 @@ h1 {
 }
 
 .graph-date-cell {
-    font-size: 0.8em;
+    font-size: 0.92em;
     white-space: nowrap;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     padding: 0 4px;
@@ -2007,7 +2008,7 @@ h1 {
     background: transparent;
     color: var(--vscode-textLink-foreground, #4daafc);
     font: inherit;
-    font-size: 0.86em;
+    font-size: inherit;
     cursor: pointer;
 }
 
@@ -2022,18 +2023,18 @@ h1 {
     gap: 8px;
     padding: 24px;
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.86em;
+    font-size: inherit;
 }
 
 /* ── Ref Badges ──────────────────────────────────────────────────────────── */
 
 .ref-badge {
-    font-size: 0.72em;
-    padding: 1px 5px;
-    border-radius: 3px;
+    font-size: 0.95em;
+    padding: 2px 6px;
+    border-radius: 4px;
     flex-shrink: 0;
     white-space: nowrap;
-    line-height: 1.4;
+    line-height: 1.35;
 }
 
 .ref-badge-head {
@@ -2096,7 +2097,7 @@ h1 {
 }
 
 .graph-details-hash {
-    font-size: 0.8em;
+    font-size: 0.92em;
     font-family: var(--vscode-editor-font-family, monospace);
     color: var(--vscode-descriptionForeground, #9d9d9d);
     min-width: 0;
@@ -2118,7 +2119,7 @@ h1 {
 }
 
 .graph-details-message {
-    font-size: 0.86em;
+    font-size: inherit;
     color: var(--vscode-foreground, #cccccc);
     margin: 0 0 6px;
     word-break: break-word;
@@ -2126,7 +2127,7 @@ h1 {
 }
 
 .graph-details-hash-full {
-    font-size: 0.75em;
+    font-size: 0.88em;
     font-family: var(--vscode-editor-font-family, monospace);
     color: var(--vscode-descriptionForeground, #9d9d9d);
     margin: 0;
@@ -2140,7 +2141,7 @@ h1 {
     gap: 8px;
     flex: 1;
     color: var(--vscode-descriptionForeground, #9d9d9d);
-    font-size: 0.86em;
+    font-size: inherit;
     padding: 16px;
 }
 
@@ -2155,7 +2156,7 @@ h1 {
     align-items: center;
     gap: 5px;
     min-height: 22px;
-    font-size: 0.86em;
+    font-size: inherit;
     cursor: pointer;
     overflow: hidden;
 }
@@ -2170,7 +2171,7 @@ h1 {
     background: transparent;
     color: var(--vscode-foreground, #cccccc);
     font: inherit;
-    font-size: 0.86em;
+    font-size: inherit;
     text-align: left;
 }
 
@@ -2212,7 +2213,7 @@ h1 {
 }
 
 .commit-file-count {
-    font-size: 0.75em;
+    font-size: 0.88em;
     padding: 1px 4px;
     border-radius: 3px;
     background: var(--vscode-badge-background, #4d4d4d);
@@ -2248,9 +2249,9 @@ h1 {
 }
 
 .wip-label {
-    font-size: 0.72em;
+    font-size: 0.88em;
     font-weight: 700;
-    letter-spacing: 0.06em;
+    letter-spacing: 0;
     color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
     flex-shrink: 0;
 }
@@ -2262,19 +2263,19 @@ h1 {
     flex-shrink: 0;
 }
 
-.wip-staged    { color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b); font-size: 0.8em; }
-.wip-unstaged  { color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d); font-size: 0.8em; }
-.wip-untracked { color: var(--vscode-descriptionForeground, #9d9d9d); font-size: 0.8em; }
-.wip-conflict  { color: var(--vscode-gitDecoration-conflictingResourceForeground, #e4676b); font-size: 0.8em; }
+.wip-staged    { color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b); font-size: 0.92em; }
+.wip-unstaged  { color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d); font-size: 0.92em; }
+.wip-untracked { color: var(--vscode-descriptionForeground, #9d9d9d); font-size: 0.92em; }
+.wip-conflict  { color: var(--vscode-gitDecoration-conflictingResourceForeground, #e4676b); font-size: 0.92em; }
 
 .graph-wip-path {
-    font-size: 0.78em;
+    font-size: 0.9em;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     font-style: normal;
 }
 
 .wip-date-cell {
-    font-size: 0.75em;
+    font-size: 0.88em;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     font-style: italic;
 }

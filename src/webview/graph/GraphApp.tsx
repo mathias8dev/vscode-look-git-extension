@@ -24,6 +24,7 @@ import {
 } from '../features/graph/graphCommands';
 import { ErrorNotice } from '../shared/ErrorNotice';
 import { vscodeApi } from '../platform/vscodeHost';
+import { applyWebviewFontSize, isWebviewFontSizeMessage } from '../platform/font-size';
 
 const PAGE_LIMIT = 300;
 const ERROR_NOTICE_TIMEOUT_MS = 8000;
@@ -33,6 +34,10 @@ export function GraphApp() {
 
     useEffect(() => {
         const onMessage = (event: MessageEvent<GraphExtensionToWebviewMessage>) => {
+            if (isWebviewFontSizeMessage(event.data)) {
+                applyWebviewFontSize(event.data.fontSize);
+                return;
+            }
             dispatch({ type: 'message', message: event.data });
         };
         window.addEventListener('message', onMessage);

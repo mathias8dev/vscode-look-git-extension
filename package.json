@@ -58,6 +58,17 @@
         }
       ]
     },
+    "configuration": {
+      "title": "Look Git",
+      "properties": {
+        "lookGit.fontSize": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "markdownDescription": "Controls the font size used by Look Git webviews. Set to `0` to follow VS Code `editor.fontSize`."
+        }
+      }
+    },
     "commands": [
       {
         "command": "lookGit.history.copyRevisionNumber",

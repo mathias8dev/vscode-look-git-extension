@@ -9,6 +9,7 @@ import { createErrorPayload, isAbortError } from '../messaging/errorSerializatio
 import { getWebviewHtml } from './webviewHtml';
 import { GetChangesStatusUseCase } from '../../application/usecases/changes/get-changes-status';
 import { toSerializedRepoContext } from '../mapping/toProtocol';
+import { webviewFontSizeMessage } from './webview-font';
 
 const CHANGES_TOOLBAR_COMMANDS: readonly { readonly id: string; readonly command: ChangesToolbarCommand }[] = [
     { id: 'lookGit.changes.openGraph', command: 'openGraph' },
@@ -236,5 +237,9 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         this.router?.setKnownSubmodulePaths([]);
         this.view?.webview.postMessage({ type: 'repo/contextChanged', context: toSerializedRepoContext(context) });
         this.scheduleRefresh();
+    }
+
+    notifyFontSizeChanged(): void {
+        void this.view?.webview.postMessage(webviewFontSizeMessage());
     }
 }

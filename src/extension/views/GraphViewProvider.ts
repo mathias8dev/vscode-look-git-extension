@@ -8,6 +8,7 @@ import { GraphMessageRouter } from '../messaging/GraphMessageRouter';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
 import type { RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { getWebviewHtml } from './webviewHtml';
+import { webviewFontSizeMessage } from './webview-font';
 
 const GRAPH_COMMIT_COMMANDS: readonly { readonly id: string; readonly command: CommitCommand }[] = [
     { id: 'lookGit.graph.commit.copyRevisionNumber', command: 'copyRevisionNumber' },
@@ -132,6 +133,10 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     /** Called by RepoRegistry when the active repo changes. */
     async notifyRepoChanged(context: RepoContext): Promise<void> {
         this.view?.webview.postMessage({ type: 'repo/contextChanged', context: toSerializedRepoContext(context) });
+    }
+
+    notifyFontSizeChanged(): void {
+        void this.view?.webview.postMessage(webviewFontSizeMessage());
     }
 
     async refresh(): Promise<void> {

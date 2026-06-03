@@ -1,5 +1,6 @@
 import * as crypto from 'crypto';
 import * as vscode from 'vscode';
+import { webviewFontSizeStyle } from './webview-font';
 
 const WEBVIEW_CONTEXT = JSON.stringify({ preventDefaultContextMenuItems: true });
 
@@ -23,6 +24,7 @@ export function getWebviewHtml(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none'; font-src ${webview.cspSource}; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src ${webview.cspSource} 'nonce-${nonce}';" />
+  <style nonce="${nonce}">${webviewFontSizeStyle()}</style>
   <link rel="stylesheet" href="${styleUri}" />
   <title>Look Git</title>
 </head>

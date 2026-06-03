@@ -140,6 +140,18 @@ describe('ChangesViewProvider', () => {
         registerReadonlyDiffDocumentProvider();
     });
 
+    it('posts configured font size updates to the changes webview', () => {
+        mockWorkspace.values.set('lookGit.fontSize', 22);
+        const provider = makeProvider(undefined);
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messages = [];
+        provider.notifyFontSizeChanged();
+
+        expect(view.messages).toContainEqual({ type: 'ui/fontSizeChanged', fontSize: 22 });
+    });
+
     it('resolveWebviewView sets CSP and script tag', () => {
         const repo = makeRepo();
         const provider = makeProvider(repo);

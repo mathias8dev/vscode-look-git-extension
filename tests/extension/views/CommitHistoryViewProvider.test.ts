@@ -5,10 +5,22 @@ import { RepoKind } from '../../../src/core/git/domain/RepoContext';
 import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHistoryViewProvider';
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
-import { commands, env, getCommandCalls, setQuickPickValue } from '../../mocks/vscode';
+import { commands, env, getCommandCalls, setQuickPickValue, workspace } from '../../mocks/vscode';
 
 describe('CommitHistoryViewProvider error propagation', () => {
     beforeEach(resetVscodeMock);
+
+    it('posts configured font size updates to the history webview', () => {
+        workspace.values.set('lookGit.fontSize', 23);
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(makeRepositoryMock()));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messages = [];
+        provider.notifyFontSizeChanged();
+
+        expect(view.messages).toContainEqual({ type: 'ui/fontSizeChanged', fontSize: 23 });
+    });
 
     it('posts mapped paginated commit history data on refresh', async () => {
         const repo = makeRepositoryMock({

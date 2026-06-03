@@ -1,5 +1,6 @@
 import type { RequestId, ErrorMessage, ProtocolError } from '../shared/base';
 import type { SerializedRepoContext } from '../shared/repo';
+import type { WebviewFontSizeChangedPush } from '../shared/ui';
 import type { StatusData, CommitMode, StashFileEntry, ConflictState, SubmoduleStatusData } from './types';
 
 // ── Extension → Webview (push) ──────────────────────────────────────────────
@@ -258,6 +259,7 @@ export interface GetSubmoduleStatusRequest {
 
 export type ChangesExtensionToWebviewMessage =
     | RepoContextChangedPush
+    | WebviewFontSizeChangedPush
     | StatusDataPush
     | CommitResultPush
     | SubmoduleCommitResultPush

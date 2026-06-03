@@ -233,10 +233,15 @@ type MockTextDocument = {
     readonly isDirty?: boolean;
 };
 
+type MockConfigurationChangeEvent = {
+    affectsConfiguration(section: string): boolean;
+};
+
 export const workspace = {
     values: new Map<string, unknown>(),
     documents: [] as MockTextDocument[],
     contentProviders: new Map<string, TextDocumentContentProvider>(),
+    configurationEmitter: new EventEmitter<MockConfigurationChangeEvent>(),
     fs: {
         writes: [] as Array<{ uri: unknown; content: Uint8Array }>,
         writeFile(uri: unknown, content: Uint8Array) { this.writes.push({ uri, content }); return Promise.resolve(); },
@@ -251,9 +256,21 @@ export const workspace = {
             update: (key: string, value: unknown) => {
                 const k = section ? `${section}.${key}` : key;
                 this.values.set(k, value);
+                this.fireConfigurationChanged(k);
                 return Promise.resolve();
             },
         };
+    },
+    onDidChangeConfiguration(listener: (event: MockConfigurationChangeEvent) => unknown) {
+        return this.configurationEmitter.event(listener);
+    },
+    fireConfigurationChanged(...sections: readonly string[]): void {
+        const changedSections = new Set(sections);
+        this.configurationEmitter.fire({
+            affectsConfiguration(section: string): boolean {
+                return changedSections.has(section);
+            },
+        });
     },
     registerTextDocumentContentProvider(scheme: string, provider: TextDocumentContentProvider) {
         this.contentProviders.set(scheme, provider);
@@ -278,6 +295,8 @@ export const workspace = {
         this.values = new Map();
         this.documents = [];
         this.contentProviders = new Map();
+        this.configurationEmitter.dispose();
+        this.configurationEmitter = new EventEmitter<MockConfigurationChangeEvent>();
         this.fs.reset();
     },
 };
