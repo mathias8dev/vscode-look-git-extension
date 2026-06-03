@@ -2,6 +2,14 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [0.2.3] - 2026-06-03
+
+### Fixed
+
+#### Look Graph
+- Make the branch panel resize handle keyboard accessible with ARIA sizing metadata and arrow-key resizing
+- Restore document cursor and text-selection state when branch panel resizing is interrupted
+
 ## [0.2.2] - 2026-06-03
 
 ### Added
