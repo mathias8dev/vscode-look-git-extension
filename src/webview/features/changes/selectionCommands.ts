@@ -26,7 +26,7 @@ export function selectionActionsFor(items: readonly ChangeListItem[]): readonly 
         ...singleFileActions,
         ...actionIf(hasSection(items, ChangeSectionId.Unstaged), { action: ChangeSelectionAction.Stage, icon: 'add', label: 'Stage', title: 'Stage selected changes' }),
         ...actionIf(hasSection(items, ChangeSectionId.Staged), { action: ChangeSelectionAction.Unstage, icon: 'remove', label: 'Unstage', title: 'Unstage selected changes' }),
-        ...actionIf(hasActionableSection(items, ChangeSectionId.Unstaged), { action: ChangeSelectionAction.Discard, icon: 'trash', label: 'Discard', title: 'Discard selected changes' }),
+        ...actionIf(hasActionableSection(items, ChangeSectionId.Unstaged), { action: ChangeSelectionAction.Discard, icon: 'discard', label: 'Discard', title: 'Discard selected changes' }),
         ...actionIf(hasActionableSection(items, ChangeSectionId.Conflicts), { action: ChangeSelectionAction.AcceptOurs, icon: 'fold-up', label: 'Ours', title: 'Accept current changes for selected conflicts' }),
         ...actionIf(hasActionableSection(items, ChangeSectionId.Conflicts), { action: ChangeSelectionAction.AcceptTheirs, icon: 'fold-down', label: 'Theirs', title: 'Accept incoming changes for selected conflicts' }),
         ...actionIf(hasSection(items, ChangeSectionId.Conflicts), { action: ChangeSelectionAction.MarkResolved, icon: 'check', label: 'Resolved', title: 'Mark selected conflicts resolved' }),

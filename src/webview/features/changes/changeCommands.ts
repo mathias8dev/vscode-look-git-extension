@@ -72,7 +72,7 @@ export function rowActionsFor(item: ChangeListItem): readonly ChangeActionDescri
     return [
         { action: ChangeRowAction.Diff, icon: 'diff', label: 'Diff', title: 'Open diff' },
         { action: ChangeRowAction.Stage, icon: 'add', label: 'Stage', title: 'Stage file' },
-        { action: ChangeRowAction.Discard, icon: 'trash', label: 'Discard', title: 'Discard changes' },
+        { action: ChangeRowAction.Discard, icon: 'discard', label: 'Discard', title: 'Discard changes' },
         { action: ChangeRowAction.Open, icon: 'go-to-file', label: 'Open', title: 'Open file' },
     ];
 }
@@ -94,7 +94,7 @@ export function bulkActionsFor(section: ChangeSection): readonly ChangeActionDes
         return section.items.length > 0
             ? [
                 { action: ChangeBulkAction.StageAll, icon: 'add', label: 'Stage All', title: 'Stage all changed files' },
-                { action: ChangeBulkAction.DiscardAll, icon: 'trash', label: 'Discard All', title: 'Discard all unstaged changes' },
+                { action: ChangeBulkAction.DiscardAll, icon: 'discard', label: 'Discard All', title: 'Discard all unstaged changes' },
             ]
             : [];
     }

@@ -32,11 +32,13 @@ describe('StashFileRow', () => {
         const onDiff = vi.fn<(index: number, file: StashFileEntry) => void>();
         const file = stashFile();
 
-        render(<StashFileRow index={1} file={file} onDiff={onDiff} />);
+        const { container } = render(<StashFileRow index={1} file={file} onDiff={onDiff} />);
         fireEvent.click(screen.getByRole('button', { name: 'Open stash diff' }));
 
         expect(onDiff).toHaveBeenCalledOnce();
         expect(onDiff).toHaveBeenCalledWith(1, file);
+        expect(container.querySelector('.codicon-git-compare')).toBeNull();
+        expect(container.querySelector('.codicon-diff')).not.toBeNull();
     });
 });
 

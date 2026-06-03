@@ -38,12 +38,12 @@ export function StashItem({ stash, expanded, files, onToggle, onAction, onFileDi
                 </div>
                 <div className="stash-actions">
                     <IconButton
-                        icon="check"
+                        icon="git-stash-apply"
                         title="Apply stash (keep in list)"
                         onClick={(e) => { e.stopPropagation(); onAction(stash.index, StashEntryAction.Apply); }}
                     />
                     <IconButton
-                        icon="play"
+                        icon="unarchive"
                         title="Pop stash (apply and remove)"
                         onClick={(e) => { e.stopPropagation(); onAction(stash.index, StashEntryAction.Pop); }}
                     />

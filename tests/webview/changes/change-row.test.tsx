@@ -31,10 +31,15 @@ describe('ChangeRow', () => {
         const onAction = vi.fn<(item: ChangeListItem, action: ChangeRowAction) => void>();
         const item = changeItem(ChangeSectionId.Unstaged, 'src/app.ts', ' ', 'M');
 
-        renderRow(item, onAction);
+        const { container } = renderRow(item, onAction);
         fireEvent.click(screen.getByTitle('src/app.ts'));
 
         expect(onAction).toHaveBeenCalledWith(item, ChangeRowAction.Diff);
+        expect(container.querySelector('.codicon-git-compare')).toBeNull();
+        expect(container.querySelector('.codicon-diff')).not.toBeNull();
+        expect(screen.getByRole('button', { name: 'Discard changes' })).toBeInTheDocument();
+        expect(container.querySelector('.codicon-discard')).not.toBeNull();
+        expect(container.querySelector('.codicon-trash')).toBeNull();
     });
 
     it('opens the gitlink diff as the primary row action for submodule gitlinks', () => {
@@ -58,8 +63,8 @@ describe('ChangeRow', () => {
 function renderRow(
     item: ChangeListItem,
     onAction: (item: ChangeListItem, action: ChangeRowAction) => void,
-): void {
-    render(
+): ReturnType<typeof render> {
+    return render(
         <ChangeRow
             item={item}
             depth={0}

@@ -3,18 +3,23 @@ export type CodiconName =
     | 'check'
     | 'chevron-down'
     | 'chevron-right'
+    | 'discard'
     | 'diff'
     | 'fold-down'
     | 'fold-up'
     | 'folder-opened'
+    | 'git-compare'
     | 'git-merge'
+    | 'git-stash'
+    | 'git-stash-apply'
     | 'go-to-file'
     | 'loading'
     | 'pass'
     | 'remove'
     | 'search'
     | 'source-control'
-    | 'trash';
+    | 'trash'
+    | 'unarchive';
 
 interface CodiconProps {
     readonly name: CodiconName;

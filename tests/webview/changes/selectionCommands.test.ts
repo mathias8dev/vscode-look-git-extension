@@ -27,12 +27,15 @@ function submodule(section: ChangeSectionId, filePath: string): ChangeListItem {
 
 describe('selectionCommands', () => {
     it('offers contextual actions for selected changes', () => {
-        expect(selectionActionsFor([item(ChangeSectionId.Unstaged, 'a.ts')]).map((action) => action.action)).toEqual([
+        const actions = selectionActionsFor([item(ChangeSectionId.Unstaged, 'a.ts')]);
+        expect(actions.map((action) => action.action)).toEqual([
             ChangeSelectionAction.Diff,
             ChangeSelectionAction.Open,
             ChangeSelectionAction.Stage,
             ChangeSelectionAction.Discard,
         ]);
+        expect(actions.find((action) => action.action === ChangeSelectionAction.Diff)?.icon).toBe('diff');
+        expect(actions.find((action) => action.action === ChangeSelectionAction.Discard)?.icon).toBe('discard');
 
         expect(selectionActionsFor([item(ChangeSectionId.Staged, 'a.ts'), item(ChangeSectionId.Conflicts, 'b.ts')]).map((action) => action.action)).toEqual([
             ChangeSelectionAction.Unstage,

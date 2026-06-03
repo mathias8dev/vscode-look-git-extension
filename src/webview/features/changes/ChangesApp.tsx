@@ -110,9 +110,8 @@ export function ChangesApp({
                         onSelectItem={(item, mode) => onSelectItem(item, mode, visibleItemIds)}
                         onRowAction={onRowAction}
                         onBulkAction={onBulkAction}
-                        onStash={section.id === ChangeSectionId.Unstaged
-                            ? (message) => onCreateStash(CreateStashKind.All, message)
-                            : undefined}
+                        onStash={stashHandlerFor(section.id, onCreateStash)}
+                        stashTitle={stashTitleFor(section.id)}
                     />
                 )) : null}
                 {!state.loading && hasRepository && state.status.submodules.length > 0 ? (
@@ -164,4 +163,23 @@ function operationBannerFor(
             onAction={(action) => onOperationAction(conflictState, action)}
         />
     );
+}
+
+function stashHandlerFor(
+    sectionId: ChangeSectionId,
+    onCreateStash: (kind: CreateStashKind, message: string) => void,
+): ((message: string) => void) | undefined {
+    if (sectionId === ChangeSectionId.Unstaged) {
+        return (message) => onCreateStash(CreateStashKind.All, message);
+    }
+    if (sectionId === ChangeSectionId.Staged) {
+        return (message) => onCreateStash(CreateStashKind.Staged, message);
+    }
+    return undefined;
+}
+
+function stashTitleFor(sectionId: ChangeSectionId): string | undefined {
+    if (sectionId === ChangeSectionId.Staged) { return 'Stash staged changes'; }
+    if (sectionId === ChangeSectionId.Unstaged) { return 'Stash changes'; }
+    return undefined;
 }

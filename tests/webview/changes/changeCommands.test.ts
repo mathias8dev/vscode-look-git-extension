@@ -21,12 +21,15 @@ function item(section: ChangeSectionId, filePath = 'src/app.ts'): ChangeListItem
 
 describe('changeCommands', () => {
     it('offers stage/discard actions for unstaged files', () => {
-        expect(rowActionsFor(item(ChangeSectionId.Unstaged)).map((action) => action.action)).toEqual([
+        const actions = rowActionsFor(item(ChangeSectionId.Unstaged));
+        expect(actions.map((action) => action.action)).toEqual([
             ChangeRowAction.Diff,
             ChangeRowAction.Stage,
             ChangeRowAction.Discard,
             ChangeRowAction.Open,
         ]);
+        expect(actions.find((action) => action.action === ChangeRowAction.Diff)?.icon).toBe('diff');
+        expect(actions.find((action) => action.action === ChangeRowAction.Discard)?.icon).toBe('discard');
     });
 
     it('offers unstage actions for staged files', () => {
@@ -126,6 +129,7 @@ describe('changeCommands', () => {
             ChangeBulkAction.StageAll,
             ChangeBulkAction.DiscardAll,
         ]);
+        expect(bulkActionsFor(unstaged).find((action) => action.action === ChangeBulkAction.DiscardAll)?.icon).toBe('discard');
         expect(bulkActionsFor(staged).map((action) => action.action)).toEqual([ChangeBulkAction.UnstageAll]);
         expect(bulkActionsFor(conflicts).map((action) => action.action)).toEqual([ChangeBulkAction.AcceptAllTheirs]);
         expect(messageForBulkAction(ChangeBulkAction.AcceptAllTheirs)).toEqual({ type: 'changes/acceptAllTheirs' });

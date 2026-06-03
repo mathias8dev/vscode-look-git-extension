@@ -17,6 +17,7 @@ interface ChangeSectionViewProps {
     readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onBulkAction: (action: ChangeBulkAction) => void;
     readonly onStash?: (message: string) => void;
+    readonly stashTitle?: string;
     readonly showWhenEmpty?: boolean;
 }
 
@@ -30,6 +31,7 @@ export function ChangeSectionView({
     onRowAction,
     onBulkAction,
     onStash,
+    stashTitle = 'Stash changes',
     showWhenEmpty = false,
 }: ChangeSectionViewProps) {
     const [visibleLimit, setVisibleLimit] = useState(CHANGE_SECTION_PAGE_SIZE);
@@ -92,8 +94,8 @@ export function ChangeSectionView({
                     ))}
                     {onStash ? (
                         <IconButton
-                            icon="archive"
-                            title="Stash all changes"
+                            icon="git-stash"
+                            title={stashTitle}
                             onClick={() => setShowStashPrompt(!showStashPrompt)}
                         />
                     ) : null}
