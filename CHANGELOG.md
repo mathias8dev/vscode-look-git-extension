@@ -2,6 +2,19 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [0.2.2] - 2026-06-03
+
+### Added
+
+#### Webview
+- Add `lookGit.fontSize` so Look Git can follow VS Code `editor.fontSize` by default or use an independent user-configured font size
+
+### Fixed
+
+#### Webview
+- Apply font-size changes live to Changes, Commit History, and Look Graph webviews without requiring a reload
+- Improve readability of branch tracking, current-branch, graph ref, and history ref badges
+
 ## [0.2.1] - 2026-06-03
 
 ### Fixed
