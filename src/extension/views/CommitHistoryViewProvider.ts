@@ -188,13 +188,13 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 await this.goToCurrentHistoryItem();
                 return;
             case 'fetchAll':
-                await this.runRepositoryToolbarOperation('fetchAll', (repo) => repo.fetchAll());
+                await this.runNativeGitToolbarOperation('fetchAll', 'git.fetchAll');
                 return;
             case 'pull':
-                await this.runRepositoryToolbarOperation('pull', (repo) => repo.pull());
+                await this.runNativeGitToolbarOperation('pull', 'git.pull');
                 return;
             case 'push':
-                await this.runRepositoryToolbarOperation('push', (repo) => repo.push());
+                await this.runNativeGitToolbarOperation('push', 'git.push');
                 return;
         }
     }
@@ -227,10 +227,10 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async runRepositoryToolbarOperation(operation: 'fetchAll' | 'pull' | 'push', run: (repo: GitRepository) => Promise<void>): Promise<void> {
+    private async runNativeGitToolbarOperation(operation: 'fetchAll' | 'pull' | 'push', command: string): Promise<void> {
         try {
-            const repo = this.repositories.requireRepository();
-            await run(repo);
+            this.repositories.requireRepository();
+            await vscode.commands.executeCommand(command);
             await Promise.all([
                 this.onRepositoryUpdated(),
                 this.refresh(),

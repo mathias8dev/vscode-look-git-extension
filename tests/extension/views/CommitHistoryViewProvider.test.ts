@@ -4,7 +4,7 @@ import type { GitFileChange } from '../../../src/core/git/GitRepository';
 import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHistoryViewProvider';
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
-import { env, getCommandCalls, setQuickPickValue } from '../../mocks/vscode';
+import { commands, env, getCommandCalls, setQuickPickValue } from '../../mocks/vscode';
 
 describe('CommitHistoryViewProvider error propagation', () => {
     beforeEach(resetVscodeMock);
@@ -386,7 +386,7 @@ describe('CommitHistoryViewProvider error propagation', () => {
         expect(repo.exec).toHaveBeenCalledWith(['rev-parse', 'HEAD']);
     });
 
-    it('runs fetch pull and push toolbar commands then refreshes history', async () => {
+    it('delegates fetch pull and push toolbar commands to VS Code Git then refreshes history', async () => {
         const repo = makeRepositoryMock();
         const onRepositoryUpdated = vi.fn(async () => {});
         const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo), onRepositoryUpdated);
@@ -397,17 +397,21 @@ describe('CommitHistoryViewProvider error propagation', () => {
         view.messageHandler?.({ type: 'history/toolbarCommand', command: 'pull' });
         view.messageHandler?.({ type: 'history/toolbarCommand', command: 'push' });
 
-        await vi.waitFor(() => expect(repo.fetchAll).toHaveBeenCalledOnce());
-        await vi.waitFor(() => expect(repo.pull).toHaveBeenCalledOnce());
-        await vi.waitFor(() => expect(repo.push).toHaveBeenCalledOnce());
+        await vi.waitFor(() => expect(getCommandCalls().filter((call) => call.command.startsWith('git.')).map((call) => call.command)).toEqual([
+            'git.fetchAll',
+            'git.pull',
+            'git.push',
+        ]));
+        expect(repo.fetchAll).not.toHaveBeenCalled();
+        expect(repo.pull).not.toHaveBeenCalled();
+        expect(repo.push).not.toHaveBeenCalled();
         await vi.waitFor(() => expect(onRepositoryUpdated).toHaveBeenCalledTimes(3));
         expect(repo.getLog).toHaveBeenCalled();
     });
 
     it('posts a recoverable toolbar error when a git operation fails', async () => {
-        const repo = makeRepositoryMock({
-            fetchAll: vi.fn(async () => { throw new Error('fetch all failed'); }),
-        });
+        const repo = makeRepositoryMock();
+        commands.failCommand('git.fetchAll', new Error('fetch all failed'));
         const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
         const view = makeWebviewView();
 
