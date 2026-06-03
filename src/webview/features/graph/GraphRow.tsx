@@ -74,16 +74,25 @@ export function GraphCommitRow({ row, branches, selected, childHash, parentHash,
             <div className="graph-author-cell" title={`${commit.authorName} <${commit.authorEmail}>`}>
                 {commit.authorName}
             </div>
-            <div className="graph-date-cell">{formatDate(commit.authorDate)}</div>
+            <div className="graph-date-cell" title={commit.authorDate}>{formatGraphCommitDate(commit.authorDate)}</div>
         </div>
     );
 }
 
-function formatDate(iso: string): string {
-    try {
-        const d = new Date(iso);
-        return d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric', year: '2-digit' });
-    } catch {
-        return iso;
-    }
+function formatGraphCommitDate(iso: string): string {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) { return iso; }
+    return [
+        date.getFullYear(),
+        twoDigits(date.getMonth() + 1),
+        twoDigits(date.getDate()),
+    ].join('-') + ' ' + [
+        twoDigits(date.getHours()),
+        twoDigits(date.getMinutes()),
+        twoDigits(date.getSeconds()),
+    ].join(':');
+}
+
+function twoDigits(value: number): string {
+    return String(value).padStart(2, '0');
 }

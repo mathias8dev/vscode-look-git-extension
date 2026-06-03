@@ -77,6 +77,25 @@ describe('GraphCommitRow', () => {
 
         expect(markup).toContain('height="35"');
     });
+
+    it('renders the full commit date including time and seconds', () => {
+        const markup = renderToStaticMarkup(
+            <GraphCommitRow
+                row={rowWithDate('2024-05-06T07:08:09')}
+                branches={[]}
+                selected={false}
+                childHash={undefined}
+                parentHash={undefined}
+                canUndoCommit={false}
+                style={{}}
+                onSelect={() => undefined}
+                onOpenContextMenu={() => undefined}
+                onBranchDoubleClick={() => undefined}
+            />,
+        );
+
+        expect(markup).toContain('2024-05-06 07:08:09');
+    });
 });
 
 function rowWithLane(lane: number): GraphRow {
@@ -96,6 +115,16 @@ function rowWithLane(lane: number): GraphRow {
             color: '#fff',
             isPrimary: false,
             lines: [],
+        },
+    };
+}
+
+function rowWithDate(authorDate: string): GraphRow {
+    return {
+        ...rowWithLane(0),
+        commit: {
+            ...rowWithLane(0).commit,
+            authorDate,
         },
     };
 }
