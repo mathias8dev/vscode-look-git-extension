@@ -102,6 +102,31 @@ export const commands = {
 
 export type CommandCall = typeof commands.calls[number];
 
+interface MockExtension<T> {
+    readonly isActive: boolean;
+    readonly exports: T;
+    activate(): Promise<T>;
+}
+
+export const extensions = {
+    values: new Map<string, MockExtension<unknown>>(),
+    getExtension<T>(id: string): MockExtension<T> | undefined {
+        const extension = this.values.get(id);
+        // The mock registry stores heterogeneous extension exports keyed by extension id.
+        return extension as MockExtension<T> | undefined;
+    },
+    setExtension<T>(id: string, exportsValue: T): void {
+        this.values.set(id, {
+            isActive: true,
+            exports: exportsValue,
+            activate: async () => exportsValue,
+        });
+    },
+    reset(): void {
+        this.values = new Map();
+    },
+};
+
 export const env = {
     clipboard: {
         value: '',
@@ -180,6 +205,7 @@ export type WarningMessage = typeof window.warningMessages[number];
 
 export function resetMockVscode(): void {
     commands.reset();
+    extensions.reset();
     env.clipboard.reset();
     window.reset();
     workspace.reset();
@@ -215,6 +241,15 @@ export function getInputBoxOptions(): readonly unknown[] {
 
 export function getCommandCalls(): readonly CommandCall[] {
     return commands.calls;
+}
+
+export function setBuiltInGitApi(api: unknown): void {
+    const enablement = new EventEmitter<boolean>();
+    extensions.setExtension('vscode.git', {
+        enabled: true,
+        onDidChangeEnablement: enablement.event,
+        getAPI: () => api,
+    });
 }
 
 type TextDocumentContentProvider = {
