@@ -17,6 +17,9 @@
     --look-git-icon-button-size: max(1.65em, 22px);
     --look-git-toolbar-button-size: max(1.85em, 24px);
     --look-git-graph-row-height: max(1.75em, 24px);
+    --look-git-motion-fast: 90ms;
+    --look-git-motion-medium: 140ms;
+    --look-git-motion-ease: cubic-bezier(0.2, 0, 0, 1);
     color: var(--vscode-foreground, #cccccc);
     background: var(--vscode-editor-background, #1e1e1e);
 }
@@ -674,7 +677,7 @@ h1 {
     background: transparent;
     font-size: inherit;
     opacity: 0;
-    transition: opacity 0.1s;
+    transition: opacity var(--look-git-motion-fast) var(--look-git-motion-ease);
 }
 
 .icon-button:hover {
@@ -1571,7 +1574,7 @@ h1 {
     flex-shrink: 0;
     background: transparent;
     position: relative;
-    transition: background 0.15s;
+    transition: background-color var(--look-git-motion-medium) var(--look-git-motion-ease);
     z-index: 2;
 }
 
@@ -2340,7 +2343,7 @@ h1 {
     display: flex;
     align-items: center;
     opacity: 0;
-    transition: opacity 0.1s;
+    transition: opacity var(--look-git-motion-fast) var(--look-git-motion-ease);
 }
 
 .commit-file-node:hover .commit-file-actions {
@@ -2393,6 +2396,131 @@ h1 {
     font-size: 0.88em;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     font-style: italic;
+}
+
+@keyframes look-git-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(-0.15em);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .error-notice,
+    .changes-banner,
+    .commit-dropdown,
+    .stash-files,
+    .submodule-files,
+    .submodule-change-areas,
+    .history-item-expanded,
+    .history-file-tree,
+    .history-details,
+    .graph-details-panel,
+    .graph-details-file-tree,
+    .graph-details-meta {
+        animation: look-git-fade-in var(--look-git-motion-medium) var(--look-git-motion-ease) both;
+    }
+
+    .change-row,
+    .stash-file-row,
+    .stash-item-header,
+    .change-section-header,
+    .stash-panel-header,
+    .submodule-panel-header,
+    .history-row,
+    .history-file-tree-row,
+    .branch-group-header,
+    .branch-node,
+    .graph-resource-row,
+    .graph-row,
+    .graph-row-wip,
+    .commit-file-node,
+    .commit-file-leaf-clickable,
+    .commit-file-folder-header,
+    .show-more-changes,
+    .history-load-more,
+    .commit-main-button,
+    .commit-more-trigger,
+    .commit-dropdown button,
+    .operation-actions button,
+    .selection-actions button,
+    .segmented button,
+    .graph-toolbar-btn,
+    .graph-details-close,
+    .search-field {
+        transition:
+            background-color var(--look-git-motion-fast) var(--look-git-motion-ease),
+            border-color var(--look-git-motion-fast) var(--look-git-motion-ease),
+            color var(--look-git-motion-fast) var(--look-git-motion-ease),
+            opacity var(--look-git-motion-fast) var(--look-git-motion-ease);
+    }
+
+    .icon-button,
+    .section-toggle,
+    .stash-toggle {
+        transition:
+            opacity var(--look-git-motion-fast) var(--look-git-motion-ease),
+            background-color var(--look-git-motion-fast) var(--look-git-motion-ease),
+            border-color var(--look-git-motion-fast) var(--look-git-motion-ease),
+            color var(--look-git-motion-fast) var(--look-git-motion-ease),
+            transform var(--look-git-motion-fast) var(--look-git-motion-ease);
+    }
+
+    .icon-button:hover:not(:disabled),
+    .section-toggle:hover,
+    .stash-toggle:hover,
+    .graph-toolbar-btn:hover,
+    .graph-details-close:hover {
+        transform: translateY(-0.05em);
+    }
+
+    .ref-badge,
+    .history-ref-badge,
+    .branch-tracking-indicator,
+    .submodule-badge,
+    .graph-resource-count,
+    .graph-resource-badge,
+    .graph-submodule-status,
+    .change-section-header span,
+    .stash-panel-header span,
+    .submodule-panel-header span,
+    .history-file-count,
+    .commit-file-count {
+        transition:
+            background-color var(--look-git-motion-fast) var(--look-git-motion-ease),
+            color var(--look-git-motion-fast) var(--look-git-motion-ease),
+            opacity var(--look-git-motion-fast) var(--look-git-motion-ease);
+    }
+
+    .branch-chevron,
+    .branch-leaf-icon,
+    .branch-folder-icon,
+    .history-row-chevron,
+    .history-file-chevron,
+    .folder-chevron,
+    .file-tree-chevron,
+    .file-tree-folder-icon {
+        transition:
+            color var(--look-git-motion-fast) var(--look-git-motion-ease),
+            opacity var(--look-git-motion-fast) var(--look-git-motion-ease),
+            transform var(--look-git-motion-fast) var(--look-git-motion-ease);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+    }
 }
 
 /* ── Font-scaled Density Overrides ───────────────────────────────────────── */
