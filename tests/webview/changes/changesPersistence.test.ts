@@ -23,7 +23,7 @@ describe('changesPersistence', () => {
     it('serializes only persistent view preferences', () => {
         const state = createInitialChangesState({
             viewMode: ChangesViewMode.List,
-            sortMode: ChangesSortMode.Status,
+            sortMode: ChangesSortMode.Extension,
             pathFilter: 'README',
             collapsedSectionIds: [ChangeSectionId.Unstaged],
             commitMessageHistory: ['fix: bug'],
@@ -31,7 +31,7 @@ describe('changesPersistence', () => {
 
         expect(changesStateToPersisted(state)).toEqual({
             viewMode: ChangesViewMode.List,
-            sortMode: ChangesSortMode.Status,
+            sortMode: ChangesSortMode.Extension,
             pathFilter: 'README',
             collapsedSectionIds: [ChangeSectionId.Unstaged],
             commitMessageHistory: ['fix: bug'],

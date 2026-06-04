@@ -15,6 +15,7 @@ export enum ChangesSortMode {
     Name = 'name',
     Path = 'path',
     Status = 'status',
+    Extension = 'extension',
     Directory = 'directory',
 }
 
@@ -368,10 +369,11 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
     }
 }
 
-function sortModeFromProtocol(sortMode: 'name' | 'path' | 'status' | 'directory'): ChangesSortMode {
+function sortModeFromProtocol(sortMode: 'name' | 'path' | 'status' | 'extension' | 'directory'): ChangesSortMode {
     switch (sortMode) {
         case 'name': return ChangesSortMode.Name;
         case 'status': return ChangesSortMode.Status;
+        case 'extension': return ChangesSortMode.Extension;
         case 'directory': return ChangesSortMode.Directory;
         case 'path': return ChangesSortMode.Path;
     }

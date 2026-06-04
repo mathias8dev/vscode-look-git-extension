@@ -38,6 +38,26 @@ describe('changeTree', () => {
         expect(tree[0]?.children[0]?.children.map((node) => node.name)).toEqual(['a.ts', 'b.ts']);
     });
 
+    it('keeps tree folders stable while sorting files with the provided comparator', () => {
+        const sections = buildChangeSections({
+            conflicts: [],
+            staged: [],
+            unstaged: [
+                { indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/features/a.ts' },
+                { indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/features/b.ts' },
+            ],
+            conflictState: ConflictState.None,
+            stashes: [],
+            submodules: [],
+        });
+        const tree = buildChangeTree(
+            sections[2]?.items ?? [],
+            (left, right) => right.entry.filePath.localeCompare(left.entry.filePath),
+        );
+
+        expect(tree[0]?.children[0]?.children.map((node) => node.name)).toEqual(['b.ts', 'a.ts']);
+    });
+
     it('derives user-facing status labels in the UI layer', () => {
         expect(statusLabel({ indexStatus: 'A', workTreeStatus: ' ', filePath: 'new.ts' })).toBe('Added');
         expect(statusLabel({ indexStatus: ' ', workTreeStatus: 'D', filePath: 'old.ts' })).toBe('Deleted');

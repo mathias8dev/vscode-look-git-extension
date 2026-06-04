@@ -36,7 +36,7 @@ describe('changeViewModel', () => {
         expect(flattenedItems(filtered).map((item) => item.entry.filePath)).toEqual(['src/new-name.ts']);
     });
 
-    it('sorts changes by name, path, status, and directory in the UI layer', () => {
+    it('sorts changes by name, path, status, extension, and directory in the UI layer', () => {
         expect(flattenedItems(filterAndSortSections(sections, '', ChangesSortMode.Name)).map((item) => item.entry.filePath)).toEqual([
             'src/new.ts',
             'README.md',
@@ -52,6 +52,12 @@ describe('changeViewModel', () => {
         expect(flattenedItems(filterAndSortSections(sections, '', ChangesSortMode.Status)).map((item) => item.entry.filePath)).toEqual([
             'src/new.ts',
             'README.md',
+            'src/app.ts',
+            'docs/old.md',
+        ]);
+        expect(flattenedItems(filterAndSortSections(sections, '', ChangesSortMode.Extension)).map((item) => item.entry.filePath)).toEqual([
+            'README.md',
+            'src/new.ts',
             'docs/old.md',
             'src/app.ts',
         ]);
@@ -60,6 +66,27 @@ describe('changeViewModel', () => {
             'src/new.ts',
             'docs/old.md',
             'src/app.ts',
+        ]);
+    });
+
+    it('sorts untracked files before tracked changes when sorting by status', () => {
+        const statusSections = buildChangeSections({
+            conflicts: [],
+            staged: [],
+            unstaged: [
+                { indexStatus: ' ', workTreeStatus: 'M', filePath: 'a-modified.ts' },
+                { indexStatus: '?', workTreeStatus: '?', filePath: 'z-untracked.ts' },
+                { indexStatus: ' ', workTreeStatus: 'D', filePath: 'b-deleted.ts' },
+            ],
+            conflictState: ConflictState.None,
+            stashes: [],
+            submodules: [],
+        });
+
+        expect(flattenedItems(filterAndSortSections(statusSections, '', ChangesSortMode.Status)).map((item) => item.entry.filePath)).toEqual([
+            'z-untracked.ts',
+            'a-modified.ts',
+            'b-deleted.ts',
         ]);
     });
 

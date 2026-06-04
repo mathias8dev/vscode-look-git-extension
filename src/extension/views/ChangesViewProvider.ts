@@ -57,15 +57,16 @@ const CHANGES_TOOLBAR_COMMANDS: readonly { readonly id: string; readonly command
     { id: 'lookGit.changes.showGitOutput', command: 'showGitOutput' },
 ];
 
-const CHANGES_VIEW_COMMANDS: readonly { readonly id: string; readonly viewMode: ChangesViewPreference }[] = [
-    { id: 'lookGit.changes.viewAsList', viewMode: 'list' },
-    { id: 'lookGit.changes.viewAsTree', viewMode: 'tree' },
+const CHANGES_VIEW_COMMANDS: readonly { readonly ids: readonly string[]; readonly viewMode: ChangesViewPreference }[] = [
+    { ids: ['lookGit.changes.viewAsList', 'lookGit.changes.viewAsListChecked'], viewMode: 'list' },
+    { ids: ['lookGit.changes.viewAsTree', 'lookGit.changes.viewAsTreeChecked'], viewMode: 'tree' },
 ];
 
-const CHANGES_SORT_COMMANDS: readonly { readonly id: string; readonly sortMode: ChangesSortPreference }[] = [
-    { id: 'lookGit.changes.sortByName', sortMode: 'name' },
-    { id: 'lookGit.changes.sortByPath', sortMode: 'path' },
-    { id: 'lookGit.changes.sortByStatus', sortMode: 'status' },
+const CHANGES_SORT_COMMANDS: readonly { readonly ids: readonly string[]; readonly sortMode: ChangesSortPreference }[] = [
+    { ids: ['lookGit.changes.sortByPath', 'lookGit.changes.sortByPathChecked'], sortMode: 'path' },
+    { ids: ['lookGit.changes.sortByName', 'lookGit.changes.sortByNameChecked'], sortMode: 'name' },
+    { ids: ['lookGit.changes.sortByStatus', 'lookGit.changes.sortByStatusChecked'], sortMode: 'status' },
+    { ids: ['lookGit.changes.sortByExtension', 'lookGit.changes.sortByExtensionChecked'], sortMode: 'extension' },
 ];
 
 const CHANGES_BULK_COMMANDS: readonly { readonly id: string; readonly message: ChangesWebviewToExtensionMessage }[] = [
@@ -120,6 +121,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
         void this.commands.executeCommand('setContext', 'lookGit.viewAsTree', this.viewAsTree);
         void this.commands.executeCommand('setContext', 'lookGit.changesViewAsTree', this.viewAsTree);
+        void this.commands.executeCommand('setContext', 'lookGit.changesViewMode', 'tree');
         void this.commands.executeCommand('setContext', 'lookGit.changesSortMode', 'path');
         this.scheduleRefresh();
     }
@@ -131,8 +133,8 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         return [
             vscode.commands.registerCommand('lookGit.changes.refresh', () => this.refresh()),
             ...CHANGES_TOOLBAR_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runToolbarCommand(command))),
-            ...CHANGES_VIEW_COMMANDS.map(({ id, viewMode }) => vscode.commands.registerCommand(id, () => this.applyViewMode(viewMode))),
-            ...CHANGES_SORT_COMMANDS.map(({ id, sortMode }) => vscode.commands.registerCommand(id, () => this.applySortMode(sortMode))),
+            ...CHANGES_VIEW_COMMANDS.flatMap(({ ids, viewMode }) => ids.map((id) => vscode.commands.registerCommand(id, () => this.applyViewMode(viewMode)))),
+            ...CHANGES_SORT_COMMANDS.flatMap(({ ids, sortMode }) => ids.map((id) => vscode.commands.registerCommand(id, () => this.applySortMode(sortMode)))),
             ...CHANGES_BULK_COMMANDS.map(({ id, message }) => vscode.commands.registerCommand(id, () => this.runChangesCommand(message))),
             vscode.commands.registerCommand('lookGit.changes.commit', () => this.focusCommitComposer()),
             vscode.commands.registerCommand('lookGit.changes.commitStaged', () => this.focusCommitComposer()),
@@ -155,6 +157,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         this.viewAsTree = viewMode === 'tree';
         await this.commands.executeCommand('setContext', 'lookGit.viewAsTree', this.viewAsTree);
         await this.commands.executeCommand('setContext', 'lookGit.changesViewAsTree', this.viewAsTree);
+        await this.commands.executeCommand('setContext', 'lookGit.changesViewMode', viewMode);
         this.view?.webview.postMessage({ type: 'changes/applyViewMode', viewMode });
     }
 

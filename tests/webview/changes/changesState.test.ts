@@ -284,6 +284,15 @@ describe('changesState', () => {
         expect(sorted.sortMode).toBe(ChangesSortMode.Status);
     });
 
+    it('applies extension sort mode from extension messages', () => {
+        const state = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: { type: 'changes/applySortMode', sortMode: 'extension' },
+        });
+
+        expect(state.sortMode).toBe(ChangesSortMode.Extension);
+    });
+
     it('toggles collapsed sections locally', () => {
         const collapsed = reduceChangesState(createInitialChangesState(), { type: 'toggleSection', sectionId: ChangeSectionId.Unstaged });
         const expanded = reduceChangesState(collapsed, { type: 'toggleSection', sectionId: ChangeSectionId.Unstaged });

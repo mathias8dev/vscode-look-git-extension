@@ -11,7 +11,7 @@ import type { ChangeBulkAction, ChangeRowAction } from './changeCommands';
 import { ChangeSectionView } from './ChangeSectionView';
 import type { ChangeListItem, ChangeSection } from './changeTree';
 import { ChangeSectionId } from './changeTree';
-import { ChangeSelectionMode, ChangesViewMode, type CommitFeedback, type GeneratedCommitMessage } from './changesState';
+import { ChangeSelectionMode, ChangesSortMode, ChangesViewMode, type CommitFeedback, type GeneratedCommitMessage } from './changesState';
 import { CommitComposer } from './CommitComposer';
 import { changesItemContext } from './context-menu-model';
 import { OperationBanner } from './OperationBanner';
@@ -145,6 +145,7 @@ export function SubmoduleItem({
                                     key={section.id}
                                     section={section}
                                     viewMode={ChangesViewMode.List}
+                                    sortMode={ChangesSortMode.Path}
                                     collapsed={collapsedSectionIds.includes(section.id)}
                                     selectedItemIds={new Set()}
                                     onToggleCollapsed={() => setCollapsedSectionIds((ids) => toggleSectionId(ids, section.id))}

@@ -2,14 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { IconButton } from '../../shared/IconButton';
 import { bulkActionsFor, type ChangeBulkAction, type ChangeRowAction } from './changeCommands';
 import { buildChangeTree, type ChangeListItem, type ChangeSection } from './changeTree';
-import { ChangesViewMode, type ChangeSelectionMode } from './changesState';
+import { ChangesViewMode, type ChangeSelectionMode, type ChangesSortMode } from './changesState';
 import { CHANGE_SECTION_PAGE_SIZE, visibleChangeItems } from './changePagination';
 import { ChangeRow } from './ChangeRow';
+import { compareChangeItems } from './changeViewModel';
 import { TreeNodeView } from './TreeNodeView';
 
 interface ChangeSectionViewProps {
     readonly section: ChangeSection;
     readonly viewMode: ChangesViewMode;
+    readonly sortMode: ChangesSortMode;
     readonly collapsed: boolean;
     readonly selectedItemIds: ReadonlySet<string>;
     readonly onToggleCollapsed: () => void;
@@ -24,6 +26,7 @@ interface ChangeSectionViewProps {
 export function ChangeSectionView({
     section,
     viewMode,
+    sortMode,
     collapsed,
     selectedItemIds,
     onToggleCollapsed,
@@ -48,7 +51,7 @@ export function ChangeSectionView({
     if (section.items.length === 0 && !showWhenEmpty) { return null; }
 
     const visible = visibleChangeItems(section.items, visibleLimit);
-    const tree = buildChangeTree(visible.items);
+    const tree = buildChangeTree(visible.items, (left, right) => compareChangeItems(left, right, sortMode));
     const bulkActions = bulkActionsFor(section);
 
     const confirmStash = () => {

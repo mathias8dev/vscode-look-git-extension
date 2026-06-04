@@ -10,7 +10,13 @@ interface PersistedChangesWebviewState {
 }
 
 const VIEW_MODES: ReadonlySet<ChangesViewMode> = new Set([ChangesViewMode.Tree, ChangesViewMode.List]);
-const SORT_MODES: ReadonlySet<ChangesSortMode> = new Set([ChangesSortMode.Name, ChangesSortMode.Path, ChangesSortMode.Status, ChangesSortMode.Directory]);
+const SORT_MODES: ReadonlySet<ChangesSortMode> = new Set([
+    ChangesSortMode.Name,
+    ChangesSortMode.Path,
+    ChangesSortMode.Status,
+    ChangesSortMode.Extension,
+    ChangesSortMode.Directory,
+]);
 const SECTION_IDS: ReadonlySet<ChangeSectionId> = new Set([ChangeSectionId.Conflicts, ChangeSectionId.Staged, ChangeSectionId.Unstaged]);
 
 export function readChangesStatePreferences(value: unknown): ChangesStatePreferences {

@@ -2,9 +2,16 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+interface PackageCommand {
+    readonly command: string;
+    readonly title: string;
+    readonly icon?: string;
+    readonly toggled?: unknown;
+}
+
 interface PackageJson {
     readonly contributes?: {
-        readonly commands?: readonly { readonly command: string; readonly title: string; readonly icon?: string }[];
+        readonly commands?: readonly PackageCommand[];
         readonly submenus?: readonly { readonly id: string; readonly label: string }[];
         readonly menus?: {
             readonly 'view/title'?: readonly {
@@ -58,6 +65,36 @@ describe('native view title toolbar manifest', () => {
 
         expect(commands.has('lookGit.changes.refresh')).toBe(true);
         expect(commands.has('lookGit.changes.openGraph')).toBe(true);
+        expect(commands.has('lookGit.changes.sortByExtension')).toBe(true);
+        expect(commands.has('lookGit.changes.sortByExtensionChecked')).toBe(true);
+        expect(commandById(pkg, 'lookGit.changes.viewAsList')).toEqual(expect.objectContaining({
+            title: 'View as List',
+        }));
+        expect(commandById(pkg, 'lookGit.changes.viewAsList')?.toggled).toBeUndefined();
+        expect(commandById(pkg, 'lookGit.changes.viewAsListChecked')).toEqual(expect.objectContaining({
+            title: '$(check) View as List',
+        }));
+        expect(commandById(pkg, 'lookGit.changes.viewAsTree')).toEqual(expect.objectContaining({
+            title: 'View as Tree',
+        }));
+        expect(commandById(pkg, 'lookGit.changes.viewAsTree')?.toggled).toBeUndefined();
+        expect(commandById(pkg, 'lookGit.changes.viewAsTreeChecked')).toEqual(expect.objectContaining({
+            title: '$(check) View as Tree',
+        }));
+        expect(commandById(pkg, 'lookGit.changes.sortByPath')).toEqual(expect.objectContaining({
+            title: 'Sort by Path',
+        }));
+        expect(commandById(pkg, 'lookGit.changes.sortByPath')?.toggled).toBeUndefined();
+        expect(commandById(pkg, 'lookGit.changes.sortByPathChecked')).toEqual(expect.objectContaining({
+            title: '$(check) Sort by Path',
+        }));
+        expect(commandById(pkg, 'lookGit.changes.sortByExtension')).toEqual(expect.objectContaining({
+            title: 'Sort by Extension',
+        }));
+        expect(commandById(pkg, 'lookGit.changes.sortByExtension')?.toggled).toBeUndefined();
+        expect(commandById(pkg, 'lookGit.changes.sortByExtensionChecked')).toEqual(expect.objectContaining({
+            title: '$(check) Sort by Extension',
+        }));
         expect(viewTitle).toEqual(expect.arrayContaining([
             expect.objectContaining({
                 command: 'lookGit.changes.refresh',
@@ -96,9 +133,52 @@ describe('native view title toolbar manifest', () => {
             expect(submenus.has(submenu)).toBe(true);
             expect(pkg.contributes?.menus?.[submenu]?.length).toBeGreaterThan(0);
         }
+
+        expect(pkg.contributes?.menus?.['lookGit.changes.viewSort']).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                command: 'lookGit.changes.viewAsList',
+                when: 'lookGit.changesViewMode != list',
+            }),
+            expect.objectContaining({
+                command: 'lookGit.changes.viewAsListChecked',
+                when: 'lookGit.changesViewMode == list',
+            }),
+            expect.objectContaining({
+                command: 'lookGit.changes.viewAsTree',
+                when: 'lookGit.changesViewMode != tree',
+            }),
+            expect.objectContaining({
+                command: 'lookGit.changes.sortByPath',
+                when: 'lookGit.changesSortMode != path',
+            }),
+            expect.objectContaining({
+                command: 'lookGit.changes.sortByPathChecked',
+                when: 'lookGit.changesSortMode == path',
+            }),
+            expect.objectContaining({
+                command: 'lookGit.changes.sortByName',
+                when: 'lookGit.changesSortMode != name',
+            }),
+            expect.objectContaining({
+                command: 'lookGit.changes.sortByStatus',
+                when: 'lookGit.changesSortMode != status',
+            }),
+            expect.objectContaining({
+                command: 'lookGit.changes.sortByExtension',
+                when: 'lookGit.changesSortMode != extension',
+            }),
+            expect.objectContaining({
+                command: 'lookGit.changes.sortByExtensionChecked',
+                when: 'lookGit.changesSortMode == extension',
+            }),
+        ]));
     });
 });
 
 function packageJson(): PackageJson {
     return JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as PackageJson;
+}
+
+function commandById(pkg: PackageJson, command: string): PackageCommand | undefined {
+    return pkg.contributes?.commands?.find((entry) => entry.command === command);
 }

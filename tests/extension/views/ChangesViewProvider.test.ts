@@ -305,13 +305,19 @@ describe('ChangesViewProvider', () => {
 
         await vscode.commands.executeCommand('lookGit.changes.openGraph');
         await vscode.commands.executeCommand('lookGit.changes.viewAsList');
+        await vscode.commands.executeCommand('lookGit.changes.viewAsTreeChecked');
         await vscode.commands.executeCommand('lookGit.changes.sortByName');
+        await vscode.commands.executeCommand('lookGit.changes.sortByExtensionChecked');
         await vscode.commands.executeCommand('lookGit.changes.stageAllChanges');
         await vscode.commands.executeCommand('lookGit.changes.refresh');
 
         expect(getCommandCalls()).toContainEqual({ command: 'lookGit.graphView.focus', args: [] });
         expect(view.messages).toContainEqual({ type: 'changes/applyViewMode', viewMode: 'list' });
+        expect(view.messages).toContainEqual({ type: 'changes/applyViewMode', viewMode: 'tree' });
         expect(view.messages).toContainEqual({ type: 'changes/applySortMode', sortMode: 'name' });
+        expect(view.messages).toContainEqual({ type: 'changes/applySortMode', sortMode: 'extension' });
+        expect(getCommandCalls()).toContainEqual({ command: 'setContext', args: ['lookGit.changesViewMode', 'tree'] });
+        expect(getCommandCalls()).toContainEqual({ command: 'setContext', args: ['lookGit.changesSortMode', 'extension'] });
         await vi.waitFor(() => expect(repo.stageAll).toHaveBeenCalledOnce());
         await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
         disposables.forEach((disposable) => disposable.dispose());

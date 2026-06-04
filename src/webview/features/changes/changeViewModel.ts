@@ -1,6 +1,6 @@
 import type { StatusEntry } from '../../../protocol/changes/types';
 import type { ChangeSection, ChangeListItem } from './changeTree';
-import { statusLabel } from './changeTree';
+import { statusCode, statusLabel } from './changeTree';
 import { ChangesSortMode } from './changesState';
 
 export function filterAndSortSections(
@@ -38,15 +38,17 @@ function matchesPathFilter(entry: StatusEntry, normalizedFilter: string): boolea
 }
 
 function sortItems(items: readonly ChangeListItem[], sortMode: ChangesSortMode): readonly ChangeListItem[] {
-    return [...items].sort((left, right) => compareItems(left, right, sortMode));
+    return [...items].sort((left, right) => compareChangeItems(left, right, sortMode));
 }
 
-function compareItems(left: ChangeListItem, right: ChangeListItem, sortMode: ChangesSortMode): number {
+export function compareChangeItems(left: ChangeListItem, right: ChangeListItem, sortMode: ChangesSortMode): number {
     switch (sortMode) {
         case ChangesSortMode.Name:
             return byName(left, right) || byPath(left, right);
         case ChangesSortMode.Status:
             return byStatus(left, right) || byPath(left, right);
+        case ChangesSortMode.Extension:
+            return byExtension(left, right) || byName(left, right) || byPath(left, right);
         case ChangesSortMode.Directory:
             return byDirectory(left, right) || byPath(left, right);
         case ChangesSortMode.Path:
@@ -55,7 +57,8 @@ function compareItems(left: ChangeListItem, right: ChangeListItem, sortMode: Cha
 }
 
 function byStatus(left: ChangeListItem, right: ChangeListItem): number {
-    return statusLabel(left.entry).localeCompare(statusLabel(right.entry));
+    return statusRank(left.entry) - statusRank(right.entry)
+        || statusLabel(left.entry).localeCompare(statusLabel(right.entry));
 }
 
 function byDirectory(left: ChangeListItem, right: ChangeListItem): number {
@@ -70,6 +73,23 @@ function byName(left: ChangeListItem, right: ChangeListItem): number {
     return fileName(left.entry.filePath).localeCompare(fileName(right.entry.filePath));
 }
 
+function byExtension(left: ChangeListItem, right: ChangeListItem): number {
+    return fileExtension(left.entry.filePath).localeCompare(fileExtension(right.entry.filePath));
+}
+
+function statusRank(entry: StatusEntry): number {
+    const code = statusCode(entry);
+    if (code.includes('U')) { return 0; }
+    if (code.includes('?')) { return 1; }
+    if (code.includes('A')) { return 2; }
+    if (code.includes('M')) { return 3; }
+    if (code.includes('R')) { return 4; }
+    if (code.includes('C')) { return 5; }
+    if (code.includes('D')) { return 6; }
+    if (code.includes('T')) { return 7; }
+    return 8;
+}
+
 function directoryName(filePath: string): string {
     const parts = filePath.split('/');
     parts.pop();
@@ -78,4 +98,10 @@ function directoryName(filePath: string): string {
 
 function fileName(filePath: string): string {
     return filePath.split('/').pop() ?? filePath;
+}
+
+function fileExtension(filePath: string): string {
+    const name = fileName(filePath);
+    const dotIndex = name.lastIndexOf('.');
+    return dotIndex > 0 && dotIndex < name.length - 1 ? name.substring(dotIndex + 1).toLowerCase() : '';
 }

@@ -29,6 +29,8 @@ export interface ChangeSection {
     readonly items: readonly ChangeListItem[];
 }
 
+export type ChangeItemCompare = (left: ChangeListItem, right: ChangeListItem) => number;
+
 export function buildChangeSections(status: StatusData): readonly ChangeSection[] {
     return [
         {
@@ -49,7 +51,7 @@ export function buildChangeSections(status: StatusData): readonly ChangeSection[
     ];
 }
 
-export function buildChangeTree(items: readonly ChangeListItem[]): readonly ChangeTreeNode[] {
+export function buildChangeTree(items: readonly ChangeListItem[], compareItems: ChangeItemCompare = compareChangeItemsByPath): readonly ChangeTreeNode[] {
     const roots = new Map<string, MutableTreeNode>();
 
     for (const item of items) {
@@ -81,7 +83,7 @@ export function buildChangeTree(items: readonly ChangeListItem[]): readonly Chan
         }
     }
 
-    return freezeNodes(roots);
+    return freezeNodes(roots, compareItems);
 }
 
 export function statusCode(entry: StatusEntry): string {
@@ -132,22 +134,27 @@ interface MutableTreeNode {
     item?: ChangeListItem;
 }
 
-function freezeNodes(nodes: Map<string, MutableTreeNode>): readonly ChangeTreeNode[] {
+function freezeNodes(nodes: Map<string, MutableTreeNode>, compareItems: ChangeItemCompare): readonly ChangeTreeNode[] {
     return [...nodes.values()]
-        .sort(compareNodes)
+        .sort((left, right) => compareNodes(left, right, compareItems))
         .map((node) => ({
             id: node.id,
             name: node.name,
             path: node.path,
             depth: node.depth,
             item: node.item,
-            children: freezeNodes(node.children),
+            children: freezeNodes(node.children, compareItems),
         }));
 }
 
-function compareNodes(a: MutableTreeNode, b: MutableTreeNode): number {
+function compareNodes(a: MutableTreeNode, b: MutableTreeNode, compareItems: ChangeItemCompare): number {
     const aIsFolder = a.children.size > 0 && !a.item;
     const bIsFolder = b.children.size > 0 && !b.item;
     if (aIsFolder !== bIsFolder) { return aIsFolder ? -1 : 1; }
+    if (a.item && b.item) { return compareItems(a.item, b.item); }
     return a.name.localeCompare(b.name);
+}
+
+function compareChangeItemsByPath(left: ChangeListItem, right: ChangeListItem): number {
+    return left.entry.filePath.localeCompare(right.entry.filePath);
 }

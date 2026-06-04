@@ -61,6 +61,14 @@ export function ChangesWebview() {
     }, [state]);
 
     useEffect(() => {
+        postToExtension({
+            type: 'changes/preferencesChanged',
+            viewMode: state.viewMode,
+            sortMode: state.sortMode,
+        });
+    }, [state.viewMode, state.sortMode]);
+
+    useEffect(() => {
         const knownStashIndexes = new Set(state.status.stashes.map((stash) => stash.index));
         for (const index of state.expandedStashIndexes) {
             if (!knownStashIndexes.has(index)) { continue; }

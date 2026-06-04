@@ -45,6 +45,12 @@ export function run(): Promise<void> {
             },
         },
         {
+            name: 'loads Changes view and sort menu entries with checked codicon aliases',
+            run: async () => {
+                await runChangesNativeViewSortMenuMarkerE2E();
+            },
+        },
+        {
             name: 'finds the fixture repository used for submodule E2E coverage',
             run: async () => {
                 const fixturePath = getFixtureRepoPath();
@@ -306,6 +312,102 @@ export function run(): Promise<void> {
             },
         },
     ]);
+}
+
+interface ExtensionPackageJson {
+    readonly contributes?: {
+        readonly commands?: readonly ExtensionCommandContribution[];
+        readonly menus?: Record<string, readonly ExtensionMenuContribution[] | undefined>;
+    };
+}
+
+interface ExtensionCommandContribution {
+    readonly command: string;
+    readonly title: string;
+    readonly toggled?: unknown;
+}
+
+interface ExtensionMenuContribution {
+    readonly command?: string;
+    readonly group?: string;
+    readonly when?: string;
+}
+
+async function runChangesNativeViewSortMenuMarkerE2E(): Promise<void> {
+    await vscode.commands.executeCommand('workbench.view.extension.look-git');
+    await vscode.commands.executeCommand('lookGit.changesView.focus');
+
+    const commands = await vscode.commands.getCommands(true);
+    for (const command of [
+        'lookGit.changes.viewAsList',
+        'lookGit.changes.viewAsListChecked',
+        'lookGit.changes.viewAsTree',
+        'lookGit.changes.viewAsTreeChecked',
+        'lookGit.changes.sortByPath',
+        'lookGit.changes.sortByPathChecked',
+        'lookGit.changes.sortByName',
+        'lookGit.changes.sortByNameChecked',
+        'lookGit.changes.sortByStatus',
+        'lookGit.changes.sortByStatusChecked',
+        'lookGit.changes.sortByExtension',
+        'lookGit.changes.sortByExtensionChecked',
+    ]) {
+        assert.ok(commands.includes(command), `Expected ${command} to be registered in VS Code.`);
+    }
+
+    const pkg = readExtensionPackageJson();
+    assertCheckedAliasCommand(pkg, 'lookGit.changes.viewAsList', 'View as List');
+    assertCheckedAliasCommand(pkg, 'lookGit.changes.viewAsListChecked', '$(check) View as List');
+    assertCheckedAliasCommand(pkg, 'lookGit.changes.viewAsTree', 'View as Tree');
+    assertCheckedAliasCommand(pkg, 'lookGit.changes.viewAsTreeChecked', '$(check) View as Tree');
+    assertCheckedAliasCommand(pkg, 'lookGit.changes.sortByPath', 'Sort by Path');
+    assertCheckedAliasCommand(pkg, 'lookGit.changes.sortByPathChecked', '$(check) Sort by Path');
+    assertCheckedAliasCommand(pkg, 'lookGit.changes.sortByName', 'Sort by File Name');
+    assertCheckedAliasCommand(pkg, 'lookGit.changes.sortByNameChecked', '$(check) Sort by File Name');
+    assertCheckedAliasCommand(pkg, 'lookGit.changes.sortByStatus', 'Sort by Status');
+    assertCheckedAliasCommand(pkg, 'lookGit.changes.sortByStatusChecked', '$(check) Sort by Status');
+    assertCheckedAliasCommand(pkg, 'lookGit.changes.sortByExtension', 'Sort by Extension');
+    assertCheckedAliasCommand(pkg, 'lookGit.changes.sortByExtensionChecked', '$(check) Sort by Extension');
+
+    const viewSortMenu = pkg.contributes?.menus?.['lookGit.changes.viewSort'] ?? [];
+    assert.deepEqual(viewSortMenu.map((entry) => [entry.command, entry.when]), [
+        ['lookGit.changes.viewAsList', 'lookGit.changesViewMode != list'],
+        ['lookGit.changes.viewAsListChecked', 'lookGit.changesViewMode == list'],
+        ['lookGit.changes.viewAsTree', 'lookGit.changesViewMode != tree'],
+        ['lookGit.changes.viewAsTreeChecked', 'lookGit.changesViewMode == tree'],
+        ['lookGit.changes.sortByPath', 'lookGit.changesSortMode != path'],
+        ['lookGit.changes.sortByPathChecked', 'lookGit.changesSortMode == path'],
+        ['lookGit.changes.sortByName', 'lookGit.changesSortMode != name'],
+        ['lookGit.changes.sortByNameChecked', 'lookGit.changesSortMode == name'],
+        ['lookGit.changes.sortByStatus', 'lookGit.changesSortMode != status'],
+        ['lookGit.changes.sortByStatusChecked', 'lookGit.changesSortMode == status'],
+        ['lookGit.changes.sortByExtension', 'lookGit.changesSortMode != extension'],
+        ['lookGit.changes.sortByExtensionChecked', 'lookGit.changesSortMode == extension'],
+    ]);
+
+    await vscode.commands.executeCommand('lookGit.changes.viewAsList');
+    await vscode.commands.executeCommand('lookGit.changes.viewAsTreeChecked');
+    await vscode.commands.executeCommand('lookGit.changes.sortByExtensionChecked');
+    await vscode.commands.executeCommand('lookGit.changes.sortByPath');
+}
+
+function readExtensionPackageJson(): ExtensionPackageJson {
+    const extension = vscode.extensions.getExtension('mathias8dev.look-git');
+    assert.ok(extension, 'Expected Look Git extension to be loaded in the E2E VS Code instance.');
+    const parsed: unknown = JSON.parse(fs.readFileSync(path.join(extension.extensionPath, 'package.json'), 'utf8'));
+    assert.ok(isExtensionPackageJson(parsed), 'Expected extension package.json to be an object.');
+    return parsed;
+}
+
+function isExtensionPackageJson(value: unknown): value is ExtensionPackageJson {
+    return typeof value === 'object' && value !== null;
+}
+
+function assertCheckedAliasCommand(pkg: ExtensionPackageJson, command: string, title: string): void {
+    const contribution = pkg.contributes?.commands?.find((entry) => entry.command === command);
+    assert.ok(contribution, `Expected ${command} to be contributed.`);
+    assert.equal(contribution.title, title);
+    assert.equal(contribution.toggled, undefined);
 }
 
 async function runWebviewFontSizeConfigurationE2E(): Promise<void> {

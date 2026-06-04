@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import type { GitRepository } from '../../application/ports/git-repository';
 import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
-import type { ChangesToolbarCommand, ChangesWebviewToExtensionMessage, ChangesExtensionToWebviewMessage } from '../../protocol/changes/messages';
+import type { ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage, ChangesExtensionToWebviewMessage } from '../../protocol/changes/messages';
 import { CommitMode, ConflictState, RepositoryState } from '../../protocol/changes/types';
 import type { StatusData, StatusEntry } from '../../protocol/changes/types';
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
@@ -70,7 +70,11 @@ export class ChangesMessageRouter {
                 return;
 
             case 'changes/viewModeChanged':
-                await vscode.commands.executeCommand('setContext', 'lookGit.viewAsTree', msg.asTree);
+                await updateChangesViewContexts(msg.asTree ? 'tree' : 'list', undefined);
+                return;
+
+            case 'changes/preferencesChanged':
+                await updateChangesViewContexts(msg.viewMode, msg.sortMode);
                 return;
 
             case 'changes/toolbarCommand':
@@ -998,6 +1002,16 @@ export class ChangesMessageRouter {
             throw new Error(`Unknown submodule path: ${requestedPath}`);
         }
         return requestedPath;
+    }
+}
+
+async function updateChangesViewContexts(viewMode: ChangesViewPreference, sortMode: ChangesSortPreference | undefined): Promise<void> {
+    const viewAsTree = viewMode === 'tree';
+    await vscode.commands.executeCommand('setContext', 'lookGit.viewAsTree', viewAsTree);
+    await vscode.commands.executeCommand('setContext', 'lookGit.changesViewAsTree', viewAsTree);
+    await vscode.commands.executeCommand('setContext', 'lookGit.changesViewMode', viewMode);
+    if (sortMode) {
+        await vscode.commands.executeCommand('setContext', 'lookGit.changesSortMode', sortMode);
     }
 }
 

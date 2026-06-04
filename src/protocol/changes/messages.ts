@@ -73,7 +73,7 @@ export interface ChangesErrorPush {
 }
 
 export type ChangesViewPreference = 'list' | 'tree';
-export type ChangesSortPreference = 'name' | 'path' | 'status' | 'directory';
+export type ChangesSortPreference = 'name' | 'path' | 'status' | 'extension' | 'directory';
 
 export interface ApplyViewModePush {
     readonly type: 'changes/applyViewMode';
@@ -93,6 +93,11 @@ export interface FocusCommitComposerPush {
 
 export interface ChangesReadyMessage    { readonly type: 'changes/ready'; }
 export interface ViewModeChangedMessage { readonly type: 'changes/viewModeChanged'; readonly asTree: boolean; }
+export interface ChangesPreferencesChangedMessage {
+    readonly type: 'changes/preferencesChanged';
+    readonly viewMode: ChangesViewPreference;
+    readonly sortMode: ChangesSortPreference;
+}
 export type ChangesToolbarCommand =
     | 'openGraph'
     | 'pull'
@@ -299,7 +304,7 @@ export type ChangesExtensionToWebviewMessage =
     | ErrorMessage;
 
 export type ChangesWebviewToExtensionMessage =
-    | ChangesReadyMessage | ViewModeChangedMessage | ChangesToolbarCommandMessage
+    | ChangesReadyMessage | ViewModeChangedMessage | ChangesPreferencesChangedMessage | ChangesToolbarCommandMessage
     | StageFileMessage | UnstageFileMessage | StageFilesMessage | UnstageFilesMessage | StageAllMessage | UnstageAllMessage
     | DiscardFileMessage | DiscardFilesMessage | DiscardAllMessage
     | MarkResolvedMessage | MarkResolvedFilesMessage

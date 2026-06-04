@@ -24,6 +24,7 @@ describe('ChangesWebview', () => {
         await waitFor(() => expect(screen.getByLabelText('Repository changes')).toBeInTheDocument());
 
         expect(api.messages).toContainEqual({ type: 'changes/ready' });
+        expect(api.messages).toContainEqual({ type: 'changes/preferencesChanged', viewMode: 'tree', sortMode: 'path' });
         expect(screen.queryByRole('heading', { level: 1, name: 'Changes' })).not.toBeInTheDocument();
         expect(screen.queryByLabelText('Refresh Changes')).not.toBeInTheDocument();
         expect(screen.queryByLabelText('Open Git Graph')).not.toBeInTheDocument();

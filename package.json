@@ -257,23 +257,58 @@
         "category": "Look Git"
       },
       {
+        "command": "lookGit.changes.viewAsListChecked",
+        "title": "$(check) View as List",
+        "category": "Look Git"
+      },
+      {
         "command": "lookGit.changes.viewAsTree",
         "title": "View as Tree",
         "category": "Look Git"
       },
       {
+        "command": "lookGit.changes.viewAsTreeChecked",
+        "title": "$(check) View as Tree",
+        "category": "Look Git"
+      },
+      {
         "command": "lookGit.changes.sortByName",
-        "title": "Sort Changes by Name",
+        "title": "Sort by File Name",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.sortByNameChecked",
+        "title": "$(check) Sort by File Name",
         "category": "Look Git"
       },
       {
         "command": "lookGit.changes.sortByPath",
-        "title": "Sort Changes by Path",
+        "title": "Sort by Path",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.sortByPathChecked",
+        "title": "$(check) Sort by Path",
         "category": "Look Git"
       },
       {
         "command": "lookGit.changes.sortByStatus",
-        "title": "Sort Changes by Status",
+        "title": "Sort by Status",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.sortByStatusChecked",
+        "title": "$(check) Sort by Status",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.sortByExtension",
+        "title": "Sort by Extension",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.sortByExtensionChecked",
+        "title": "$(check) Sort by Extension",
         "category": "Look Git"
       },
       {
@@ -1016,23 +1051,63 @@
       "lookGit.changes.viewSort": [
         {
           "command": "lookGit.changes.viewAsList",
+          "when": "lookGit.changesViewMode != list",
+          "group": "1_changes_view@1"
+        },
+        {
+          "command": "lookGit.changes.viewAsListChecked",
+          "when": "lookGit.changesViewMode == list",
           "group": "1_changes_view@1"
         },
         {
           "command": "lookGit.changes.viewAsTree",
+          "when": "lookGit.changesViewMode != tree",
           "group": "1_changes_view@2"
         },
         {
-          "command": "lookGit.changes.sortByName",
-          "group": "2_changes_sort@1"
+          "command": "lookGit.changes.viewAsTreeChecked",
+          "when": "lookGit.changesViewMode == tree",
+          "group": "1_changes_view@2"
         },
         {
           "command": "lookGit.changes.sortByPath",
+          "when": "lookGit.changesSortMode != path",
+          "group": "2_changes_sort@1"
+        },
+        {
+          "command": "lookGit.changes.sortByPathChecked",
+          "when": "lookGit.changesSortMode == path",
+          "group": "2_changes_sort@1"
+        },
+        {
+          "command": "lookGit.changes.sortByName",
+          "when": "lookGit.changesSortMode != name",
+          "group": "2_changes_sort@2"
+        },
+        {
+          "command": "lookGit.changes.sortByNameChecked",
+          "when": "lookGit.changesSortMode == name",
           "group": "2_changes_sort@2"
         },
         {
           "command": "lookGit.changes.sortByStatus",
+          "when": "lookGit.changesSortMode != status",
           "group": "2_changes_sort@3"
+        },
+        {
+          "command": "lookGit.changes.sortByStatusChecked",
+          "when": "lookGit.changesSortMode == status",
+          "group": "2_changes_sort@3"
+        },
+        {
+          "command": "lookGit.changes.sortByExtension",
+          "when": "lookGit.changesSortMode != extension",
+          "group": "2_changes_sort@4"
+        },
+        {
+          "command": "lookGit.changes.sortByExtensionChecked",
+          "when": "lookGit.changesSortMode == extension",
+          "group": "2_changes_sort@4"
         }
       ],
       "lookGit.changes.commitMenu": [

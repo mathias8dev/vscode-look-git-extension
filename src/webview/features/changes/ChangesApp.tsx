@@ -112,6 +112,7 @@ export function ChangesApp({
                         key={section.id}
                         section={section}
                         viewMode={state.viewMode}
+                        sortMode={state.sortMode}
                         collapsed={state.collapsedSectionIds.includes(section.id)}
                         selectedItemIds={selectedItemIds}
                         onToggleCollapsed={() => onSectionToggle(section.id)}
