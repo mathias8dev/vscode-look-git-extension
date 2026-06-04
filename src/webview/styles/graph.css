@@ -443,6 +443,40 @@
     background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
 }
 
+.graph-toolbar-btn:disabled {
+    opacity: 0.7;
+    cursor: default;
+}
+
+.graph-operation-notice {
+    display: flex;
+    align-items: center;
+    gap: var(--look-git-space-sm);
+    min-height: var(--look-git-graph-panel-control-height);
+    padding: 0 var(--look-git-space-md);
+    border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
+    color: var(--vscode-foreground, #cccccc);
+    background: var(--vscode-sideBarSectionHeader-background, rgba(255, 255, 255, 0.04));
+    flex-shrink: 0;
+}
+
+.graph-operation-notice .codicon {
+    font-size: inherit;
+    flex-shrink: 0;
+}
+
+.graph-operation-notice-running .codicon {
+    color: var(--vscode-progressBar-background, var(--vscode-textLink-foreground, #4daafc));
+}
+
+.graph-operation-notice-success .codicon {
+    color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+}
+
+.graph-operation-notice-failed .codicon {
+    color: var(--vscode-errorForeground, #f48771);
+}
+
 /* ── Table ───────────────────────────────────────────────────────────────── */
 
 .graph-table-wrapper {

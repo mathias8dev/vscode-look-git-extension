@@ -5,6 +5,7 @@ import { BranchPanel } from '../features/graph/BranchPanel';
 import { CommitDetailsPanel } from '../features/graph/CommitDetailsPanel';
 import { GraphTable } from '../features/graph/GraphTable';
 import { GraphToolbar } from '../features/graph/GraphToolbar';
+import { GraphOperationNotice } from '../features/graph/GraphOperationNotice';
 import {
     createInitialGraphState,
     reduceGraphState,
@@ -23,6 +24,7 @@ import {
     messageForBranchCheckout,
 } from '../features/graph/graphCommands';
 import { ErrorNotice } from '../shared/ErrorNotice';
+import { GraphOperationStatus } from '../../protocol/graph/messages';
 import { ResizablePanel } from '../shared/ResizablePanel';
 import { ResizeAxis } from '../shared/resizeAxis';
 import { ResizeHandleSide } from '../shared/resizeHandleSide';
@@ -31,6 +33,7 @@ import { applyWebviewFontSize, isWebviewFontSizeMessage } from '../platform/font
 
 const PAGE_LIMIT = 300;
 const ERROR_NOTICE_TIMEOUT_MS = 8000;
+const OPERATION_NOTICE_TIMEOUT_MS = 5000;
 const BRANCH_PANEL_MIN = 120;
 const BRANCH_PANEL_MAX = 960;
 const BRANCH_PANEL_DEFAULT = 260;
@@ -98,6 +101,13 @@ export function GraphApp() {
         const timeout = window.setTimeout(() => dispatch({ type: 'clearError' }), ERROR_NOTICE_TIMEOUT_MS);
         return () => window.clearTimeout(timeout);
     }, [state.error]);
+
+    useEffect(() => {
+        if (!state.operationStatus || state.operationStatus.status === GraphOperationStatus.Running) { return; }
+        const operationId = state.operationStatus.operationId;
+        const timeout = window.setTimeout(() => dispatch({ type: 'clearOperationStatus', operationId }), OPERATION_NOTICE_TIMEOUT_MS);
+        return () => window.clearTimeout(timeout);
+    }, [state.operationStatus]);
 
     const handleLoadMore = useCallback(() => {
         if (!state.hasMore || state.loading || state.loadingMore) { return; }
@@ -169,6 +179,7 @@ export function GraphApp() {
                         currentBranch={state.currentBranch}
                         selectedBranchFilter={state.selectedBranchFilter}
                         selectedWorktreePath={state.selectedWorktreePath}
+                        operationStatus={state.operationStatus}
                         onSelectBranch={(branch) => dispatch({ type: 'setBranchFilter', branch })}
                         onSelectMainRepository={() => dispatch({ type: 'selectMainRepository' })}
                         onSelectSubmodule={(submodulePath, submoduleLabel) => dispatch({ type: 'selectSubmodule', submodulePath, submoduleLabel })}
@@ -188,10 +199,13 @@ export function GraphApp() {
                         filters={state.filters}
                         branches={state.branches}
                         selectedBranchFilter={state.selectedBranchFilter}
+                        refreshing={state.loading && state.rows.length > 0}
                         onFiltersChange={(filters) => dispatch({ type: 'setFilters', filters })}
                         onBranchFilterChange={(branch) => dispatch({ type: 'setBranchFilter', branch })}
                         onRefresh={() => dispatch({ type: 'refreshRequested' })}
                     />
+
+                    <GraphOperationNotice operation={state.operationStatus} />
 
                     <ErrorNotice error={state.error} />
 

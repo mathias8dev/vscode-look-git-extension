@@ -8,7 +8,7 @@ import { LOG_FIELD_SEP, LOG_RECORD_SEP } from '../../../src/core/parsing/parseLo
 import type { GitRepository } from '../../../src/application/ports/git-repository';
 import { GetGraphDataUseCase, type GraphDataResult } from '../../../src/application/usecases/graph/get-graph-data';
 import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessageRouter';
-import type { GraphDataResponse, GraphExtensionToWebviewMessage, GraphSubmodulesPush, WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
+import { GraphOperationCategory, GraphOperationStatus, type GraphDataResponse, type GraphExtensionToWebviewMessage, type GraphSubmodulesPush, type WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
 import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
 import { commands, env, resetMockVscode, setInputBoxValue, setInputBoxValues, setQuickPickValue, setWarningChoice, setWarningChoices, Uri, window, workspace } from '../../mocks/vscode';
@@ -856,6 +856,20 @@ describe('GraphMessageRouter branch commands', () => {
 
         expect(commands.calls).toContainEqual({ command: 'git.fetchAll', args: [] });
         expect(vi.mocked(repo.fetchAll)).not.toHaveBeenCalled();
+        expect(messages).toContainEqual({
+            type: 'graph/operationStatus',
+            operationId: 'graph-op-1',
+            status: GraphOperationStatus.Running,
+            category: GraphOperationCategory.Repository,
+            command: 'fetch',
+        });
+        expect(messages).toContainEqual({
+            type: 'graph/operationStatus',
+            operationId: 'graph-op-1',
+            status: GraphOperationStatus.Success,
+            category: GraphOperationCategory.Repository,
+            command: 'fetch',
+        });
         expect(messages).toContainEqual({ type: 'graph/refreshRequested' });
         expect(onRepositoryUpdated).toHaveBeenCalledOnce();
     });
@@ -925,6 +939,13 @@ describe('GraphMessageRouter branch commands', () => {
 
         await router.handle({ type: 'graph/branchCommand', command: 'mergeInto', branch: 'feature/conflict', isRemote: false });
 
+        expect(messages).toContainEqual(expect.objectContaining({
+            type: 'graph/operationStatus',
+            status: GraphOperationStatus.Failed,
+            category: GraphOperationCategory.Branch,
+            command: 'mergeInto',
+            target: 'feature/conflict',
+        }));
         expect(messages).toContainEqual(expect.objectContaining({ type: 'graph/error' }));
         expect(messages).toContainEqual({ type: 'graph/refreshRequested' });
         expect(onRepositoryUpdated).toHaveBeenCalledOnce();

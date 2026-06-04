@@ -6,6 +6,7 @@ interface GraphToolbarProps {
     readonly filters: GraphFilters;
     readonly branches: readonly BranchInfo[];
     readonly selectedBranchFilter: string | undefined;
+    readonly refreshing?: boolean;
     readonly onFiltersChange: (filters: Partial<GraphFilters>) => void;
     readonly onBranchFilterChange: (branch: string | undefined) => void;
     readonly onRefresh: () => void;
@@ -15,6 +16,7 @@ export function GraphToolbar({
     filters,
     branches,
     selectedBranchFilter,
+    refreshing = false,
     onFiltersChange,
     onBranchFilterChange,
     onRefresh,
@@ -71,9 +73,11 @@ export function GraphToolbar({
                 className="graph-toolbar-btn"
                 title="Refresh"
                 aria-label="Refresh"
+                aria-busy={refreshing ? 'true' : undefined}
+                disabled={refreshing}
                 onClick={onRefresh}
             >
-                <i className="codicon codicon-refresh" aria-hidden="true" />
+                <i className={`codicon ${refreshing ? 'codicon-loading codicon-modifier-spin' : 'codicon-refresh'}`} aria-hidden="true" />
             </button>
         </div>
     );

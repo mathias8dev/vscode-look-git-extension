@@ -2,6 +2,7 @@
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { GraphOperationCategory, GraphOperationStatus } from '../../../src/protocol/graph/messages';
 import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 import { createMockVsCodeApi, sendToWebview } from '../../helpers/webviewRuntime';
 
@@ -12,6 +13,7 @@ describe('GraphApp', () => {
         document.body.removeAttribute('style');
         document.body.innerHTML = '<div id="root"></div>';
         localStorage.clear();
+        vi.useRealTimers();
         globalThis.ResizeObserver = MockResizeObserver;
     });
 
@@ -218,6 +220,38 @@ describe('GraphApp', () => {
         expect(screen.getByTitle('feature/oauth')).toBeInTheDocument();
         await waitFor(() => expect(graphDataRequests(api.messages).length).toBeGreaterThan(requestsBeforePush));
         expect(isSubmoduleScope(latestGraphDataRequest(api.messages).repositoryScope, 'modules/auth-kit')).toBe(true);
+    });
+
+    it('shows operation feedback and busy state for graph repository commands', async () => {
+        createMockVsCodeApi();
+        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+
+        render(<GraphApp />);
+        const fetchButton = screen.getByRole('button', { name: 'Fetch' });
+
+        await act(async () => sendToWebview({
+            type: 'graph/operationStatus',
+            operationId: 'fetch-1',
+            status: GraphOperationStatus.Running,
+            category: GraphOperationCategory.Repository,
+            command: 'fetch',
+        }));
+
+        expect(screen.getByRole('status')).toHaveTextContent('Fetch all remotes...');
+        expect(fetchButton).toHaveAttribute('aria-busy', 'true');
+        expect(fetchButton).toBeDisabled();
+
+        await act(async () => sendToWebview({
+            type: 'graph/operationStatus',
+            operationId: 'fetch-1',
+            status: GraphOperationStatus.Success,
+            category: GraphOperationCategory.Repository,
+            command: 'fetch',
+        }));
+
+        expect(screen.getByRole('status')).toHaveTextContent('Fetched all remotes.');
+        expect(fetchButton).not.toHaveAttribute('aria-busy');
+        expect(fetchButton).not.toBeDisabled();
     });
 });
 

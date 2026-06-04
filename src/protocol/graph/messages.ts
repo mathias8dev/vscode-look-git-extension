@@ -44,6 +44,30 @@ export interface GraphSelectWorktreePush {
     readonly path: string;
 }
 
+export enum GraphOperationCategory {
+    Repository = 'repository',
+    Branch = 'branch',
+    Worktree = 'worktree',
+    Commit = 'commit',
+}
+
+export enum GraphOperationStatus {
+    Running = 'running',
+    Success = 'success',
+    Failed = 'failed',
+}
+
+export interface GraphOperationStatusPush {
+    readonly type: 'graph/operationStatus';
+    readonly operationId: string;
+    readonly status: GraphOperationStatus;
+    readonly category: GraphOperationCategory;
+    readonly command: GraphRepositoryCommand | BranchCommand | WorktreeCommand | CommitCommand;
+    readonly target?: string;
+    readonly background?: boolean;
+    readonly repositoryScope?: GraphRepositoryScope;
+}
+
 // ── Extension → Webview (responses — echo requestId) ───────────────────────
 
 export interface GraphDataResponse {
@@ -238,6 +262,7 @@ export type GraphExtensionToWebviewMessage =
     | WorktreeDetailsResponse
     | GraphSelectCommitPush
     | GraphSelectWorktreePush
+    | GraphOperationStatusPush
     | GraphErrorPush
     | ErrorMessage;
 

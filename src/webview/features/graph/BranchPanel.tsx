@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
-import type { BranchCommand } from '../../../protocol/graph/messages';
+import { GraphOperationCategory, GraphOperationStatus, type BranchCommand, type GraphOperationStatusPush } from '../../../protocol/graph/messages';
 import type { BranchInfo, GraphContextTarget, GraphRepositoryScope, GraphSubmoduleInfo, WorktreeInfo } from '../../../protocol/graph/types';
 import { buildBranchTree, buildRemoteBranchTree } from './graphBranchTree';
 import { BranchTreeNode, type BranchTreeExpansionRequest } from './BranchTreeNode';
@@ -18,6 +18,7 @@ interface BranchPanelProps {
     readonly currentBranch: string;
     readonly selectedBranchFilter: string | undefined;
     readonly selectedWorktreePath: string | undefined;
+    readonly operationStatus?: GraphOperationStatusPush;
     readonly onSelectBranch: (branch: string | undefined) => void;
     readonly onSelectMainRepository?: () => void;
     readonly onSelectSubmodule?: (submodulePath: string, submoduleLabel: string) => void;
@@ -38,6 +39,7 @@ export function BranchPanel({
     currentBranch,
     selectedBranchFilter,
     selectedWorktreePath,
+    operationStatus,
     onSelectBranch,
     onSelectMainRepository = () => undefined,
     onSelectSubmodule = () => undefined,
@@ -83,6 +85,8 @@ export function BranchPanel({
     const updateSelectedDisabled = !selectedBranch || selectedBranch.isRemote;
     const deleteSelectedDisabled = !selectedBranch || selectedBranch.isCurrent;
     const compareWithLocalDisabled = !selectedBranch || selectedBranch.isCurrent;
+    const fetching = isRunningRepositoryOperation(operationStatus, 'fetch');
+    const updatingSelected = isRunningBranchOperation(operationStatus, 'update', selectedBranch?.name);
 
     const handleSelect = (fullName: string) => {
         onSelectBranch(selectBranchFilter(fullName, selectedBranchFilter));
@@ -152,6 +156,7 @@ export function BranchPanel({
                         icon="repo-pull"
                         title="Update Selected Branch"
                         disabled={updateSelectedDisabled}
+                        busy={updatingSelected}
                         onClick={() => runBranchCommand('update', selectedBranch)}
                     />
                     <IconButton
@@ -174,6 +179,7 @@ export function BranchPanel({
                     <IconButton
                         icon="git-fetch"
                         title="Fetch"
+                        busy={fetching}
                         onClick={onFetch}
                     />
                     <span className="graph-branch-action-separator" aria-hidden="true" />
@@ -368,6 +374,19 @@ export function BranchPanel({
             </div>
         </div>
     );
+}
+
+function isRunningRepositoryOperation(operation: GraphOperationStatusPush | undefined, command: string): boolean {
+    return operation?.status === GraphOperationStatus.Running
+        && operation.category === GraphOperationCategory.Repository
+        && operation.command === command;
+}
+
+function isRunningBranchOperation(operation: GraphOperationStatusPush | undefined, command: string, branch: string | undefined): boolean {
+    return operation?.status === GraphOperationStatus.Running
+        && operation.category === GraphOperationCategory.Branch
+        && operation.command === command
+        && operation.target === branch;
 }
 
 function shortWorktreeBranch(branch: string | undefined): string | undefined {

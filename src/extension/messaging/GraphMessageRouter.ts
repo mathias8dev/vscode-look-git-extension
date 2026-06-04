@@ -2,7 +2,18 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
-import type { GraphWebviewToExtensionMessage, GraphExtensionToWebviewMessage, GraphDataResponse, CommitDetailsResponse, WorktreeDetailsResponse, OpenDiffRequest, OpenWorktreeDiffRequest } from '../../protocol/graph/messages';
+import {
+    GraphOperationCategory,
+    GraphOperationStatus,
+    type GraphWebviewToExtensionMessage,
+    type GraphExtensionToWebviewMessage,
+    type GraphDataResponse,
+    type CommitDetailsResponse,
+    type WorktreeDetailsResponse,
+    type OpenDiffRequest,
+    type OpenWorktreeDiffRequest,
+    type GraphOperationStatusPush,
+} from '../../protocol/graph/messages';
 import type { GraphData, GraphFilters, GraphRepositoryScope, GraphSubmoduleInfo } from '../../protocol/graph/types';
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
 import type { GitRepository } from '../../application/ports/git-repository';
@@ -23,6 +34,7 @@ type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
 
 export class GraphMessageRouter {
     private readonly pending = new Map<string, AbortController>();
+    private operationSequence = 0;
 
     constructor(
         private readonly repositories: ActiveRepositoryAccessor,
@@ -40,10 +52,22 @@ export class GraphMessageRouter {
     }
 
     async handle(msg: GraphWebviewToExtensionMessage): Promise<void> {
+        const operation = graphOperationForMessage(msg);
+        const operationId = operation ? this.nextOperationId() : undefined;
+        if (operation && operationId) {
+            this.postGraphOperation({ ...operation, operationId, status: GraphOperationStatus.Running });
+        }
+
         try {
             await this.dispatch(msg);
+            if (operation && operationId) {
+                this.postGraphOperation({ ...operation, operationId, status: GraphOperationStatus.Success });
+            }
         } catch (error) {
             if (isAbortError(error)) { return; }
+            if (operation && operationId) {
+                this.postGraphOperation({ ...operation, operationId, status: GraphOperationStatus.Failed });
+            }
             this.postGraphError(error, {
                 requestId: requestIdOf(msg),
                 operation: msg.type,
@@ -307,6 +331,15 @@ export class GraphMessageRouter {
         }
     }
 
+    private postGraphOperation(operation: Omit<GraphOperationStatusPush, 'type'>): void {
+        this.postMessage({ type: 'graph/operationStatus', ...operation });
+    }
+
+    private nextOperationId(): string {
+        this.operationSequence += 1;
+        return `graph-op-${this.operationSequence}`;
+    }
+
     private async refreshAfterRepositoryChange(): Promise<void> {
         this.requestGraphRefresh();
         await this.onRepositoryUpdated();
@@ -327,6 +360,8 @@ export class GraphMessageRouter {
         this.postMessage({ type: 'graph/refreshRequested' });
     }
 }
+
+type GraphOperationDescriptor = Omit<GraphOperationStatusPush, 'type' | 'operationId' | 'status'>;
 
 function toProtocolGraphData(result: GraphDataResult, repositoryScope: GraphRepositoryScope): GraphData {
     return {
@@ -413,6 +448,122 @@ function shouldRefreshAfterFailedRepositoryMutation(msg: GraphWebviewToExtension
                 || msg.command === 'stash';
         default:
             return false;
+    }
+}
+
+function graphOperationForMessage(msg: GraphWebviewToExtensionMessage): GraphOperationDescriptor | undefined {
+    switch (msg.type) {
+        case 'graph/repositoryCommand':
+            return {
+                category: GraphOperationCategory.Repository,
+                command: msg.command,
+                repositoryScope: msg.repositoryScope,
+            };
+        case 'graph/branchCommand':
+            return graphBranchOperation(msg);
+        case 'graph/worktreeCommand':
+            return graphWorktreeOperation(msg);
+        case 'graph/commitCommand':
+            return graphCommitOperation(msg);
+        default:
+            return undefined;
+    }
+}
+
+function graphBranchOperation(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/branchCommand' }>): GraphOperationDescriptor | undefined {
+    switch (msg.command) {
+        case 'checkout':
+        case 'checkoutRebaseOnto':
+        case 'push':
+        case 'update':
+        case 'rebaseOnto':
+        case 'mergeInto':
+        case 'pullBranchWorktree':
+        case 'pushBranchWorktree':
+        case 'lockBranchWorktree':
+        case 'unlockBranchWorktree':
+            return {
+                category: GraphOperationCategory.Branch,
+                command: msg.command,
+                target: msg.branch,
+                background: msg.command === 'push'
+                    || msg.command === 'pullBranchWorktree'
+                    || msg.command === 'pushBranchWorktree',
+                repositoryScope: msg.repositoryScope,
+            };
+        case 'newBranchFrom':
+        case 'newWorktreeFromBranch':
+        case 'delete':
+        case 'rename':
+        case 'removeBranchWorktree':
+        case 'openBranchWorktree':
+        case 'revealBranchWorktree':
+        case 'compareWithCurrent':
+        case 'showDiffWithWorkingTree':
+        case 'compareBranchWithWorktree':
+        case 'showDiffWithBranchWorktree':
+            return undefined;
+    }
+}
+
+function graphWorktreeOperation(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/worktreeCommand' }>): GraphOperationDescriptor | undefined {
+    switch (msg.command) {
+        case 'fetch':
+        case 'pull':
+        case 'push':
+        case 'lock':
+        case 'unlock':
+            return {
+                category: GraphOperationCategory.Worktree,
+                command: msg.command,
+                target: msg.path,
+                background: msg.command === 'fetch' || msg.command === 'pull' || msg.command === 'push',
+                repositoryScope: msg.repositoryScope,
+            };
+        case 'commit':
+        case 'stash':
+        case 'newBranch':
+        case 'checkoutBranch':
+        case 'add':
+        case 'remove':
+        case 'removeForce':
+        case 'open':
+        case 'openInNewWindow':
+        case 'reveal':
+        case 'showDiffWithHead':
+        case 'showDiffWithMainWorktree':
+            return undefined;
+    }
+}
+
+function graphCommitOperation(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/commitCommand' }>): GraphOperationDescriptor | undefined {
+    switch (msg.command) {
+        case 'cherryPick':
+        case 'checkoutRevision':
+        case 'revertCommit':
+        case 'fixup':
+            return {
+                category: GraphOperationCategory.Commit,
+                command: msg.command,
+                target: msg.hash,
+                repositoryScope: msg.repositoryScope,
+            };
+        case 'resetCurrentBranchToHere':
+        case 'undoCommit':
+        case 'editCommitMessage':
+        case 'squashInto':
+        case 'dropCommit':
+        case 'interactiveRebaseFromHere':
+        case 'pushAllUpToHere':
+        case 'newBranch':
+        case 'newTag':
+        case 'newWorktreeFromCommit':
+        case 'copyRevisionNumber':
+        case 'createPatch':
+        case 'showRepositoryAtRevision':
+        case 'compareWithLocal':
+        case 'compareCommitWithWorktree':
+            return undefined;
     }
 }
 

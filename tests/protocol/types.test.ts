@@ -16,6 +16,7 @@ describe('protocol discriminated unions', () => {
                 case 'graph/worktreeDetailsResponse': return msg.path satisfies string;
                 case 'graph/selectCommit': return msg.hash satisfies string;
                 case 'graph/selectWorktree': return msg.path satisfies string;
+                case 'graph/operationStatus': return msg.operationId satisfies string;
                 case 'graph/error': return msg.error.recoverable satisfies boolean;
                 case 'error': return msg.error.message satisfies string;
             }

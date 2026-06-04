@@ -1,4 +1,4 @@
-import type { GraphExtensionToWebviewMessage } from '../../../protocol/graph/messages';
+import { GraphOperationStatus, type GraphExtensionToWebviewMessage, type GraphOperationStatusPush } from '../../../protocol/graph/messages';
 import type { BranchInfo, CommitFileChange, GraphData, GraphFilters, GraphRepositoryScope, GraphSubmoduleInfo, TagInfo, WorktreeInfo, WorktreeWip } from '../../../protocol/graph/types';
 import type { ProtocolError } from '../../../protocol/shared/base';
 import { assignLanes, type GraphRow, type LaneData, type LineDef } from './layout/assignGraphLanes';
@@ -101,6 +101,7 @@ export interface GraphState {
     readonly loadingMore: boolean;
     readonly refreshVersion: number;
     readonly activeGraphRequestId: string | undefined;
+    readonly operationStatus: GraphOperationStatusPush | undefined;
 }
 
 export type GraphAction =
@@ -115,6 +116,7 @@ export type GraphAction =
     | { readonly type: 'selectCommitRange'; readonly hashes: readonly string[]; readonly focusHash: string }
     | { readonly type: 'clearSelection' }
     | { readonly type: 'clearError' }
+    | { readonly type: 'clearOperationStatus'; readonly operationId: string }
     | { readonly type: 'refreshRequested' }
     | { readonly type: 'startLoadMore' };
 
@@ -145,6 +147,7 @@ export function createInitialGraphState(): GraphState {
         loadingMore: false,
         refreshVersion: 0,
         activeGraphRequestId: graphRequestId(0, 'replace'),
+        operationStatus: undefined,
     };
 }
 
@@ -210,6 +213,10 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
             return { ...state, selectedHash: undefined, selectedWorktreePath: undefined, selectedHashes: [], selectionAnchorHash: undefined, commitDetails: undefined, detailsLoading: false };
         case 'clearError':
             return { ...state, error: undefined };
+        case 'clearOperationStatus':
+            return state.operationStatus?.operationId === action.operationId
+                ? { ...state, operationStatus: undefined }
+                : state;
         case 'refreshRequested':
             return startGraphReload(state, state.refreshVersion + 1);
         case 'startLoadMore':
@@ -300,6 +307,8 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
             return selectCommit(state, message.hash, [message.hash], message.hash);
         case 'graph/selectWorktree':
             return selectWorktree(state, message.path);
+        case 'graph/operationStatus':
+            return reduceGraphOperationStatus(state, message);
         case 'graph/error':
             if (!isExpectedGraphError(state, message.requestId)) { return state; }
             return message.requestId
@@ -312,6 +321,14 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
         case 'ui/fontSizeChanged':
             return state;
     }
+}
+
+function reduceGraphOperationStatus(state: GraphState, message: GraphOperationStatusPush): GraphState {
+    if (!sameRepositoryScope(message.repositoryScope, state.repositoryScope)) { return state; }
+    if (message.status !== GraphOperationStatus.Running && state.operationStatus?.operationId && state.operationStatus.operationId !== message.operationId) {
+        return state;
+    }
+    return { ...state, operationStatus: message };
 }
 
 function reduceGraphDataPush(state: GraphState, data: GraphData, repoId: string | undefined): GraphState {

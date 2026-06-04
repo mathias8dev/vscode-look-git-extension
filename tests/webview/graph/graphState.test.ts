@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GraphOperationCategory, GraphOperationStatus } from '../../../src/protocol/graph/messages';
 import type { BranchInfo, GraphCommit, GraphData, WorktreeWip } from '../../../src/protocol/graph/types';
 import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 import { buildDisplayRows, createInitialGraphState, graphRequestId, reduceGraphState } from '../../../src/webview/features/graph/graphState';
@@ -236,6 +237,68 @@ describe('graphState', () => {
         expect(warned.loading).toBe(true);
         expect(warned.activeGraphRequestId).toBe(graphRequestId(0, 'replace'));
         expect(warned.error?.code).toBe('optionalDataUnavailable');
+    });
+
+    it('tracks graph operation feedback and clears only the active operation', () => {
+        const running = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/operationStatus',
+                operationId: 'op-1',
+                status: GraphOperationStatus.Running,
+                category: GraphOperationCategory.Repository,
+                command: 'fetch',
+            },
+        });
+        const staleSuccess = reduceGraphState(running, {
+            type: 'message',
+            message: {
+                type: 'graph/operationStatus',
+                operationId: 'op-stale',
+                status: GraphOperationStatus.Success,
+                category: GraphOperationCategory.Repository,
+                command: 'fetch',
+            },
+        });
+        const success = reduceGraphState(staleSuccess, {
+            type: 'message',
+            message: {
+                type: 'graph/operationStatus',
+                operationId: 'op-1',
+                status: GraphOperationStatus.Success,
+                category: GraphOperationCategory.Repository,
+                command: 'fetch',
+            },
+        });
+        const clearedWrong = reduceGraphState(success, { type: 'clearOperationStatus', operationId: 'op-stale' });
+        const cleared = reduceGraphState(clearedWrong, { type: 'clearOperationStatus', operationId: 'op-1' });
+
+        expect(running.operationStatus?.status).toBe(GraphOperationStatus.Running);
+        expect(staleSuccess.operationStatus?.operationId).toBe('op-1');
+        expect(success.operationStatus?.status).toBe(GraphOperationStatus.Success);
+        expect(clearedWrong.operationStatus).toBeDefined();
+        expect(cleared.operationStatus).toBeUndefined();
+    });
+
+    it('ignores graph operation feedback from another repository scope', () => {
+        const scoped = reduceGraphState(createInitialGraphState(), {
+            type: 'selectSubmodule',
+            submodulePath: 'modules/auth-kit',
+            submoduleLabel: 'auth-kit',
+        });
+        const ignored = reduceGraphState(scoped, {
+            type: 'message',
+            message: {
+                type: 'graph/operationStatus',
+                operationId: 'op-main',
+                status: GraphOperationStatus.Running,
+                category: GraphOperationCategory.Repository,
+                command: 'fetch',
+                repositoryScope: { kind: 'main' },
+            },
+        });
+
+        expect(ignored.operationStatus).toBeUndefined();
     });
 
     it('ignores stale graph responses after a newer refresh response has completed', () => {
