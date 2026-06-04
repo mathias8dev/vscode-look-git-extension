@@ -2,6 +2,15 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [0.5.0] - 2026-06-04
+
+### Added
+
+#### Look Graph
+- Add operation feedback for graph Git commands with running, success, and failure states
+- Show busy indicators on graph fetch, update selected branch, and refresh controls while operations are active
+- Surface background remote operations as started instead of implying completion when work continues in a hidden terminal
+
 ## [0.4.0] - 2026-06-04
 
 ### Added
