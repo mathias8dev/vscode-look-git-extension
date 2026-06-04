@@ -115,6 +115,9 @@ describe('submoduleCommands', () => {
             unstageFilePaths: [],
             discardFilePaths: ['src/a.ts'],
             stashFilePaths: ['src/a.ts'],
+            patchStagedFilePaths: [],
+            patchUnstagedFilePaths: ['src/a.ts'],
+            patchUntrackedFilePaths: [],
             stashIncludeUntracked: false,
         })).toEqual({
             type: 'changes/contextTarget',
@@ -125,6 +128,9 @@ describe('submoduleCommands', () => {
                 unstageFilePaths: [],
                 discardFilePaths: ['src/a.ts'],
                 stashFilePaths: ['src/a.ts'],
+                patchStagedFilePaths: [],
+                patchUnstagedFilePaths: ['src/a.ts'],
+                patchUntrackedFilePaths: [],
                 stashIncludeUntracked: false,
             },
         });

@@ -34,6 +34,9 @@ export interface ChangesSelectionContextTarget {
     readonly unstageFilePaths: readonly string[];
     readonly discardFilePaths: readonly string[];
     readonly stashFilePaths: readonly string[];
+    readonly patchStagedFilePaths: readonly string[];
+    readonly patchUnstagedFilePaths: readonly string[];
+    readonly patchUntrackedFilePaths: readonly string[];
     readonly stashIncludeUntracked: boolean;
 }
 

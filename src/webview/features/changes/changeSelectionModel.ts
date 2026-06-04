@@ -8,6 +8,8 @@ export function changesSelectionTarget(
     const stageableItems = items.filter((item) => item.section === ChangeSectionId.Unstaged);
     const stagedItems = items.filter((item) => item.section === ChangeSectionId.Staged);
     const stashableItems = items.filter((item) => item.section === ChangeSectionId.Unstaged || item.section === ChangeSectionId.Staged);
+    const untrackedItems = stageableItems.filter(isUntracked);
+    const trackedUnstagedItems = stageableItems.filter((item) => !isUntracked(item));
     return {
         kind: 'selection',
         ...(submodulePath ? { submodulePath } : {}),
@@ -16,6 +18,9 @@ export function changesSelectionTarget(
         unstageFilePaths: uniqueFilePaths(stagedItems),
         discardFilePaths: uniqueFilePaths(stageableItems),
         stashFilePaths: uniqueFilePaths(stashableItems),
+        patchStagedFilePaths: uniqueFilePaths(stagedItems),
+        patchUnstagedFilePaths: uniqueFilePaths(trackedUnstagedItems),
+        patchUntrackedFilePaths: uniqueFilePaths(untrackedItems),
         stashIncludeUntracked: stashableItems.some((item) => isUntracked(item)),
     };
 }

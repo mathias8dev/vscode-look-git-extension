@@ -5,12 +5,15 @@ import { CommitMode, type ChangesContextTarget } from '../../protocol/changes/ty
 import type { RepoContext } from '../../core/git/domain/RepoContext';
 import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '../messaging/ChangesMessageRouter';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
+import { ScopedGitRepository } from '../git/scoped-git-repository';
 import type { RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { createErrorPayload, isAbortError } from '../messaging/errorSerialization';
 import { getWebviewHtml } from './webviewHtml';
 import { GetChangesStatusUseCase } from '../../application/usecases/changes/get-changes-status';
 import { GenerateCommitMessageUseCase } from '../../application/usecases/changes/generate-commit-message';
+import { CreateChangesPatchResultKind, type CreateChangesPatchResult, type CreateChangesPatchUseCase } from '../../application/usecases/changes/create-changes-patch';
 import { VscodeLanguageModelCommitMessageGenerator } from '../adapters/vscode/vscode-language-model-commit-message-generator';
+import { defaultCreateChangesPatch } from '../adapters/vscode/default-create-changes-patch';
 import { toSerializedRepoContext } from '../mapping/toProtocol';
 import { webviewFontSizeMessage } from './webview-font';
 
@@ -44,6 +47,7 @@ enum ChangesSelectionCommandKind {
     Stage,
     Unstage,
     Stash,
+    CreatePatch,
     Discard,
 }
 
@@ -143,6 +147,7 @@ const CHANGES_SELECTION_NATIVE_COMMANDS: readonly ChangesSelectionCommandDescrip
     { id: 'lookGit.changes.selection.stage', kind: ChangesSelectionCommandKind.Stage },
     { id: 'lookGit.changes.selection.unstage', kind: ChangesSelectionCommandKind.Unstage },
     { id: 'lookGit.changes.selection.stash', kind: ChangesSelectionCommandKind.Stash },
+    { id: 'lookGit.changes.selection.createPatch', kind: ChangesSelectionCommandKind.CreatePatch },
     { id: 'lookGit.changes.selection.discard', kind: ChangesSelectionCommandKind.Discard },
 ];
 
@@ -189,6 +194,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
         private readonly getChangesStatus = new GetChangesStatusUseCase(),
         private readonly generateCommitMessage = new GenerateCommitMessageUseCase(new VscodeLanguageModelCommitMessageGenerator()),
+        private readonly createChangesPatch: CreateChangesPatchUseCase = defaultCreateChangesPatch,
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -259,12 +265,32 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             case ChangesSelectionCommandKind.Stash:
                 await this.stashSelectedFiles(target.submodulePath, target.stashFilePaths, target.stashIncludeUntracked);
                 return;
+            case ChangesSelectionCommandKind.CreatePatch:
+                await this.createPatchFromSelectedChanges(target);
+                return;
             case ChangesSelectionCommandKind.Discard:
                 await this.runSelectionFileCommand(target.discardFilePaths, target.submodulePath
                     ? { type: 'changes/submoduleDiscardFiles', submodulePath: target.submodulePath, filePaths: target.discardFilePaths }
                     : { type: 'changes/discardFiles', filePaths: target.discardFilePaths });
                 return;
         }
+    }
+
+    private async createPatchFromSelectedChanges(target: Extract<ChangesContextTarget, { readonly kind: 'selection' }>): Promise<void> {
+        const selectedCount = target.patchStagedFilePaths.length + target.patchUnstagedFilePaths.length + target.patchUntrackedFilePaths.length;
+        if (selectedCount === 0) {
+            await vscode.window.showWarningMessage('No selected changes can be exported as a patch.');
+            return;
+        }
+        const baseRepo = this.repositories.requireRepository();
+        const repo = target.submodulePath
+            ? new ScopedGitRepository(baseRepo, await requireKnownSubmodulePath(baseRepo, target.submodulePath))
+            : baseRepo;
+        await showChangesPatchNotification(await this.createChangesPatch.execute(repo, {
+            stagedFilePaths: target.patchStagedFilePaths,
+            unstagedFilePaths: target.patchUnstagedFilePaths,
+            untrackedFilePaths: target.patchUntrackedFilePaths,
+        }));
     }
 
     private async runSelectionFileCommand(
@@ -519,4 +545,23 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     private renderWebviewHtml(webviewView: vscode.WebviewView): void {
         webviewView.webview.html = getWebviewHtml(webviewView.webview, this.extensionUri, 'changes');
     }
+}
+
+async function showChangesPatchNotification(result: CreateChangesPatchResult): Promise<void> {
+    switch (result.kind) {
+        case CreateChangesPatchResultKind.Cancelled:
+            return;
+        case CreateChangesPatchResultKind.CopiedToClipboard:
+            await vscode.window.showInformationMessage('Patch copied to clipboard.');
+            return;
+        case CreateChangesPatchResultKind.SavedToFile:
+            await vscode.window.showInformationMessage(`Patch saved to ${result.filePath ?? 'file'}.`);
+            return;
+    }
+}
+
+async function requireKnownSubmodulePath(repo: { getSubmodulePaths(): Promise<ReadonlySet<string>> }, submodulePath: string): Promise<string> {
+    const paths = await repo.getSubmodulePaths();
+    if (!paths.has(submodulePath)) { throw new Error(`Unknown submodule: ${submodulePath}`); }
+    return submodulePath;
 }

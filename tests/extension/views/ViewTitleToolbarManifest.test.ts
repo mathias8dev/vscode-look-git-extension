@@ -195,6 +195,7 @@ describe('native view title toolbar manifest', () => {
         expect(commands.has('lookGit.changes.selection.stage')).toBe(true);
         expect(commands.has('lookGit.changes.selection.unstage')).toBe(true);
         expect(commands.has('lookGit.changes.selection.stash')).toBe(true);
+        expect(commands.has('lookGit.changes.selection.createPatch')).toBe(true);
         expect(commands.has('lookGit.changes.selection.discard')).toBe(true);
 
         for (const submenu of [
@@ -226,6 +227,10 @@ describe('native view title toolbar manifest', () => {
             expect.objectContaining({
                 command: 'lookGit.changes.selection.stash',
                 when: "webviewId == 'lookGit.changesView' && webviewSection == 'changesSelection' && changesSelectionCanStash",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.changes.selection.createPatch',
+                when: "webviewId == 'lookGit.changesView' && webviewSection == 'changesSelection' && changesSelectionCanCreatePatch",
             }),
             expect.objectContaining({
                 command: 'lookGit.changes.selection.discard',

@@ -195,6 +195,9 @@ describe('SubmoduleItem', () => {
             unstageFilePaths: ['src/staged.ts'],
             discardFilePaths: ['src/app.ts'],
             stashFilePaths: ['src/app.ts', 'src/staged.ts'],
+            patchStagedFilePaths: ['src/staged.ts'],
+            patchUnstagedFilePaths: ['src/app.ts'],
+            patchUntrackedFilePaths: [],
             stashIncludeUntracked: false,
         });
     });

@@ -526,6 +526,9 @@ describe('ChangesViewProvider', () => {
                 unstageFilePaths: ['src/staged.ts'],
                 discardFilePaths: ['src/a.ts'],
                 stashFilePaths: ['src/a.ts', 'src/staged.ts'],
+                patchStagedFilePaths: ['src/staged.ts'],
+                patchUnstagedFilePaths: ['src/a.ts'],
+                patchUntrackedFilePaths: [],
                 stashIncludeUntracked: false,
             },
         });
@@ -557,6 +560,9 @@ describe('ChangesViewProvider', () => {
                 unstageFilePaths: [],
                 discardFilePaths: ['src/a.ts', 'src/new.ts'],
                 stashFilePaths: ['src/a.ts', 'src/new.ts'],
+                patchStagedFilePaths: [],
+                patchUnstagedFilePaths: ['src/a.ts'],
+                patchUntrackedFilePaths: ['src/new.ts'],
                 stashIncludeUntracked: true,
             },
         });
@@ -573,6 +579,83 @@ describe('ChangesViewProvider', () => {
             'src/a.ts',
             'src/new.ts',
         ]));
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('native selection create patch command exports selected changes', async () => {
+        setQuickPickValue('Copy Patch to Clipboard');
+        const repo = makeRepo({
+            execRaw: vi.fn(async (args) => args.includes('--cached') ? 'staged patch\n' : 'unstaged patch\n'),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/contextTarget',
+            target: {
+                kind: 'selection',
+                filePaths: ['src/app.ts', 'src/staged.ts'],
+                stageFilePaths: ['src/app.ts'],
+                unstageFilePaths: ['src/staged.ts'],
+                discardFilePaths: ['src/app.ts'],
+                stashFilePaths: ['src/app.ts', 'src/staged.ts'],
+                patchStagedFilePaths: ['src/staged.ts'],
+                patchUnstagedFilePaths: ['src/app.ts'],
+                patchUntrackedFilePaths: [],
+                stashIncludeUntracked: false,
+            },
+        });
+
+        await vscode.commands.executeCommand('lookGit.changes.selection.createPatch');
+
+        await vi.waitFor(() => expect(repo.execRaw).toHaveBeenNthCalledWith(1, ['diff', '--cached', '--binary', '--', 'src/staged.ts']));
+        expect(repo.execRaw).toHaveBeenNthCalledWith(2, ['diff', '--binary', '--', 'src/app.ts']);
+        expect(mockWindow.infoMessages).toContain('Patch copied to clipboard.');
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('native selection create patch command runs inside selected submodule changes', async () => {
+        setQuickPickValue('Copy Patch to Clipboard');
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+            execRaw: vi.fn(async () => 'submodule staged patch\n'),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/contextTarget',
+            target: {
+                kind: 'selection',
+                submodulePath: 'modules/lib',
+                filePaths: ['src/staged.ts'],
+                stageFilePaths: [],
+                unstageFilePaths: ['src/staged.ts'],
+                discardFilePaths: [],
+                stashFilePaths: ['src/staged.ts'],
+                patchStagedFilePaths: ['src/staged.ts'],
+                patchUnstagedFilePaths: [],
+                patchUntrackedFilePaths: [],
+                stashIncludeUntracked: false,
+            },
+        });
+
+        await vscode.commands.executeCommand('lookGit.changes.selection.createPatch');
+
+        await vi.waitFor(() => expect(repo.execRaw).toHaveBeenCalledWith([
+            '-C',
+            'modules/lib',
+            'diff',
+            '--cached',
+            '--binary',
+            '--',
+            'src/staged.ts',
+        ], undefined));
+        expect(mockWindow.infoMessages).toContain('Patch copied to clipboard.');
         disposables.forEach((disposable) => disposable.dispose());
     });
 
@@ -598,6 +681,9 @@ describe('ChangesViewProvider', () => {
                 unstageFilePaths: ['src/staged.ts'],
                 discardFilePaths: ['src/app.ts'],
                 stashFilePaths: ['src/app.ts', 'src/staged.ts'],
+                patchStagedFilePaths: ['src/staged.ts'],
+                patchUnstagedFilePaths: ['src/app.ts'],
+                patchUntrackedFilePaths: [],
                 stashIncludeUntracked: true,
             },
         });

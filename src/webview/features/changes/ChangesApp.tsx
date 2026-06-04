@@ -107,6 +107,7 @@ export function ChangesApp({
             canStage: target.stageFilePaths.length > 0,
             canUnstage: target.unstageFilePaths.length > 0,
             canStash: target.stashFilePaths.length > 0,
+            canCreatePatch: hasPatchableSelection(target),
             canDiscard: target.discardFilePaths.length > 0,
         });
     };
@@ -205,6 +206,12 @@ export function ChangesApp({
             </section>
         </main>
     );
+}
+
+function hasPatchableSelection(target: ReturnType<typeof changesSelectionTarget>): boolean {
+    return target.patchStagedFilePaths.length > 0
+        || target.patchUnstagedFilePaths.length > 0
+        || target.patchUntrackedFilePaths.length > 0;
 }
 
 function operationBannerFor(

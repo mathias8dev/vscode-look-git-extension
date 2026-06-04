@@ -12,6 +12,7 @@ export interface ChangesSelectionContextFlags {
     readonly canStage: boolean;
     readonly canUnstage: boolean;
     readonly canStash: boolean;
+    readonly canCreatePatch: boolean;
     readonly canDiscard: boolean;
 }
 
@@ -34,6 +35,7 @@ export function changesSelectionContext(flags: ChangesSelectionContextFlags): st
         changesSelectionCanStage: flags.canStage,
         changesSelectionCanUnstage: flags.canUnstage,
         changesSelectionCanStash: flags.canStash,
+        changesSelectionCanCreatePatch: flags.canCreatePatch,
         changesSelectionCanDiscard: flags.canDiscard,
     });
 }
