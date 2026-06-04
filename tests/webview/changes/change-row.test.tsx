@@ -69,7 +69,9 @@ function renderRow(
             item={item}
             depth={0}
             selected={false}
+            context={JSON.stringify({ webviewSection: 'changesSelection', preventDefaultContextMenuItems: true })}
             onSelect={vi.fn()}
+            onOpenContextMenu={vi.fn()}
             onAction={onAction}
         />,
     );

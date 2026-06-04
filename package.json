@@ -407,6 +407,26 @@
         "category": "Look Git"
       },
       {
+        "command": "lookGit.changes.selection.stage",
+        "title": "Stage Selected Changes",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.selection.unstage",
+        "title": "Unstage Selected Changes",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.selection.stash",
+        "title": "Stash Selected Changes",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.selection.discard",
+        "title": "Discard Selected Changes",
+        "category": "Look Git"
+      },
+      {
         "command": "lookGit.changes.sync",
         "title": "Sync",
         "category": "Look Git"
@@ -1809,6 +1829,26 @@
           "command": "lookGit.changes.commitComposer.commitSync",
           "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesCommitComposer'",
           "group": "1_changes_commit_composer@3"
+        },
+        {
+          "command": "lookGit.changes.selection.stage",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSelection' && changesSelectionCanStage",
+          "group": "1_changes_selection@1"
+        },
+        {
+          "command": "lookGit.changes.selection.unstage",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSelection' && changesSelectionCanUnstage",
+          "group": "1_changes_selection@2"
+        },
+        {
+          "command": "lookGit.changes.selection.stash",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSelection' && changesSelectionCanStash",
+          "group": "2_changes_selection@1"
+        },
+        {
+          "command": "lookGit.changes.selection.discard",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSelection' && changesSelectionCanDiscard",
+          "group": "3_changes_selection@1"
         },
         {
           "command": "lookGit.changes.submodule.pull",

@@ -40,6 +40,18 @@ interface ChangesCommitComposerCommandDescriptor {
     readonly mode: CommitMode;
 }
 
+enum ChangesSelectionCommandKind {
+    Stage,
+    Unstage,
+    Stash,
+    Discard,
+}
+
+interface ChangesSelectionCommandDescriptor {
+    readonly id: string;
+    readonly kind: ChangesSelectionCommandKind;
+}
+
 const SHARED_TOOLBAR_COMMANDS: readonly ChangesToolbarCommand[] = [
     'pull',
     'push',
@@ -125,6 +137,13 @@ const CHANGES_COMMIT_COMPOSER_NATIVE_COMMANDS: readonly ChangesCommitComposerCom
     { id: 'lookGit.changes.commitComposer.amend', mode: CommitMode.Amend },
     { id: 'lookGit.changes.commitComposer.commitPush', mode: CommitMode.CommitPush },
     { id: 'lookGit.changes.commitComposer.commitSync', mode: CommitMode.CommitSync },
+];
+
+const CHANGES_SELECTION_NATIVE_COMMANDS: readonly ChangesSelectionCommandDescriptor[] = [
+    { id: 'lookGit.changes.selection.stage', kind: ChangesSelectionCommandKind.Stage },
+    { id: 'lookGit.changes.selection.unstage', kind: ChangesSelectionCommandKind.Unstage },
+    { id: 'lookGit.changes.selection.stash', kind: ChangesSelectionCommandKind.Stash },
+    { id: 'lookGit.changes.selection.discard', kind: ChangesSelectionCommandKind.Discard },
 ];
 
 function toolbarDescriptor(scope: ChangesCommandScope, toolbarCommand: ChangesToolbarCommand): ChangesCommandDescriptor {
@@ -216,7 +235,60 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             ...CHANGES_SORT_COMMANDS.flatMap(({ ids, sortMode }) => ids.map((id) => vscode.commands.registerCommand(id, () => this.applySortMode(sortMode)))),
             ...CHANGES_NATIVE_COMMANDS.map((command) => vscode.commands.registerCommand(command.id, () => this.runNativeCommand(command))),
             ...CHANGES_COMMIT_COMPOSER_NATIVE_COMMANDS.map((command) => vscode.commands.registerCommand(command.id, () => this.runCommitComposerNativeCommand(command))),
+            ...CHANGES_SELECTION_NATIVE_COMMANDS.map((command) => vscode.commands.registerCommand(command.id, () => this.runSelectionNativeCommand(command))),
         ];
+    }
+
+    private async runSelectionNativeCommand(command: ChangesSelectionCommandDescriptor): Promise<void> {
+        const target = this.contextTarget;
+        if (!target || target.kind !== 'selection') {
+            await vscode.window.showWarningMessage('No changes are selected for this command.');
+            return;
+        }
+        switch (command.kind) {
+            case ChangesSelectionCommandKind.Stage:
+                await this.runSelectionFileCommand(target.stageFilePaths, { type: 'changes/stageFiles', filePaths: target.stageFilePaths });
+                return;
+            case ChangesSelectionCommandKind.Unstage:
+                await this.runSelectionFileCommand(target.unstageFilePaths, { type: 'changes/unstageFiles', filePaths: target.unstageFilePaths });
+                return;
+            case ChangesSelectionCommandKind.Stash:
+                await this.stashSelectedFiles(target.stashFilePaths, target.stashIncludeUntracked);
+                return;
+            case ChangesSelectionCommandKind.Discard:
+                await this.runSelectionFileCommand(target.discardFilePaths, { type: 'changes/discardFiles', filePaths: target.discardFilePaths });
+                return;
+        }
+    }
+
+    private async runSelectionFileCommand(
+        filePaths: readonly string[],
+        message: ChangesWebviewToExtensionMessage,
+    ): Promise<void> {
+        if (filePaths.length === 0) {
+            await vscode.window.showWarningMessage('No selected changes can use this command.');
+            return;
+        }
+        await this.router?.handle(message);
+    }
+
+    private async stashSelectedFiles(filePaths: readonly string[], includeUntracked: boolean): Promise<void> {
+        if (filePaths.length === 0) {
+            await vscode.window.showWarningMessage('No selected changes can be stashed.');
+            return;
+        }
+        const message = await vscode.window.showInputBox({
+            prompt: 'Stash selected changes',
+            placeHolder: 'Stash message (optional)',
+        });
+        if (message === undefined) { return; }
+        const trimmedMessage = message.trim();
+        await this.router?.handle({
+            type: 'changes/stashSelectedFiles',
+            filePaths,
+            includeUntracked,
+            ...(trimmedMessage ? { message: trimmedMessage } : {}),
+        });
     }
 
     private async runCommitComposerNativeCommand(command: ChangesCommitComposerCommandDescriptor): Promise<void> {

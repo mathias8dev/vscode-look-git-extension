@@ -108,6 +108,26 @@ describe('submoduleCommands', () => {
             type: 'changes/contextTarget',
             target: { kind: 'commitComposer', submodulePath: 'modules/lib', message: 'feat: inner' },
         });
+        expect(messageForChangesContextTarget({
+            kind: 'selection',
+            filePaths: ['src/a.ts'],
+            stageFilePaths: ['src/a.ts'],
+            unstageFilePaths: [],
+            discardFilePaths: ['src/a.ts'],
+            stashFilePaths: ['src/a.ts'],
+            stashIncludeUntracked: false,
+        })).toEqual({
+            type: 'changes/contextTarget',
+            target: {
+                kind: 'selection',
+                filePaths: ['src/a.ts'],
+                stageFilePaths: ['src/a.ts'],
+                unstageFilePaths: [],
+                discardFilePaths: ['src/a.ts'],
+                stashFilePaths: ['src/a.ts'],
+                stashIncludeUntracked: false,
+            },
+        });
         expect(messageForSubmoduleToolbarCommand('modules/lib', 'fetch')).toEqual({
             type: 'changes/submoduleToolbarCommand',
             submodulePath: 'modules/lib',

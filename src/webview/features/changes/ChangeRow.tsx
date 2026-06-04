@@ -4,7 +4,6 @@ import { ChangeRowAction, primaryRowActionFor, rowActionsFor, type ChangeActionD
 import type { ChangeListItem } from './changeTree';
 import { ChangeSelectionMode } from './changesState';
 import { FileTypeIcon } from './FileTypeIcon';
-import { changesItemContext } from './context-menu-model';
 import { iconKindForStatusEntry } from './fileIconModel';
 import { depthStyle } from './viewStyles';
 
@@ -12,23 +11,26 @@ interface ChangeRowProps {
     readonly item: ChangeListItem;
     readonly depth: number;
     readonly selected: boolean;
+    readonly context: string;
     readonly onSelect: (item: ChangeListItem, mode: ChangeSelectionMode) => void;
+    readonly onOpenContextMenu: (item: ChangeListItem) => void;
     readonly onAction: (item: ChangeListItem, action: ChangeRowAction) => void;
     readonly actions?: readonly ChangeActionDescriptor<ChangeRowAction>[];
 }
 
-export function ChangeRow({ item, depth, selected, onSelect, onAction, actions: actionOverride }: ChangeRowProps) {
+export function ChangeRow({ item, depth, selected, context, onSelect, onOpenContextMenu, onAction, actions: actionOverride }: ChangeRowProps) {
     const entry = item.entry;
     const actions = actionOverride ?? rowActionsFor(item);
     const primaryAction = primaryRowActionFor(item);
     return (
         <article
             className="change-row"
-            data-vscode-context={changesItemContext()}
+            data-vscode-context={context}
             style={depthStyle(depth)}
             title={entry.filePath}
             aria-selected={selected}
             tabIndex={0}
+            onContextMenu={() => onOpenContextMenu(item)}
             onClick={(event) => {
                 if (event.shiftKey) {
                     onSelect(item, ChangeSelectionMode.Range);

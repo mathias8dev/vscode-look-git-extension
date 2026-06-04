@@ -500,6 +500,18 @@ export class ChangesMessageRouter {
                 await this.refresh();
                 break;
 
+            case 'changes/stashSelectedFiles': {
+                if (msg.filePaths.length === 0) { break; }
+                const args = ['stash', 'push'];
+                if (msg.includeUntracked) { args.push('--include-untracked'); }
+                const message = msg.message?.trim();
+                if (message) { args.push('-m', message); }
+                args.push('--', ...msg.filePaths);
+                await repo.exec(args);
+                await this.refresh();
+                break;
+            }
+
             case 'changes/stashPop':
                 await repo.stashPop(msg.index);
                 await this.refresh();

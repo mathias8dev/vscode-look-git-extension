@@ -103,6 +103,38 @@ describe('ChangesWebview', () => {
         });
     });
 
+    it('posts selected changes as a native context menu target', async () => {
+        const api = createMockVsCodeApi();
+        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+        render(<ChangesWebview />);
+        sendStatusDataWithMultipleChanges();
+
+        const first = await screen.findByTitle('src/a.ts');
+        const second = await screen.findByTitle('src/b.ts');
+        fireEvent.click(first, { ctrlKey: true });
+        fireEvent.click(second, { ctrlKey: true });
+
+        await waitFor(() => expect(second).toHaveAttribute('aria-selected', 'true'));
+        expect(second.getAttribute('data-vscode-context')).toContain('changesSelection');
+        expect(second.getAttribute('data-vscode-context')).toContain('changesSelectionCanStage');
+
+        fireEvent.contextMenu(second);
+
+        expect(api.messages).toContainEqual({
+            type: 'changes/contextTarget',
+            target: {
+                kind: 'selection',
+                filePaths: ['src/a.ts', 'src/b.ts'],
+                stageFilePaths: ['src/a.ts', 'src/b.ts'],
+                unstageFilePaths: [],
+                discardFilePaths: ['src/a.ts', 'src/b.ts'],
+                stashFilePaths: ['src/a.ts', 'src/b.ts'],
+                stashIncludeUntracked: true,
+            },
+        });
+    });
+
     it('keeps expanded submodules open after parent status refreshes and reloads their details', async () => {
         const api = createMockVsCodeApi();
         const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
@@ -351,6 +383,25 @@ function sendStatusDataWithStagedChange(): void {
             currentBranch: 'experimental',
             staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'src/app.ts' }],
             unstaged: [],
+            conflicts: [],
+            conflictState: ConflictState.None,
+            stashes: [],
+            submodules: [],
+        },
+    });
+}
+
+function sendStatusDataWithMultipleChanges(): void {
+    sendToWebview({
+        type: 'changes/statusData',
+        data: {
+            repositoryState: RepositoryState.Available,
+            currentBranch: 'main',
+            staged: [],
+            unstaged: [
+                { indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/a.ts' },
+                { indexStatus: '?', workTreeStatus: '?', filePath: 'src/b.ts' },
+            ],
             conflicts: [],
             conflictState: ConflictState.None,
             stashes: [],

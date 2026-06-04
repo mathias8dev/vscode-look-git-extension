@@ -26,7 +26,20 @@ export interface ChangesCommitComposerContextTarget {
     readonly submodulePath?: string;
 }
 
-export type ChangesContextTarget = ChangesSubmoduleToolbarContextTarget | ChangesCommitComposerContextTarget;
+export interface ChangesSelectionContextTarget {
+    readonly kind: 'selection';
+    readonly filePaths: readonly string[];
+    readonly stageFilePaths: readonly string[];
+    readonly unstageFilePaths: readonly string[];
+    readonly discardFilePaths: readonly string[];
+    readonly stashFilePaths: readonly string[];
+    readonly stashIncludeUntracked: boolean;
+}
+
+export type ChangesContextTarget =
+    | ChangesSubmoduleToolbarContextTarget
+    | ChangesCommitComposerContextTarget
+    | ChangesSelectionContextTarget;
 
 export interface StatusEntry {
     readonly indexStatus: string;

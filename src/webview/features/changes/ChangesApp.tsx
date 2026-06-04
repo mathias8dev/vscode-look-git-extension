@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { ConflictState, RepositoryState } from '../../../protocol/changes/types';
-import type { CommitMode, StashFileEntry } from '../../../protocol/changes/types';
+import type { ChangesSelectionContextTarget, CommitMode, StashFileEntry } from '../../../protocol/changes/types';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import type { ChangeBulkAction, ChangeRowAction } from './changeCommands';
 import { ChangeSectionView } from './ChangeSectionView';
@@ -11,11 +11,12 @@ import { StashList } from './StashList';
 import { SubmoduleSection } from './SubmoduleSection';
 import { buildChangeSections, ChangeSectionId, type ChangeListItem } from './changeTree';
 import {
+    ChangeSelectionMode,
     getChangeCount,
-    type ChangeSelectionMode,
     type ChangesState,
 } from './changesState';
 import { filterAndSortSections, flattenedItems } from './changeViewModel';
+import { changesSelectionContext } from './context-menu-model';
 import type { ActiveConflictState, OperationAction } from './operationCommands';
 import { CreateStashKind, type StashEntryAction } from './stashCommands';
 import { SubmoduleAction } from './submoduleCommands';
@@ -26,6 +27,7 @@ interface ChangesAppProps {
     readonly onSelectItem: (item: ChangeListItem, mode: ChangeSelectionMode, visibleItemIds: readonly string[]) => void;
     readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onBulkAction: (action: ChangeBulkAction) => void;
+    readonly onSelectionContextTarget: (target: ChangesSelectionContextTarget) => void;
     readonly onCommit: (message: string, mode: CommitMode) => void;
     readonly onCommitComposerContextTarget: (message: string) => void;
     readonly onGenerateCommitMessage: () => void;
@@ -55,6 +57,7 @@ export function ChangesApp({
     onSelectItem,
     onRowAction,
     onBulkAction,
+    onSelectionContextTarget,
     onCommit,
     onCommitComposerContextTarget,
     onGenerateCommitMessage,
@@ -82,11 +85,34 @@ export function ChangesApp({
         () => filterAndSortSections(rawSections, state.pathFilter, state.sortMode),
         [rawSections, state.pathFilter, state.sortMode],
     );
-    const visibleItemIds = useMemo(() => flattenedItems(sections).map((item) => item.id), [sections]);
+    const visibleItems = useMemo(() => flattenedItems(sections), [sections]);
+    const visibleItemIds = useMemo(() => visibleItems.map((item) => item.id), [visibleItems]);
+    const visibleItemsById = useMemo(() => new Map(visibleItems.map((item) => [item.id, item])), [visibleItems]);
     const selectedItemIds = useMemo(() => new Set(state.selectedItemIds), [state.selectedItemIds]);
     const changeCount = getChangeCount(state.status);
     const visibleChangeCount = visibleItemIds.length;
     const hasRepository = state.status.repositoryState !== RepositoryState.Missing;
+    const selectionItemsFor = (item: ChangeListItem): readonly ChangeListItem[] => (
+        selectedItemIds.has(item.id)
+            ? state.selectedItemIds.map((id) => visibleItemsById.get(id)).filter(isChangeListItem)
+            : [item]
+    );
+    const selectionTargetFor = (item: ChangeListItem) => changesSelectionTarget(selectionItemsFor(item));
+    const contextForItem = (item: ChangeListItem) => {
+        const target = selectionTargetFor(item);
+        return changesSelectionContext({
+            canStage: target.stageFilePaths.length > 0,
+            canUnstage: target.unstageFilePaths.length > 0,
+            canStash: target.stashFilePaths.length > 0,
+            canDiscard: target.discardFilePaths.length > 0,
+        });
+    };
+    const openSelectionContext = (item: ChangeListItem) => {
+        if (!selectedItemIds.has(item.id)) {
+            onSelectItem(item, ChangeSelectionMode.Replace, visibleItemIds);
+        }
+        onSelectionContextTarget(selectionTargetFor(item));
+    };
 
     return (
         <main className="changes-shell">
@@ -123,8 +149,10 @@ export function ChangesApp({
                         sortMode={state.sortMode}
                         collapsed={state.collapsedSectionIds.includes(section.id)}
                         selectedItemIds={selectedItemIds}
+                        contextForItem={contextForItem}
                         onToggleCollapsed={() => onSectionToggle(section.id)}
                         onSelectItem={(item, mode) => onSelectItem(item, mode, visibleItemIds)}
+                        onOpenSelectionContext={openSelectionContext}
                         onRowAction={onRowAction}
                         onBulkAction={onBulkAction}
                         onStash={stashHandlerFor(section.id, onCreateStash)}
@@ -188,6 +216,33 @@ function operationBannerFor(
             onAction={(action) => onOperationAction(conflictState, action)}
         />
     );
+}
+
+function changesSelectionTarget(items: readonly ChangeListItem[]): ChangesSelectionContextTarget {
+    const stageableItems = items.filter((item) => item.section === ChangeSectionId.Unstaged);
+    const stagedItems = items.filter((item) => item.section === ChangeSectionId.Staged);
+    const stashableItems = items.filter((item) => item.section === ChangeSectionId.Unstaged || item.section === ChangeSectionId.Staged);
+    return {
+        kind: 'selection',
+        filePaths: uniqueFilePaths(items),
+        stageFilePaths: uniqueFilePaths(stageableItems),
+        unstageFilePaths: uniqueFilePaths(stagedItems),
+        discardFilePaths: uniqueFilePaths(stageableItems),
+        stashFilePaths: uniqueFilePaths(stashableItems),
+        stashIncludeUntracked: stashableItems.some((item) => isUntracked(item)),
+    };
+}
+
+function uniqueFilePaths(items: readonly ChangeListItem[]): readonly string[] {
+    return Array.from(new Set(items.map((item) => item.entry.filePath)));
+}
+
+function isUntracked(item: ChangeListItem): boolean {
+    return item.entry.indexStatus === '?' || item.entry.workTreeStatus === '?';
+}
+
+function isChangeListItem(item: ChangeListItem | undefined): item is ChangeListItem {
+    return item !== undefined;
 }
 
 function stashHandlerFor(

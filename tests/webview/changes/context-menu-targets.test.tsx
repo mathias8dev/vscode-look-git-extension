@@ -20,7 +20,9 @@ describe('changes native context menu targets', () => {
                 item={changeItem('src/app.ts')}
                 depth={0}
                 selected={false}
+                context={JSON.stringify({ webviewSection: 'changesSelection', preventDefaultContextMenuItems: true })}
                 onSelect={vi.fn()}
+                onOpenContextMenu={vi.fn()}
                 onAction={vi.fn()}
             />,
         );
@@ -41,7 +43,9 @@ describe('changes native context menu targets', () => {
             <TreeNodeView
                 node={node}
                 selectedItemIds={new Set()}
+                contextForItem={() => JSON.stringify({ webviewSection: 'changesSelection', preventDefaultContextMenuItems: true })}
                 onSelectItem={vi.fn()}
+                onOpenSelectionContext={vi.fn()}
                 onRowAction={vi.fn()}
             />,
         );
@@ -94,7 +98,7 @@ function expectSuppressesDefaultItems(element: HTMLElement): void {
     const raw = element.getAttribute('data-vscode-context');
     expect(raw).not.toBeNull();
     const context: unknown = JSON.parse(raw ?? '{}');
-    expect(context).toEqual({ preventDefaultContextMenuItems: true });
+    expect(context).toEqual(expect.objectContaining({ preventDefaultContextMenuItems: true }));
 }
 
 function changeItem(filePath: string): ChangeListItem {
@@ -127,6 +131,7 @@ function renderSubmodule(status: SubmoduleStatusData): void {
             generatedCommitMessage={undefined}
             commitMessageGenerationError={undefined}
             onCommit={vi.fn()}
+            onCommitComposerContextTarget={vi.fn()}
             onGenerateCommitMessage={vi.fn()}
             onCreateStash={vi.fn()}
             onToggleStash={vi.fn()}

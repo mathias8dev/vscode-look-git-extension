@@ -138,6 +138,7 @@ export function ChangesWebview() {
             }}
             onRowAction={(item: ChangeListItem, action: ChangeRowAction) => postToExtension(messageForRowAction(item, action))}
             onBulkAction={(action: ChangeBulkAction) => postToExtension(messageForBulkAction(action))}
+            onSelectionContextTarget={(target) => postToExtension(messageForChangesContextTarget(target))}
             onCommit={(message: string, mode: CommitMode) => {
                 dispatch({ type: 'rememberCommitMessage', message });
                 postToExtension({ type: 'changes/commit', message, mode });

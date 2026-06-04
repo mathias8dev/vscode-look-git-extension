@@ -10,11 +10,13 @@ import { depthStyle } from './viewStyles';
 interface TreeNodeViewProps {
     readonly node: ChangeTreeNode;
     readonly selectedItemIds: ReadonlySet<string>;
+    readonly contextForItem: (item: ChangeListItem) => string;
     readonly onSelectItem: (item: ChangeListItem, mode: ChangeSelectionMode) => void;
+    readonly onOpenSelectionContext: (item: ChangeListItem) => void;
     readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
 }
 
-export function TreeNodeView({ node, selectedItemIds, onSelectItem, onRowAction }: TreeNodeViewProps) {
+export function TreeNodeView({ node, selectedItemIds, contextForItem, onSelectItem, onOpenSelectionContext, onRowAction }: TreeNodeViewProps) {
     const [folderCollapsed, setFolderCollapsed] = useState(false);
 
     if (node.item) {
@@ -23,7 +25,9 @@ export function TreeNodeView({ node, selectedItemIds, onSelectItem, onRowAction 
                 item={node.item}
                 depth={node.depth}
                 selected={selectedItemIds.has(node.item.id)}
+                context={contextForItem(node.item)}
                 onSelect={onSelectItem}
+                onOpenContextMenu={onOpenSelectionContext}
                 onAction={onRowAction}
             />
         );
@@ -57,7 +61,9 @@ export function TreeNodeView({ node, selectedItemIds, onSelectItem, onRowAction 
                     key={child.id}
                     node={child}
                     selectedItemIds={selectedItemIds}
+                    contextForItem={contextForItem}
                     onSelectItem={onSelectItem}
+                    onOpenSelectionContext={onOpenSelectionContext}
                     onRowAction={onRowAction}
                 />
             )) : null}

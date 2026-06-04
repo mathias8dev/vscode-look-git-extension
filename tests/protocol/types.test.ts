@@ -145,6 +145,7 @@ describe('protocol discriminated unions', () => {
                 case 'changes/submoduleAcceptAllTheirs': return msg.submodulePath satisfies string;
                 case 'changes/stash': return msg.message satisfies string | undefined;
                 case 'changes/stashStaged': return msg.message satisfies string | undefined;
+                case 'changes/stashSelectedFiles': return msg.filePaths satisfies readonly string[];
                 case 'changes/stashPop': return msg.index satisfies number;
                 case 'changes/stashApply': return msg.index satisfies number;
                 case 'changes/stashDrop': return msg.index satisfies number;

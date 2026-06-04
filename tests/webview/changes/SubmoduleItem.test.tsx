@@ -205,6 +205,7 @@ function renderSubmodule(input: {
             generatedCommitMessage={undefined}
             commitMessageGenerationError={undefined}
             onCommit={vi.fn()}
+            onCommitComposerContextTarget={vi.fn()}
             onGenerateCommitMessage={vi.fn()}
             onCreateStash={vi.fn()}
             onToggleStash={vi.fn()}

@@ -509,6 +509,73 @@ describe('ChangesViewProvider', () => {
         disposables.forEach((disposable) => disposable.dispose());
     });
 
+    it('native selection commands stage unstage and discard selected changes', async () => {
+        setWarningChoice('Discard');
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/contextTarget',
+            target: {
+                kind: 'selection',
+                filePaths: ['src/a.ts', 'src/staged.ts'],
+                stageFilePaths: ['src/a.ts'],
+                unstageFilePaths: ['src/staged.ts'],
+                discardFilePaths: ['src/a.ts'],
+                stashFilePaths: ['src/a.ts', 'src/staged.ts'],
+                stashIncludeUntracked: false,
+            },
+        });
+
+        await vscode.commands.executeCommand('lookGit.changes.selection.stage');
+        await vscode.commands.executeCommand('lookGit.changes.selection.unstage');
+        await vscode.commands.executeCommand('lookGit.changes.selection.discard');
+
+        await vi.waitFor(() => expect(repo.stageFile).toHaveBeenCalledWith('src/a.ts'));
+        expect(repo.unstageFile).toHaveBeenCalledWith('src/staged.ts');
+        expect(repo.discardFile).toHaveBeenCalledWith('src/a.ts');
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('native selection stash command stashes selected pathspecs', async () => {
+        setInputBoxValue('save selected');
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/contextTarget',
+            target: {
+                kind: 'selection',
+                filePaths: ['src/a.ts', 'src/new.ts'],
+                stageFilePaths: ['src/a.ts', 'src/new.ts'],
+                unstageFilePaths: [],
+                discardFilePaths: ['src/a.ts', 'src/new.ts'],
+                stashFilePaths: ['src/a.ts', 'src/new.ts'],
+                stashIncludeUntracked: true,
+            },
+        });
+
+        await vscode.commands.executeCommand('lookGit.changes.selection.stash');
+
+        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith([
+            'stash',
+            'push',
+            '--include-untracked',
+            '-m',
+            'save selected',
+            '--',
+            'src/a.ts',
+            'src/new.ts',
+        ]));
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
     it('toolbar push publishes the current branch when it has no upstream', async () => {
         const repo = makeRepo({
             getCurrentBranch: vi.fn(async () => 'topic'),

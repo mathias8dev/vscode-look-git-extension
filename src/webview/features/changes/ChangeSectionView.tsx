@@ -14,8 +14,10 @@ interface ChangeSectionViewProps {
     readonly sortMode: ChangesSortMode;
     readonly collapsed: boolean;
     readonly selectedItemIds: ReadonlySet<string>;
+    readonly contextForItem: (item: ChangeListItem) => string;
     readonly onToggleCollapsed: () => void;
     readonly onSelectItem: (item: ChangeListItem, mode: ChangeSelectionMode) => void;
+    readonly onOpenSelectionContext: (item: ChangeListItem) => void;
     readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onBulkAction: (action: ChangeBulkAction) => void;
     readonly onStash?: (message: string) => void;
@@ -29,8 +31,10 @@ export function ChangeSectionView({
     sortMode,
     collapsed,
     selectedItemIds,
+    contextForItem,
     onToggleCollapsed,
     onSelectItem,
+    onOpenSelectionContext,
     onRowAction,
     onBulkAction,
     onStash,
@@ -131,7 +135,9 @@ export function ChangeSectionView({
                                 key={node.id}
                                 node={node}
                                 selectedItemIds={selectedItemIds}
+                                contextForItem={contextForItem}
                                 onSelectItem={onSelectItem}
+                                onOpenSelectionContext={onOpenSelectionContext}
                                 onRowAction={onRowAction}
                             />
                         ))
@@ -141,7 +147,9 @@ export function ChangeSectionView({
                                 item={item}
                                 depth={0}
                                 selected={selectedItemIds.has(item.id)}
+                                context={contextForItem(item)}
                                 onSelect={onSelectItem}
+                                onOpenContextMenu={onOpenSelectionContext}
                                 onAction={onRowAction}
                             />
                         ))}

@@ -187,8 +187,10 @@ export function SubmoduleItem({
                                     sortMode={ChangesSortMode.Path}
                                     collapsed={collapsedSectionIds.includes(section.id)}
                                     selectedItemIds={new Set()}
+                                    contextForItem={changesItemContextForSubmoduleRow}
                                     onToggleCollapsed={() => setCollapsedSectionIds((ids) => toggleSectionId(ids, section.id))}
                                     onSelectItem={noopSelect}
+                                    onOpenSelectionContext={noopOpenSelectionContext}
                                     onRowAction={onRowAction}
                                     onBulkAction={onBulkAction}
                                     onStash={section.id === ChangeSectionId.Unstaged ? onCreateStash : undefined}
@@ -215,6 +217,12 @@ export function SubmoduleItem({
 }
 
 function noopSelect(_item: ChangeListItem, _mode: ChangeSelectionMode): void {}
+
+function noopOpenSelectionContext(_item: ChangeListItem): void {}
+
+function changesItemContextForSubmoduleRow(_item: ChangeListItem): string {
+    return changesItemContext();
+}
 
 function openNativeContextMenu(event: MouseEvent<HTMLButtonElement>, onOpenContextMenu: () => void): void {
     onOpenContextMenu();

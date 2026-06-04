@@ -192,6 +192,10 @@ describe('native view title toolbar manifest', () => {
         expect(commands.has('lookGit.changes.commitComposer.amend')).toBe(true);
         expect(commands.has('lookGit.changes.commitComposer.commitPush')).toBe(true);
         expect(commands.has('lookGit.changes.commitComposer.commitSync')).toBe(true);
+        expect(commands.has('lookGit.changes.selection.stage')).toBe(true);
+        expect(commands.has('lookGit.changes.selection.unstage')).toBe(true);
+        expect(commands.has('lookGit.changes.selection.stash')).toBe(true);
+        expect(commands.has('lookGit.changes.selection.discard')).toBe(true);
 
         for (const submenu of [
             'lookGit.changes.submodule.commitMenu',
@@ -214,6 +218,18 @@ describe('native view title toolbar manifest', () => {
             expect.objectContaining({
                 command: 'lookGit.changes.commitComposer.commitSync',
                 when: "webviewId == 'lookGit.changesView' && webviewSection == 'changesCommitComposer'",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.changes.selection.stage',
+                when: "webviewId == 'lookGit.changesView' && webviewSection == 'changesSelection' && changesSelectionCanStage",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.changes.selection.stash',
+                when: "webviewId == 'lookGit.changesView' && webviewSection == 'changesSelection' && changesSelectionCanStash",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.changes.selection.discard',
+                when: "webviewId == 'lookGit.changesView' && webviewSection == 'changesSelection' && changesSelectionCanDiscard",
             }),
             expect.objectContaining({
                 command: 'lookGit.changes.submodule.pull',

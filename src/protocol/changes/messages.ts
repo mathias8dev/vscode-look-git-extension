@@ -248,6 +248,12 @@ export interface SubmoduleBulkMessage {
 
 export interface StashMessage         { readonly type: 'changes/stash'; readonly message?: string; }
 export interface StashStagedMessage   { readonly type: 'changes/stashStaged'; readonly message?: string; }
+export interface StashSelectedFilesMessage {
+    readonly type: 'changes/stashSelectedFiles';
+    readonly filePaths: readonly string[];
+    readonly includeUntracked: boolean;
+    readonly message?: string;
+}
 export interface StashPopMessage      { readonly type: 'changes/stashPop'; readonly index: number; }
 export interface StashApplyMessage    { readonly type: 'changes/stashApply'; readonly index: number; }
 export interface StashDropMessage     { readonly type: 'changes/stashDrop'; readonly index: number; }
@@ -326,7 +332,7 @@ export type ChangesWebviewToExtensionMessage =
     | AcceptOursMessage | AcceptTheirsMessage | AcceptOursFilesMessage | AcceptTheirsFilesMessage | AcceptAllTheirsMessage
     | CommitMessage | GenerateCommitMessageRequest | SubmoduleCommitMessage | GenerateSubmoduleCommitMessageRequest | OpenFileMessage | OpenSubmoduleMessage | OpenMergeEditorMessage | OpenDiffMessage | OpenSubmoduleDiffMessage
     | SubmoduleFileMessage | SubmoduleBulkMessage
-    | StashMessage | StashStagedMessage | StashPopMessage | StashApplyMessage | StashDropMessage
+    | StashMessage | StashStagedMessage | StashSelectedFilesMessage | StashPopMessage | StashApplyMessage | StashDropMessage
     | GetStashFilesRequest | OpenStashDiffMessage
     | SubmoduleStashMessage | SubmoduleStashPopMessage | SubmoduleStashApplyMessage | SubmoduleStashDropMessage
     | GetSubmoduleStashFilesRequest | OpenSubmoduleStashDiffMessage
