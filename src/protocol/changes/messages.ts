@@ -110,6 +110,7 @@ export type ChangesToolbarCommand =
     | 'clone'
     | 'checkout'
     | 'fetch'
+    | 'applyPatch'
     | 'sync'
     | 'pullRebase'
     | 'pullFrom'

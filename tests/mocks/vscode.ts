@@ -131,6 +131,7 @@ export const env = {
     clipboard: {
         value: '',
         writeText(value: string) { this.value = value; return Promise.resolve(); },
+        readText() { return Promise.resolve(this.value); },
         reset() { this.value = ''; },
     },
 };
@@ -139,12 +140,17 @@ export const window = {
     errorMessages: [] as string[],
     infoMessages: [] as string[],
     warningMessages: [] as Array<{ message: string; items: string[] }>,
+    outputChannels: [] as Array<{ name: string; lines: string[]; shown: boolean }>,
     inputBoxOptions: [] as unknown[],
     inputBoxValue: undefined as string | undefined,
     inputBoxValues: [] as string[],
     quickPickValue: undefined as string | undefined,
+    quickPickValues: [] as string[],
+    openDialogValue: undefined as TestUri[] | undefined,
+    openDialogOptions: [] as unknown[],
     saveDialogValue: undefined as TestUri | undefined,
     saveDialogOptions: [] as unknown[],
+    errorChoice: undefined as string | undefined,
     warningChoice: undefined as string | undefined,
     warningChoices: [] as string[],
     shownDocuments: [] as unknown[],
@@ -156,7 +162,7 @@ export const window = {
         texts: string[];
         visible: boolean;
     }>,
-    showErrorMessage(message: string) { this.errorMessages.push(message); return Promise.resolve(undefined); },
+    showErrorMessage(message: string, ..._items: string[]) { this.errorMessages.push(message); return Promise.resolve(this.errorChoice); },
     showInformationMessage(message: string) { this.infoMessages.push(message); return Promise.resolve(undefined); },
     showWarningMessage(message: string, _opts?: unknown, ...items: string[]) {
         this.warningMessages.push({ message, items });
@@ -166,9 +172,23 @@ export const window = {
         this.inputBoxOptions.push(options);
         return Promise.resolve(this.inputBoxValues.shift() ?? this.inputBoxValue);
     },
-    showQuickPick() { return Promise.resolve(this.quickPickValue); },
+    showQuickPick() { return Promise.resolve(this.quickPickValues.shift() ?? this.quickPickValue); },
+    showOpenDialog(options: unknown) { this.openDialogOptions.push(options); return Promise.resolve(this.openDialogValue); },
     showSaveDialog(options: unknown) { this.saveDialogOptions.push(options); return Promise.resolve(this.saveDialogValue); },
     showTextDocument(document: unknown) { this.shownDocuments.push(document); return Promise.resolve(undefined); },
+    createOutputChannel(name: string) {
+        const channel = {
+            name,
+            lines: [] as string[],
+            shown: false,
+            appendLine(line: string) { this.lines.push(line); },
+            clear() { this.lines = []; },
+            show() { this.shown = true; },
+            dispose() {},
+        };
+        this.outputChannels.push(channel);
+        return channel;
+    },
     createTerminal(options: { name: string; cwd?: string; hideFromUser?: boolean; isTransient?: boolean }) {
         const terminal = {
             name: options.name,
@@ -192,11 +212,16 @@ export const window = {
         this.inputBoxValue = undefined;
         this.inputBoxValues = [];
         this.quickPickValue = undefined;
+        this.quickPickValues = [];
+        this.openDialogValue = undefined;
+        this.openDialogOptions = [];
         this.saveDialogValue = undefined;
         this.saveDialogOptions = [];
+        this.errorChoice = undefined;
         this.warningChoice = undefined;
         this.warningChoices = [];
         this.shownDocuments = [];
+        this.outputChannels = [];
         this.terminals = [];
     },
 };
@@ -229,6 +254,14 @@ export function setInputBoxValues(values: readonly string[]): void {
 
 export function setQuickPickValue(value: string | undefined): void {
     window.quickPickValue = value;
+}
+
+export function setQuickPickValues(values: readonly string[]): void {
+    window.quickPickValues = [...values];
+}
+
+export function setErrorChoice(choice: string | undefined): void {
+    window.errorChoice = choice;
 }
 
 export function getWarningMessages(): readonly WarningMessage[] {
@@ -278,9 +311,18 @@ export const workspace = {
     contentProviders: new Map<string, TextDocumentContentProvider>(),
     configurationEmitter: new EventEmitter<MockConfigurationChangeEvent>(),
     fs: {
+        files: new Map<string, Uint8Array>(),
         writes: [] as Array<{ uri: unknown; content: Uint8Array }>,
+        readFile(uri: unknown) {
+            const key = typeof uri === 'object' && uri !== null && 'fsPath' in uri && typeof uri.fsPath === 'string'
+                ? uri.fsPath
+                : String(uri);
+            const content = this.files.get(key);
+            if (!content) { return Promise.reject(new Error(`File not found: ${key}`)); }
+            return Promise.resolve(content);
+        },
         writeFile(uri: unknown, content: Uint8Array) { this.writes.push({ uri, content }); return Promise.resolve(); },
-        reset() { this.writes = []; },
+        reset() { this.files = new Map(); this.writes = []; },
     },
     getConfiguration(section?: string) {
         return {

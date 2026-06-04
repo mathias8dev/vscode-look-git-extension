@@ -71,6 +71,7 @@ describe('native view title toolbar manifest', () => {
 
         expect(commands.has('lookGit.changes.refresh')).toBe(true);
         expect(commands.has('lookGit.changes.openGraph')).toBe(true);
+        expect(commands.has('lookGit.changes.applyPatch')).toBe(true);
         expect(commands.has('lookGit.changes.sortByExtension')).toBe(true);
         expect(commands.has('lookGit.changes.sortByExtensionChecked')).toBe(true);
         expect(commandById(pkg, 'lookGit.changes.viewAsList')).toEqual(expect.objectContaining({
@@ -111,6 +112,11 @@ describe('native view title toolbar manifest', () => {
                 command: 'lookGit.changes.openGraph',
                 when: 'view == lookGit.changesView',
                 group: 'navigation@2',
+            }),
+            expect.objectContaining({
+                command: 'lookGit.changes.applyPatch',
+                when: 'view == lookGit.changesView',
+                group: '3_changes_root@6',
             }),
             expect.objectContaining({
                 submenu: 'lookGit.changes.viewSort',

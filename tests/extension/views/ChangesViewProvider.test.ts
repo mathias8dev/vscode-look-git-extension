@@ -10,7 +10,7 @@ import type { ActiveRepositoryAccessor } from '../../../src/extension/repositori
 import { GenerateCommitMessageUseCase } from '../../../src/application/usecases/changes/generate-commit-message';
 import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
 import { createSubmoduleFixture } from '../../helpers/gitRepo';
-import { getCommandCalls, getInputBoxOptions, getWarningMessages, setInputBoxValue, setQuickPickValue, setWarningChoice, window as mockWindow, workspace as mockWorkspace } from '../../mocks/vscode';
+import { env, getCommandCalls, getInputBoxOptions, getWarningMessages, setErrorChoice, setInputBoxValue, setQuickPickValue, setQuickPickValues, setWarningChoice, window as mockWindow, workspace as mockWorkspace } from '../../mocks/vscode';
 
 function makeRepo(overrides: Partial<GitRepository> = {}): GitRepository {
     return {
@@ -328,6 +328,79 @@ describe('ChangesViewProvider', () => {
         expect(getCommandCalls()).toContainEqual({ command: 'setContext', args: ['lookGit.changesSortMode', 'extension'] });
         await vi.waitFor(() => expect(repo.stageAll).toHaveBeenCalledOnce());
         await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('native apply patch command applies clipboard patch to the working tree', async () => {
+        setQuickPickValues(['From Clipboard', 'Apply to Working Tree']);
+        env.clipboard.value = 'diff --git a/src/app.ts b/src/app.ts\n';
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const repo = makeRepo();
+        const provider = new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), onRepositoryUpdated);
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+
+        provider.resolveWebviewView(view);
+        await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
+        vi.mocked(repo.getStatus).mockClear();
+
+        await vscode.commands.executeCommand('lookGit.changes.applyPatch');
+
+        expect(repo.exec).toHaveBeenNthCalledWith(1, ['apply', '--check', '--3way', expect.any(String)]);
+        expect(repo.exec).toHaveBeenNthCalledWith(2, ['apply', '--3way', expect.any(String)]);
+        await vi.waitFor(() => expect(mockWindow.infoMessages).toContain('Patch applied.'));
+        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('native apply patch command reads a patch file and applies it staged', async () => {
+        setQuickPickValues(['From File...', 'Apply and Stage']);
+        const patchUri = vscode.Uri.file('/workspace/fix.patch');
+        mockWindow.openDialogValue = [patchUri];
+        mockWorkspace.fs.files.set('/workspace/fix.patch', new TextEncoder().encode('diff --git a/a.ts b/a.ts\n'));
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+
+        provider.resolveWebviewView(view);
+        await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
+
+        await vscode.commands.executeCommand('lookGit.changes.applyPatch');
+
+        expect(repo.exec).toHaveBeenNthCalledWith(1, ['apply', '--check', '--3way', '--index', expect.any(String)]);
+        expect(repo.exec).toHaveBeenNthCalledWith(2, ['apply', '--3way', '--index', expect.any(String)]);
+        await vi.waitFor(() => expect(mockWindow.infoMessages).toContain('Patch applied and staged.'));
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('native apply patch command stops on failed preflight and offers output details', async () => {
+        setQuickPickValues(['From Clipboard', 'Apply to Working Tree']);
+        setErrorChoice('Show Output');
+        env.clipboard.value = 'diff --git a/src/app.ts b/src/app.ts\n';
+        const failure = Object.assign(new Error('Command failed: git apply --check'), {
+            stderr: 'error: patch failed: src/app.ts:1',
+        });
+        const repo = makeRepo({
+            exec: vi.fn(async () => {
+                throw failure;
+            }),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+
+        provider.resolveWebviewView(view);
+        await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
+        vi.mocked(repo.getStatus).mockClear();
+
+        await vscode.commands.executeCommand('lookGit.changes.applyPatch');
+
+        expect(repo.exec).toHaveBeenCalledOnce();
+        expect(repo.getStatus).not.toHaveBeenCalled();
+        expect(mockWindow.errorMessages).toContain('Patch could not be applied.');
+        expect(mockWindow.outputChannels[0]?.shown).toBe(true);
+        expect(mockWindow.outputChannels[0]?.lines.join('\n')).toContain('error: patch failed: src/app.ts:1');
         disposables.forEach((disposable) => disposable.dispose());
     });
 

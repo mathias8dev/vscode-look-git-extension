@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import type { ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
 import { CommitMode, type ChangesContextTarget } from '../../protocol/changes/types';
@@ -7,15 +10,22 @@ import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '../messa
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
 import { ScopedGitRepository } from '../git/scoped-git-repository';
 import type { RemoteCommandBackend } from '../../application/ports/remote-command-backend';
+import type { GitRepository } from '../../application/ports/git-repository';
 import { createErrorPayload, isAbortError } from '../messaging/errorSerialization';
 import { getWebviewHtml } from './webviewHtml';
 import { GetChangesStatusUseCase } from '../../application/usecases/changes/get-changes-status';
 import { GenerateCommitMessageUseCase } from '../../application/usecases/changes/generate-commit-message';
 import { CreateChangesPatchResultKind, type CreateChangesPatchResult, type CreateChangesPatchUseCase } from '../../application/usecases/changes/create-changes-patch';
+import { ApplyPatchMode, ApplyPatchResultKind, ApplyPatchUseCase } from '../../application/usecases/changes/apply-patch';
 import { VscodeLanguageModelCommitMessageGenerator } from '../adapters/vscode/vscode-language-model-commit-message-generator';
 import { defaultCreateChangesPatch } from '../adapters/vscode/default-create-changes-patch';
 import { toSerializedRepoContext } from '../mapping/toProtocol';
 import { webviewFontSizeMessage } from './webview-font';
+
+const APPLY_PATCH_FROM_CLIPBOARD = 'From Clipboard';
+const APPLY_PATCH_FROM_FILE = 'From File...';
+const APPLY_PATCH_TO_WORKING_TREE = 'Apply to Working Tree';
+const APPLY_PATCH_AND_STAGE = 'Apply and Stage';
 
 enum ChangesCommandScope {
     ActiveRepository,
@@ -99,7 +109,7 @@ const SHARED_TOOLBAR_COMMANDS: readonly ChangesToolbarCommand[] = [
     'showGitOutput',
 ];
 
-const REPOSITORY_TOOLBAR_COMMANDS: readonly ChangesToolbarCommand[] = ['openGraph', ...SHARED_TOOLBAR_COMMANDS];
+const REPOSITORY_TOOLBAR_COMMANDS: readonly ChangesToolbarCommand[] = ['openGraph', 'applyPatch', ...SHARED_TOOLBAR_COMMANDS];
 const SUBMODULE_TOOLBAR_COMMANDS = SHARED_TOOLBAR_COMMANDS;
 
 const CHANGES_VIEW_COMMANDS: readonly { readonly ids: readonly string[]; readonly viewMode: ChangesViewPreference }[] = [
@@ -195,6 +205,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         private readonly getChangesStatus = new GetChangesStatusUseCase(),
         private readonly generateCommitMessage = new GenerateCommitMessageUseCase(new VscodeLanguageModelCommitMessageGenerator()),
         private readonly createChangesPatch: CreateChangesPatchUseCase = defaultCreateChangesPatch,
+        private readonly applyPatch = new ApplyPatchUseCase(),
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -403,11 +414,44 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         submodulePath: string | undefined,
     ): Promise<void> {
         if (scope === ChangesCommandScope.ActiveRepository) {
+            if (command === 'applyPatch') {
+                await this.applyPatchToRepository(this.repositories.requireRepository());
+                return;
+            }
             await this.router?.handleToolbarCommand(command);
             return;
         }
         if (!submodulePath) { return; }
         await this.router?.handle({ type: 'changes/submoduleToolbarCommand', submodulePath, command });
+    }
+
+    private async applyPatchToRepository(repo: GitRepository): Promise<void> {
+        const patchContent = await pickPatchContent();
+        if (patchContent === undefined) { return; }
+        if (!patchContent.trim()) {
+            await vscode.window.showWarningMessage('Patch content is empty.');
+            return;
+        }
+        const mode = await pickApplyPatchMode();
+        if (mode === undefined) { return; }
+        const tempFile = await writeTempPatchFile(patchContent);
+        try {
+            try {
+                await this.applyPatch.preflight(repo, tempFile, mode);
+            } catch (error) {
+                await showApplyPatchPreflightError(error);
+                return;
+            }
+            const result = await this.applyPatch.execute(repo, tempFile, mode);
+            await Promise.all([this.refresh(), this.onRepositoryUpdated()]);
+            if (result.kind === ApplyPatchResultKind.AppliedWithConflicts) {
+                await vscode.window.showWarningMessage('Patch applied with conflicts.');
+                return;
+            }
+            await vscode.window.showInformationMessage(mode === ApplyPatchMode.Index ? 'Patch applied and staged.' : 'Patch applied.');
+        } finally {
+            await fs.rm(path.dirname(tempFile), { recursive: true, force: true });
+        }
     }
 
     private async stageAll(scope: ChangesCommandScope, submodulePath: string | undefined): Promise<void> {
@@ -558,6 +602,79 @@ async function showChangesPatchNotification(result: CreateChangesPatchResult): P
             await vscode.window.showInformationMessage(`Patch saved to ${result.filePath ?? 'file'}.`);
             return;
     }
+}
+
+async function pickPatchContent(): Promise<string | undefined> {
+    const source = await vscode.window.showQuickPick([APPLY_PATCH_FROM_CLIPBOARD, APPLY_PATCH_FROM_FILE], {
+        placeHolder: 'Apply patch',
+    });
+    switch (source) {
+        case APPLY_PATCH_FROM_CLIPBOARD:
+            return vscode.env.clipboard.readText();
+        case APPLY_PATCH_FROM_FILE:
+            return readPatchFile();
+        case undefined:
+            return undefined;
+    }
+}
+
+async function readPatchFile(): Promise<string | undefined> {
+    const uris = await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: false,
+        filters: { Patches: ['patch', 'diff'] },
+        openLabel: 'Apply Patch',
+    });
+    const uri = uris?.[0];
+    if (!uri) { return undefined; }
+    return new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+}
+
+async function pickApplyPatchMode(): Promise<ApplyPatchMode | undefined> {
+    const mode = await vscode.window.showQuickPick([APPLY_PATCH_TO_WORKING_TREE, APPLY_PATCH_AND_STAGE], {
+        placeHolder: 'Apply patch mode',
+    });
+    switch (mode) {
+        case APPLY_PATCH_TO_WORKING_TREE:
+            return ApplyPatchMode.WorkingTree;
+        case APPLY_PATCH_AND_STAGE:
+            return ApplyPatchMode.Index;
+        case undefined:
+            return undefined;
+    }
+}
+
+async function writeTempPatchFile(content: string): Promise<string> {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'look-git-apply-patch-'));
+    const filePath = path.join(dir, 'patch.diff');
+    await fs.writeFile(filePath, content, 'utf8');
+    return filePath;
+}
+
+async function showApplyPatchPreflightError(error: unknown): Promise<void> {
+    const output = vscode.window.createOutputChannel('Look Git');
+    output.clear();
+    output.appendLine('Patch preflight failed.');
+    output.appendLine('');
+    output.appendLine(errorDetails(error));
+    const action = await vscode.window.showErrorMessage('Patch could not be applied.', 'Show Output');
+    if (action === 'Show Output') { output.show(); }
+}
+
+function errorDetails(error: unknown): string {
+    const parts = [
+        error instanceof Error ? error.message : String(error),
+        stringProperty(error, 'stdout'),
+        stringProperty(error, 'stderr'),
+    ].filter((part): part is string => Boolean(part));
+    return Array.from(new Set(parts)).join('\n\n');
+}
+
+function stringProperty(value: unknown, key: 'stdout' | 'stderr'): string | undefined {
+    if (typeof value !== 'object' || value === null) { return undefined; }
+    const property = Object.getOwnPropertyDescriptor(value, key)?.value;
+    return typeof property === 'string' ? property : undefined;
 }
 
 async function requireKnownSubmodulePath(repo: { getSubmodulePaths(): Promise<ReadonlySet<string>> }, submodulePath: string): Promise<string> {

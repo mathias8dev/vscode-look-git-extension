@@ -337,6 +337,12 @@
         "category": "Look Git"
       },
       {
+        "command": "lookGit.changes.applyPatch",
+        "title": "Apply Patch...",
+        "category": "Look Git",
+        "icon": "$(diff)"
+      },
+      {
         "command": "lookGit.changes.commit",
         "title": "Commit",
         "category": "Look Git"
@@ -1320,6 +1326,11 @@
           "command": "lookGit.changes.fetch",
           "when": "view == lookGit.changesView",
           "group": "3_changes_root@5"
+        },
+        {
+          "command": "lookGit.changes.applyPatch",
+          "when": "view == lookGit.changesView",
+          "group": "3_changes_root@6"
         },
         {
           "submenu": "lookGit.changes.commitMenu",
