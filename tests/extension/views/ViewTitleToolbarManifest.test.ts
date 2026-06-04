@@ -189,6 +189,9 @@ describe('native view title toolbar manifest', () => {
         expect(commands.has('lookGit.changes.submodule.pull')).toBe(true);
         expect(commands.has('lookGit.changes.submodule.stageAllChanges')).toBe(true);
         expect(commands.has('lookGit.changes.submodule.commitAll')).toBe(true);
+        expect(commands.has('lookGit.changes.commitComposer.amend')).toBe(true);
+        expect(commands.has('lookGit.changes.commitComposer.commitPush')).toBe(true);
+        expect(commands.has('lookGit.changes.commitComposer.commitSync')).toBe(true);
 
         for (const submenu of [
             'lookGit.changes.submodule.commitMenu',
@@ -204,6 +207,14 @@ describe('native view title toolbar manifest', () => {
         }
 
         expect(webviewContext).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                command: 'lookGit.changes.commitComposer.commitPush',
+                when: "webviewId == 'lookGit.changesView' && webviewSection == 'changesCommitComposer'",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.changes.commitComposer.commitSync',
+                when: "webviewId == 'lookGit.changesView' && webviewSection == 'changesCommitComposer'",
+            }),
             expect.objectContaining({
                 command: 'lookGit.changes.submodule.pull',
                 when: "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",

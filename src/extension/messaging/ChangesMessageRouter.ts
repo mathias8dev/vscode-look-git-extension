@@ -654,10 +654,11 @@ export class ChangesMessageRouter {
             case 'changes/getSubmoduleStatus': {
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.path);
                 const subPath = path.join(repo.cwd, submodulePath);
-                const [raw, stashRaw, conflictState] = await Promise.all([
+                const [raw, stashRaw, conflictState, currentBranch] = await Promise.all([
                     repo.execRaw(['--no-optional-locks', '-C', subPath, 'status', '--porcelain', '-z', '--untracked-files=all']),
                     repo.exec(['--no-optional-locks', '-C', subPath, 'stash', 'list', '--format=%gd %s']),
                     detectSubmoduleConflictState(repo, subPath),
+                    readCurrentBranch(repo, subPath),
                 ]);
                 const { staged, unstaged, conflicts } = parsePorcelainStatus(raw);
                 const toEntry = (e: typeof staged[number]): StatusEntry => ({
@@ -672,6 +673,7 @@ export class ChangesMessageRouter {
                     requestId: msg.requestId,
                     path: msg.path,
                     data: {
+                        ...(currentBranch ? { currentBranch } : {}),
                         staged: staged.map(toEntry),
                         unstaged: unstaged.map(toEntry),
                         conflicts: conflicts.map(toEntry),
@@ -1206,6 +1208,15 @@ async function detectSubmoduleConflictState(repo: GitRepository, submoduleCwd: s
     }
 }
 
+async function readCurrentBranch(repo: GitRepository, cwd: string): Promise<string | undefined> {
+    try {
+        const branch = await repo.exec(['--no-optional-locks', '-C', cwd, 'rev-parse', '--abbrev-ref', 'HEAD']);
+        return branch || undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 function toGitUri(uri: vscode.Uri, ref: string): vscode.Uri {
     const query = JSON.stringify({ path: uri.path, ref });
     return uri.with({ scheme: 'git', query });
@@ -1227,6 +1238,7 @@ export function buildStatusData(
     status: Awaited<ReturnType<GitRepository['getStatus']>>,
     stashes: Awaited<ReturnType<GitRepository['stashList']>>,
     submodules: readonly GitSubmodule[] = [],
+    currentBranch?: string,
 ): { type: 'changes/statusData'; data: StatusData } {
     const dirtySubmodulePaths = new Set(
         [...status.staged, ...status.unstaged, ...status.conflicts]
@@ -1253,6 +1265,7 @@ export function buildStatusData(
         type: 'changes/statusData',
         data: {
             repositoryState: RepositoryState.Available,
+            ...(currentBranch ? { currentBranch } : {}),
             staged: status.staged.map(toEntry),
             unstaged: status.unstaged.map(toEntry),
             conflicts: status.conflicts.map(toEntry),

@@ -458,6 +458,57 @@ describe('ChangesViewProvider', () => {
         disposables.forEach((disposable) => disposable.dispose());
     });
 
+    it('native commit composer commands submit the captured active repository message', async () => {
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/contextTarget',
+            target: { kind: 'commitComposer', message: '  fix(changes): amend from native menu  ' },
+        });
+        await vscode.commands.executeCommand('lookGit.changes.commitComposer.amend');
+
+        await vi.waitFor(() => expect(repo.commitAmend).toHaveBeenCalledWith('fix(changes): amend from native menu'));
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('native commit composer commands submit the captured submodule message', async () => {
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+        });
+        const remoteCommands = makeRemoteCommands();
+        const provider = new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), async () => {}, remoteCommands);
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/contextTarget',
+            target: {
+                kind: 'commitComposer',
+                submodulePath: 'modules/lib',
+                message: 'feat(lib): commit from native menu',
+            },
+        });
+        await vscode.commands.executeCommand('lookGit.changes.commitComposer.commitPush');
+
+        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith([
+            '-C',
+            path.resolve('/workspace/modules/lib'),
+            'commit',
+            '-m',
+            'feat(lib): commit from native menu',
+        ]));
+        expect(remoteCommands.runCli).toHaveBeenCalledWith(repo, expect.objectContaining({
+            cwd: path.resolve('/workspace/modules/lib'),
+            args: ['push'],
+        }));
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
     it('toolbar push publishes the current branch when it has no upstream', async () => {
         const repo = makeRepo({
             getCurrentBranch: vi.fn(async () => 'topic'),

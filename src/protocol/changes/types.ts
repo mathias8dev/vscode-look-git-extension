@@ -7,6 +7,7 @@ export interface SubmoduleEntry {
 }
 
 export interface SubmoduleStatusData {
+    readonly currentBranch?: string;
     readonly staged: readonly StatusEntry[];
     readonly unstaged: readonly StatusEntry[];
     readonly conflicts: readonly StatusEntry[];
@@ -19,7 +20,13 @@ export interface ChangesSubmoduleToolbarContextTarget {
     readonly submodulePath: string;
 }
 
-export type ChangesContextTarget = ChangesSubmoduleToolbarContextTarget;
+export interface ChangesCommitComposerContextTarget {
+    readonly kind: 'commitComposer';
+    readonly message: string;
+    readonly submodulePath?: string;
+}
+
+export type ChangesContextTarget = ChangesSubmoduleToolbarContextTarget | ChangesCommitComposerContextTarget;
 
 export interface StatusEntry {
     readonly indexStatus: string;
@@ -54,6 +61,7 @@ export enum RepositoryState {
 
 export interface StatusData {
     readonly repositoryState?: RepositoryState;
+    readonly currentBranch?: string;
     readonly staged: readonly StatusEntry[];
     readonly unstaged: readonly StatusEntry[];
     readonly conflicts: readonly StatusEntry[];

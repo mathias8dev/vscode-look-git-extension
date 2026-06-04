@@ -32,6 +32,7 @@ interface SubmoduleSectionProps {
     readonly onBulkAction: (submodulePath: string, action: ChangeBulkAction) => void;
     readonly onOperationAction: (submodulePath: string, conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly onCommit: (submodulePath: string, message: string, mode: CommitMode) => void;
+    readonly onCommitComposerContextTarget: (submodulePath: string, message: string) => void;
     readonly onGenerateCommitMessage: (submodulePath: string) => void;
     readonly onCreateStash: (submodulePath: string, message: string) => void;
     readonly onToggleStash: (submodulePath: string, index: number) => void;
@@ -59,6 +60,7 @@ export function SubmoduleSection({
     onBulkAction,
     onOperationAction,
     onCommit,
+    onCommitComposerContextTarget,
     onGenerateCommitMessage,
     onCreateStash,
     onToggleStash,
@@ -120,6 +122,7 @@ export function SubmoduleSection({
                                 generatedCommitMessage={generatedCommitMessageByPath[submodule.path]}
                                 commitMessageGenerationError={commitMessageGenerationErrorByPath[submodule.path]}
                                 onCommit={(message, mode) => onCommit(submodule.path, message, mode)}
+                                onCommitComposerContextTarget={(message) => onCommitComposerContextTarget(submodule.path, message)}
                                 onGenerateCommitMessage={() => onGenerateCommitMessage(submodule.path)}
                                 onCreateStash={(message) => onCreateStash(submodule.path, message)}
                                 onToggleStash={(index) => onToggleStash(submodule.path, index)}

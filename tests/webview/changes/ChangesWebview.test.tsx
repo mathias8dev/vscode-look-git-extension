@@ -61,6 +61,48 @@ describe('ChangesWebview', () => {
         await waitFor(() => expect(screen.getByLabelText('Commit message')).toHaveFocus());
     });
 
+    it('shows the current branch in the compact commit composer placeholder', async () => {
+        const api = createMockVsCodeApi();
+        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+        render(<ChangesWebview />);
+        sendStatusDataWithStagedChange();
+
+        const input = await screen.findByPlaceholderText('Message (Ctrl+Enter to commit on "experimental")');
+        expect(screen.getByRole('button', { name: 'Commit' })).toBeInTheDocument();
+        fireEvent.change(input, { target: { value: 'feat(changes): native commit menu' } });
+        const moreButton = screen.getByRole('button', { name: 'More commit options' });
+        expect(moreButton.getAttribute('data-vscode-context')).toContain('changesCommitComposer');
+        fireEvent.click(moreButton);
+
+        expect(api.messages).toContainEqual({
+            type: 'changes/contextTarget',
+            target: {
+                kind: 'commitComposer',
+                message: 'feat(changes): native commit menu',
+            },
+        });
+        expect(screen.queryByRole('menuitem', { name: /Commit & Push/ })).not.toBeInTheDocument();
+    });
+
+    it('commits the compact composer message with Ctrl+Enter', async () => {
+        const api = createMockVsCodeApi();
+        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+        render(<ChangesWebview />);
+        sendStatusDataWithStagedChange();
+
+        const input = await screen.findByLabelText('Commit message');
+        fireEvent.change(input, { target: { value: 'fix(changes): compact composer' } });
+        fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true });
+
+        expect(api.messages).toContainEqual({
+            type: 'changes/commit',
+            message: 'fix(changes): compact composer',
+            mode: 'commit',
+        });
+    });
+
     it('keeps expanded submodules open after parent status refreshes and reloads their details', async () => {
         const api = createMockVsCodeApi();
         const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
@@ -199,11 +241,13 @@ describe('ChangesWebview', () => {
                 unstaged: [],
                 conflicts: [],
                 conflictState: ConflictState.None,
+                currentBranch: 'feature/lib',
                 stashes: [],
             },
         });
 
         await waitFor(() => expect(screen.getByTitle('src/inner.ts')).toBeInTheDocument());
+        expect(screen.getByPlaceholderText('Message (Ctrl+Enter to commit on "feature/lib")')).toBeInTheDocument();
         const generateButton = enabledGenerateButton();
         fireEvent.click(generateButton);
 
@@ -218,6 +262,15 @@ describe('ChangesWebview', () => {
         });
 
         await waitFor(() => expect(screen.getByDisplayValue('fix(lib): update inner module')).toBeInTheDocument());
+        fireEvent.click(screen.getAllByRole('button', { name: 'More commit options' })[1]);
+        expect(api.messages).toContainEqual({
+            type: 'changes/contextTarget',
+            target: {
+                kind: 'commitComposer',
+                submodulePath: 'modules/lib',
+                message: 'fix(lib): update inner module',
+            },
+        });
     });
 
     it('posts targeted submodule toolbar messages and native context targets from submodule header actions', async () => {
@@ -263,6 +316,7 @@ function sendStatusData(): void {
         type: 'changes/statusData',
         data: {
             repositoryState: RepositoryState.Available,
+            currentBranch: 'main',
             staged: [],
             unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/app.ts' }],
             conflicts: [],
@@ -278,6 +332,7 @@ function sendStatusDataWithSubmodule(): void {
         type: 'changes/statusData',
         data: {
             repositoryState: RepositoryState.Available,
+            currentBranch: 'main',
             staged: [],
             unstaged: [],
             conflicts: [],
@@ -293,6 +348,7 @@ function sendStatusDataWithStagedChange(): void {
         type: 'changes/statusData',
         data: {
             repositoryState: RepositoryState.Available,
+            currentBranch: 'experimental',
             staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'src/app.ts' }],
             unstaged: [],
             conflicts: [],

@@ -17,6 +17,7 @@ describe('GetChangesStatusUseCase', () => {
             getStatus: vi.fn(async () => status),
             stashList: vi.fn(async () => [{ index: 0, message: 'WIP on main' }]),
             getSubmoduleStatus: vi.fn(async () => submodules),
+            getCurrentBranch: vi.fn(async () => 'experimental'),
         });
 
         const result = await new GetChangesStatusUseCase().execute(repo);
@@ -24,6 +25,7 @@ describe('GetChangesStatusUseCase', () => {
         expect(result.status).toBe(status);
         expect(result.stashes).toEqual([{ index: 0, message: 'WIP on main' }]);
         expect(result.submodules).toEqual([{ path: 'modules/auth-kit', status: '+' }]);
+        expect(result.currentBranch).toBe('experimental');
         expect(result.warnings).toEqual([]);
     });
 

@@ -104,6 +104,10 @@ describe('submoduleCommands', () => {
             type: 'changes/contextTarget',
             target: { kind: 'submoduleToolbar', submodulePath: 'modules/lib' },
         });
+        expect(messageForChangesContextTarget({ kind: 'commitComposer', submodulePath: 'modules/lib', message: 'feat: inner' })).toEqual({
+            type: 'changes/contextTarget',
+            target: { kind: 'commitComposer', submodulePath: 'modules/lib', message: 'feat: inner' },
+        });
         expect(messageForSubmoduleToolbarCommand('modules/lib', 'fetch')).toEqual({
             type: 'changes/submoduleToolbarCommand',
             submodulePath: 'modules/lib',

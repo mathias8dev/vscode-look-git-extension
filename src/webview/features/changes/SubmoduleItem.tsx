@@ -38,6 +38,7 @@ interface SubmoduleItemProps {
     readonly generatedCommitMessage: GeneratedCommitMessage | undefined;
     readonly commitMessageGenerationError: ProtocolError | undefined;
     readonly onCommit: (message: string, mode: CommitMode) => void;
+    readonly onCommitComposerContextTarget: (message: string) => void;
     readonly onGenerateCommitMessage: () => void;
     readonly onCreateStash: (message: string) => void;
     readonly onToggleStash: (index: number) => void;
@@ -70,6 +71,7 @@ export function SubmoduleItem({
     generatedCommitMessage,
     commitMessageGenerationError,
     onCommit,
+    onCommitComposerContextTarget,
     onGenerateCommitMessage,
     onCreateStash,
     onToggleStash,
@@ -170,8 +172,11 @@ export function SubmoduleItem({
                                     generatingMessage={commitMessageGenerating}
                                     generatedMessage={generatedCommitMessage}
                                     generationError={commitMessageGenerationError}
+                                    targetLabel={statusData.currentBranch ?? submodule.name}
+                                    submodulePath={submodule.path}
                                     onGenerateMessage={onGenerateCommitMessage}
                                     onCommit={onCommit}
+                                    onOpenNativeMenu={(message) => onCommitComposerContextTarget(message)}
                                 />
                             ) : null}
                             {sections.map((section) => (

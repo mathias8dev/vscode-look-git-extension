@@ -27,6 +27,7 @@ interface ChangesAppProps {
     readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onBulkAction: (action: ChangeBulkAction) => void;
     readonly onCommit: (message: string, mode: CommitMode) => void;
+    readonly onCommitComposerContextTarget: (message: string) => void;
     readonly onGenerateCommitMessage: () => void;
     readonly onOperationAction: (conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly onCreateStash: (kind: CreateStashKind, message: string) => void;
@@ -40,6 +41,7 @@ interface ChangesAppProps {
     readonly onSubmoduleBulkAction: (submodulePath: string, action: ChangeBulkAction) => void;
     readonly onSubmoduleOperationAction: (submodulePath: string, conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly onSubmoduleCommit: (submodulePath: string, message: string, mode: CommitMode) => void;
+    readonly onSubmoduleCommitComposerContextTarget: (submodulePath: string, message: string) => void;
     readonly onGenerateCommitMessageForSubmodule: (submodulePath: string) => void;
     readonly onSubmoduleCreateStash: (submodulePath: string, message: string) => void;
     readonly onToggleSubmoduleStash: (submodulePath: string, index: number) => void;
@@ -54,6 +56,7 @@ export function ChangesApp({
     onRowAction,
     onBulkAction,
     onCommit,
+    onCommitComposerContextTarget,
     onGenerateCommitMessage,
     onOperationAction,
     onCreateStash,
@@ -67,6 +70,7 @@ export function ChangesApp({
     onSubmoduleBulkAction,
     onSubmoduleOperationAction,
     onSubmoduleCommit,
+    onSubmoduleCommitComposerContextTarget,
     onGenerateCommitMessageForSubmodule,
     onSubmoduleCreateStash,
     onToggleSubmoduleStash,
@@ -99,8 +103,10 @@ export function ChangesApp({
                     generatingMessage={state.commitMessageGenerationRequestId !== undefined}
                     generatedMessage={state.generatedCommitMessage}
                     generationError={state.commitMessageGenerationError}
+                    targetLabel={state.status.currentBranch}
                     onGenerateMessage={onGenerateCommitMessage}
                     onCommit={onCommit}
+                    onOpenNativeMenu={(message) => onCommitComposerContextTarget(message)}
                 />
             ) : null}
 
@@ -146,6 +152,7 @@ export function ChangesApp({
                         onBulkAction={onSubmoduleBulkAction}
                         onOperationAction={onSubmoduleOperationAction}
                         onCommit={onSubmoduleCommit}
+                        onCommitComposerContextTarget={onSubmoduleCommitComposerContextTarget}
                         onGenerateCommitMessage={onGenerateCommitMessageForSubmodule}
                         onCreateStash={onSubmoduleCreateStash}
                         onToggleStash={onToggleSubmoduleStash}

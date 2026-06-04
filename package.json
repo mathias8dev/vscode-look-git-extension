@@ -377,6 +377,21 @@
         "category": "Look Git"
       },
       {
+        "command": "lookGit.changes.commitComposer.amend",
+        "title": "Amend Last Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.commitComposer.commitPush",
+        "title": "Commit & Push",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.commitComposer.commitSync",
+        "title": "Commit & Sync",
+        "category": "Look Git"
+      },
+      {
         "command": "lookGit.changes.stageAllChanges",
         "title": "Stage All Changes",
         "category": "Look Git"
@@ -1780,6 +1795,21 @@
         }
       ],
       "webview/context": [
+        {
+          "command": "lookGit.changes.commitComposer.amend",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesCommitComposer'",
+          "group": "1_changes_commit_composer@1"
+        },
+        {
+          "command": "lookGit.changes.commitComposer.commitPush",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesCommitComposer'",
+          "group": "1_changes_commit_composer@2"
+        },
+        {
+          "command": "lookGit.changes.commitComposer.commitSync",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesCommitComposer'",
+          "group": "1_changes_commit_composer@3"
+        },
         {
           "command": "lookGit.changes.submodule.pull",
           "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",

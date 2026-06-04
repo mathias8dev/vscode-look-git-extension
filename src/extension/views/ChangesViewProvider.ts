@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import type { ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
-import type { ChangesContextTarget } from '../../protocol/changes/types';
+import { CommitMode, type ChangesContextTarget } from '../../protocol/changes/types';
 import type { RepoContext } from '../../core/git/domain/RepoContext';
 import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '../messaging/ChangesMessageRouter';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
@@ -33,6 +33,11 @@ interface ChangesCommandDescriptor {
     readonly scope: ChangesCommandScope;
     readonly kind: ChangesCommandKind;
     readonly toolbarCommand: ChangesToolbarCommand | undefined;
+}
+
+interface ChangesCommitComposerCommandDescriptor {
+    readonly id: string;
+    readonly mode: CommitMode;
 }
 
 const SHARED_TOOLBAR_COMMANDS: readonly ChangesToolbarCommand[] = [
@@ -114,6 +119,12 @@ const CHANGES_NATIVE_COMMANDS: readonly ChangesCommandDescriptor[] = [
     descriptor(ChangesCommandScope.Submodule, 'stageAllChanges', ChangesCommandKind.StageAll),
     descriptor(ChangesCommandScope.Submodule, 'unstageAllChanges', ChangesCommandKind.UnstageAll),
     descriptor(ChangesCommandScope.Submodule, 'discardAllChanges', ChangesCommandKind.DiscardAll),
+];
+
+const CHANGES_COMMIT_COMPOSER_NATIVE_COMMANDS: readonly ChangesCommitComposerCommandDescriptor[] = [
+    { id: 'lookGit.changes.commitComposer.amend', mode: CommitMode.Amend },
+    { id: 'lookGit.changes.commitComposer.commitPush', mode: CommitMode.CommitPush },
+    { id: 'lookGit.changes.commitComposer.commitSync', mode: CommitMode.CommitSync },
 ];
 
 function toolbarDescriptor(scope: ChangesCommandScope, toolbarCommand: ChangesToolbarCommand): ChangesCommandDescriptor {
@@ -204,7 +215,30 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             ...CHANGES_VIEW_COMMANDS.flatMap(({ ids, viewMode }) => ids.map((id) => vscode.commands.registerCommand(id, () => this.applyViewMode(viewMode)))),
             ...CHANGES_SORT_COMMANDS.flatMap(({ ids, sortMode }) => ids.map((id) => vscode.commands.registerCommand(id, () => this.applySortMode(sortMode)))),
             ...CHANGES_NATIVE_COMMANDS.map((command) => vscode.commands.registerCommand(command.id, () => this.runNativeCommand(command))),
+            ...CHANGES_COMMIT_COMPOSER_NATIVE_COMMANDS.map((command) => vscode.commands.registerCommand(command.id, () => this.runCommitComposerNativeCommand(command))),
         ];
+    }
+
+    private async runCommitComposerNativeCommand(command: ChangesCommitComposerCommandDescriptor): Promise<void> {
+        const target = this.contextTarget;
+        if (!target || target.kind !== 'commitComposer') {
+            await vscode.window.showWarningMessage('No commit message is selected for this command.');
+            return;
+        }
+        if (target.submodulePath) {
+            await this.router?.handle({
+                type: 'changes/submoduleCommit',
+                submodulePath: target.submodulePath,
+                message: target.message,
+                mode: command.mode,
+            });
+            return;
+        }
+        await this.router?.handle({
+            type: 'changes/commit',
+            message: target.message,
+            mode: command.mode,
+        });
     }
 
     private async runNativeCommand(command: ChangesCommandDescriptor): Promise<void> {
@@ -349,10 +383,10 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     continue;
                 }
 
-                const { status, stashes, submodules } = await this.getChangesStatus.execute(repo, controller.signal);
+                const { status, stashes, submodules, currentBranch } = await this.getChangesStatus.execute(repo, controller.signal);
                 this.router?.setKnownSubmodulePaths(submodules.map((submodule) => submodule.path));
                 this.updateBadge(status.staged.length + status.unstaged.length + status.conflicts.length);
-                this.view.webview.postMessage(buildStatusData(status, stashes, submodules));
+                this.view.webview.postMessage(buildStatusData(status, stashes, submodules, currentBranch));
             } catch (error) {
                 if (isAbortError(error)) { continue; }
                 this.updateBadge(0);

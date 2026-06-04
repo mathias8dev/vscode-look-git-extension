@@ -39,8 +39,12 @@
 }
 
 .commit-message-input {
-    min-height: max(4.6em, 60px);
-    padding: var(--look-git-space-sm) var(--look-git-space-md);
+    min-height: calc(var(--look-git-control-min-height) - 2px);
+    padding-inline: var(--look-git-space-sm);
+}
+
+.commit-message-field {
+    min-height: var(--look-git-control-min-height);
 }
 
 .change-section-header,

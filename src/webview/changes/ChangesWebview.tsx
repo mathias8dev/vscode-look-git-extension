@@ -142,6 +142,10 @@ export function ChangesWebview() {
                 dispatch({ type: 'rememberCommitMessage', message });
                 postToExtension({ type: 'changes/commit', message, mode });
             }}
+            onCommitComposerContextTarget={(message: string) => postToExtension(messageForChangesContextTarget({
+                kind: 'commitComposer',
+                message,
+            }))}
             onGenerateCommitMessage={() => {
                 const message = messageForGenerateCommitMessage();
                 dispatch({ type: 'requestCommitMessageGeneration', requestId: message.requestId });
@@ -171,6 +175,11 @@ export function ChangesWebview() {
                 dispatch({ type: 'clearSubmoduleCommitMessageGeneration', path: submodulePath });
                 postToExtension(messageForSubmoduleCommit(submodulePath, message, mode));
             }}
+            onSubmoduleCommitComposerContextTarget={(submodulePath: string, message: string) => postToExtension(messageForChangesContextTarget({
+                kind: 'commitComposer',
+                submodulePath,
+                message,
+            }))}
             onGenerateCommitMessageForSubmodule={(submodulePath: string) => {
                 const message = messageForGenerateSubmoduleCommitMessage(submodulePath);
                 dispatch({
