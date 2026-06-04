@@ -42,6 +42,7 @@ const DETAILS_PANEL_STORAGE_KEY = 'lookGit.commitDetailsPanelWidth';
 
 export function GraphApp() {
     const [state, dispatch] = useReducer(reduceGraphState, undefined, createInitialGraphState);
+    const scopeAnimationKey = graphScopeAnimationKey(state.repositoryScope);
 
     useEffect(() => {
         const onMessage = (event: MessageEvent<GraphExtensionToWebviewMessage>) => {
@@ -159,6 +160,7 @@ export function GraphApp() {
             >
                 {(style) => (
                     <BranchPanel
+                        key={`branch-panel:${scopeAnimationKey}`}
                         style={style}
                         branches={state.branches}
                         worktrees={state.worktrees}
@@ -169,7 +171,7 @@ export function GraphApp() {
                         selectedWorktreePath={state.selectedWorktreePath}
                         onSelectBranch={(branch) => dispatch({ type: 'setBranchFilter', branch })}
                         onSelectMainRepository={() => dispatch({ type: 'selectMainRepository' })}
-                        onSelectSubmoduleBranch={(submodulePath, submoduleLabel, branch) => dispatch({ type: 'selectSubmoduleBranch', submodulePath, submoduleLabel, branch })}
+                        onSelectSubmodule={(submodulePath, submoduleLabel) => dispatch({ type: 'selectSubmodule', submodulePath, submoduleLabel })}
                         onBranchCommand={(command, branch, isRemote) => vscodeApi.postMessage(messageForBranchCommand(command, branch, isRemote, state.repositoryScope))}
                         onFetch={() => vscodeApi.postMessage(messageForGraphRepositoryCommand('fetch', state.repositoryScope))}
                         onSelectWorktree={handleSelectWorktree}
@@ -181,38 +183,40 @@ export function GraphApp() {
             </ResizablePanel>
 
             <div className="graph-center">
-                <GraphToolbar
-                    filters={state.filters}
-                    branches={state.branches}
-                    selectedBranchFilter={state.selectedBranchFilter}
-                    onFiltersChange={(filters) => dispatch({ type: 'setFilters', filters })}
-                    onBranchFilterChange={(branch) => dispatch({ type: 'setBranchFilter', branch })}
-                    onRefresh={() => dispatch({ type: 'refreshRequested' })}
-                />
+                <div key={`graph-scope:${scopeAnimationKey}`} className="graph-scope-content graph-scope-transition-surface">
+                    <GraphToolbar
+                        filters={state.filters}
+                        branches={state.branches}
+                        selectedBranchFilter={state.selectedBranchFilter}
+                        onFiltersChange={(filters) => dispatch({ type: 'setFilters', filters })}
+                        onBranchFilterChange={(branch) => dispatch({ type: 'setBranchFilter', branch })}
+                        onRefresh={() => dispatch({ type: 'refreshRequested' })}
+                    />
 
-                <ErrorNotice error={state.error} />
+                    <ErrorNotice error={state.error} />
 
-                {state.loading && state.rows.length === 0 ? (
-                    <div className="graph-loading">
-                        <i className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
-                        <span>Loading graph…</span>
-                    </div>
-                ) : null}
+                    {state.loading && state.rows.length === 0 ? (
+                        <div className="graph-loading">
+                            <i className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+                            <span>Loading graph…</span>
+                        </div>
+                    ) : null}
 
-                <GraphTable
-                    rows={state.rows}
-                    displayRows={state.displayRows}
-                    branches={state.branches}
-                    selectedHashes={state.selectedHashes}
-                    selectedWorktreePath={state.selectedWorktreePath}
-                    hasMore={state.hasMore}
-                    loadingMore={state.loadingMore}
-                    onSelectCommit={handleSelectCommit}
-                    onSelectWorktree={handleSelectWorktree}
-                    onContextTarget={handleContextTarget}
-                    onLoadMore={handleLoadMore}
-                    onBranchDoubleClick={(branch, isRemote) => vscodeApi.postMessage(messageForBranchCheckout(branch, isRemote, state.repositoryScope))}
-                />
+                    <GraphTable
+                        rows={state.rows}
+                        displayRows={state.displayRows}
+                        branches={state.branches}
+                        selectedHashes={state.selectedHashes}
+                        selectedWorktreePath={state.selectedWorktreePath}
+                        hasMore={state.hasMore}
+                        loadingMore={state.loadingMore}
+                        onSelectCommit={handleSelectCommit}
+                        onSelectWorktree={handleSelectWorktree}
+                        onContextTarget={handleContextTarget}
+                        onLoadMore={handleLoadMore}
+                        onBranchDoubleClick={(branch, isRemote) => vscodeApi.postMessage(messageForBranchCheckout(branch, isRemote, state.repositoryScope))}
+                    />
+                </div>
             </div>
 
             {state.selectedHash || state.selectedWorktreePath ? (
@@ -253,4 +257,9 @@ function selectedRangeHashes(hashes: readonly string[], anchorHash: string, focu
 function contextTargetForScope(target: GraphContextTarget, repositoryScope: GraphRepositoryScope): GraphContextTarget {
     if (repositoryScope.kind === 'main') { return target; }
     return { ...target, repositoryScope };
+}
+
+function graphScopeAnimationKey(repositoryScope: GraphRepositoryScope): string {
+    if (repositoryScope.kind === 'main') { return 'main'; }
+    return `submodule:${repositoryScope.path ?? repositoryScope.label ?? ''}`;
 }

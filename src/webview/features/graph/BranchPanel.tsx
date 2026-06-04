@@ -20,7 +20,7 @@ interface BranchPanelProps {
     readonly selectedWorktreePath: string | undefined;
     readonly onSelectBranch: (branch: string | undefined) => void;
     readonly onSelectMainRepository?: () => void;
-    readonly onSelectSubmoduleBranch?: (submodulePath: string, submoduleLabel: string, branch: string) => void;
+    readonly onSelectSubmodule?: (submodulePath: string, submoduleLabel: string) => void;
     readonly onBranchCommand: (command: BranchCommand, branch: string, isRemote: boolean) => void;
     readonly onFetch: () => void;
     readonly onSelectWorktree: (path: string) => void;
@@ -40,7 +40,7 @@ export function BranchPanel({
     selectedWorktreePath,
     onSelectBranch,
     onSelectMainRepository = () => undefined,
-    onSelectSubmoduleBranch = () => undefined,
+    onSelectSubmodule = () => undefined,
     onBranchCommand,
     onFetch,
     onSelectWorktree,
@@ -140,7 +140,7 @@ export function BranchPanel({
     };
 
     return (
-        <div className="graph-branch-panel" style={style}>
+        <div className="graph-branch-panel graph-scope-transition-surface" style={style}>
             <div className="graph-branch-panel-body">
                 <div className="graph-branch-action-bar" aria-label="Branch actions">
                     <IconButton
@@ -358,10 +358,7 @@ export function BranchPanel({
                                         key={submodule.path}
                                         submodule={submodule}
                                         selectedSubmodulePath={repositoryScope.kind === 'submodule' ? repositoryScope.path : undefined}
-                                        selectedBranch={selectedBranchFilter}
-                                        expansionRequest={treeExpansionRequest}
-                                        forceExpanded={normalizedSearch.length > 0}
-                                        onSelectBranch={onSelectSubmoduleBranch}
+                                        onSelectSubmodule={onSelectSubmodule}
                                     />
                                 ))}
                             </div>

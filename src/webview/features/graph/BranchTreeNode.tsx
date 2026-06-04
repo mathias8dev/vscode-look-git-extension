@@ -29,7 +29,7 @@ export function BranchTreeNode({ node, depth, selectedBranch, expansionRequest, 
                 <button
                     type="button"
                     className="branch-node branch-folder-header"
-                    style={{ paddingLeft: `${8 + depth * 12}px` }}
+                    style={{ paddingLeft: `${10 + depth * 14}px` }}
                     onClick={() => setLocalCollapse({ version: expansionRequest.version, collapsed: !collapsed })}
                 >
                     <i
@@ -63,7 +63,7 @@ export function BranchTreeNode({ node, depth, selectedBranch, expansionRequest, 
         <button
             type="button"
             className={`branch-node branch-leaf${isActive ? ' branch-node-active' : ''}`}
-            style={{ paddingLeft: `${8 + depth * 12}px` }}
+            style={{ paddingLeft: `${10 + depth * 14}px` }}
             title={node.fullName}
             data-vscode-context={branch ? JSON.stringify(contextForBranch(branch)) : undefined}
             onClick={() => onSelect(node.fullName)}

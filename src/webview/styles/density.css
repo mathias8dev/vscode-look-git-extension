@@ -107,7 +107,7 @@
 
 .graph-table-header,
 .graph-row {
-    padding-inline: var(--look-git-space-xs);
+    padding-inline: var(--look-git-space-sm);
 }
 
 .graph-message-cell,

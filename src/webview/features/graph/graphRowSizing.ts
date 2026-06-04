@@ -1,4 +1,4 @@
-export const ROW_HEIGHT = 24;
+export const ROW_HEIGHT = 28;
 
 export function rowHeightForFontSize(fontSize: number): number {
     return Number.isFinite(fontSize) && fontSize > 0

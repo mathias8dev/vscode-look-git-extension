@@ -9,7 +9,7 @@ describe('GraphTable', () => {
         });
         expect(getVisibleGraphRowRange(50, 0, 240)).toEqual({
             firstVisible: 0,
-            lastVisible: 18,
+            lastVisible: 17,
         });
     });
 

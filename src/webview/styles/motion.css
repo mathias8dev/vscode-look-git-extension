@@ -10,6 +10,18 @@
     }
 }
 
+@keyframes look-git-scope-enter {
+    from {
+        opacity: 0;
+        transform: translateX(0.35em);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
 @media (prefers-reduced-motion: no-preference) {
     .error-notice,
     .changes-banner,
@@ -24,6 +36,10 @@
     .graph-details-file-tree,
     .graph-details-meta {
         animation: look-git-fade-in var(--look-git-motion-medium) var(--look-git-motion-ease) both;
+    }
+
+    .graph-scope-transition-surface {
+        animation: look-git-scope-enter var(--look-git-motion-medium) var(--look-git-motion-ease) both;
     }
 
     .change-row,
@@ -110,6 +126,17 @@
             opacity var(--look-git-motion-fast) var(--look-git-motion-ease),
             transform var(--look-git-motion-fast) var(--look-git-motion-ease);
     }
+
+    .graph-submodule-row {
+        transition:
+            background-color var(--look-git-motion-fast) var(--look-git-motion-ease),
+            color var(--look-git-motion-fast) var(--look-git-motion-ease),
+            transform var(--look-git-motion-fast) var(--look-git-motion-ease);
+    }
+
+    .graph-submodule-row:active {
+        transform: translateX(0.15em);
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -122,4 +149,3 @@
         transition-duration: 0.01ms !important;
     }
 }
-

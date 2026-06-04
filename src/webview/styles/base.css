@@ -14,7 +14,7 @@
     --look-git-row-comfortable-min-height: max(2.8em, 36px);
     --look-git-icon-button-size: max(1.65em, 22px);
     --look-git-toolbar-button-size: max(1.85em, 24px);
-    --look-git-graph-row-height: max(1.75em, 24px);
+    --look-git-graph-row-height: max(2em, 28px);
     --look-git-motion-fast: 90ms;
     --look-git-motion-medium: 140ms;
     --look-git-motion-ease: cubic-bezier(0.2, 0, 0, 1);
@@ -92,4 +92,3 @@ h1 {
     color: var(--vscode-descriptionForeground, #9d9d9d);
     font-size: inherit;
 }
-

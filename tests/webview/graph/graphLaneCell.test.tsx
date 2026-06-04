@@ -24,8 +24,8 @@ describe('GraphLaneCell', () => {
         const markup = renderToStaticMarkup(<GraphLaneCell laneData={laneData} />);
 
         expect(markup).toContain('width="16"');
-        expect(markup).toContain('y1="12"');
-        expect(markup).toContain('y2="24"');
+        expect(markup).toContain('y1="14"');
+        expect(markup).toContain('y2="28"');
     });
 
     it('renders curved parent edges to the next row boundary', () => {
@@ -47,8 +47,8 @@ describe('GraphLaneCell', () => {
         const markup = renderToStaticMarkup(<GraphLaneCell laneData={laneData} />);
 
         expect(markup).toContain('width="32"');
-        expect(markup).toContain('M 8 12');
-        expect(markup).toContain('24 24');
+        expect(markup).toContain('M 8 14');
+        expect(markup).toContain('24 28');
     });
 
     it('scales vertical geometry with the measured graph row height', () => {

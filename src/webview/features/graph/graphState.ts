@@ -108,7 +108,7 @@ export type GraphAction =
     | { readonly type: 'setFilters'; readonly filters: Partial<GraphFilters> }
     | { readonly type: 'setBranchFilter'; readonly branch: string | undefined }
     | { readonly type: 'selectMainRepository' }
-    | { readonly type: 'selectSubmoduleBranch'; readonly submodulePath: string; readonly submoduleLabel: string; readonly branch: string }
+    | { readonly type: 'selectSubmodule'; readonly submodulePath: string; readonly submoduleLabel: string }
     | { readonly type: 'selectCommit'; readonly hash: string }
     | { readonly type: 'selectWorktree'; readonly path: string }
     | { readonly type: 'toggleCommitSelection'; readonly hash: string }
@@ -169,40 +169,35 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
                 loadedCount: 0,
             }, state.refreshVersion + 1);
         case 'selectMainRepository':
-            return startGraphReload({
+            return startGraphReload(clearGraphContent({
                 ...state,
                 repositoryScope: mainRepositoryScope(),
                 selectedBranchFilter: undefined,
                 filters: { ...state.filters, branches: undefined },
-                loadedCount: 0,
                 selectedHash: undefined,
                 selectedWorktreePath: undefined,
                 selectedHashes: [],
                 selectionAnchorHash: undefined,
                 commitDetails: undefined,
                 detailsLoading: false,
-            }, state.refreshVersion + 1);
-        case 'selectSubmoduleBranch':
-            return startGraphReload({
+            }), state.refreshVersion + 1);
+        case 'selectSubmodule':
+            return startGraphReload(clearGraphContent({
                 ...state,
                 repositoryScope: {
                     kind: 'submodule',
                     path: action.submodulePath,
                     label: action.submoduleLabel,
                 },
-                selectedBranchFilter: action.branch,
-                filters: {
-                    ...state.filters,
-                    branches: [action.branch],
-                },
-                loadedCount: 0,
+                selectedBranchFilter: undefined,
+                filters: { ...state.filters, branches: undefined },
                 selectedHash: undefined,
                 selectedWorktreePath: undefined,
                 selectedHashes: [],
                 selectionAnchorHash: undefined,
                 commitDetails: undefined,
                 detailsLoading: false,
-            }, state.refreshVersion + 1);
+            }), state.refreshVersion + 1);
         case 'selectCommit':
             return selectCommit(state, action.hash, [action.hash], action.hash);
         case 'selectWorktree':
@@ -394,6 +389,21 @@ function startGraphReload(state: GraphState, refreshVersion: number): GraphState
         loadingMore: false,
         activeGraphRequestId: graphRequestId(refreshVersion, 'replace'),
         refreshVersion,
+    };
+}
+
+function clearGraphContent(state: GraphState): GraphState {
+    return {
+        ...state,
+        rows: [],
+        displayRows: [],
+        branches: [],
+        tags: [],
+        worktrees: [],
+        submodules: [],
+        currentBranch: '',
+        hasMore: false,
+        loadedCount: 0,
     };
 }
 

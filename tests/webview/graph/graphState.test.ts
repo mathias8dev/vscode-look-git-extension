@@ -399,14 +399,31 @@ describe('graphState', () => {
         expect(next.submodules[0]?.branches).toEqual([branch('feature/oauth')]);
     });
 
-    it('switches graph requests to a selected submodule branch', () => {
+    it('switches graph requests to an unfiltered submodule scope', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: {
+                    ...graphData([commit('parent-hash')], 1, false),
+                    branches: [branch('main')],
+                    submodules: [{
+                        path: 'modules/auth-kit',
+                        name: 'auth-kit',
+                        status: SubmoduleStatus.Clean,
+                        branches: [branch('feature/oauth')],
+                        worktrees: [],
+                    }],
+                },
+            },
+        });
         const selected = reduceGraphState(
-            reduceGraphState(createInitialGraphState(), { type: 'selectCommit', hash: 'parent-hash' }),
+            reduceGraphState(loaded, { type: 'selectCommit', hash: 'parent-hash' }),
             {
-                type: 'selectSubmoduleBranch',
+                type: 'selectSubmodule',
                 submodulePath: 'modules/auth-kit',
                 submoduleLabel: 'auth-kit',
-                branch: 'feature/oauth',
             },
         );
 
@@ -415,19 +432,21 @@ describe('graphState', () => {
             path: 'modules/auth-kit',
             label: 'auth-kit',
         });
-        expect(selected.selectedBranchFilter).toBe('feature/oauth');
-        expect(selected.filters.branches).toEqual(['feature/oauth']);
+        expect(selected.selectedBranchFilter).toBeUndefined();
+        expect(selected.filters.branches).toBeUndefined();
         expect(selected.loading).toBe(true);
         expect(selected.selectedHash).toBeUndefined();
         expect(selected.commitDetails).toBeUndefined();
+        expect(selected.rows).toEqual([]);
+        expect(selected.branches).toEqual([]);
+        expect(selected.submodules).toEqual([]);
     });
 
     it('returns from a submodule graph scope to the main repository', () => {
         const scoped = reduceGraphState(createInitialGraphState(), {
-            type: 'selectSubmoduleBranch',
+            type: 'selectSubmodule',
             submodulePath: 'modules/auth-kit',
             submoduleLabel: 'auth-kit',
-            branch: 'feature/oauth',
         });
         const main = reduceGraphState(scoped, { type: 'selectMainRepository' });
 
@@ -439,10 +458,9 @@ describe('graphState', () => {
 
     it('ignores stale graph responses for another repository scope', () => {
         const scoped = reduceGraphState(createInitialGraphState(), {
-            type: 'selectSubmoduleBranch',
+            type: 'selectSubmodule',
             submodulePath: 'modules/auth-kit',
             submoduleLabel: 'auth-kit',
-            branch: 'feature/oauth',
         });
         const loaded = reduceGraphState(scoped, {
             type: 'message',
@@ -480,10 +498,9 @@ describe('graphState', () => {
 
     it('does not replace submodule branch data with main repository data pushes', () => {
         const scoped = reduceGraphState(createInitialGraphState(), {
-            type: 'selectSubmoduleBranch',
+            type: 'selectSubmodule',
             submodulePath: 'modules/auth-kit',
             submoduleLabel: 'auth-kit',
-            branch: 'feature/oauth',
         });
         const loaded = reduceGraphState(scoped, {
             type: 'message',

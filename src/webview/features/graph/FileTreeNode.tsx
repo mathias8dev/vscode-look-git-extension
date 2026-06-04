@@ -16,7 +16,7 @@ interface FileTreeNodeViewProps {
 
 export function FileTreeNodeView({ node, depth, onDiff, diffable = true, selectedFileId, onSelectFile }: FileTreeNodeViewProps) {
     const [collapsed, setCollapsed] = useState(false);
-    const indent = depth * 12 + 8;
+    const indent = depth * 14 + 10;
 
     if (node.isFolder) {
         return (

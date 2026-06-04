@@ -417,10 +417,9 @@ async function runSubmoduleBranchRefreshStoryE2E(): Promise<void> {
         assert.ok(hydratedSubmodule?.branches.some((branch) => branch.name === 'feature/oauth'), 'Expected hydrated submodule branch list to include feature/oauth.');
 
         state = reduceGraphState(state, {
-            type: 'selectSubmoduleBranch',
+            type: 'selectSubmodule',
             submodulePath: 'modules/auth-kit',
             submoduleLabel: 'auth-kit',
-            branch: 'feature/oauth',
         });
         const scopedResponse = await requestGraphDataForState(router, messages, state, 'submodule-branch-refresh');
         state = reduceGraphState(state, { type: 'message', message: scopedResponse });

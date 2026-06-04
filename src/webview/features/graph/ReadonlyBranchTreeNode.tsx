@@ -20,7 +20,7 @@ export function ReadonlyBranchTreeNode({ node, depth, expansionRequest }: Readon
                 <button
                     type="button"
                     className="branch-node branch-folder-header"
-                    style={{ paddingLeft: `${8 + depth * 12}px` }}
+                    style={{ paddingLeft: `${10 + depth * 14}px` }}
                     onClick={() => setLocalCollapse({ version: expansionRequest.version, collapsed: !collapsed })}
                 >
                     <i
@@ -48,7 +48,7 @@ export function ReadonlyBranchTreeNode({ node, depth, expansionRequest }: Readon
     return (
         <div
             className="branch-node branch-leaf graph-readonly-branch-row"
-            style={{ paddingLeft: `${8 + depth * 12}px` }}
+            style={{ paddingLeft: `${10 + depth * 14}px` }}
             title={node.fullName}
         >
             <i

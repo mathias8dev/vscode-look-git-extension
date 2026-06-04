@@ -228,8 +228,8 @@ describe('BranchPanel', () => {
         expect(screen.getByLabelText('Expand Branches')).not.toBeDisabled();
     });
 
-    it('renders expandable submodules with their own branches and worktrees', () => {
-        const onSelectSubmoduleBranch = vi.fn<(submodulePath: string, submoduleLabel: string, branch: string) => void>();
+    it('navigates from submodule rows without rendering nested submodule branches', () => {
+        const onSelectSubmodule = vi.fn<(submodulePath: string, submoduleLabel: string) => void>();
 
         render(
             <BranchPanel
@@ -240,7 +240,7 @@ describe('BranchPanel', () => {
                 selectedBranchFilter={undefined}
                 selectedWorktreePath={undefined}
                 onSelectBranch={() => undefined}
-                onSelectSubmoduleBranch={onSelectSubmoduleBranch}
+                onSelectSubmodule={onSelectSubmodule}
                 onBranchCommand={() => undefined}
                 onFetch={() => undefined}
                 onSelectWorktree={() => undefined}
@@ -257,16 +257,14 @@ describe('BranchPanel', () => {
         expect(screen.getByTitle('1 worktrees')).toHaveTextContent('1w');
 
         fireEvent.click(screen.getByTitle('modules/auth-kit'));
+        expect(onSelectSubmodule).toHaveBeenCalledWith('modules/auth-kit', 'auth-kit');
 
-        expect(screen.getAllByText('Local')).toHaveLength(2);
-        expect(screen.getByTitle('feature/oauth')).toBeInTheDocument();
-        expect(screen.getByText('Remote')).toBeInTheDocument();
-        expect(screen.getByTitle('origin/release/1.4')).toBeInTheDocument();
-        expect(screen.getAllByText('Worktrees')).toHaveLength(2);
-        expect(screen.getByText('oauth-sandbox')).toBeInTheDocument();
-
-        fireEvent.click(screen.getByTitle('feature/oauth'));
-        expect(onSelectSubmoduleBranch).toHaveBeenCalledWith('modules/auth-kit', 'auth-kit', 'feature/oauth');
+        expect(screen.getAllByText('Local')).toHaveLength(1);
+        expect(screen.queryByTitle('feature/oauth')).not.toBeInTheDocument();
+        expect(screen.queryByText('Remote')).not.toBeInTheDocument();
+        expect(screen.queryByTitle('origin/release/1.4')).not.toBeInTheDocument();
+        expect(screen.getAllByText('Worktrees')).toHaveLength(1);
+        expect(screen.queryByText('oauth-sandbox')).not.toBeInTheDocument();
     });
 
     it('renders a main repository action while scoped to a submodule', () => {

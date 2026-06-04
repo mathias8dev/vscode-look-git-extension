@@ -110,7 +110,7 @@ describe('GraphApp', () => {
         expect(localStorage.getItem('lookGit.commitDetailsPanelWidth')).toBe('336');
     });
 
-    it('requests graph data in a submodule scope when a submodule branch is clicked', async () => {
+    it('requests unfiltered graph data in a submodule scope when a submodule row is clicked', async () => {
         const api = createMockVsCodeApi();
         const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
 
@@ -144,15 +144,13 @@ describe('GraphApp', () => {
         }));
 
         fireEvent.click(await screen.findByTitle('modules/auth-kit'));
-        fireEvent.click(await screen.findByTitle('feature/oauth'));
 
-        await waitFor(() => expect(api.messages).toEqual(expect.arrayContaining([
-            expect.objectContaining({
-                type: 'graph/dataRequest',
-                filters: expect.objectContaining({ branches: ['feature/oauth'] }),
-                repositoryScope: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
-            }),
-        ])));
+        await waitFor(() => expect(graphDataRequests(api.messages).some((request) => (
+            isSubmoduleScope(request.repositoryScope, 'modules/auth-kit')
+        ))).toBe(true));
+        const scopedRequest = latestGraphDataRequest(api.messages);
+        expect(scopedRequest.repositoryScope).toEqual({ kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' });
+        expect(scopedRequest.filters?.branches).toBeUndefined();
     });
 
     it('keeps scoped submodule branches visible when a main repository data push arrives', async () => {
@@ -169,7 +167,6 @@ describe('GraphApp', () => {
             data: mainGraphDataWithAuthKitSubmodule(),
         }));
         fireEvent.click(await screen.findByTitle('modules/auth-kit'));
-        fireEvent.click(await screen.findByTitle('feature/oauth'));
 
         await waitFor(() => expect(graphDataRequests(api.messages).some((request) => (
             isSubmoduleScope(request.repositoryScope, 'modules/auth-kit')
@@ -248,6 +245,9 @@ function isGraphDataRequest(value: unknown): value is GraphDataRequestLike {
 interface GraphDataRequestLike {
     readonly type: 'graph/dataRequest';
     readonly requestId: string;
+    readonly filters?: {
+        readonly branches?: readonly string[];
+    };
     readonly repositoryScope?: unknown;
 }
 
