@@ -2,6 +2,22 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [0.6.0] - 2026-06-04
+
+### Added
+
+#### Changes Panel
+- Add VS Code language model commit message generation from staged changes
+- Add file sorting modes for path, name, status, and extension in the native Changes view menu
+- Add native submodule toolbar context actions for pull, push, fetch, commit, changes, branch, remote, stash, and tags workflows
+- Add a compact commit composer that shows the target branch and delegates advanced commit options to a native VS Code menu
+
+### Fixed
+
+#### Changes Panel
+- Publish branches without an upstream through VS Code Git instead of failing with a plain push
+- Keep advanced commit composer actions working for both the main repository and submodule scopes
+
 ## [0.5.0] - 2026-06-04
 
 ### Added
