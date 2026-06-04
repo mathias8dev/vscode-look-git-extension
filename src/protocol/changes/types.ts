@@ -14,6 +14,13 @@ export interface SubmoduleStatusData {
     readonly stashes: readonly StashEntry[];
 }
 
+export interface ChangesSubmoduleToolbarContextTarget {
+    readonly kind: 'submoduleToolbar';
+    readonly submodulePath: string;
+}
+
+export type ChangesContextTarget = ChangesSubmoduleToolbarContextTarget;
+
 export interface StatusEntry {
     readonly indexStatus: string;
     readonly workTreeStatus: string;

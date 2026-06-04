@@ -39,6 +39,7 @@ describe('ChangesApp', () => {
                 onStashAction={() => undefined}
                 onStashFileDiff={() => undefined}
                 onSubmoduleAction={() => undefined}
+                onSubmoduleContextTarget={() => undefined}
                 onToggleSubmodule={() => undefined}
                 onSubmoduleRowAction={() => undefined}
                 onSubmoduleBulkAction={() => undefined}
@@ -90,6 +91,7 @@ describe('ChangesApp', () => {
                 onStashAction={() => undefined}
                 onStashFileDiff={() => undefined}
                 onSubmoduleAction={() => undefined}
+                onSubmoduleContextTarget={() => undefined}
                 onToggleSubmodule={() => undefined}
                 onSubmoduleRowAction={() => undefined}
                 onSubmoduleBulkAction={() => undefined}

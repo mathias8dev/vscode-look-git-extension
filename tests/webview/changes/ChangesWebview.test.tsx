@@ -219,6 +219,43 @@ describe('ChangesWebview', () => {
 
         await waitFor(() => expect(screen.getByDisplayValue('fix(lib): update inner module')).toBeInTheDocument());
     });
+
+    it('posts targeted submodule toolbar messages and native context targets from submodule header actions', async () => {
+        const api = createMockVsCodeApi();
+        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+        render(<ChangesWebview />);
+        sendStatusDataWithSubmodule();
+
+        await waitFor(() => expect(screen.getByText('lib')).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh submodule changes' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Pull submodule' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Push submodule' }));
+        fireEvent.click(screen.getByRole('button', { name: 'More submodule actions' }));
+
+        expect(api.messages).toContainEqual({
+            type: 'changes/getSubmoduleStatus',
+            requestId: 'changes:submodule-status:modules/lib',
+            path: 'modules/lib',
+        });
+        expect(api.messages).toContainEqual({
+            type: 'changes/submoduleToolbarCommand',
+            submodulePath: 'modules/lib',
+            command: 'pull',
+        });
+        expect(api.messages).toContainEqual({
+            type: 'changes/submoduleToolbarCommand',
+            submodulePath: 'modules/lib',
+            command: 'push',
+        });
+        expect(api.messages).toContainEqual({
+            type: 'changes/contextTarget',
+            target: {
+                kind: 'submoduleToolbar',
+                submodulePath: 'modules/lib',
+            },
+        });
+    });
 });
 
 function sendStatusData(): void {

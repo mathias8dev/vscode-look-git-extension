@@ -22,7 +22,10 @@ interface SubmoduleSectionProps {
     readonly commitMessageGenerationRequestIdByPath: Readonly<Record<string, string>>;
     readonly generatedCommitMessageByPath: Readonly<Record<string, GeneratedCommitMessage>>;
     readonly commitMessageGenerationErrorByPath: Readonly<Record<string, ProtocolError>>;
+    readonly loadingStatusPaths: readonly string[];
+    readonly commitFocusRequestByPath: Readonly<Record<string, number>>;
     readonly onToggle: (path: string) => void;
+    readonly onContextTarget: (path: string) => void;
     readonly onAction: (path: string, action: SubmoduleAction) => void;
     readonly onUpdateAll: () => void;
     readonly onRowAction: (submodulePath: string, item: ChangeListItem, action: ChangeRowAction) => void;
@@ -46,7 +49,10 @@ export function SubmoduleSection({
     commitMessageGenerationRequestIdByPath,
     generatedCommitMessageByPath,
     commitMessageGenerationErrorByPath,
+    loadingStatusPaths,
+    commitFocusRequestByPath,
     onToggle,
+    onContextTarget,
     onAction,
     onUpdateAll,
     onRowAction,
@@ -93,7 +99,10 @@ export function SubmoduleSection({
                                 submodule={submodule}
                                 expanded={expandedPaths.includes(submodule.path)}
                                 statusData={statusByPath[submodule.path]}
+                                loadingStatus={loadingStatusPaths.includes(submodule.path)}
+                                focusRequest={commitFocusRequestByPath[submodule.path] ?? 0}
                                 onToggle={() => onToggle(submodule.path)}
+                                onOpenContextMenu={() => onContextTarget(submodule.path)}
                                 onAction={(action) => onAction(submodule.path, action)}
                                 expandedStashIndexes={stashEntries
                                     .map((stash) => stash.index)

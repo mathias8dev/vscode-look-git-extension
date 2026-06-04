@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import type { ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
+import type { ChangesContextTarget } from '../../protocol/changes/types';
 import type { RepoContext } from '../../core/git/domain/RepoContext';
 import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '../messaging/ChangesMessageRouter';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
@@ -13,49 +14,72 @@ import { VscodeLanguageModelCommitMessageGenerator } from '../adapters/vscode/vs
 import { toSerializedRepoContext } from '../mapping/toProtocol';
 import { webviewFontSizeMessage } from './webview-font';
 
-const CHANGES_TOOLBAR_COMMANDS: readonly { readonly id: string; readonly command: ChangesToolbarCommand }[] = [
-    { id: 'lookGit.changes.openGraph', command: 'openGraph' },
-    { id: 'lookGit.changes.pull', command: 'pull' },
-    { id: 'lookGit.changes.push', command: 'push' },
-    { id: 'lookGit.changes.clone', command: 'clone' },
-    { id: 'lookGit.changes.checkout', command: 'checkout' },
-    { id: 'lookGit.changes.fetch', command: 'fetch' },
-    { id: 'lookGit.changes.sync', command: 'sync' },
-    { id: 'lookGit.changes.pullRebase', command: 'pullRebase' },
-    { id: 'lookGit.changes.pullFrom', command: 'pullFrom' },
-    { id: 'lookGit.changes.pushForce', command: 'pushForce' },
-    { id: 'lookGit.changes.pushTo', command: 'pushTo' },
-    { id: 'lookGit.changes.pushToForce', command: 'pushToForce' },
-    { id: 'lookGit.changes.fetchPrune', command: 'fetchPrune' },
-    { id: 'lookGit.changes.fetchAll', command: 'fetchAll' },
-    { id: 'lookGit.changes.undoLastCommit', command: 'undoLastCommit' },
-    { id: 'lookGit.changes.abortRebase', command: 'abortRebase' },
-    { id: 'lookGit.changes.mergeBranch', command: 'mergeBranch' },
-    { id: 'lookGit.changes.rebaseBranch', command: 'rebaseBranch' },
-    { id: 'lookGit.changes.createBranch', command: 'createBranch' },
-    { id: 'lookGit.changes.createBranchFrom', command: 'createBranchFrom' },
-    { id: 'lookGit.changes.renameBranch', command: 'renameBranch' },
-    { id: 'lookGit.changes.deleteBranch', command: 'deleteBranch' },
-    { id: 'lookGit.changes.deleteRemoteBranch', command: 'deleteRemoteBranch' },
-    { id: 'lookGit.changes.publishBranch', command: 'publishBranch' },
-    { id: 'lookGit.changes.addRemote', command: 'addRemote' },
-    { id: 'lookGit.changes.removeRemote', command: 'removeRemote' },
-    { id: 'lookGit.changes.stash', command: 'stash' },
-    { id: 'lookGit.changes.stashIncludeUntracked', command: 'stashIncludeUntracked' },
-    { id: 'lookGit.changes.stashStaged', command: 'stashStaged' },
-    { id: 'lookGit.changes.applyLatestStash', command: 'applyLatestStash' },
-    { id: 'lookGit.changes.applyStash', command: 'applyStash' },
-    { id: 'lookGit.changes.popLatestStash', command: 'popLatestStash' },
-    { id: 'lookGit.changes.popStash', command: 'popStash' },
-    { id: 'lookGit.changes.dropStash', command: 'dropStash' },
-    { id: 'lookGit.changes.dropAllStashes', command: 'dropAllStashes' },
-    { id: 'lookGit.changes.viewStash', command: 'viewStash' },
-    { id: 'lookGit.changes.createTag', command: 'createTag' },
-    { id: 'lookGit.changes.deleteTag', command: 'deleteTag' },
-    { id: 'lookGit.changes.deleteRemoteTag', command: 'deleteRemoteTag' },
-    { id: 'lookGit.changes.pushTags', command: 'pushTags' },
-    { id: 'lookGit.changes.showGitOutput', command: 'showGitOutput' },
+enum ChangesCommandScope {
+    ActiveRepository,
+    Submodule,
+}
+
+enum ChangesCommandKind {
+    Toolbar,
+    StageAll,
+    UnstageAll,
+    DiscardAll,
+    FocusCommit,
+    StageAllThenFocusCommit,
+}
+
+interface ChangesCommandDescriptor {
+    readonly id: string;
+    readonly scope: ChangesCommandScope;
+    readonly kind: ChangesCommandKind;
+    readonly toolbarCommand: ChangesToolbarCommand | undefined;
+}
+
+const SHARED_TOOLBAR_COMMANDS: readonly ChangesToolbarCommand[] = [
+    'pull',
+    'push',
+    'clone',
+    'checkout',
+    'fetch',
+    'sync',
+    'pullRebase',
+    'pullFrom',
+    'pushForce',
+    'pushTo',
+    'pushToForce',
+    'fetchPrune',
+    'fetchAll',
+    'undoLastCommit',
+    'abortRebase',
+    'mergeBranch',
+    'rebaseBranch',
+    'createBranch',
+    'createBranchFrom',
+    'renameBranch',
+    'deleteBranch',
+    'deleteRemoteBranch',
+    'publishBranch',
+    'addRemote',
+    'removeRemote',
+    'stash',
+    'stashIncludeUntracked',
+    'stashStaged',
+    'applyLatestStash',
+    'applyStash',
+    'popLatestStash',
+    'popStash',
+    'dropStash',
+    'dropAllStashes',
+    'viewStash',
+    'createTag',
+    'deleteTag',
+    'deleteRemoteTag',
+    'pushTags',
+    'showGitOutput',
 ];
+
+const REPOSITORY_TOOLBAR_COMMANDS: readonly ChangesToolbarCommand[] = ['openGraph', ...SHARED_TOOLBAR_COMMANDS];
+const SUBMODULE_TOOLBAR_COMMANDS = SHARED_TOOLBAR_COMMANDS;
 
 const CHANGES_VIEW_COMMANDS: readonly { readonly ids: readonly string[]; readonly viewMode: ChangesViewPreference }[] = [
     { ids: ['lookGit.changes.viewAsList', 'lookGit.changes.viewAsListChecked'], viewMode: 'list' },
@@ -69,11 +93,51 @@ const CHANGES_SORT_COMMANDS: readonly { readonly ids: readonly string[]; readonl
     { ids: ['lookGit.changes.sortByExtension', 'lookGit.changes.sortByExtensionChecked'], sortMode: 'extension' },
 ];
 
-const CHANGES_BULK_COMMANDS: readonly { readonly id: string; readonly message: ChangesWebviewToExtensionMessage }[] = [
-    { id: 'lookGit.changes.stageAllChanges', message: { type: 'changes/stageAll' } },
-    { id: 'lookGit.changes.unstageAllChanges', message: { type: 'changes/unstageAll' } },
-    { id: 'lookGit.changes.discardAllChanges', message: { type: 'changes/discardAll' } },
+const CHANGES_NATIVE_COMMANDS: readonly ChangesCommandDescriptor[] = [
+    ...REPOSITORY_TOOLBAR_COMMANDS.map((command) => toolbarDescriptor(ChangesCommandScope.ActiveRepository, command)),
+    descriptor(ChangesCommandScope.ActiveRepository, 'stageAllChanges', ChangesCommandKind.StageAll),
+    descriptor(ChangesCommandScope.ActiveRepository, 'unstageAllChanges', ChangesCommandKind.UnstageAll),
+    descriptor(ChangesCommandScope.ActiveRepository, 'discardAllChanges', ChangesCommandKind.DiscardAll),
+    descriptor(ChangesCommandScope.ActiveRepository, 'commit', ChangesCommandKind.FocusCommit),
+    descriptor(ChangesCommandScope.ActiveRepository, 'commitStaged', ChangesCommandKind.FocusCommit),
+    descriptor(ChangesCommandScope.ActiveRepository, 'commitAll', ChangesCommandKind.StageAllThenFocusCommit),
+    descriptor(ChangesCommandScope.ActiveRepository, 'commitAmend', ChangesCommandKind.FocusCommit),
+    descriptor(ChangesCommandScope.ActiveRepository, 'commitStagedAmend', ChangesCommandKind.FocusCommit),
+    descriptor(ChangesCommandScope.ActiveRepository, 'commitAllAmend', ChangesCommandKind.StageAllThenFocusCommit),
+    ...SUBMODULE_TOOLBAR_COMMANDS.map((command) => toolbarDescriptor(ChangesCommandScope.Submodule, command)),
+    descriptor(ChangesCommandScope.Submodule, 'commit', ChangesCommandKind.FocusCommit),
+    descriptor(ChangesCommandScope.Submodule, 'commitStaged', ChangesCommandKind.FocusCommit),
+    descriptor(ChangesCommandScope.Submodule, 'commitAll', ChangesCommandKind.StageAllThenFocusCommit),
+    descriptor(ChangesCommandScope.Submodule, 'commitAmend', ChangesCommandKind.FocusCommit),
+    descriptor(ChangesCommandScope.Submodule, 'commitStagedAmend', ChangesCommandKind.FocusCommit),
+    descriptor(ChangesCommandScope.Submodule, 'commitAllAmend', ChangesCommandKind.StageAllThenFocusCommit),
+    descriptor(ChangesCommandScope.Submodule, 'stageAllChanges', ChangesCommandKind.StageAll),
+    descriptor(ChangesCommandScope.Submodule, 'unstageAllChanges', ChangesCommandKind.UnstageAll),
+    descriptor(ChangesCommandScope.Submodule, 'discardAllChanges', ChangesCommandKind.DiscardAll),
 ];
+
+function toolbarDescriptor(scope: ChangesCommandScope, toolbarCommand: ChangesToolbarCommand): ChangesCommandDescriptor {
+    return {
+        id: commandId(scope, toolbarCommand),
+        scope,
+        kind: ChangesCommandKind.Toolbar,
+        toolbarCommand,
+    };
+}
+
+function descriptor(scope: ChangesCommandScope, actionId: string, kind: ChangesCommandKind): ChangesCommandDescriptor {
+    return {
+        id: commandId(scope, actionId),
+        scope,
+        kind,
+        toolbarCommand: undefined,
+    };
+}
+
+function commandId(scope: ChangesCommandScope, actionId: string): string {
+    const prefix = scope === ChangesCommandScope.Submodule ? 'lookGit.changes.submodule' : 'lookGit.changes';
+    return `${prefix}.${actionId}`;
+}
 
 export class ChangesViewProvider implements vscode.WebviewViewProvider {
     static readonly viewType = 'lookGit.changesView';
@@ -84,6 +148,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     private refreshPromise?: Promise<void>;
     private refreshAbortController?: AbortController;
     private refreshTimer?: ReturnType<typeof setTimeout>;
+    private contextTarget?: ChangesContextTarget;
     private viewAsTree = true;
     private readonly refreshDebounceMs = 50;
 
@@ -110,6 +175,10 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         }, () => this.refresh(), this.onRepositoryUpdated, this.remoteCommands, this.generateCommitMessage);
 
         webviewView.webview.onDidReceiveMessage((msg: ChangesWebviewToExtensionMessage) => {
+            if (msg.type === 'changes/contextTarget') {
+                this.contextTarget = msg.target;
+                return;
+            }
             void this.router!.handle(msg);
         });
 
@@ -132,25 +201,97 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     registerNativeContextCommands(): readonly vscode.Disposable[] {
         return [
             vscode.commands.registerCommand('lookGit.changes.refresh', () => this.refresh()),
-            ...CHANGES_TOOLBAR_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runToolbarCommand(command))),
             ...CHANGES_VIEW_COMMANDS.flatMap(({ ids, viewMode }) => ids.map((id) => vscode.commands.registerCommand(id, () => this.applyViewMode(viewMode)))),
             ...CHANGES_SORT_COMMANDS.flatMap(({ ids, sortMode }) => ids.map((id) => vscode.commands.registerCommand(id, () => this.applySortMode(sortMode)))),
-            ...CHANGES_BULK_COMMANDS.map(({ id, message }) => vscode.commands.registerCommand(id, () => this.runChangesCommand(message))),
-            vscode.commands.registerCommand('lookGit.changes.commit', () => this.focusCommitComposer()),
-            vscode.commands.registerCommand('lookGit.changes.commitStaged', () => this.focusCommitComposer()),
-            vscode.commands.registerCommand('lookGit.changes.commitAll', () => this.stageAllThenFocusCommitComposer()),
-            vscode.commands.registerCommand('lookGit.changes.commitAmend', () => this.focusCommitComposer()),
-            vscode.commands.registerCommand('lookGit.changes.commitStagedAmend', () => this.focusCommitComposer()),
-            vscode.commands.registerCommand('lookGit.changes.commitAllAmend', () => this.stageAllThenFocusCommitComposer()),
+            ...CHANGES_NATIVE_COMMANDS.map((command) => vscode.commands.registerCommand(command.id, () => this.runNativeCommand(command))),
         ];
     }
 
-    private async runToolbarCommand(command: ChangesToolbarCommand): Promise<void> {
-        await this.router?.handleToolbarCommand(command);
+    private async runNativeCommand(command: ChangesCommandDescriptor): Promise<void> {
+        const submodulePath = await this.submodulePathFor(command.scope);
+        if (command.scope === ChangesCommandScope.Submodule && !submodulePath) { return; }
+
+        switch (command.kind) {
+            case ChangesCommandKind.Toolbar:
+                if (!command.toolbarCommand) { return; }
+                await this.runToolbarCommand(command.scope, command.toolbarCommand, submodulePath);
+                return;
+            case ChangesCommandKind.StageAll:
+                await this.stageAll(command.scope, submodulePath);
+                return;
+            case ChangesCommandKind.UnstageAll:
+                await this.unstageAll(command.scope, submodulePath);
+                return;
+            case ChangesCommandKind.DiscardAll:
+                await this.discardAll(command.scope, submodulePath);
+                return;
+            case ChangesCommandKind.FocusCommit:
+                this.focusCommit(command.scope, submodulePath);
+                return;
+            case ChangesCommandKind.StageAllThenFocusCommit:
+                await this.stageAll(command.scope, submodulePath);
+                this.focusCommit(command.scope, submodulePath);
+                return;
+        }
     }
 
-    private async runChangesCommand(message: ChangesWebviewToExtensionMessage): Promise<void> {
-        await this.router?.handle(message);
+    private async submodulePathFor(scope: ChangesCommandScope): Promise<string | undefined> {
+        if (scope === ChangesCommandScope.ActiveRepository) { return undefined; }
+        const target = this.contextTarget;
+        if (!target || target.kind !== 'submoduleToolbar') {
+            await vscode.window.showWarningMessage('No submodule is selected for this command.');
+            return undefined;
+        }
+        return target.submodulePath;
+    }
+
+    private async runToolbarCommand(
+        scope: ChangesCommandScope,
+        command: ChangesToolbarCommand,
+        submodulePath: string | undefined,
+    ): Promise<void> {
+        if (scope === ChangesCommandScope.ActiveRepository) {
+            await this.router?.handleToolbarCommand(command);
+            return;
+        }
+        if (!submodulePath) { return; }
+        await this.router?.handle({ type: 'changes/submoduleToolbarCommand', submodulePath, command });
+    }
+
+    private async stageAll(scope: ChangesCommandScope, submodulePath: string | undefined): Promise<void> {
+        if (scope === ChangesCommandScope.ActiveRepository) {
+            await this.router?.handle({ type: 'changes/stageAll' });
+            return;
+        }
+        if (!submodulePath) { return; }
+        await this.router?.handle({ type: 'changes/submoduleStageAll', submodulePath });
+    }
+
+    private async unstageAll(scope: ChangesCommandScope, submodulePath: string | undefined): Promise<void> {
+        if (scope === ChangesCommandScope.ActiveRepository) {
+            await this.router?.handle({ type: 'changes/unstageAll' });
+            return;
+        }
+        if (!submodulePath) { return; }
+        await this.router?.handle({ type: 'changes/submoduleUnstageAll', submodulePath });
+    }
+
+    private async discardAll(scope: ChangesCommandScope, submodulePath: string | undefined): Promise<void> {
+        if (scope === ChangesCommandScope.ActiveRepository) {
+            await this.router?.handle({ type: 'changes/discardAll' });
+            return;
+        }
+        if (!submodulePath) { return; }
+        await this.router?.handle({ type: 'changes/submoduleDiscardAll', submodulePath });
+    }
+
+    private focusCommit(scope: ChangesCommandScope, submodulePath: string | undefined): void {
+        if (scope === ChangesCommandScope.ActiveRepository) {
+            this.focusCommitComposer();
+            return;
+        }
+        if (!submodulePath) { return; }
+        this.focusSubmoduleCommitComposer(submodulePath);
     }
 
     private async applyViewMode(viewMode: ChangesViewPreference): Promise<void> {
@@ -170,9 +311,8 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         this.view?.webview.postMessage({ type: 'changes/focusCommitComposer' });
     }
 
-    private async stageAllThenFocusCommitComposer(): Promise<void> {
-        await this.router?.handle({ type: 'changes/stageAll' });
-        this.focusCommitComposer();
+    private focusSubmoduleCommitComposer(path: string): void {
+        this.view?.webview.postMessage({ type: 'changes/focusSubmoduleCommitComposer', path });
     }
 
     async refresh(): Promise<void> {
@@ -240,6 +380,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     /** Called by RepoRegistry when the active repo changes. */
     async notifyRepoChanged(context: RepoContext): Promise<void> {
+        this.contextTarget = undefined;
         this.router?.setKnownSubmodulePaths([]);
         this.view?.webview.postMessage({ type: 'repo/contextChanged', context: toSerializedRepoContext(context) });
         this.scheduleRefresh();

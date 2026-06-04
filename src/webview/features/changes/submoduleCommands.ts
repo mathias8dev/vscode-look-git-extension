@@ -1,11 +1,14 @@
-import type { ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
-import type { ConflictState, StashFileEntry, StatusEntry } from '../../../protocol/changes/types';
+import type { ChangesToolbarCommand, ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
+import type { ChangesContextTarget, ConflictState, StashFileEntry, StatusEntry } from '../../../protocol/changes/types';
 import { CommitMode } from '../../../protocol/changes/types';
 import { ChangeBulkAction, ChangeRowAction } from './changeCommands';
 import { OperationAction } from './operationCommands';
 import { StashEntryAction } from './stashCommands';
 
 export enum SubmoduleAction {
+    Refresh   = 'refresh',
+    Pull      = 'pull',
+    Push      = 'push',
     Update    = 'update',
     Open      = 'open',
     UpdateAll = 'updateAll',
@@ -22,7 +25,24 @@ export function messageForSubmoduleAction(
             return { type: 'changes/openSubmodule', filePath: submodulePath };
         case SubmoduleAction.UpdateAll:
             return { type: 'changes/submoduleUpdateAll' };
+        case SubmoduleAction.Refresh:
+            return messageForGetSubmoduleStatus(submodulePath, submoduleStatusRequestId(submodulePath));
+        case SubmoduleAction.Pull:
+            return messageForSubmoduleToolbarCommand(submodulePath, 'pull');
+        case SubmoduleAction.Push:
+            return messageForSubmoduleToolbarCommand(submodulePath, 'push');
     }
+}
+
+export function messageForChangesContextTarget(target: ChangesContextTarget): ChangesWebviewToExtensionMessage {
+    return { type: 'changes/contextTarget', target };
+}
+
+export function messageForSubmoduleToolbarCommand(
+    submodulePath: string,
+    command: ChangesToolbarCommand,
+): ChangesWebviewToExtensionMessage {
+    return { type: 'changes/submoduleToolbarCommand', submodulePath, command };
 }
 
 export function messageForGetSubmoduleStatus(submodulePath: string, requestId: string): ChangesWebviewToExtensionMessage {

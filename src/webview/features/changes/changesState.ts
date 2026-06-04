@@ -42,6 +42,7 @@ export interface ChangesState {
     readonly submoduleCommitMessageGenerationRequestIdByPath: Readonly<Record<string, string>>;
     readonly generatedSubmoduleCommitMessageByPath: Readonly<Record<string, GeneratedCommitMessage>>;
     readonly submoduleCommitMessageGenerationErrorByPath: Readonly<Record<string, ProtocolError>>;
+    readonly submoduleCommitFocusRequestByPath: Readonly<Record<string, number>>;
     readonly collapsedSectionIds: readonly ChangeSectionId[];
     readonly selectedItemIds: readonly string[];
     readonly selectionAnchorId: string | undefined;
@@ -115,6 +116,7 @@ export function createInitialChangesState(preferences: ChangesStatePreferences =
         submoduleCommitMessageGenerationRequestIdByPath: {},
         generatedSubmoduleCommitMessageByPath: {},
         submoduleCommitMessageGenerationErrorByPath: {},
+        submoduleCommitFocusRequestByPath: {},
         collapsedSectionIds: preferences.collapsedSectionIds ?? [],
         selectedItemIds: [],
         selectionAnchorId: undefined,
@@ -225,6 +227,7 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 submoduleCommitMessageGenerationRequestIdByPath: keepKnownRecord(state.submoduleCommitMessageGenerationRequestIdByPath, submodulePaths),
                 generatedSubmoduleCommitMessageByPath: keepKnownRecord(state.generatedSubmoduleCommitMessageByPath, submodulePaths),
                 submoduleCommitMessageGenerationErrorByPath: keepKnownRecord(state.submoduleCommitMessageGenerationErrorByPath, submodulePaths),
+                submoduleCommitFocusRequestByPath: keepKnownRecord(state.submoduleCommitFocusRequestByPath, submodulePaths),
             };
         }
         case 'changes/error':
@@ -362,6 +365,15 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
             return { ...state, sortMode: sortModeFromProtocol(message.sortMode), selectedItemIds: [], selectionAnchorId: undefined };
         case 'changes/focusCommitComposer':
             return { ...state, commitFocusRequest: state.commitFocusRequest + 1 };
+        case 'changes/focusSubmoduleCommitComposer':
+            return {
+                ...state,
+                expandedSubmodulePaths: addedPath(state.expandedSubmodulePaths, message.path),
+                submoduleCommitFocusRequestByPath: {
+                    ...state.submoduleCommitFocusRequestByPath,
+                    [message.path]: (state.submoduleCommitFocusRequestByPath[message.path] ?? 0) + 1,
+                },
+            };
         case 'repo/contextChanged':
             return state;
         case 'ui/fontSizeChanged':

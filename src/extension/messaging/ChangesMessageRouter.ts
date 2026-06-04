@@ -373,6 +373,12 @@ export class ChangesMessageRouter {
                 break;
             }
 
+            case 'changes/submoduleToolbarCommand': {
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                await this.handleToolbarCommandForRepo(new ScopedGitRepository(repo, submodulePath), msg.command);
+                break;
+            }
+
             case 'changes/openFile': {
                 const uri = vscode.Uri.file(path.join(repo.cwd, msg.filePath));
                 await vscode.commands.executeCommand('vscode.open', uri);
@@ -727,20 +733,12 @@ export class ChangesMessageRouter {
     }
 
     async handleToolbarCommand(command: ChangesToolbarCommand): Promise<void> {
-        if (command === 'openGraph') {
-            await vscode.commands.executeCommand('lookGit.graphView.focus');
-            return;
-        }
-        if (command === 'clone') {
-            await vscode.commands.executeCommand('git.clone');
-            return;
-        }
-        if (command === 'showGitOutput') {
-            await vscode.commands.executeCommand('workbench.action.output.toggleOutput');
-            return;
-        }
+        if (await this.handleGlobalToolbarCommand(command)) { return; }
+        await this.handleToolbarCommandForRepo(this.repositories.requireRepository(), command);
+    }
 
-        const repo = this.repositories.requireRepository();
+    async handleToolbarCommandForRepo(repo: GitRepository, command: ChangesToolbarCommand): Promise<void> {
+        if (await this.handleGlobalToolbarCommand(command)) { return; }
         switch (command) {
             case 'pull':
                 await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Pull);
@@ -960,6 +958,22 @@ export class ChangesMessageRouter {
                 return;
             }
         }
+    }
+
+    private async handleGlobalToolbarCommand(command: ChangesToolbarCommand): Promise<boolean> {
+        if (command === 'openGraph') {
+            await vscode.commands.executeCommand('lookGit.graphView.focus');
+            return true;
+        }
+        if (command === 'clone') {
+            await vscode.commands.executeCommand('git.clone');
+            return true;
+        }
+        if (command === 'showGitOutput') {
+            await vscode.commands.executeCommand('workbench.action.output.toggleOutput');
+            return true;
+        }
+        return false;
     }
 
     private async runVscodeRemoteToolbarCommand(repo: GitRepository, command: VscodeRemoteCommand): Promise<void> {

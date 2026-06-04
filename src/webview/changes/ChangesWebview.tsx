@@ -21,6 +21,7 @@ import {
     type CreateStashKind,
 } from '../features/changes/stashCommands';
 import {
+    messageForChangesContextTarget,
     messageForSubmoduleAction,
     messageForSubmoduleBulkAction,
     messageForSubmoduleCommit,
@@ -121,6 +122,13 @@ export function ChangesWebview() {
         dispatch({ type: 'toggleSubmoduleStash', key });
     };
 
+    const handleSubmoduleAction = (path: string, action: SubmoduleAction) => {
+        if (action === SubmoduleAction.Refresh) {
+            dispatch({ type: 'requestSubmoduleStatus', path });
+        }
+        postToExtension(messageForSubmoduleAction(path, action));
+    };
+
     return (
         <ChangesApp
             state={state}
@@ -147,7 +155,11 @@ export function ChangesWebview() {
             onStashAction={(index: number, action: StashEntryAction) => postToExtension(messageForStashAction(index, action))}
             onStashFileDiff={(index: number, file: StashFileEntry) => postToExtension(messageForStashFileDiff(index, file))}
             onToggleSubmodule={toggleSubmodule}
-            onSubmoduleAction={(path: string, action: SubmoduleAction) => postToExtension(messageForSubmoduleAction(path, action))}
+            onSubmoduleContextTarget={(path: string) => postToExtension(messageForChangesContextTarget({
+                kind: 'submoduleToolbar',
+                submodulePath: path,
+            }))}
+            onSubmoduleAction={handleSubmoduleAction}
             onSubmoduleRowAction={(submodulePath: string, item: ChangeListItem, action: ChangeRowAction) =>
                 postToExtension(messageForSubmoduleRowAction(submodulePath, item.entry, item.isStaged, action))}
             onSubmoduleBulkAction={(submodulePath: string, action: ChangeBulkAction) =>

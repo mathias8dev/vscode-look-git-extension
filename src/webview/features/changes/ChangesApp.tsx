@@ -34,6 +34,7 @@ interface ChangesAppProps {
     readonly onStashAction: (index: number, action: StashEntryAction) => void;
     readonly onStashFileDiff: (index: number, file: StashFileEntry) => void;
     readonly onSubmoduleAction: (path: string, action: SubmoduleAction) => void;
+    readonly onSubmoduleContextTarget: (path: string) => void;
     readonly onToggleSubmodule: (path: string) => void;
     readonly onSubmoduleRowAction: (submodulePath: string, item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onSubmoduleBulkAction: (submodulePath: string, action: ChangeBulkAction) => void;
@@ -60,6 +61,7 @@ export function ChangesApp({
     onStashAction,
     onStashFileDiff,
     onSubmoduleAction,
+    onSubmoduleContextTarget,
     onToggleSubmodule,
     onSubmoduleRowAction,
     onSubmoduleBulkAction,
@@ -134,7 +136,10 @@ export function ChangesApp({
                         commitMessageGenerationRequestIdByPath={state.submoduleCommitMessageGenerationRequestIdByPath}
                         generatedCommitMessageByPath={state.generatedSubmoduleCommitMessageByPath}
                         commitMessageGenerationErrorByPath={state.submoduleCommitMessageGenerationErrorByPath}
+                        loadingStatusPaths={state.loadingSubmoduleStatusPaths}
+                        commitFocusRequestByPath={state.submoduleCommitFocusRequestByPath}
                         onToggle={onToggleSubmodule}
+                        onContextTarget={onSubmoduleContextTarget}
                         onAction={onSubmoduleAction}
                         onUpdateAll={() => onSubmoduleAction('', SubmoduleAction.UpdateAll)}
                         onRowAction={onSubmoduleRowAction}

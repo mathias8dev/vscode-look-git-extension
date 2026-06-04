@@ -112,7 +112,10 @@ function renderSubmodule(status: SubmoduleStatusData): void {
             submodule={{ path: 'modules/lib', name: 'lib', status: SubmoduleStatus.Dirty }}
             expanded
             statusData={status}
+            loadingStatus={false}
+            focusRequest={0}
             onToggle={vi.fn()}
+            onOpenContextMenu={vi.fn()}
             onAction={vi.fn()}
             expandedStashIndexes={[]}
             stashFilesByIndex={{}}

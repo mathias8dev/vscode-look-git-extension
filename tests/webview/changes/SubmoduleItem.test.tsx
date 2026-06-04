@@ -6,6 +6,7 @@ import type { SubmoduleStatusData } from '../../../src/protocol/changes/types';
 import { ConflictState } from '../../../src/protocol/changes/types';
 import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 import { OperationAction } from '../../../src/webview/features/changes/operationCommands';
+import { SubmoduleAction } from '../../../src/webview/features/changes/submoduleCommands';
 import { SubmoduleItem } from '../../../src/webview/features/changes/SubmoduleItem';
 
 describe('SubmoduleItem', () => {
@@ -132,10 +133,56 @@ describe('SubmoduleItem', () => {
         expect(onOperationAction).toHaveBeenCalledWith(ConflictState.Merge, OperationAction.Continue);
         expect(onOperationAction).toHaveBeenCalledWith(ConflictState.Merge, OperationAction.Abort);
     });
+
+    it('exposes submodule toolbar actions from the row header', () => {
+        const onAction = vi.fn<(action: SubmoduleAction) => void>();
+        renderSubmodule({
+            statusData: statusData(),
+            onAction,
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh submodule changes' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Pull submodule' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Push submodule' }));
+
+        expect(onAction).toHaveBeenCalledWith(SubmoduleAction.Refresh);
+        expect(onAction).toHaveBeenCalledWith(SubmoduleAction.Pull);
+        expect(onAction).toHaveBeenCalledWith(SubmoduleAction.Push);
+    });
+
+    it('marks the submodule more button as a native VS Code context menu target', () => {
+        const onOpenContextMenu = vi.fn();
+        renderSubmodule({
+            statusData: statusData(),
+            onOpenContextMenu,
+        });
+
+        const more = screen.getByRole('button', { name: 'More submodule actions' });
+        expect(more.getAttribute('data-vscode-context')).toContain('changesSubmoduleToolbar');
+
+        fireEvent.contextMenu(more);
+
+        expect(onOpenContextMenu).toHaveBeenCalledOnce();
+    });
+
+    it('shows a busy refresh control while submodule status is loading', () => {
+        renderSubmodule({
+            statusData: statusData(),
+            loadingStatus: true,
+        });
+
+        const refresh = screen.getByRole('button', { name: 'Refresh submodule changes' });
+        expect(refresh).toHaveAttribute('aria-busy', 'true');
+        expect(refresh).toBeDisabled();
+    });
 });
 
 function renderSubmodule(input: {
     readonly statusData: SubmoduleStatusData;
+    readonly loadingStatus?: boolean;
+    readonly focusRequest?: number;
+    readonly onAction?: (action: SubmoduleAction) => void;
+    readonly onOpenContextMenu?: () => void;
     readonly onOperationAction?: (conflictState: ConflictState.Merge | ConflictState.Rebase, action: OperationAction) => void;
 }): void {
     render(
@@ -143,8 +190,11 @@ function renderSubmodule(input: {
             submodule={{ path: 'modules/lib', name: 'lib', status: SubmoduleStatus.Dirty }}
             expanded
             statusData={input.statusData}
+            loadingStatus={input.loadingStatus ?? false}
+            focusRequest={input.focusRequest ?? 0}
             onToggle={vi.fn()}
-            onAction={vi.fn()}
+            onOpenContextMenu={input.onOpenContextMenu ?? vi.fn()}
+            onAction={input.onAction ?? vi.fn()}
             expandedStashIndexes={[]}
             stashFilesByIndex={{}}
             onRowAction={vi.fn()}

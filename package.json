@@ -557,6 +557,251 @@
         "category": "Look Git"
       },
       {
+        "command": "lookGit.changes.submodule.pull",
+        "title": "Pull",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.push",
+        "title": "Push",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.clone",
+        "title": "Clone",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.checkout",
+        "title": "Checkout to...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.fetch",
+        "title": "Fetch",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.commit",
+        "title": "Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.commitStaged",
+        "title": "Commit Staged",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.commitAll",
+        "title": "Commit All",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.undoLastCommit",
+        "title": "Undo Last Commit",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.abortRebase",
+        "title": "Abort Rebase",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.commitAmend",
+        "title": "Commit (Amend)",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.commitStagedAmend",
+        "title": "Commit Staged (Amend)",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.commitAllAmend",
+        "title": "Commit All (Amend)",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.stageAllChanges",
+        "title": "Stage All Changes",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.unstageAllChanges",
+        "title": "Unstage All Changes",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.discardAllChanges",
+        "title": "Discard All Changes",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.sync",
+        "title": "Sync",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.pullRebase",
+        "title": "Pull (Rebase)",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.pullFrom",
+        "title": "Pull From...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.pushForce",
+        "title": "Push (Force)",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.pushTo",
+        "title": "Push to...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.pushToForce",
+        "title": "Push to... (Force)",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.fetchPrune",
+        "title": "Fetch (Prune)",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.fetchAll",
+        "title": "Fetch From All Remotes",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.mergeBranch",
+        "title": "Merge...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.rebaseBranch",
+        "title": "Rebase Branch...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.createBranch",
+        "title": "Create Branch...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.createBranchFrom",
+        "title": "Create Branch From...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.renameBranch",
+        "title": "Rename Branch...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.deleteBranch",
+        "title": "Delete Branch...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.deleteRemoteBranch",
+        "title": "Delete Remote Branch...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.publishBranch",
+        "title": "Publish Branch...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.addRemote",
+        "title": "Add Remote...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.removeRemote",
+        "title": "Remove Remote",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.stash",
+        "title": "Stash",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.stashIncludeUntracked",
+        "title": "Stash (Include Untracked)",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.stashStaged",
+        "title": "Stash Staged",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.applyLatestStash",
+        "title": "Apply Latest Stash",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.applyStash",
+        "title": "Apply Stash...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.popLatestStash",
+        "title": "Pop Latest Stash",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.popStash",
+        "title": "Pop Stash...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.dropStash",
+        "title": "Drop Stash...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.dropAllStashes",
+        "title": "Drop All Stashes...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.viewStash",
+        "title": "View Stash...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.createTag",
+        "title": "Create Tag...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.deleteTag",
+        "title": "Delete Tag...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.deleteRemoteTag",
+        "title": "Delete Remote Tag...",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.pushTags",
+        "title": "Push Tags",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.submodule.showGitOutput",
+        "title": "Show Git Output",
+        "category": "Look Git"
+      },
+      {
         "command": "lookGit.graph.commit.copyRevisionNumber",
         "title": "Copy Revision Number",
         "category": "Look Git",
@@ -917,6 +1162,34 @@
       },
       {
         "id": "lookGit.changes.tagsMenu",
+        "label": "Tags"
+      },
+      {
+        "id": "lookGit.changes.submodule.commitMenu",
+        "label": "Commit"
+      },
+      {
+        "id": "lookGit.changes.submodule.changesMenu",
+        "label": "Changes"
+      },
+      {
+        "id": "lookGit.changes.submodule.pullPushMenu",
+        "label": "Pull, Push"
+      },
+      {
+        "id": "lookGit.changes.submodule.branchMenu",
+        "label": "Branch"
+      },
+      {
+        "id": "lookGit.changes.submodule.remoteMenu",
+        "label": "Remote"
+      },
+      {
+        "id": "lookGit.changes.submodule.stashMenu",
+        "label": "Stash"
+      },
+      {
+        "id": "lookGit.changes.submodule.tagsMenu",
         "label": "Tags"
       }
     ],
@@ -1308,7 +1581,270 @@
           "group": "2_changes_tags_push@1"
         }
       ],
+      "lookGit.changes.submodule.commitMenu": [
+        {
+          "command": "lookGit.changes.submodule.commit",
+          "group": "1_changes_submodule_commit@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.commitStaged",
+          "group": "1_changes_submodule_commit@2"
+        },
+        {
+          "command": "lookGit.changes.submodule.commitAll",
+          "group": "1_changes_submodule_commit@3"
+        },
+        {
+          "command": "lookGit.changes.submodule.undoLastCommit",
+          "group": "1_changes_submodule_commit@4"
+        },
+        {
+          "command": "lookGit.changes.submodule.abortRebase",
+          "group": "1_changes_submodule_commit@5"
+        },
+        {
+          "command": "lookGit.changes.submodule.commitAmend",
+          "group": "2_changes_submodule_amend@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.commitStagedAmend",
+          "group": "2_changes_submodule_amend@2"
+        },
+        {
+          "command": "lookGit.changes.submodule.commitAllAmend",
+          "group": "2_changes_submodule_amend@3"
+        }
+      ],
+      "lookGit.changes.submodule.changesMenu": [
+        {
+          "command": "lookGit.changes.submodule.stageAllChanges",
+          "group": "1_changes_submodule_bulk@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.unstageAllChanges",
+          "group": "1_changes_submodule_bulk@2"
+        },
+        {
+          "command": "lookGit.changes.submodule.discardAllChanges",
+          "group": "1_changes_submodule_bulk@3"
+        }
+      ],
+      "lookGit.changes.submodule.pullPushMenu": [
+        {
+          "command": "lookGit.changes.submodule.sync",
+          "group": "1_changes_submodule_sync@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.pull",
+          "group": "2_changes_submodule_pull@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.pullRebase",
+          "group": "2_changes_submodule_pull@2"
+        },
+        {
+          "command": "lookGit.changes.submodule.pullFrom",
+          "group": "2_changes_submodule_pull@3"
+        },
+        {
+          "command": "lookGit.changes.submodule.push",
+          "group": "3_changes_submodule_push@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.pushForce",
+          "group": "3_changes_submodule_push@2"
+        },
+        {
+          "command": "lookGit.changes.submodule.pushTo",
+          "group": "3_changes_submodule_push@3"
+        },
+        {
+          "command": "lookGit.changes.submodule.pushToForce",
+          "group": "3_changes_submodule_push@4"
+        },
+        {
+          "command": "lookGit.changes.submodule.fetch",
+          "group": "4_changes_submodule_fetch@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.fetchPrune",
+          "group": "4_changes_submodule_fetch@2"
+        },
+        {
+          "command": "lookGit.changes.submodule.fetchAll",
+          "group": "4_changes_submodule_fetch@3"
+        }
+      ],
+      "lookGit.changes.submodule.branchMenu": [
+        {
+          "command": "lookGit.changes.submodule.mergeBranch",
+          "group": "1_changes_submodule_branch@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.rebaseBranch",
+          "group": "1_changes_submodule_branch@2"
+        },
+        {
+          "command": "lookGit.changes.submodule.createBranch",
+          "group": "2_changes_submodule_branch_create@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.createBranchFrom",
+          "group": "2_changes_submodule_branch_create@2"
+        },
+        {
+          "command": "lookGit.changes.submodule.renameBranch",
+          "group": "3_changes_submodule_branch_manage@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.deleteBranch",
+          "group": "3_changes_submodule_branch_manage@2"
+        },
+        {
+          "command": "lookGit.changes.submodule.deleteRemoteBranch",
+          "group": "3_changes_submodule_branch_manage@3"
+        },
+        {
+          "command": "lookGit.changes.submodule.publishBranch",
+          "group": "4_changes_submodule_branch_publish@1"
+        }
+      ],
+      "lookGit.changes.submodule.remoteMenu": [
+        {
+          "command": "lookGit.changes.submodule.addRemote",
+          "group": "1_changes_submodule_remote@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.removeRemote",
+          "group": "1_changes_submodule_remote@2"
+        }
+      ],
+      "lookGit.changes.submodule.stashMenu": [
+        {
+          "command": "lookGit.changes.submodule.stash",
+          "group": "1_changes_submodule_stash_create@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.stashIncludeUntracked",
+          "group": "1_changes_submodule_stash_create@2"
+        },
+        {
+          "command": "lookGit.changes.submodule.stashStaged",
+          "group": "1_changes_submodule_stash_create@3"
+        },
+        {
+          "command": "lookGit.changes.submodule.applyLatestStash",
+          "group": "2_changes_submodule_stash_apply@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.applyStash",
+          "group": "2_changes_submodule_stash_apply@2"
+        },
+        {
+          "command": "lookGit.changes.submodule.popLatestStash",
+          "group": "3_changes_submodule_stash_pop@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.popStash",
+          "group": "3_changes_submodule_stash_pop@2"
+        },
+        {
+          "command": "lookGit.changes.submodule.dropStash",
+          "group": "4_changes_submodule_stash_drop@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.dropAllStashes",
+          "group": "4_changes_submodule_stash_drop@2"
+        },
+        {
+          "command": "lookGit.changes.submodule.viewStash",
+          "group": "5_changes_submodule_stash_view@1"
+        }
+      ],
+      "lookGit.changes.submodule.tagsMenu": [
+        {
+          "command": "lookGit.changes.submodule.createTag",
+          "group": "1_changes_submodule_tags@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.deleteTag",
+          "group": "1_changes_submodule_tags@2"
+        },
+        {
+          "command": "lookGit.changes.submodule.deleteRemoteTag",
+          "group": "1_changes_submodule_tags@3"
+        },
+        {
+          "command": "lookGit.changes.submodule.pushTags",
+          "group": "2_changes_submodule_tags_push@1"
+        }
+      ],
       "webview/context": [
+        {
+          "command": "lookGit.changes.submodule.pull",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
+          "group": "1_changes_submodule_root@1"
+        },
+        {
+          "command": "lookGit.changes.submodule.push",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
+          "group": "1_changes_submodule_root@2"
+        },
+        {
+          "command": "lookGit.changes.submodule.clone",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
+          "group": "1_changes_submodule_root@3"
+        },
+        {
+          "command": "lookGit.changes.submodule.checkout",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
+          "group": "1_changes_submodule_root@4"
+        },
+        {
+          "command": "lookGit.changes.submodule.fetch",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
+          "group": "1_changes_submodule_root@5"
+        },
+        {
+          "submenu": "lookGit.changes.submodule.commitMenu",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
+          "group": "2_changes_submodule_submenus@1"
+        },
+        {
+          "submenu": "lookGit.changes.submodule.changesMenu",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
+          "group": "2_changes_submodule_submenus@2"
+        },
+        {
+          "submenu": "lookGit.changes.submodule.pullPushMenu",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
+          "group": "2_changes_submodule_submenus@3"
+        },
+        {
+          "submenu": "lookGit.changes.submodule.branchMenu",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
+          "group": "2_changes_submodule_submenus@4"
+        },
+        {
+          "submenu": "lookGit.changes.submodule.remoteMenu",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
+          "group": "2_changes_submodule_submenus@5"
+        },
+        {
+          "submenu": "lookGit.changes.submodule.stashMenu",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
+          "group": "2_changes_submodule_submenus@6"
+        },
+        {
+          "submenu": "lookGit.changes.submodule.tagsMenu",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
+          "group": "2_changes_submodule_submenus@7"
+        },
+        {
+          "command": "lookGit.changes.submodule.showGitOutput",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
+          "group": "3_changes_submodule_output@1"
+        },
         {
           "command": "lookGit.history.copyRevisionNumber",
           "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",

@@ -1,7 +1,7 @@
 import type { RequestId, ErrorMessage, ProtocolError } from '../shared/base';
 import type { SerializedRepoContext } from '../shared/repo';
 import type { WebviewFontSizeChangedPush } from '../shared/ui';
-import type { StatusData, CommitMode, StashFileEntry, ConflictState, SubmoduleStatusData } from './types';
+import type { StatusData, CommitMode, StashFileEntry, ConflictState, SubmoduleStatusData, ChangesContextTarget } from './types';
 
 // ── Extension → Webview (push) ──────────────────────────────────────────────
 
@@ -89,6 +89,11 @@ export interface FocusCommitComposerPush {
     readonly type: 'changes/focusCommitComposer';
 }
 
+export interface FocusSubmoduleCommitComposerPush {
+    readonly type: 'changes/focusSubmoduleCommitComposer';
+    readonly path: string;
+}
+
 // ── Webview → Extension (commands — no response expected unless noted) ──────
 
 export interface ChangesReadyMessage    { readonly type: 'changes/ready'; }
@@ -142,6 +147,15 @@ export type ChangesToolbarCommand =
     | 'showGitOutput';
 export interface ChangesToolbarCommandMessage {
     readonly type: 'changes/toolbarCommand';
+    readonly command: ChangesToolbarCommand;
+}
+export interface ChangesContextTargetMessage {
+    readonly type: 'changes/contextTarget';
+    readonly target: ChangesContextTarget;
+}
+export interface SubmoduleToolbarCommandMessage {
+    readonly type: 'changes/submoduleToolbarCommand';
+    readonly submodulePath: string;
     readonly command: ChangesToolbarCommand;
 }
 export interface StageFileMessage       { readonly type: 'changes/stageFile'; readonly filePath: string; }
@@ -300,11 +314,12 @@ export type ChangesExtensionToWebviewMessage =
     | ApplyViewModePush
     | ApplySortModePush
     | FocusCommitComposerPush
+    | FocusSubmoduleCommitComposerPush
     | ChangesErrorPush
     | ErrorMessage;
 
 export type ChangesWebviewToExtensionMessage =
-    | ChangesReadyMessage | ViewModeChangedMessage | ChangesPreferencesChangedMessage | ChangesToolbarCommandMessage
+    | ChangesReadyMessage | ViewModeChangedMessage | ChangesPreferencesChangedMessage | ChangesToolbarCommandMessage | ChangesContextTargetMessage | SubmoduleToolbarCommandMessage
     | StageFileMessage | UnstageFileMessage | StageFilesMessage | UnstageFilesMessage | StageAllMessage | UnstageAllMessage
     | DiscardFileMessage | DiscardFilesMessage | DiscardAllMessage
     | MarkResolvedMessage | MarkResolvedFilesMessage

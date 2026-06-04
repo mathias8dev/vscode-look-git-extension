@@ -59,6 +59,7 @@ describe('protocol discriminated unions', () => {
                 case 'changes/applyViewMode': return msg.viewMode satisfies string;
                 case 'changes/applySortMode': return msg.sortMode satisfies string;
                 case 'changes/focusCommitComposer': return;
+                case 'changes/focusSubmoduleCommitComposer': return msg.path satisfies string;
                 case 'changes/error': return msg.error.recoverable satisfies boolean;
                 case 'error': return msg.error.message satisfies string;
             }
@@ -103,6 +104,8 @@ describe('protocol discriminated unions', () => {
                 case 'changes/ready': return;
                 case 'changes/viewModeChanged': return msg.asTree satisfies boolean;
                 case 'changes/toolbarCommand': return msg.command satisfies string;
+                case 'changes/contextTarget': return msg.target.kind satisfies string;
+                case 'changes/submoduleToolbarCommand': return msg.submodulePath satisfies string;
                 case 'changes/stageFile': return msg.filePath satisfies string;
                 case 'changes/unstageFile': return msg.filePath satisfies string;
                 case 'changes/stageFiles': return msg.filePaths satisfies readonly string[];

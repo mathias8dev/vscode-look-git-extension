@@ -5,6 +5,7 @@ import { ChangesViewProvider } from '../../../src/extension/views/ChangesViewPro
 import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import type { GitRepository } from '../../../src/application/ports/git-repository';
+import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../../src/application/ports/remote-command-backend';
 import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
 import { GenerateCommitMessageUseCase } from '../../../src/application/usecases/changes/generate-commit-message';
 import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
@@ -86,6 +87,13 @@ function makeAccessor(repo: GitRepository | undefined): ActiveRepositoryAccessor
 
 function makeProvider(repo: GitRepository | undefined, generateCommitMessage?: GenerateCommitMessageUseCase): ChangesViewProvider {
     return new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), async () => {}, undefined, undefined, generateCommitMessage);
+}
+
+function makeRemoteCommands(): RemoteCommandBackend {
+    return {
+        runVscode: vi.fn(async () => {}),
+        runCli: vi.fn(async () => {}),
+    };
 }
 
 function makeMutableAccessor(initialRepo: GitRepository | undefined): {
@@ -356,6 +364,98 @@ describe('ChangesViewProvider', () => {
         expect(repo.push).not.toHaveBeenCalled();
         expect(repo.exec).not.toHaveBeenCalledWith(['fetch']);
         await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
+    });
+
+    it('submodule toolbar pull push and fetch run against the selected submodule repository', async () => {
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+        });
+        const remoteCommands = makeRemoteCommands();
+        const provider = new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), async () => {}, remoteCommands);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/submoduleToolbarCommand', submodulePath: 'modules/lib', command: 'pull' });
+        view.messageHandler?.({ type: 'changes/submoduleToolbarCommand', submodulePath: 'modules/lib', command: 'push' });
+        view.messageHandler?.({ type: 'changes/submoduleToolbarCommand', submodulePath: 'modules/lib', command: 'fetch' });
+
+        await vi.waitFor(() => expect(remoteCommands.runVscode).toHaveBeenCalledWith(
+            expect.objectContaining({ cwd: path.resolve('/workspace/modules/lib') }),
+            VscodeRemoteCommand.Pull,
+        ));
+        expect(remoteCommands.runVscode).toHaveBeenCalledWith(
+            expect.objectContaining({ cwd: path.resolve('/workspace/modules/lib') }),
+            VscodeRemoteCommand.Push,
+        );
+        expect(remoteCommands.runVscode).toHaveBeenCalledWith(
+            expect.objectContaining({ cwd: path.resolve('/workspace/modules/lib') }),
+            VscodeRemoteCommand.Fetch,
+        );
+    });
+
+    it('native submodule context commands run against the selected submodule', async () => {
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+        });
+        const remoteCommands = makeRemoteCommands();
+        const provider = new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), async () => {}, remoteCommands);
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/contextTarget',
+            target: { kind: 'submoduleToolbar', submodulePath: 'modules/lib' },
+        });
+        await vscode.commands.executeCommand('lookGit.changes.submodule.fetch');
+
+        await vi.waitFor(() => expect(remoteCommands.runVscode).toHaveBeenCalledWith(
+            expect.objectContaining({ cwd: path.resolve('/workspace/modules/lib') }),
+            VscodeRemoteCommand.Fetch,
+        ));
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('native submodule changes commands use submodule-scoped file operations', async () => {
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+        });
+        const provider = new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo));
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/contextTarget',
+            target: { kind: 'submoduleToolbar', submodulePath: 'modules/lib' },
+        });
+        await vscode.commands.executeCommand('lookGit.changes.submodule.stageAllChanges');
+
+        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith(['-C', path.resolve('/workspace/modules/lib'), 'add', '-A']));
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('native submodule commit commands focus the submodule composer', async () => {
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+        });
+        const provider = new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo));
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/contextTarget',
+            target: { kind: 'submoduleToolbar', submodulePath: 'modules/lib' },
+        });
+        await vscode.commands.executeCommand('lookGit.changes.submodule.commitAll');
+
+        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith(['-C', path.resolve('/workspace/modules/lib'), 'add', '-A']));
+        expect(view.messages).toContainEqual({
+            type: 'changes/focusSubmoduleCommitComposer',
+            path: 'modules/lib',
+        });
+        disposables.forEach((disposable) => disposable.dispose());
     });
 
     it('toolbar push publishes the current branch when it has no upstream', async () => {

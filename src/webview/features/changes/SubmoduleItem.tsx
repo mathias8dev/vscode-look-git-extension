@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { SubmoduleStatus } from '../../../protocol/shared/repo';
 import type { StashFileEntry, SubmoduleEntry, SubmoduleStatusData } from '../../../protocol/changes/types';
 import { ConflictState } from '../../../protocol/changes/types';
@@ -13,7 +13,7 @@ import type { ChangeListItem, ChangeSection } from './changeTree';
 import { ChangeSectionId } from './changeTree';
 import { ChangeSelectionMode, ChangesSortMode, ChangesViewMode, type CommitFeedback, type GeneratedCommitMessage } from './changesState';
 import { CommitComposer } from './CommitComposer';
-import { changesItemContext } from './context-menu-model';
+import { changesItemContext, changesSubmoduleToolbarContext } from './context-menu-model';
 import { OperationBanner } from './OperationBanner';
 import type { ActiveConflictState, OperationAction } from './operationCommands';
 import { StashList } from './StashList';
@@ -23,7 +23,10 @@ interface SubmoduleItemProps {
     readonly submodule: SubmoduleEntry;
     readonly expanded: boolean;
     readonly statusData: SubmoduleStatusData | undefined;
+    readonly loadingStatus: boolean;
+    readonly focusRequest: number;
     readonly onToggle: () => void;
+    readonly onOpenContextMenu: () => void;
     readonly onAction: (action: SubmoduleAction) => void;
     readonly expandedStashIndexes: readonly number[];
     readonly stashFilesByIndex: Readonly<Record<number, readonly StashFileEntry[]>>;
@@ -52,7 +55,10 @@ export function SubmoduleItem({
     submodule,
     expanded,
     statusData,
+    loadingStatus,
+    focusRequest,
     onToggle,
+    onOpenContextMenu,
     onAction,
     expandedStashIndexes,
     stashFilesByIndex,
@@ -76,6 +82,7 @@ export function SubmoduleItem({
     const visibleItemIds = sections.flatMap((section) => section.items.map((item) => item.id));
     const showCommitComposer = statusData
         ? statusData.staged.length > 0
+            || focusRequest > 0
             || commitFeedback !== undefined
             || commitMessageGenerating
             || generatedCommitMessage !== undefined
@@ -106,6 +113,22 @@ export function SubmoduleItem({
                     </span>
                 ) : null}
                 <div className="submodule-actions">
+                    <IconButton
+                        icon="refresh"
+                        title="Refresh submodule changes"
+                        busy={loadingStatus}
+                        onClick={() => onAction(SubmoduleAction.Refresh)}
+                    />
+                    <IconButton
+                        icon="repo-pull"
+                        title="Pull submodule"
+                        onClick={() => onAction(SubmoduleAction.Pull)}
+                    />
+                    <IconButton
+                        icon="repo-push"
+                        title="Push submodule"
+                        onClick={() => onAction(SubmoduleAction.Push)}
+                    />
                     {needsAction ? (
                         <IconButton
                             icon="arrow-down"
@@ -118,6 +141,17 @@ export function SubmoduleItem({
                         title="Open submodule"
                         onClick={() => onAction(SubmoduleAction.Open)}
                     />
+                    <button
+                        type="button"
+                        className="icon-button"
+                        title="More submodule actions"
+                        aria-label="More submodule actions"
+                        data-vscode-context={changesSubmoduleToolbarContext()}
+                        onContextMenu={onOpenContextMenu}
+                        onClick={(event) => openNativeContextMenu(event, onOpenContextMenu)}
+                    >
+                        <i className="codicon codicon-ellipsis" aria-hidden="true" />
+                    </button>
                 </div>
             </header>
             {expanded ? (
@@ -132,7 +166,7 @@ export function SubmoduleItem({
                                     stagedCount={statusData.staged.length}
                                     conflictState={commitConflictState(statusData)}
                                     feedback={commitFeedback}
-                                    focusRequest={0}
+                                    focusRequest={focusRequest}
                                     generatingMessage={commitMessageGenerating}
                                     generatedMessage={generatedCommitMessage}
                                     generationError={commitMessageGenerationError}
@@ -176,6 +210,18 @@ export function SubmoduleItem({
 }
 
 function noopSelect(_item: ChangeListItem, _mode: ChangeSelectionMode): void {}
+
+function openNativeContextMenu(event: MouseEvent<HTMLButtonElement>, onOpenContextMenu: () => void): void {
+    onOpenContextMenu();
+    const rect = event.currentTarget.getBoundingClientRect();
+    event.currentTarget.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        clientX: rect.right,
+        clientY: rect.bottom,
+    }));
+}
 
 function toggleSectionId(sectionIds: readonly ChangeSectionId[], sectionId: ChangeSectionId): readonly ChangeSectionId[] {
     return sectionIds.includes(sectionId)

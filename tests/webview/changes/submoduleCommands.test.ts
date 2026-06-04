@@ -3,13 +3,17 @@ import { CommitMode, ConflictState } from '../../../src/protocol/changes/types';
 import { ChangeBulkAction, ChangeRowAction } from '../../../src/webview/features/changes/changeCommands';
 import { OperationAction } from '../../../src/webview/features/changes/operationCommands';
 import {
+    messageForSubmoduleAction,
     messageForSubmoduleCommit,
     messageForSubmoduleBulkAction,
+    messageForChangesContextTarget,
     messageForSubmoduleOperationAction,
     messageForSubmoduleRowAction,
     messageForSubmoduleStash,
     messageForSubmoduleStashAction,
     messageForSubmoduleStashFileDiff,
+    messageForSubmoduleToolbarCommand,
+    SubmoduleAction,
     submoduleStashFilesRequestId,
 } from '../../../src/webview/features/changes/submoduleCommands';
 import { StashEntryAction } from '../../../src/webview/features/changes/stashCommands';
@@ -77,6 +81,33 @@ describe('submoduleCommands', () => {
             submodulePath: 'modules/lib',
             message: 'feat: inner',
             mode: CommitMode.Commit,
+        });
+    });
+
+    it('maps submodule header actions to targeted messages', () => {
+        expect(messageForSubmoduleAction('modules/lib', SubmoduleAction.Refresh)).toEqual({
+            type: 'changes/getSubmoduleStatus',
+            path: 'modules/lib',
+            requestId: 'changes:submodule-status:modules/lib',
+        });
+        expect(messageForSubmoduleAction('modules/lib', SubmoduleAction.Pull)).toEqual({
+            type: 'changes/submoduleToolbarCommand',
+            submodulePath: 'modules/lib',
+            command: 'pull',
+        });
+        expect(messageForSubmoduleAction('modules/lib', SubmoduleAction.Push)).toEqual({
+            type: 'changes/submoduleToolbarCommand',
+            submodulePath: 'modules/lib',
+            command: 'push',
+        });
+        expect(messageForChangesContextTarget({ kind: 'submoduleToolbar', submodulePath: 'modules/lib' })).toEqual({
+            type: 'changes/contextTarget',
+            target: { kind: 'submoduleToolbar', submodulePath: 'modules/lib' },
+        });
+        expect(messageForSubmoduleToolbarCommand('modules/lib', 'fetch')).toEqual({
+            type: 'changes/submoduleToolbarCommand',
+            submodulePath: 'modules/lib',
+            command: 'fetch',
         });
     });
 

@@ -20,6 +20,12 @@ interface PackageJson {
                 readonly when: string;
                 readonly group: string;
             }[];
+            readonly 'webview/context'?: readonly {
+                readonly command?: string;
+                readonly submenu?: string;
+                readonly when: string;
+                readonly group: string;
+            }[];
             readonly [menuId: string]: readonly {
                 readonly command?: string;
                 readonly submenu?: string;
@@ -170,6 +176,49 @@ describe('native view title toolbar manifest', () => {
             expect.objectContaining({
                 command: 'lookGit.changes.sortByExtensionChecked',
                 when: 'lookGit.changesSortMode == extension',
+            }),
+        ]));
+    });
+
+    it('contributes submodule more actions as native VS Code webview context menus', () => {
+        const pkg = packageJson();
+        const commands = new Set((pkg.contributes?.commands ?? []).map((entry) => entry.command));
+        const submenus = new Set((pkg.contributes?.submenus ?? []).map((entry) => entry.id));
+        const webviewContext = pkg.contributes?.menus?.['webview/context'] ?? [];
+
+        expect(commands.has('lookGit.changes.submodule.pull')).toBe(true);
+        expect(commands.has('lookGit.changes.submodule.stageAllChanges')).toBe(true);
+        expect(commands.has('lookGit.changes.submodule.commitAll')).toBe(true);
+
+        for (const submenu of [
+            'lookGit.changes.submodule.commitMenu',
+            'lookGit.changes.submodule.changesMenu',
+            'lookGit.changes.submodule.pullPushMenu',
+            'lookGit.changes.submodule.branchMenu',
+            'lookGit.changes.submodule.remoteMenu',
+            'lookGit.changes.submodule.stashMenu',
+            'lookGit.changes.submodule.tagsMenu',
+        ]) {
+            expect(submenus.has(submenu)).toBe(true);
+            expect(pkg.contributes?.menus?.[submenu]?.length).toBeGreaterThan(0);
+        }
+
+        expect(webviewContext).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                command: 'lookGit.changes.submodule.pull',
+                when: "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
+            }),
+            expect.objectContaining({
+                submenu: 'lookGit.changes.submodule.commitMenu',
+                when: "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
+            }),
+            expect.objectContaining({
+                submenu: 'lookGit.changes.submodule.pullPushMenu',
+                when: "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.changes.submodule.showGitOutput',
+                when: "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
             }),
         ]));
     });
