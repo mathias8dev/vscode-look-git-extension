@@ -427,6 +427,25 @@ describe('CommitHistoryViewProvider error propagation', () => {
         expect(repo.getLog).toHaveBeenCalled();
     });
 
+    it('publishes from the history toolbar when the current branch has no upstream', async () => {
+        const repo = makeRepositoryMock({
+            getCurrentBranch: vi.fn(async () => 'topic'),
+            getAllBranches: vi.fn(async () => [
+                { name: 'topic', isRemote: false, isCurrent: true, hash: 'topic-head', upstream: undefined, ahead: 0, behind: 0 },
+            ]),
+        });
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo), onRepositoryUpdated);
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'push' });
+
+        await vi.waitFor(() => expect(getCommandCalls()).toContainEqual({ command: 'git.publish', args: [] }));
+        expect(getCommandCalls()).not.toContainEqual({ command: 'git.push', args: [] });
+        await vi.waitFor(() => expect(onRepositoryUpdated).toHaveBeenCalledOnce());
+    });
+
     it('shows the history repository selector only when submodules are available', async () => {
         const repo = makeRepositoryMock({
             getSubmoduleStatus: vi.fn(async () => [{ path: 'modules/auth-kit', status: ' ' as const }]),

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import type { GitRepository } from '../../application/ports/git-repository';
 import { VscodeRemoteCommand as RemoteCommand, type VscodeRemoteCommand, type VscodeRemoteCommandRunner } from '../../application/ports/remote-command-backend';
+import { resolveVscodeRemoteCommand } from '../../application/usecases/remotes/resolve-vscode-remote-command';
 import type { API, Repository } from '../../types/git';
 import { getBuiltInGitApi } from '../utils/gitExtension';
 
@@ -9,9 +10,10 @@ const FORCE_PUSH_MODE: Parameters<Repository['push']>[3] = 0;
 
 export class VscodeRemoteCommandBackend implements VscodeRemoteCommandRunner {
     async run(repo: GitRepository, command: VscodeRemoteCommand): Promise<void> {
+        const resolvedCommand = await resolveVscodeRemoteCommand(repo, command);
         const api = await getBuiltInGitApi();
         if (!api) {
-            await vscode.commands.executeCommand(vscodeGitCommandId(command));
+            await vscode.commands.executeCommand(vscodeGitCommandId(resolvedCommand));
             return;
         }
 
@@ -20,8 +22,8 @@ export class VscodeRemoteCommandBackend implements VscodeRemoteCommandRunner {
             throw new Error(`VS Code Git does not know repository "${repo.cwd}".`);
         }
 
-        if (await runRepositoryCommand(vscodeRepo, command)) { return; }
-        await vscode.commands.executeCommand(vscodeGitCommandId(command), vscodeRepo);
+        if (await runRepositoryCommand(vscodeRepo, resolvedCommand)) { return; }
+        await vscode.commands.executeCommand(vscodeGitCommandId(resolvedCommand), vscodeRepo);
     }
 }
 

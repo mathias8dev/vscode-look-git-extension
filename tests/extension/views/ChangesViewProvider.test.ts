@@ -352,6 +352,23 @@ describe('ChangesViewProvider', () => {
         await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
     });
 
+    it('toolbar push publishes the current branch when it has no upstream', async () => {
+        const repo = makeRepo({
+            getCurrentBranch: vi.fn(async () => 'topic'),
+            getAllBranches: vi.fn(async () => [
+                { name: 'topic', isRemote: false, isCurrent: true, hash: 'topic-head', upstream: undefined, ahead: 0, behind: 0 },
+            ]),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'push' });
+
+        await vi.waitFor(() => expect(getCommandCalls()).toContainEqual({ command: 'git.publish', args: [] }));
+        expect(getCommandCalls()).not.toContainEqual({ command: 'git.push', args: [] });
+    });
+
     it('toolbar fetch all delegates to VS Code Git all-remotes semantics', async () => {
         const repo = makeRepo();
         const onRepositoryUpdated = vi.fn(async () => {});
