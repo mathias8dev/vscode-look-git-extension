@@ -1,0 +1,157 @@
+/* ── Submodule Section ───────────────────────────────────────────────────── */
+
+.submodule-panel {
+    display: grid;
+    min-width: 0;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border, #3c3c3c));
+}
+
+.submodule-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    min-height: 28px;
+    padding: 0 8px;
+}
+
+.submodule-panel-header h2 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: 0.92em;
+    font-weight: 700;
+    text-transform: uppercase;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.submodule-panel-header span {
+    min-width: 1.6em;
+    padding: 2px 5px;
+    border-radius: 4px;
+    color: var(--vscode-badge-foreground, #ffffff);
+    background: var(--vscode-badge-background, #4d4d4d);
+    font-size: 0.9em;
+    line-height: 1;
+    text-align: center;
+}
+
+.submodule-header-actions {
+    flex: none;
+    display: flex;
+    align-items: center;
+}
+
+.submodule-header-actions .icon-button {
+    opacity: 1;
+}
+
+.submodule-list {
+    display: grid;
+    min-width: 0;
+}
+
+.submodule-item {
+    display: grid;
+    min-width: 0;
+    border-top: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
+}
+
+.submodule-item-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 28px;
+    padding: 0 8px;
+}
+
+.submodule-item:hover .icon-button {
+    opacity: 1;
+}
+
+.submodule-icon {
+    flex-shrink: 0;
+    font-size: inherit;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+.submodule-title {
+    flex: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.submodule-name {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 50%;
+    font-size: inherit;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.submodule-path {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 0.9em;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.submodule-actions {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.submodule-badge {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 8em;
+    font-size: 0.88em;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.submodule-badge-dirty {
+    color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
+    background: color-mix(in srgb, var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d) 15%, transparent);
+}
+
+.submodule-badge-out-of-sync {
+    color: var(--vscode-gitDecoration-untrackedResourceForeground, #73c991);
+    background: color-mix(in srgb, var(--vscode-gitDecoration-untrackedResourceForeground, #73c991) 15%, transparent);
+}
+
+.submodule-badge-not-initialized {
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    background: rgba(128, 128, 128, 0.15);
+}
+
+.submodule-files {
+    display: grid;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 8px 4px 18px;
+}
+
+.submodule-change-areas {
+    min-width: 0;
+    overflow: hidden;
+}
+

@@ -1,0 +1,461 @@
+/* ── Commit History ──────────────────────────────────────────────────────── */
+
+.history-shell {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    background: var(--vscode-sideBar-background, var(--vscode-editor-background, #1e1e1e));
+}
+
+.history-search {
+    margin: 6px 8px;
+}
+
+.history-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    padding: 2px 0 6px;
+}
+
+.history-item {
+    display: grid;
+}
+
+.history-row {
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 5px;
+    width: 100%;
+    min-height: 36px;
+    border: none;
+    padding: 4px 8px;
+    color: var(--vscode-foreground, #cccccc);
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.history-row:hover {
+    background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
+}
+
+.history-row[aria-selected="true"] {
+    color: var(--vscode-list-activeSelectionForeground, #ffffff);
+    background: var(--vscode-list-activeSelectionBackground, rgba(14, 99, 156, 0.4));
+}
+
+.history-row:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder, #007fd4);
+    outline-offset: -1px;
+}
+
+.history-row-chevron {
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: inherit;
+}
+
+.history-row-main {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.history-row-title {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.history-row-message,
+.history-row-hash {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-row-message {
+    flex: 1;
+    font-size: inherit;
+}
+
+.history-row-refs {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+    max-width: 52%;
+    overflow: hidden;
+}
+
+.history-ref-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    max-width: 11em;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.95em;
+    line-height: 1.35;
+    white-space: nowrap;
+    flex-shrink: 1;
+}
+
+.history-ref-badge .codicon {
+    flex-shrink: 0;
+    font-size: 1em;
+}
+
+.history-ref-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-ref-badge-local {
+    background: var(--vscode-button-background, #0e639c);
+    color: var(--vscode-button-foreground, #fff);
+}
+
+.history-ref-badge-remote {
+    background: color-mix(in srgb, var(--vscode-gitDecoration-untrackedResourceForeground, #73c991) 28%, transparent);
+    color: var(--vscode-foreground, #cccccc);
+}
+
+.history-ref-badge-tag {
+    background: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
+    color: var(--vscode-editor-background, #000);
+}
+
+.history-row-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 0.9em;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    min-width: 0;
+}
+
+.history-row-author {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.history-row-date {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.history-row-hash {
+    max-width: 7.5em;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.9em;
+}
+
+.history-file-tree {
+    display: grid;
+    gap: 1px;
+    padding: 2px 0 5px;
+    background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground, rgba(14, 99, 156, 0.4)) 16%, transparent);
+}
+
+.history-file-tree-row {
+    --depth: 0;
+    display: grid;
+    align-items: center;
+    gap: 5px;
+    width: 100%;
+    min-height: 22px;
+    border: none;
+    padding: 1px 8px 1px calc(8px + var(--depth) * 14px);
+    color: var(--vscode-foreground, #cccccc);
+    background: transparent;
+    font: inherit;
+    font-size: inherit;
+    text-align: left;
+}
+
+.history-file-folder-row {
+    grid-template-columns: 16px 16px minmax(0, 1fr) auto;
+    cursor: pointer;
+}
+
+.history-file-leaf-row {
+    grid-template-columns: 16px 18px 16px minmax(0, 1fr) minmax(0, 0.6fr);
+}
+
+.history-file-entry-clickable {
+    cursor: pointer;
+}
+
+.history-file-entry-submodule {
+    cursor: default;
+}
+
+.history-file-folder-row:hover,
+.history-file-entry-clickable:hover {
+    background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
+}
+
+.history-file-folder-row:focus-visible,
+.history-file-entry-clickable:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder, #007fd4);
+    outline-offset: -1px;
+}
+
+.history-file-chevron,
+.history-file-spacer {
+    width: 16px;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: inherit;
+}
+
+.history-file-status {
+    justify-self: end;
+    font-size: 0.9em;
+    font-weight: 700;
+}
+
+.history-file-status-added,
+.history-file-status-copied {
+    color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+}
+
+.history-file-status-modified,
+.history-file-status-renamed {
+    color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
+}
+
+.history-file-status-deleted {
+    color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
+}
+
+.history-file-status-conflict {
+    color: var(--vscode-gitDecoration-conflictingResourceForeground, #e4676b);
+}
+
+.history-file-count {
+    min-width: 1.6em;
+    border-radius: 3px;
+    padding: 0 4px;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    background: var(--vscode-badge-background, #4d4d4d);
+    font-size: 0.88em;
+    text-align: center;
+}
+
+.history-file-path,
+.history-file-original {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-file-original {
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: inherit;
+}
+
+.history-file-loading,
+.history-file-empty {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 28px;
+    padding: 4px 8px 5px 30px;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground, rgba(14, 99, 156, 0.4)) 16%, transparent);
+    font-size: 0.92em;
+}
+
+.history-load-more {
+    min-height: 28px;
+    margin: 4px 8px;
+    border: 1px solid var(--vscode-button-border, transparent);
+    border-radius: 3px;
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, #cccccc));
+    background: var(--vscode-button-secondaryBackground, transparent);
+    font: inherit;
+    font-size: inherit;
+}
+
+.history-load-more:hover:not(:disabled) {
+    background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.1)));
+}
+
+.history-load-more:disabled {
+    opacity: 0.5;
+}
+
+.history-loading,
+.history-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px 12px;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: inherit;
+}
+
+.history-empty-icon {
+    font-size: 1.8em;
+    opacity: 0.5;
+}
+
+.history-item-expanded {
+    background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground, rgba(14, 99, 156, 0.4)) 14%, transparent);
+    border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
+}
+
+.history-item-expanded .history-file-tree {
+    padding-top: 4px;
+    padding-bottom: 6px;
+    border-top: 1px solid var(--vscode-panel-border, #3c3c3c);
+}
+
+.history-item-meta {
+    display: grid;
+    gap: 4px;
+    padding: 6px 8px 6px 28px;
+}
+
+.history-item-subject {
+    margin: 0;
+    color: var(--vscode-foreground, #cccccc);
+    font-size: inherit;
+    font-weight: 500;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.history-item-body {
+    margin: 0;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.92em;
+    line-height: 1.4;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.history-item-info {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.9em;
+}
+
+.history-item-author {
+    font-weight: 500;
+    color: var(--vscode-foreground, #cccccc);
+}
+
+.history-item-date {
+    white-space: nowrap;
+}
+
+.history-item-sep {
+    opacity: 0.4;
+}
+
+.history-details {
+    flex-shrink: 0;
+    display: grid;
+    gap: 8px;
+    border-top: 1px solid var(--vscode-panel-border, #3c3c3c);
+    padding: 8px;
+    background: var(--vscode-sideBar-background, transparent);
+}
+
+.history-details-subject {
+    margin: 0;
+    color: var(--vscode-foreground, #cccccc);
+    font-size: inherit;
+    font-weight: 500;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.history-details-body {
+    margin: 0;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.92em;
+    line-height: 1.4;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.history-copy-hash {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: none;
+    background: transparent;
+    color: var(--vscode-foreground, #cccccc);
+    font: inherit;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.9em;
+    cursor: pointer;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-left: -4px;
+}
+
+.history-copy-hash:hover {
+    background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
+}
+
+.history-copy-hash .codicon {
+    font-size: inherit;
+    opacity: 0.7;
+}
+
+.history-details dl {
+    display: grid;
+    gap: 5px;
+    margin: 0;
+}
+
+.history-details div {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 8px;
+}
+
+.history-details dt,
+.history-details dd {
+    margin: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.9em;
+}
+
+.history-details dt {
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+.history-details dd {
+    color: var(--vscode-foreground, #cccccc);
+    font-family: var(--vscode-editor-font-family, inherit);
+}
+

@@ -1,0 +1,95 @@
+:root {
+    color-scheme: light dark;
+    font-family: var(--vscode-font-family, system-ui, sans-serif);
+    font-size: var(--look-git-font-size, var(--vscode-font-size, inherit));
+    line-height: var(--look-git-line-height);
+    --look-git-line-height: 1.38;
+    --look-git-space-xxs: 0.15em;
+    --look-git-space-xs: 0.3em;
+    --look-git-space-sm: 0.45em;
+    --look-git-space-md: 0.6em;
+    --look-git-space-lg: 0.8em;
+    --look-git-control-min-height: max(1.9em, 24px);
+    --look-git-row-min-height: max(1.65em, 22px);
+    --look-git-row-comfortable-min-height: max(2.8em, 36px);
+    --look-git-icon-button-size: max(1.65em, 22px);
+    --look-git-toolbar-button-size: max(1.85em, 24px);
+    --look-git-graph-row-height: max(1.75em, 24px);
+    --look-git-motion-fast: 90ms;
+    --look-git-motion-medium: 140ms;
+    --look-git-motion-ease: cubic-bezier(0.2, 0, 0, 1);
+    color: var(--vscode-foreground, #cccccc);
+    background: var(--vscode-editor-background, #1e1e1e);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-size: inherit;
+    line-height: inherit;
+    overflow-x: hidden;
+}
+
+.app-shell {
+    min-height: 100%;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+}
+
+.hero {
+    width: min(560px, 100%);
+    border: 1px solid var(--vscode-panel-border, #3c3c3c);
+    border-radius: 6px;
+    padding: 24px;
+    background: var(--vscode-sideBar-background, transparent);
+}
+
+.eyebrow {
+    margin: 0 0 8px;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: inherit;
+}
+
+h1 {
+    margin: 0;
+    font-size: 1.8em;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.description {
+    margin: 12px 0 0;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    line-height: 1.5;
+}
+
+.error-notice {
+    margin-top: 16px;
+    display: grid;
+    gap: 6px;
+    border: 1px solid var(--vscode-inputValidation-errorBorder, #f14c4c);
+    border-radius: 4px;
+    padding: 10px 12px;
+    color: var(--vscode-inputValidation-errorForeground, var(--vscode-foreground, #cccccc));
+    background: var(--vscode-inputValidation-errorBackground, transparent);
+    line-height: 1.4;
+}
+
+.error-notice strong {
+    font-weight: 600;
+}
+
+.error-notice span {
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: inherit;
+}
+
