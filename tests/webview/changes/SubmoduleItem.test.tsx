@@ -165,6 +165,40 @@ describe('SubmoduleItem', () => {
         expect(onOpenContextMenu).toHaveBeenCalledOnce();
     });
 
+    it('posts submodule-scoped selected changes as a native context menu target', () => {
+        const onSelectionContextTarget = vi.fn();
+        renderSubmodule({
+            statusData: statusData({
+                staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'src/staged.ts' }],
+                unstaged: [
+                    { indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/app.ts' },
+                    { indexStatus: '?', workTreeStatus: '?', filePath: 'src/new.ts' },
+                ],
+            }),
+            onSelectionContextTarget,
+        });
+
+        const app = screen.getByTitle('src/app.ts');
+        const staged = screen.getByTitle('src/staged.ts');
+        fireEvent.click(app, { ctrlKey: true });
+        fireEvent.click(staged, { ctrlKey: true });
+
+        expect(staged).toHaveAttribute('aria-selected', 'true');
+        expect(staged.getAttribute('data-vscode-context')).toContain('changesSelection');
+        fireEvent.contextMenu(staged);
+
+        expect(onSelectionContextTarget).toHaveBeenCalledWith({
+            kind: 'selection',
+            submodulePath: 'modules/lib',
+            filePaths: ['src/app.ts', 'src/staged.ts'],
+            stageFilePaths: ['src/app.ts'],
+            unstageFilePaths: ['src/staged.ts'],
+            discardFilePaths: ['src/app.ts'],
+            stashFilePaths: ['src/app.ts', 'src/staged.ts'],
+            stashIncludeUntracked: false,
+        });
+    });
+
     it('shows a busy refresh control while submodule status is loading', () => {
         renderSubmodule({
             statusData: statusData(),
@@ -183,6 +217,7 @@ function renderSubmodule(input: {
     readonly focusRequest?: number;
     readonly onAction?: (action: SubmoduleAction) => void;
     readonly onOpenContextMenu?: () => void;
+    readonly onSelectionContextTarget?: Parameters<typeof SubmoduleItem>[0]['onSelectionContextTarget'];
     readonly onOperationAction?: (conflictState: ConflictState.Merge | ConflictState.Rebase, action: OperationAction) => void;
 }): void {
     render(
@@ -199,6 +234,7 @@ function renderSubmodule(input: {
             stashFilesByIndex={{}}
             onRowAction={vi.fn()}
             onBulkAction={vi.fn()}
+            onSelectionContextTarget={input.onSelectionContextTarget ?? vi.fn()}
             onOperationAction={input.onOperationAction ?? vi.fn()}
             commitFeedback={undefined}
             commitMessageGenerating={false}

@@ -4,6 +4,7 @@ import type { ChangesSelectionContextTarget, CommitMode, StashFileEntry } from '
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import type { ChangeBulkAction, ChangeRowAction } from './changeCommands';
 import { ChangeSectionView } from './ChangeSectionView';
+import { changesSelectionTarget, isChangeListItem } from './changeSelectionModel';
 import { CommitComposer } from './CommitComposer';
 import { EmptyState } from './EmptyState';
 import { OperationBanner } from './OperationBanner';
@@ -41,6 +42,7 @@ interface ChangesAppProps {
     readonly onToggleSubmodule: (path: string) => void;
     readonly onSubmoduleRowAction: (submodulePath: string, item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onSubmoduleBulkAction: (submodulePath: string, action: ChangeBulkAction) => void;
+    readonly onSubmoduleSelectionContextTarget: (target: ChangesSelectionContextTarget) => void;
     readonly onSubmoduleOperationAction: (submodulePath: string, conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly onSubmoduleCommit: (submodulePath: string, message: string, mode: CommitMode) => void;
     readonly onSubmoduleCommitComposerContextTarget: (submodulePath: string, message: string) => void;
@@ -71,6 +73,7 @@ export function ChangesApp({
     onToggleSubmodule,
     onSubmoduleRowAction,
     onSubmoduleBulkAction,
+    onSubmoduleSelectionContextTarget,
     onSubmoduleOperationAction,
     onSubmoduleCommit,
     onSubmoduleCommitComposerContextTarget,
@@ -178,6 +181,7 @@ export function ChangesApp({
                         onUpdateAll={() => onSubmoduleAction('', SubmoduleAction.UpdateAll)}
                         onRowAction={onSubmoduleRowAction}
                         onBulkAction={onSubmoduleBulkAction}
+                        onSelectionContextTarget={onSubmoduleSelectionContextTarget}
                         onOperationAction={onSubmoduleOperationAction}
                         onCommit={onSubmoduleCommit}
                         onCommitComposerContextTarget={onSubmoduleCommitComposerContextTarget}
@@ -216,33 +220,6 @@ function operationBannerFor(
             onAction={(action) => onOperationAction(conflictState, action)}
         />
     );
-}
-
-function changesSelectionTarget(items: readonly ChangeListItem[]): ChangesSelectionContextTarget {
-    const stageableItems = items.filter((item) => item.section === ChangeSectionId.Unstaged);
-    const stagedItems = items.filter((item) => item.section === ChangeSectionId.Staged);
-    const stashableItems = items.filter((item) => item.section === ChangeSectionId.Unstaged || item.section === ChangeSectionId.Staged);
-    return {
-        kind: 'selection',
-        filePaths: uniqueFilePaths(items),
-        stageFilePaths: uniqueFilePaths(stageableItems),
-        unstageFilePaths: uniqueFilePaths(stagedItems),
-        discardFilePaths: uniqueFilePaths(stageableItems),
-        stashFilePaths: uniqueFilePaths(stashableItems),
-        stashIncludeUntracked: stashableItems.some((item) => isUntracked(item)),
-    };
-}
-
-function uniqueFilePaths(items: readonly ChangeListItem[]): readonly string[] {
-    return Array.from(new Set(items.map((item) => item.entry.filePath)));
-}
-
-function isUntracked(item: ChangeListItem): boolean {
-    return item.entry.indexStatus === '?' || item.entry.workTreeStatus === '?';
-}
-
-function isChangeListItem(item: ChangeListItem | undefined): item is ChangeListItem {
-    return item !== undefined;
 }
 
 function stashHandlerFor(

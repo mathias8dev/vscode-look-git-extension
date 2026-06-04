@@ -28,6 +28,7 @@ export interface ChangesCommitComposerContextTarget {
 
 export interface ChangesSelectionContextTarget {
     readonly kind: 'selection';
+    readonly submodulePath?: string;
     readonly filePaths: readonly string[];
     readonly stageFilePaths: readonly string[];
     readonly unstageFilePaths: readonly string[];

@@ -169,6 +169,7 @@ export function ChangesWebview() {
                 postToExtension(messageForSubmoduleRowAction(submodulePath, item.entry, item.isStaged, action))}
             onSubmoduleBulkAction={(submodulePath: string, action: ChangeBulkAction) =>
                 postToExtension(messageForSubmoduleBulkAction(submodulePath, action))}
+            onSubmoduleSelectionContextTarget={(target) => postToExtension(messageForChangesContextTarget(target))}
             onSubmoduleOperationAction={(submodulePath: string, conflictState: ActiveConflictState, action: OperationAction) =>
                 postToExtension(messageForSubmoduleOperationAction(submodulePath, conflictState, action))}
             onSubmoduleCommit={(submodulePath: string, message: string, mode: CommitMode) => {

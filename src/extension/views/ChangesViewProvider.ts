@@ -247,16 +247,22 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         }
         switch (command.kind) {
             case ChangesSelectionCommandKind.Stage:
-                await this.runSelectionFileCommand(target.stageFilePaths, { type: 'changes/stageFiles', filePaths: target.stageFilePaths });
+                await this.runSelectionFileCommand(target.stageFilePaths, target.submodulePath
+                    ? { type: 'changes/submoduleStageFiles', submodulePath: target.submodulePath, filePaths: target.stageFilePaths }
+                    : { type: 'changes/stageFiles', filePaths: target.stageFilePaths });
                 return;
             case ChangesSelectionCommandKind.Unstage:
-                await this.runSelectionFileCommand(target.unstageFilePaths, { type: 'changes/unstageFiles', filePaths: target.unstageFilePaths });
+                await this.runSelectionFileCommand(target.unstageFilePaths, target.submodulePath
+                    ? { type: 'changes/submoduleUnstageFiles', submodulePath: target.submodulePath, filePaths: target.unstageFilePaths }
+                    : { type: 'changes/unstageFiles', filePaths: target.unstageFilePaths });
                 return;
             case ChangesSelectionCommandKind.Stash:
-                await this.stashSelectedFiles(target.stashFilePaths, target.stashIncludeUntracked);
+                await this.stashSelectedFiles(target.submodulePath, target.stashFilePaths, target.stashIncludeUntracked);
                 return;
             case ChangesSelectionCommandKind.Discard:
-                await this.runSelectionFileCommand(target.discardFilePaths, { type: 'changes/discardFiles', filePaths: target.discardFilePaths });
+                await this.runSelectionFileCommand(target.discardFilePaths, target.submodulePath
+                    ? { type: 'changes/submoduleDiscardFiles', submodulePath: target.submodulePath, filePaths: target.discardFilePaths }
+                    : { type: 'changes/discardFiles', filePaths: target.discardFilePaths });
                 return;
         }
     }
@@ -272,7 +278,11 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         await this.router?.handle(message);
     }
 
-    private async stashSelectedFiles(filePaths: readonly string[], includeUntracked: boolean): Promise<void> {
+    private async stashSelectedFiles(
+        submodulePath: string | undefined,
+        filePaths: readonly string[],
+        includeUntracked: boolean,
+    ): Promise<void> {
         if (filePaths.length === 0) {
             await vscode.window.showWarningMessage('No selected changes can be stashed.');
             return;
@@ -283,6 +293,16 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         });
         if (message === undefined) { return; }
         const trimmedMessage = message.trim();
+        if (submodulePath) {
+            await this.router?.handle({
+                type: 'changes/submoduleStashSelectedFiles',
+                submodulePath,
+                filePaths,
+                includeUntracked,
+                ...(trimmedMessage ? { message: trimmedMessage } : {}),
+            });
+            return;
+        }
         await this.router?.handle({
             type: 'changes/stashSelectedFiles',
             filePaths,

@@ -139,6 +139,9 @@ describe('protocol discriminated unions', () => {
                 case 'changes/submoduleMarkResolved': return msg.submodulePath satisfies string;
                 case 'changes/submoduleAcceptOurs': return msg.submodulePath satisfies string;
                 case 'changes/submoduleAcceptTheirs': return msg.submodulePath satisfies string;
+                case 'changes/submoduleStageFiles': return msg.filePaths satisfies readonly string[];
+                case 'changes/submoduleUnstageFiles': return msg.filePaths satisfies readonly string[];
+                case 'changes/submoduleDiscardFiles': return msg.filePaths satisfies readonly string[];
                 case 'changes/submoduleStageAll': return msg.submodulePath satisfies string;
                 case 'changes/submoduleUnstageAll': return msg.submodulePath satisfies string;
                 case 'changes/submoduleDiscardAll': return msg.submodulePath satisfies string;
@@ -152,6 +155,7 @@ describe('protocol discriminated unions', () => {
                 case 'changes/getStashFiles': return msg.requestId satisfies string;
                 case 'changes/openStashDiff': return msg.filePath satisfies string;
                 case 'changes/submoduleStash': return msg.submodulePath satisfies string;
+                case 'changes/submoduleStashSelectedFiles': return msg.filePaths satisfies readonly string[];
                 case 'changes/submoduleStashPop': return msg.index satisfies number;
                 case 'changes/submoduleStashApply': return msg.index satisfies number;
                 case 'changes/submoduleStashDrop': return msg.index satisfies number;

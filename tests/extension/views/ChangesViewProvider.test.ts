@@ -576,6 +576,56 @@ describe('ChangesViewProvider', () => {
         disposables.forEach((disposable) => disposable.dispose());
     });
 
+    it('native selection commands run against selected submodule changes', async () => {
+        setWarningChoice('Discard');
+        setInputBoxValue('save inner');
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+            getSubmoduleStatus: vi.fn(async () => [{ path: 'modules/lib', status: ' ' as const }]),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/contextTarget',
+            target: {
+                kind: 'selection',
+                submodulePath: 'modules/lib',
+                filePaths: ['src/app.ts', 'src/staged.ts'],
+                stageFilePaths: ['src/app.ts'],
+                unstageFilePaths: ['src/staged.ts'],
+                discardFilePaths: ['src/app.ts'],
+                stashFilePaths: ['src/app.ts', 'src/staged.ts'],
+                stashIncludeUntracked: true,
+            },
+        });
+
+        await vscode.commands.executeCommand('lookGit.changes.selection.stage');
+        await vscode.commands.executeCommand('lookGit.changes.selection.unstage');
+        await vscode.commands.executeCommand('lookGit.changes.selection.discard');
+        await vscode.commands.executeCommand('lookGit.changes.selection.stash');
+
+        const submoduleCwd = path.resolve('/workspace/modules/lib');
+        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith(['-C', submoduleCwd, 'add', '--', 'src/app.ts']));
+        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith(['-C', submoduleCwd, 'reset', 'HEAD', '--', 'src/staged.ts']));
+        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith(['-C', submoduleCwd, 'checkout', '--', 'src/app.ts']));
+        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith([
+            '-C',
+            submoduleCwd,
+            'stash',
+            'push',
+            '--include-untracked',
+            '-m',
+            'save inner',
+            '--',
+            'src/app.ts',
+            'src/staged.ts',
+        ]));
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
     it('toolbar push publishes the current branch when it has no upstream', async () => {
         const repo = makeRepo({
             getCurrentBranch: vi.fn(async () => 'topic'),

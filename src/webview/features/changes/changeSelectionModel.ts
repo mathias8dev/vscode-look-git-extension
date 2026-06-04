@@ -1,0 +1,33 @@
+import type { ChangesSelectionContextTarget } from '../../../protocol/changes/types';
+import { ChangeSectionId, type ChangeListItem } from './changeTree';
+
+export function changesSelectionTarget(
+    items: readonly ChangeListItem[],
+    submodulePath?: string,
+): ChangesSelectionContextTarget {
+    const stageableItems = items.filter((item) => item.section === ChangeSectionId.Unstaged);
+    const stagedItems = items.filter((item) => item.section === ChangeSectionId.Staged);
+    const stashableItems = items.filter((item) => item.section === ChangeSectionId.Unstaged || item.section === ChangeSectionId.Staged);
+    return {
+        kind: 'selection',
+        ...(submodulePath ? { submodulePath } : {}),
+        filePaths: uniqueFilePaths(items),
+        stageFilePaths: uniqueFilePaths(stageableItems),
+        unstageFilePaths: uniqueFilePaths(stagedItems),
+        discardFilePaths: uniqueFilePaths(stageableItems),
+        stashFilePaths: uniqueFilePaths(stashableItems),
+        stashIncludeUntracked: stashableItems.some((item) => isUntracked(item)),
+    };
+}
+
+export function isChangeListItem(item: ChangeListItem | undefined): item is ChangeListItem {
+    return item !== undefined;
+}
+
+function uniqueFilePaths(items: readonly ChangeListItem[]): readonly string[] {
+    return Array.from(new Set(items.map((item) => item.entry.filePath)));
+}
+
+function isUntracked(item: ChangeListItem): boolean {
+    return item.entry.indexStatus === '?' || item.entry.workTreeStatus === '?';
+}

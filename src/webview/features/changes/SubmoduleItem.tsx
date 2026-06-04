@@ -1,6 +1,6 @@
 import { useState, type MouseEvent } from 'react';
 import { SubmoduleStatus } from '../../../protocol/shared/repo';
-import type { StashFileEntry, SubmoduleEntry, SubmoduleStatusData } from '../../../protocol/changes/types';
+import type { ChangesSelectionContextTarget, StashFileEntry, SubmoduleEntry, SubmoduleStatusData } from '../../../protocol/changes/types';
 import { ConflictState } from '../../../protocol/changes/types';
 import type { CommitMode } from '../../../protocol/changes/types';
 import type { ProtocolError } from '../../../protocol/shared/base';
@@ -12,8 +12,9 @@ import { ChangeSectionView } from './ChangeSectionView';
 import type { ChangeListItem, ChangeSection } from './changeTree';
 import { ChangeSectionId } from './changeTree';
 import { ChangeSelectionMode, ChangesSortMode, ChangesViewMode, type CommitFeedback, type GeneratedCommitMessage } from './changesState';
+import { changesSelectionTarget, isChangeListItem } from './changeSelectionModel';
 import { CommitComposer } from './CommitComposer';
-import { changesItemContext, changesSubmoduleToolbarContext } from './context-menu-model';
+import { changesItemContext, changesSelectionContext, changesSubmoduleToolbarContext } from './context-menu-model';
 import { OperationBanner } from './OperationBanner';
 import type { ActiveConflictState, OperationAction } from './operationCommands';
 import { StashList } from './StashList';
@@ -32,6 +33,7 @@ interface SubmoduleItemProps {
     readonly stashFilesByIndex: Readonly<Record<number, readonly StashFileEntry[]>>;
     readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onBulkAction: (action: ChangeBulkAction) => void;
+    readonly onSelectionContextTarget: (target: ChangesSelectionContextTarget) => void;
     readonly onOperationAction: (conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly commitFeedback: CommitFeedback | undefined;
     readonly commitMessageGenerating: boolean;
@@ -65,6 +67,7 @@ export function SubmoduleItem({
     stashFilesByIndex,
     onRowAction,
     onBulkAction,
+    onSelectionContextTarget,
     onOperationAction,
     commitFeedback,
     commitMessageGenerating,
@@ -79,9 +82,53 @@ export function SubmoduleItem({
     onStashFileDiff,
 }: SubmoduleItemProps) {
     const [collapsedSectionIds, setCollapsedSectionIds] = useState<readonly ChangeSectionId[]>([]);
+    const [selectedItemIds, setSelectedItemIds] = useState<readonly string[]>([]);
+    const [selectionAnchorId, setSelectionAnchorId] = useState<string | undefined>(undefined);
     const needsAction = submodule.status !== SubmoduleStatus.Clean;
     const sections = statusData ? buildSubmoduleSections(statusData) : [];
-    const visibleItemIds = sections.flatMap((section) => section.items.map((item) => item.id));
+    const visibleItems = sections
+        .filter((section) => !collapsedSectionIds.includes(section.id))
+        .flatMap((section) => section.items);
+    const visibleItemIds = visibleItems.map((item) => item.id);
+    const visibleItemsById = new Map(visibleItems.map((item) => [item.id, item]));
+    const selectedItemIdsSet = new Set(selectedItemIds);
+    const selectionItemsFor = (item: ChangeListItem): readonly ChangeListItem[] => (
+        selectedItemIdsSet.has(item.id)
+            ? selectedItemIds.map((id) => visibleItemsById.get(id)).filter(isChangeListItem)
+            : [item]
+    );
+    const selectionTargetFor = (item: ChangeListItem) => changesSelectionTarget(selectionItemsFor(item), submodule.path);
+    const contextForItem = (item: ChangeListItem) => {
+        const target = selectionTargetFor(item);
+        return changesSelectionContext({
+            canStage: target.stageFilePaths.length > 0,
+            canUnstage: target.unstageFilePaths.length > 0,
+            canStash: target.stashFilePaths.length > 0,
+            canDiscard: target.discardFilePaths.length > 0,
+        });
+    };
+    const selectItem = (item: ChangeListItem, mode: ChangeSelectionMode) => {
+        if (mode === ChangeSelectionMode.Range) {
+            const anchorId = selectionAnchorId ?? item.id;
+            setSelectedItemIds(rangeSelection(visibleItemIds, anchorId, item.id));
+            setSelectionAnchorId(anchorId);
+            return;
+        }
+        if (mode === ChangeSelectionMode.Toggle) {
+            setSelectedItemIds(toggledItem(selectedItemIds, item.id));
+            setSelectionAnchorId(item.id);
+            return;
+        }
+        setSelectedItemIds([item.id]);
+        setSelectionAnchorId(item.id);
+    };
+    const openSelectionContext = (item: ChangeListItem) => {
+        if (!selectedItemIdsSet.has(item.id)) {
+            setSelectedItemIds([item.id]);
+            setSelectionAnchorId(item.id);
+        }
+        onSelectionContextTarget(selectionTargetFor(item));
+    };
     const showCommitComposer = statusData
         ? statusData.staged.length > 0
             || focusRequest > 0
@@ -186,11 +233,11 @@ export function SubmoduleItem({
                                     viewMode={ChangesViewMode.List}
                                     sortMode={ChangesSortMode.Path}
                                     collapsed={collapsedSectionIds.includes(section.id)}
-                                    selectedItemIds={new Set()}
-                                    contextForItem={changesItemContextForSubmoduleRow}
+                                    selectedItemIds={selectedItemIdsSet}
+                                    contextForItem={contextForItem}
                                     onToggleCollapsed={() => setCollapsedSectionIds((ids) => toggleSectionId(ids, section.id))}
-                                    onSelectItem={noopSelect}
-                                    onOpenSelectionContext={noopOpenSelectionContext}
+                                    onSelectItem={selectItem}
+                                    onOpenSelectionContext={openSelectionContext}
                                     onRowAction={onRowAction}
                                     onBulkAction={onBulkAction}
                                     onStash={section.id === ChangeSectionId.Unstaged ? onCreateStash : undefined}
@@ -216,14 +263,6 @@ export function SubmoduleItem({
     );
 }
 
-function noopSelect(_item: ChangeListItem, _mode: ChangeSelectionMode): void {}
-
-function noopOpenSelectionContext(_item: ChangeListItem): void {}
-
-function changesItemContextForSubmoduleRow(_item: ChangeListItem): string {
-    return changesItemContext();
-}
-
 function openNativeContextMenu(event: MouseEvent<HTMLButtonElement>, onOpenContextMenu: () => void): void {
     onOpenContextMenu();
     const rect = event.currentTarget.getBoundingClientRect();
@@ -234,6 +273,21 @@ function openNativeContextMenu(event: MouseEvent<HTMLButtonElement>, onOpenConte
         clientX: rect.right,
         clientY: rect.bottom,
     }));
+}
+
+function rangeSelection(itemIds: readonly string[], anchorId: string, itemId: string): readonly string[] {
+    const anchorIndex = itemIds.indexOf(anchorId);
+    const itemIndex = itemIds.indexOf(itemId);
+    if (anchorIndex === -1 || itemIndex === -1) { return [itemId]; }
+    const start = Math.min(anchorIndex, itemIndex);
+    const end = Math.max(anchorIndex, itemIndex);
+    return itemIds.slice(start, end + 1);
+}
+
+function toggledItem(itemIds: readonly string[], itemId: string): readonly string[] {
+    return itemIds.includes(itemId)
+        ? itemIds.filter((entry) => entry !== itemId)
+        : [...itemIds, itemId];
 }
 
 function toggleSectionId(sectionIds: readonly ChangeSectionId[], sectionId: ChangeSectionId): readonly ChangeSectionId[] {

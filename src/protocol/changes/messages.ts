@@ -237,6 +237,15 @@ export interface SubmoduleFileMessage {
     readonly filePath: string;
 }
 
+export interface SubmoduleFilesMessage {
+    readonly type:
+        | 'changes/submoduleStageFiles'
+        | 'changes/submoduleUnstageFiles'
+        | 'changes/submoduleDiscardFiles';
+    readonly submodulePath: string;
+    readonly filePaths: readonly string[];
+}
+
 export interface SubmoduleBulkMessage {
     readonly type:
         | 'changes/submoduleStageAll'
@@ -273,6 +282,13 @@ export interface OpenStashDiffMessage {
 }
 
 export interface SubmoduleStashMessage       { readonly type: 'changes/submoduleStash'; readonly submodulePath: string; readonly message?: string; }
+export interface SubmoduleStashSelectedFilesMessage {
+    readonly type: 'changes/submoduleStashSelectedFiles';
+    readonly submodulePath: string;
+    readonly filePaths: readonly string[];
+    readonly includeUntracked: boolean;
+    readonly message?: string;
+}
 export interface SubmoduleStashPopMessage    { readonly type: 'changes/submoduleStashPop'; readonly submodulePath: string; readonly index: number; }
 export interface SubmoduleStashApplyMessage  { readonly type: 'changes/submoduleStashApply'; readonly submodulePath: string; readonly index: number; }
 export interface SubmoduleStashDropMessage   { readonly type: 'changes/submoduleStashDrop'; readonly submodulePath: string; readonly index: number; }
@@ -331,10 +347,10 @@ export type ChangesWebviewToExtensionMessage =
     | MarkResolvedMessage | MarkResolvedFilesMessage
     | AcceptOursMessage | AcceptTheirsMessage | AcceptOursFilesMessage | AcceptTheirsFilesMessage | AcceptAllTheirsMessage
     | CommitMessage | GenerateCommitMessageRequest | SubmoduleCommitMessage | GenerateSubmoduleCommitMessageRequest | OpenFileMessage | OpenSubmoduleMessage | OpenMergeEditorMessage | OpenDiffMessage | OpenSubmoduleDiffMessage
-    | SubmoduleFileMessage | SubmoduleBulkMessage
+    | SubmoduleFileMessage | SubmoduleFilesMessage | SubmoduleBulkMessage
     | StashMessage | StashStagedMessage | StashSelectedFilesMessage | StashPopMessage | StashApplyMessage | StashDropMessage
     | GetStashFilesRequest | OpenStashDiffMessage
-    | SubmoduleStashMessage | SubmoduleStashPopMessage | SubmoduleStashApplyMessage | SubmoduleStashDropMessage
+    | SubmoduleStashMessage | SubmoduleStashSelectedFilesMessage | SubmoduleStashPopMessage | SubmoduleStashApplyMessage | SubmoduleStashDropMessage
     | GetSubmoduleStashFilesRequest | OpenSubmoduleStashDiffMessage
     | ContinueOpMessage | AbortOpMessage | SubmoduleContinueOpMessage | SubmoduleAbortOpMessage
     | SubmoduleUpdateMessage | SubmoduleUpdateAllMessage | GetSubmoduleStatusRequest;

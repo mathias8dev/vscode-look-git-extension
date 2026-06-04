@@ -125,6 +125,7 @@ function renderSubmodule(status: SubmoduleStatusData): void {
             stashFilesByIndex={{}}
             onRowAction={vi.fn()}
             onBulkAction={vi.fn()}
+            onSelectionContextTarget={vi.fn()}
             onOperationAction={vi.fn()}
             commitFeedback={undefined}
             commitMessageGenerating={false}

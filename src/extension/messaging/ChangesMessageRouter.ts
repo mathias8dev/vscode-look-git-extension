@@ -435,9 +435,25 @@ export class ChangesMessageRouter {
                 break;
             }
 
+            case 'changes/submoduleStageFiles': {
+                if (msg.filePaths.length === 0) { break; }
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                await repo.exec(['-C', path.join(repo.cwd, submodulePath), 'add', '--', ...msg.filePaths]);
+                await this.refresh();
+                break;
+            }
+
             case 'changes/submoduleUnstageFile': {
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 await repo.exec(['-C', path.join(repo.cwd, submodulePath), 'reset', 'HEAD', '--', msg.filePath]);
+                await this.refresh();
+                break;
+            }
+
+            case 'changes/submoduleUnstageFiles': {
+                if (msg.filePaths.length === 0) { break; }
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                await repo.exec(['-C', path.join(repo.cwd, submodulePath), 'reset', 'HEAD', '--', ...msg.filePaths]);
                 await this.refresh();
                 break;
             }
@@ -449,6 +465,23 @@ export class ChangesMessageRouter {
                 );
                 if (choice === 'Discard') {
                     await discardSubmoduleFile(repo, submodulePath, msg.filePath);
+                    await this.refresh();
+                }
+                break;
+            }
+
+            case 'changes/submoduleDiscardFiles': {
+                if (msg.filePaths.length === 0) { break; }
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                const count = msg.filePaths.length;
+                const choice = await showModalWarningMessage(
+                    `Discard changes to ${count} file${count === 1 ? '' : 's'} inside "${submodulePath}"? This cannot be undone.`,
+                    'Discard',
+                );
+                if (choice === 'Discard') {
+                    for (const filePath of msg.filePaths) {
+                        await discardSubmoduleFile(repo, submodulePath, filePath);
+                    }
                     await this.refresh();
                 }
                 break;
@@ -548,6 +581,7 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/submoduleStash':
+            case 'changes/submoduleStashSelectedFiles':
             case 'changes/submoduleStashPop':
             case 'changes/submoduleStashApply':
             case 'changes/submoduleStashDrop':
@@ -562,6 +596,17 @@ export class ChangesMessageRouter {
                             : ['-C', submoduleCwd, 'stash', 'push']);
                         await this.refresh();
                         break;
+                    case 'changes/submoduleStashSelectedFiles': {
+                        if (msg.filePaths.length === 0) { break; }
+                        const args = ['-C', submoduleCwd, 'stash', 'push'];
+                        if (msg.includeUntracked) { args.push('--include-untracked'); }
+                        const message = msg.message?.trim();
+                        if (message) { args.push('-m', message); }
+                        args.push('--', ...msg.filePaths);
+                        await repo.exec(args);
+                        await this.refresh();
+                        break;
+                    }
                     case 'changes/submoduleStashPop':
                         await repo.exec(['-C', submoduleCwd, 'stash', 'pop', `stash@{${msg.index}}`]);
                         await this.refresh();

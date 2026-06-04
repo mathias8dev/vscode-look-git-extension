@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { CommitMode } from '../../../protocol/changes/types';
+import type { ChangesSelectionContextTarget, CommitMode } from '../../../protocol/changes/types';
 import type { StashFileEntry, SubmoduleEntry, SubmoduleStatusData } from '../../../protocol/changes/types';
 import { Codicon } from '../../shared/Codicon';
 import { IconButton } from '../../shared/IconButton';
@@ -30,6 +30,7 @@ interface SubmoduleSectionProps {
     readonly onUpdateAll: () => void;
     readonly onRowAction: (submodulePath: string, item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onBulkAction: (submodulePath: string, action: ChangeBulkAction) => void;
+    readonly onSelectionContextTarget: (target: ChangesSelectionContextTarget) => void;
     readonly onOperationAction: (submodulePath: string, conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly onCommit: (submodulePath: string, message: string, mode: CommitMode) => void;
     readonly onCommitComposerContextTarget: (submodulePath: string, message: string) => void;
@@ -58,6 +59,7 @@ export function SubmoduleSection({
     onUpdateAll,
     onRowAction,
     onBulkAction,
+    onSelectionContextTarget,
     onOperationAction,
     onCommit,
     onCommitComposerContextTarget,
@@ -116,6 +118,7 @@ export function SubmoduleSection({
                                 }, {})}
                                 onRowAction={(item, action) => onRowAction(submodule.path, item, action)}
                                 onBulkAction={(action) => onBulkAction(submodule.path, action)}
+                                onSelectionContextTarget={onSelectionContextTarget}
                                 onOperationAction={(conflictState, action) => onOperationAction(submodule.path, conflictState, action)}
                                 commitFeedback={commitFeedbackByPath[submodule.path]}
                                 commitMessageGenerating={commitMessageGenerationRequestIdByPath[submodule.path] !== undefined}
