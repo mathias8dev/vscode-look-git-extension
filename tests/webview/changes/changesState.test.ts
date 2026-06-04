@@ -138,6 +138,33 @@ describe('changesState', () => {
         expect(state.commitFeedback).toEqual({ success: true, message: undefined });
     });
 
+    it('clears commit feedback locally', () => {
+        const withFeedback = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: { type: 'changes/commitResult', success: true },
+        });
+        const cleared = reduceChangesState(withFeedback, { type: 'clearCommitFeedback' });
+
+        expect(cleared.commitFeedback).toBeUndefined();
+    });
+
+    it('clears submodule commit feedback locally', () => {
+        const withFeedback = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: {
+                type: 'changes/submoduleCommitResult',
+                path: 'modules/lib',
+                success: true,
+            },
+        });
+        const cleared = reduceChangesState(withFeedback, {
+            type: 'clearSubmoduleCommitFeedback',
+            path: 'modules/lib',
+        });
+
+        expect(cleared.submoduleCommitFeedbackByPath).toEqual({});
+    });
+
     it('tracks generated commit message requests and responses', () => {
         const requested = reduceChangesState(createInitialChangesState(), {
             type: 'requestCommitMessageGeneration',

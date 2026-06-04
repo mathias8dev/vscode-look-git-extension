@@ -37,6 +37,8 @@ import {
 import { applyWebviewFontSize, isWebviewFontSizeMessage } from '../platform/font-size';
 import { vscodeApi } from '../platform/vscodeHost';
 
+const COMMIT_FEEDBACK_TIMEOUT_MS = 5000;
+
 export function ChangesWebview() {
     const [state, dispatch] = useReducer(
         reduceChangesState,
@@ -60,6 +62,25 @@ export function ChangesWebview() {
     useEffect(() => {
         vscodeApi.setState(changesStateToPersisted(state));
     }, [state]);
+
+    useEffect(() => {
+        if (!state.commitFeedback?.success) { return undefined; }
+        const timeout = window.setTimeout(() => dispatch({ type: 'clearCommitFeedback' }), COMMIT_FEEDBACK_TIMEOUT_MS);
+        return () => window.clearTimeout(timeout);
+    }, [state.commitFeedback]);
+
+    useEffect(() => {
+        const successfulSubmodulePaths = Object.entries(state.submoduleCommitFeedbackByPath)
+            .filter(([, feedback]) => feedback.success)
+            .map(([path]) => path);
+        if (successfulSubmodulePaths.length === 0) { return undefined; }
+        const timeout = window.setTimeout(() => {
+            for (const path of successfulSubmodulePaths) {
+                dispatch({ type: 'clearSubmoduleCommitFeedback', path });
+            }
+        }, COMMIT_FEEDBACK_TIMEOUT_MS);
+        return () => window.clearTimeout(timeout);
+    }, [state.submoduleCommitFeedbackByPath]);
 
     useEffect(() => {
         postToExtension({

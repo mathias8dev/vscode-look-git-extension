@@ -94,6 +94,8 @@ export type ChangesAction =
     | { readonly type: 'clearSelection' }
     | { readonly type: 'toggleStash'; readonly index: number }
     | { readonly type: 'clearError' }
+    | { readonly type: 'clearCommitFeedback' }
+    | { readonly type: 'clearSubmoduleCommitFeedback'; readonly path: string }
     | { readonly type: 'toggleSubmodule'; readonly path: string }
     | { readonly type: 'requestSubmoduleStatus'; readonly path: string }
     | { readonly type: 'toggleSubmoduleStash'; readonly key: string };
@@ -183,6 +185,10 @@ export function reduceChangesState(state: ChangesState, action: ChangesAction): 
             return { ...state, selectedItemIds: [], selectionAnchorId: undefined };
         case 'toggleStash':
             return { ...state, expandedStashIndexes: toggledIndex(state.expandedStashIndexes, action.index) };
+        case 'clearCommitFeedback':
+            return { ...state, commitFeedback: undefined };
+        case 'clearSubmoduleCommitFeedback':
+            return { ...state, submoduleCommitFeedbackByPath: withoutKey(state.submoduleCommitFeedbackByPath, action.path) };
         case 'toggleSubmodule':
             return { ...state, expandedSubmodulePaths: toggledPath(state.expandedSubmodulePaths, action.path) };
         case 'requestSubmoduleStatus':

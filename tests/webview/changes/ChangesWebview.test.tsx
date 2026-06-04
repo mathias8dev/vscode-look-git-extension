@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConflictState, RepositoryState } from '../../../src/protocol/changes/types';
 import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
@@ -101,6 +101,33 @@ describe('ChangesWebview', () => {
             message: 'fix(changes): compact composer',
             mode: 'commit',
         });
+    });
+
+    it('clears successful commit feedback after a short timeout', async () => {
+        vi.useFakeTimers();
+        try {
+            createMockVsCodeApi();
+            const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+            render(<ChangesWebview />);
+            act(() => sendStatusDataWithStagedChange());
+            expect(screen.getByLabelText('Commit message')).toBeInTheDocument();
+
+            act(() => sendToWebview({ type: 'changes/commitResult', success: true }));
+            expect(screen.getByText('Committed successfully.')).toBeInTheDocument();
+
+            act(() => {
+                vi.advanceTimersByTime(4999);
+            });
+            expect(screen.getByText('Committed successfully.')).toBeInTheDocument();
+
+            act(() => {
+                vi.advanceTimersByTime(1);
+            });
+            expect(screen.queryByText('Committed successfully.')).not.toBeInTheDocument();
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('posts selected changes as a native context menu target', async () => {
