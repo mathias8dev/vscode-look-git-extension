@@ -49,10 +49,12 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
         await vscode.commands.executeCommand('lookGit.history.copyRevisionNumber');
         expect(env.clipboard.value).toBe(head);
 
+        setQuickPickValue('Save Patch to File...');
         window.saveDialogValue = vscode.Uri.file(patchPath);
         await vscode.commands.executeCommand('lookGit.history.createPatch');
         expect(readFileSync(patchPath, 'utf8')).toMatch(/Subject: \[PATCH\] feat: base/);
         expect(readFileSync(patchPath, 'utf8')).toMatch(/Subject: \[PATCH\] feat: head/);
+        expect(window.infoMessages).toContain(`Patch saved to ${patchPath}.`);
 
         fixture.write('head.txt', 'head local\n');
         await vscode.commands.executeCommand('lookGit.history.compareWithLocal');

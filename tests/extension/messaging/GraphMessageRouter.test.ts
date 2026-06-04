@@ -667,12 +667,28 @@ describe('GraphMessageRouter commit commands', () => {
         });
         const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
         const patchPath = '/tmp/look-git-router.patch';
+        setQuickPickValue('Save Patch to File...');
         window.saveDialogValue = Uri.file(patchPath);
 
         await router.handle({ type: 'graph/commitCommand', command: 'createPatch', hash: 'b', hashes: ['a', 'b'] });
 
         expect(vi.mocked(repo.execRaw)).toHaveBeenNthCalledWith(1, ['format-patch', '-1', '--stdout', 'a']);
         expect(vi.mocked(repo.execRaw)).toHaveBeenNthCalledWith(2, ['format-patch', '-1', '--stdout', 'b']);
+        expect(window.infoMessages).toContain('Patch saved to /tmp/look-git-router.patch.');
+    });
+
+    it('copies a patch for the selected commits', async () => {
+        const repo = makeRepositoryMock({
+            exec: vi.fn(async (args) => args[0] === 'rev-list' ? 'b\na' : ''),
+            execRaw: vi.fn(async (args) => `patch ${args.at(-1)}\n`),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+        setQuickPickValue('Copy Patch to Clipboard');
+        await router.handle({ type: 'graph/commitCommand', command: 'createPatch', hash: 'b', hashes: ['a', 'b'] });
+
+        expect(env.clipboard.value).toBe('patch a\n\npatch b\n');
+        expect(window.infoMessages).toContain('Patch copied to clipboard.');
     });
 
     it('confirms destructive commit commands', async () => {

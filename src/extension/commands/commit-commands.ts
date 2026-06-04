@@ -7,7 +7,7 @@ import { CliRemoteCommandKind, type RemoteCommandBackend } from '../../applicati
 import type { CommitCommand } from '../../protocol/graph/messages';
 import type { CommitReferenceActions } from '../../application/usecases/commits/commit-reference-actions';
 import { defaultCommitReferenceActions } from '../adapters/vscode/default-commit-reference-actions';
-import type { CreateCommitPatchUseCase } from '../../application/usecases/commits/create-commit-patch';
+import { CreateCommitPatchResultKind, type CreateCommitPatchUseCase, type CreateCommitPatchResult } from '../../application/usecases/commits/create-commit-patch';
 import { defaultCreateCommitPatch } from '../adapters/vscode/default-create-commit-patch';
 import { orderSelectedCommits } from '../../application/usecases/commits/order-selected-commits';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
@@ -29,7 +29,7 @@ export async function runCommitCommand(
             await commitReferenceActions.copyRevisionNumber(hash);
             return false;
         case 'createPatch':
-            await createCommitPatch.execute(repo, selected);
+            await showCommitPatchNotification(await createCommitPatch.execute(repo, selected));
             return false;
         case 'cherryPick':
             await assertNoUnmergedFiles(repo, 'cherry-picking commits');
@@ -81,6 +81,19 @@ export async function runCommitCommand(
         case 'compareCommitWithWorktree':
             await compareRefWithPickedWorktree(repo, hash, `Diff ${hash.substring(0, 7)}`);
             return false;
+    }
+}
+
+async function showCommitPatchNotification(result: CreateCommitPatchResult): Promise<void> {
+    switch (result.kind) {
+        case CreateCommitPatchResultKind.Cancelled:
+            return;
+        case CreateCommitPatchResultKind.CopiedToClipboard:
+            await vscode.window.showInformationMessage('Patch copied to clipboard.');
+            return;
+        case CreateCommitPatchResultKind.SavedToFile:
+            await vscode.window.showInformationMessage(`Patch saved to ${result.filePath ?? 'file'}.`);
+            return;
     }
 }
 

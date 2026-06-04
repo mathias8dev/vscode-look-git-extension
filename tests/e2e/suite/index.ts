@@ -171,7 +171,10 @@ export function run(): Promise<void> {
                     await router.handle({ type: 'graph/commitCommand', command: 'copyRevisionNumber', hash: head, hashes: [head] });
                     assert.equal(await vscode.env.clipboard.readText(), head);
 
-                    await withPatchedVscode({ saveDialogUri: vscode.Uri.file(patchPath) }, async () => {
+                    await withPatchedVscode({
+                        quickPickValues: ['Save Patch to File...'],
+                        saveDialogUri: vscode.Uri.file(patchPath),
+                    }, async () => {
                         await router.handle({ type: 'graph/commitCommand', command: 'createPatch', hash: head, hashes: [head, base] });
                     });
                     assert.match(fs.readFileSync(patchPath, 'utf8'), /Subject: \[PATCH\] feat: head/);
