@@ -3,6 +3,7 @@ import type { ChangesExtensionToWebviewMessage, ChangesWebviewToExtensionMessage
 import type { CommitMode, StashFileEntry } from '../../protocol/changes/types';
 import { messageForBulkAction, messageForRowAction, type ChangeBulkAction, type ChangeRowAction } from '../features/changes/changeCommands';
 import type { ChangeListItem, ChangeSectionId } from '../features/changes/changeTree';
+import { messageForGenerateCommitMessage, messageForGenerateSubmoduleCommitMessage } from '../features/changes/commit-message-commands';
 import { ChangesApp } from '../features/changes/ChangesApp';
 import {
     createInitialChangesState,
@@ -125,6 +126,11 @@ export function ChangesWebview() {
                 dispatch({ type: 'rememberCommitMessage', message });
                 postToExtension({ type: 'changes/commit', message, mode });
             }}
+            onGenerateCommitMessage={() => {
+                const message = messageForGenerateCommitMessage();
+                dispatch({ type: 'requestCommitMessageGeneration', requestId: message.requestId });
+                postToExtension(message);
+            }}
             onOperationAction={(conflictState: ActiveConflictState, action: OperationAction) => {
                 postToExtension(messageForOperationAction(conflictState, action));
             }}
@@ -142,7 +148,17 @@ export function ChangesWebview() {
                 postToExtension(messageForSubmoduleOperationAction(submodulePath, conflictState, action))}
             onSubmoduleCommit={(submodulePath: string, message: string, mode: CommitMode) => {
                 dispatch({ type: 'rememberCommitMessage', message });
+                dispatch({ type: 'clearSubmoduleCommitMessageGeneration', path: submodulePath });
                 postToExtension(messageForSubmoduleCommit(submodulePath, message, mode));
+            }}
+            onGenerateCommitMessageForSubmodule={(submodulePath: string) => {
+                const message = messageForGenerateSubmoduleCommitMessage(submodulePath);
+                dispatch({
+                    type: 'requestSubmoduleCommitMessageGeneration',
+                    path: submodulePath,
+                    requestId: message.requestId,
+                });
+                postToExtension(message);
             }}
             onSubmoduleCreateStash={(submodulePath: string, message: string) =>
                 postToExtension(messageForSubmoduleStash(submodulePath, message))}

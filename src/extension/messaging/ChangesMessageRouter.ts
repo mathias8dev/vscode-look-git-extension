@@ -16,7 +16,10 @@ import { openReadonlyDiffDocument } from '../utils/readonly-diff-documents';
 import { toProtocolSubmoduleStatus } from '../mapping/toProtocol';
 import { detectConflictStateFromFiles, parsePorcelainStatus } from '../../core/parsing/parseStatus';
 import { parseNameStatusZ } from '../../core/parsing/parseNameStatus';
-import { createErrorPayload } from './errorSerialization';
+import { GenerateCommitMessageUseCase } from '../../application/usecases/changes/generate-commit-message';
+import { VscodeLanguageModelCommitMessageGenerator } from '../adapters/vscode/vscode-language-model-commit-message-generator';
+import { ScopedGitRepository } from '../git/scoped-git-repository';
+import { createErrorPayload, isAbortError } from './errorSerialization';
 
 type PostMessage = (msg: ChangesExtensionToWebviewMessage) => void;
 type RefreshCallback = () => Promise<void>;
@@ -24,6 +27,8 @@ type RepositoryUpdatedCallback = () => Promise<void>;
 
 export class ChangesMessageRouter {
     private knownSubmodulePaths: ReadonlySet<string> | undefined;
+    private commitMessageGenerationAbortController: AbortController | undefined;
+    private readonly submoduleCommitMessageGenerationAbortControllers = new Map<string, AbortController>();
 
     constructor(
         private readonly repositories: ActiveRepositoryAccessor,
@@ -31,6 +36,7 @@ export class ChangesMessageRouter {
         private readonly refresh: RefreshCallback,
         private readonly onRepositoryUpdated: RepositoryUpdatedCallback = async () => {},
         private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
+        private readonly generateCommitMessage = new GenerateCommitMessageUseCase(new VscodeLanguageModelCommitMessageGenerator()),
     ) {}
 
     setKnownSubmodulePaths(paths: readonly string[]): void {
@@ -244,6 +250,60 @@ export class ChangesMessageRouter {
                     });
                 }
                 await this.refresh();
+                break;
+            }
+
+            case 'changes/generateCommitMessage': {
+                this.commitMessageGenerationAbortController?.abort();
+                const controller = new AbortController();
+                this.commitMessageGenerationAbortController = controller;
+                try {
+                    const result = await this.generateCommitMessage.execute(repo, controller.signal);
+                    this.postMessage({
+                        type: 'changes/generatedCommitMessage',
+                        requestId: msg.requestId,
+                        message: result.message,
+                    });
+                } catch (error) {
+                    if (isAbortError(error)) { break; }
+                    this.postChangesError(error, {
+                        requestId: msg.requestId,
+                        operation: msg.type,
+                        code: 'languageModelFailed',
+                    });
+                } finally {
+                    if (this.commitMessageGenerationAbortController === controller) {
+                        this.commitMessageGenerationAbortController = undefined;
+                    }
+                }
+                break;
+            }
+
+            case 'changes/generateSubmoduleCommitMessage': {
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                this.submoduleCommitMessageGenerationAbortControllers.get(submodulePath)?.abort();
+                const controller = new AbortController();
+                this.submoduleCommitMessageGenerationAbortControllers.set(submodulePath, controller);
+                try {
+                    const result = await this.generateCommitMessage.execute(new ScopedGitRepository(repo, submodulePath), controller.signal);
+                    this.postMessage({
+                        type: 'changes/submoduleGeneratedCommitMessage',
+                        requestId: msg.requestId,
+                        path: submodulePath,
+                        message: result.message,
+                    });
+                } catch (error) {
+                    if (isAbortError(error)) { break; }
+                    this.postChangesError(error, {
+                        requestId: msg.requestId,
+                        operation: msg.type,
+                        code: 'languageModelFailed',
+                    });
+                } finally {
+                    if (this.submoduleCommitMessageGenerationAbortControllers.get(submodulePath) === controller) {
+                        this.submoduleCommitMessageGenerationAbortControllers.delete(submodulePath);
+                    }
+                }
                 break;
             }
 
@@ -957,6 +1017,9 @@ function errorCodeFor(msg: ChangesWebviewToExtensionMessage): ErrorCode {
         case 'changes/openSubmoduleStashDiff':
         case 'changes/openStashDiff':
             return 'vscodeCommandFailed';
+        case 'changes/generateCommitMessage':
+        case 'changes/generateSubmoduleCommitMessage':
+            return 'languageModelFailed';
         case 'changes/commit':
         case 'changes/submoduleCommit':
             return 'gitOperationFailed';

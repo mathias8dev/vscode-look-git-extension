@@ -8,6 +8,8 @@ import type { RemoteCommandBackend } from '../../application/ports/remote-comman
 import { createErrorPayload, isAbortError } from '../messaging/errorSerialization';
 import { getWebviewHtml } from './webviewHtml';
 import { GetChangesStatusUseCase } from '../../application/usecases/changes/get-changes-status';
+import { GenerateCommitMessageUseCase } from '../../application/usecases/changes/generate-commit-message';
+import { VscodeLanguageModelCommitMessageGenerator } from '../adapters/vscode/vscode-language-model-commit-message-generator';
 import { toSerializedRepoContext } from '../mapping/toProtocol';
 import { webviewFontSizeMessage } from './webview-font';
 
@@ -90,6 +92,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
         private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
         private readonly getChangesStatus = new GetChangesStatusUseCase(),
+        private readonly generateCommitMessage = new GenerateCommitMessageUseCase(new VscodeLanguageModelCommitMessageGenerator()),
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -103,7 +106,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
         this.router = new ChangesMessageRouter(this.repositories, (msg) => {
             webviewView.webview.postMessage(msg);
-        }, () => this.refresh(), this.onRepositoryUpdated, this.remoteCommands);
+        }, () => this.refresh(), this.onRepositoryUpdated, this.remoteCommands, this.generateCommitMessage);
 
         webviewView.webview.onDidReceiveMessage((msg: ChangesWebviewToExtensionMessage) => {
             void this.router!.handle(msg);

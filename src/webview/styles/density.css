@@ -16,12 +16,19 @@
 .selection-actions button,
 .show-more-changes,
 .history-load-more,
+.commit-generate-button,
 .commit-main-button,
 .commit-more-trigger,
 .segmented button {
     min-height: var(--look-git-control-min-height);
     padding-inline: var(--look-git-space-md);
     line-height: var(--look-git-line-height);
+}
+
+.commit-generate-button {
+    flex-basis: var(--look-git-control-min-height);
+    width: var(--look-git-control-min-height);
+    padding-inline: 0;
 }
 
 .commit-composer,

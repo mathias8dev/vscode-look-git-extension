@@ -50,7 +50,9 @@ describe('protocol discriminated unions', () => {
                 case 'repo/contextChanged': return msg.context.id satisfies string;
                 case 'changes/statusData': return msg.data.staged satisfies readonly unknown[];
                 case 'changes/commitResult': return msg.success satisfies boolean;
+                case 'changes/generatedCommitMessage': return msg.requestId satisfies string;
                 case 'changes/submoduleCommitResult': return msg.path satisfies string;
+                case 'changes/submoduleGeneratedCommitMessage': return msg.path satisfies string;
                 case 'changes/stashFiles': return msg.files satisfies readonly unknown[];
                 case 'changes/submoduleStatusData': return msg.data.unstaged satisfies readonly unknown[];
                 case 'changes/submoduleStashFiles': return msg.path satisfies string;
@@ -118,7 +120,9 @@ describe('protocol discriminated unions', () => {
                 case 'changes/acceptTheirsFiles': return msg.filePaths satisfies readonly string[];
                 case 'changes/acceptAllTheirs': return;
                 case 'changes/commit': return msg.mode satisfies string;
+                case 'changes/generateCommitMessage': return msg.requestId satisfies string;
                 case 'changes/submoduleCommit': return msg.submodulePath satisfies string;
+                case 'changes/generateSubmoduleCommitMessage': return msg.submodulePath satisfies string;
                 case 'changes/openFile': return msg.filePath satisfies string;
                 case 'changes/openSubmodule': return msg.filePath satisfies string;
                 case 'changes/openMergeEditor': return msg.filePath satisfies string;

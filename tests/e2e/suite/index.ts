@@ -10,15 +10,17 @@ import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessag
 import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
 import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHistoryViewProvider';
 import { getConfiguredWebviewFontSize, registerWebviewFontSizeSync } from '../../../src/extension/views/webview-font';
+import type { CommitMessageGeneratorInput } from '../../../src/application/ports/commit-message-generator';
 import type { GitRepository } from '../../../src/application/ports/git-repository';
 import { VscodeRemoteCommand, type CliRemoteCommand, type RemoteCommandBackend } from '../../../src/application/ports/remote-command-backend';
+import { GenerateCommitMessageUseCase } from '../../../src/application/usecases/changes/generate-commit-message';
 import type { ChangesExtensionToWebviewMessage } from '../../../src/protocol/changes/messages';
 import { ConflictState } from '../../../src/protocol/changes/types';
 import type { GraphDataResponse, GraphExtensionToWebviewMessage, GraphSubmodulesPush, WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
 import type { HistoryExtensionToWebviewMessage, HistoryWebviewToExtensionMessage } from '../../../src/protocol/history/messages';
 import type { GraphRow } from '../../../src/webview/features/graph/layout/assignGraphLanes';
 import { createInitialGraphState, reduceGraphState, type GraphState } from '../../../src/webview/features/graph/graphState';
-import { addLinkedWorktree, createBareGitRepo, createTempGitRepo, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
+import { addLinkedWorktree, createBareGitRepo, createSubmoduleFixture, createTempGitRepo, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
 import { getFixtureRepoPath, gitFixtureOutput } from '../../helpers/fixtureRepo';
 import { findAdjacentDisconnectedSameLaneIssues, findCommitLanePassThroughIssues, findFloatingNodeIssues, findLaneContinuityIssues, findNonVisibleLineTargetIssues } from '../../helpers/graphLayoutAssertions';
 import { runTestCases } from '../../helpers/testRunner';
@@ -267,6 +269,12 @@ export function run(): Promise<void> {
                 await runFixupActionE2E();
                 await runSquashActionE2E();
                 await runDropActionE2E();
+            },
+        },
+        {
+            name: 'generates commit messages for staged repo and submodule changes end to end',
+            run: async () => {
+                await runGeneratedCommitMessageE2E();
             },
         },
         {
@@ -1414,6 +1422,79 @@ async function runRebaseResolveContinueE2E(): Promise<void> {
     }
 }
 
+async function runGeneratedCommitMessageE2E(): Promise<void> {
+    await runGeneratedCommitMessageForMainRepoE2E();
+    await runGeneratedCommitMessageForSubmoduleE2E();
+}
+
+async function runGeneratedCommitMessageForMainRepoE2E(): Promise<void> {
+    const fixture = createTempGitRepo();
+    const messages: ChangesExtensionToWebviewMessage[] = [];
+    const capturedInputs: CommitMessageGeneratorInput[] = [];
+    try {
+        fixture.commitFile('src/app.ts', 'old\n', 'feat(changes): seed app');
+        fixture.write('src/app.ts', 'old\nnew\n');
+        fixture.git(['add', 'src/app.ts']);
+
+        const generateCommitMessage = new GenerateCommitMessageUseCase({
+            generateCommitMessage: async (input) => {
+                capturedInputs.push(input);
+                return '{"message":"fix(changes): generate staged message"}';
+            },
+        });
+        const router = changesRouterFor(fixture.cwd, messages, generateCommitMessage);
+
+        await router.handle({ type: 'changes/generateCommitMessage', requestId: 'generate-main' });
+
+        const response = generatedCommitMessageResponse(messages, 'generate-main');
+        assert.equal(response.message, 'fix(changes): generate staged message');
+        const input = arrayItem(capturedInputs, 0);
+        assert.deepEqual(input.changedFiles, ['M src/app.ts']);
+        assert.match(input.diffStat, /src\/app\.ts/);
+        assert.match(input.stagedDiff, /\+new/);
+        assert.deepEqual(input.recentCommitSubjects, ['feat(changes): seed app']);
+        assertNoChangesError(messages);
+    } finally {
+        fixture.cleanup();
+    }
+}
+
+async function runGeneratedCommitMessageForSubmoduleE2E(): Promise<void> {
+    const fixture = createSubmoduleFixture();
+    const messages: ChangesExtensionToWebviewMessage[] = [];
+    const capturedInputs: CommitMessageGeneratorInput[] = [];
+    try {
+        const childPath = path.join(fixture.parent.cwd, fixture.subPath);
+        fs.writeFileSync(path.join(childPath, 'child.txt'), 'child content\nnew child\n');
+        git(childPath, ['add', 'child.txt']);
+
+        const generateCommitMessage = new GenerateCommitMessageUseCase({
+            generateCommitMessage: async (input) => {
+                capturedInputs.push(input);
+                return 'fix(child): generate submodule message';
+            },
+        });
+        const router = changesRouterFor(fixture.parent.cwd, messages, generateCommitMessage);
+
+        await router.handle({
+            type: 'changes/generateSubmoduleCommitMessage',
+            requestId: 'generate-submodule',
+            submodulePath: fixture.subPath,
+        });
+
+        const response = submoduleGeneratedCommitMessageResponse(messages, 'generate-submodule');
+        assert.equal(response.path, fixture.subPath);
+        assert.equal(response.message, 'fix(child): generate submodule message');
+        const input = arrayItem(capturedInputs, 0);
+        assert.deepEqual(input.changedFiles, ['M child.txt']);
+        assert.match(input.diffStat, /child\.txt/);
+        assert.match(input.stagedDiff, /\+new child/);
+        assertNoChangesError(messages);
+    } finally {
+        fixture.cleanup();
+    }
+}
+
 function createMergeConflict(fixture: TempGitRepo): void {
     fixture.commitFile('conflict.txt', 'base\n', 'feat: base');
     fixture.git(['checkout', '-q', '-b', 'incoming']);
@@ -1502,15 +1583,34 @@ async function historyHarnessFor(
     return { view, provider };
 }
 
-function changesRouterFor(repoPath: string, messages: ChangesExtensionToWebviewMessage[]): ChangesMessageRouter {
+function changesRouterFor(
+    repoPath: string,
+    messages: ChangesExtensionToWebviewMessage[],
+    generateCommitMessage?: GenerateCommitMessageUseCase,
+): ChangesMessageRouter {
     const repo = new GitProcessRepository(repoPath);
     const accessor: ActiveRepositoryAccessor = {
         currentRepository: repo,
         currentContext: undefined,
         requireRepository: () => repo,
     };
-    return new ChangesMessageRouter(accessor, (message) => { messages.push(message); }, async () => undefined);
+    if (!generateCommitMessage) {
+        return new ChangesMessageRouter(accessor, (message) => { messages.push(message); }, async () => undefined);
+    }
+    return new ChangesMessageRouter(
+        accessor,
+        (message) => { messages.push(message); },
+        async () => undefined,
+        async () => undefined,
+        noOpRemoteCommandBackend,
+        generateCommitMessage,
+    );
 }
+
+const noOpRemoteCommandBackend: RemoteCommandBackend = {
+    runVscode: async () => undefined,
+    runCli: async () => undefined,
+};
 
 interface HistoryE2eWebviewView extends vscode.WebviewView {
     messages: HistoryExtensionToWebviewMessage[];
@@ -1914,4 +2014,30 @@ function lastGraphSubmodulesPush(messages: readonly GraphExtensionToWebviewMessa
 function assertNoChangesError(messages: readonly ChangesExtensionToWebviewMessage[]): void {
     const error = messages.find((message) => message.type === 'changes/error');
     assert.equal(error, undefined, error?.message);
+}
+
+function generatedCommitMessageResponse(
+    messages: readonly ChangesExtensionToWebviewMessage[],
+    requestId: string,
+): Extract<ChangesExtensionToWebviewMessage, { readonly type: 'changes/generatedCommitMessage' }> {
+    const response = messages.find((message): message is Extract<ChangesExtensionToWebviewMessage, { readonly type: 'changes/generatedCommitMessage' }> =>
+        message.type === 'changes/generatedCommitMessage' && message.requestId === requestId);
+    assert.ok(response, `Expected generated commit message response for ${requestId}.`);
+    return response;
+}
+
+function submoduleGeneratedCommitMessageResponse(
+    messages: readonly ChangesExtensionToWebviewMessage[],
+    requestId: string,
+): Extract<ChangesExtensionToWebviewMessage, { readonly type: 'changes/submoduleGeneratedCommitMessage' }> {
+    const response = messages.find((message): message is Extract<ChangesExtensionToWebviewMessage, { readonly type: 'changes/submoduleGeneratedCommitMessage' }> =>
+        message.type === 'changes/submoduleGeneratedCommitMessage' && message.requestId === requestId);
+    assert.ok(response, `Expected generated submodule commit message response for ${requestId}.`);
+    return response;
+}
+
+function arrayItem<T>(items: readonly T[], index: number): T {
+    const item = items[index];
+    if (item === undefined) { assert.fail(`Expected item at index ${index}.`); }
+    return item;
 }

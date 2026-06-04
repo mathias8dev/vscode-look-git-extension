@@ -32,6 +32,7 @@ describe('ChangesApp', () => {
                 onRowAction={() => undefined}
                 onBulkAction={() => undefined}
                 onCommit={() => undefined}
+                onGenerateCommitMessage={() => undefined}
                 onOperationAction={() => undefined}
                 onCreateStash={() => undefined}
                 onToggleStash={() => undefined}
@@ -43,6 +44,7 @@ describe('ChangesApp', () => {
                 onSubmoduleBulkAction={() => undefined}
                 onSubmoduleOperationAction={() => undefined}
                 onSubmoduleCommit={() => undefined}
+                onGenerateCommitMessageForSubmodule={() => undefined}
                 onSubmoduleCreateStash={() => undefined}
                 onToggleSubmoduleStash={() => undefined}
                 onSubmoduleStashAction={() => undefined}
@@ -81,6 +83,7 @@ describe('ChangesApp', () => {
                 onRowAction={() => undefined}
                 onBulkAction={() => undefined}
                 onCommit={() => undefined}
+                onGenerateCommitMessage={() => undefined}
                 onOperationAction={() => undefined}
                 onCreateStash={onCreateStash}
                 onToggleStash={() => undefined}
@@ -92,6 +95,7 @@ describe('ChangesApp', () => {
                 onSubmoduleBulkAction={() => undefined}
                 onSubmoduleOperationAction={() => undefined}
                 onSubmoduleCommit={() => undefined}
+                onGenerateCommitMessageForSubmodule={() => undefined}
                 onSubmoduleCreateStash={() => undefined}
                 onToggleSubmoduleStash={() => undefined}
                 onSubmoduleStashAction={() => undefined}

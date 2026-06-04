@@ -6,6 +6,7 @@ import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepos
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import type { GitRepository } from '../../../src/application/ports/git-repository';
 import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
+import { GenerateCommitMessageUseCase } from '../../../src/application/usecases/changes/generate-commit-message';
 import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
 import { createSubmoduleFixture } from '../../helpers/gitRepo';
 import { getCommandCalls, getInputBoxOptions, getWarningMessages, setInputBoxValue, setQuickPickValue, setWarningChoice, window as mockWindow, workspace as mockWorkspace } from '../../mocks/vscode';
@@ -83,8 +84,8 @@ function makeAccessor(repo: GitRepository | undefined): ActiveRepositoryAccessor
     };
 }
 
-function makeProvider(repo: GitRepository | undefined): ChangesViewProvider {
-    return new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo));
+function makeProvider(repo: GitRepository | undefined, generateCommitMessage?: GenerateCommitMessageUseCase): ChangesViewProvider {
+    return new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), async () => {}, undefined, undefined, generateCommitMessage);
 }
 
 function makeMutableAccessor(initialRepo: GitRepository | undefined): {
@@ -769,6 +770,108 @@ describe('ChangesViewProvider', () => {
                 operation: 'changes/commit',
             }),
         })));
+    });
+
+    it('generates a commit message from the active repository', async () => {
+        const repo = makeRepo({
+            execRaw: vi.fn(async (args: readonly string[]) => {
+                if (args.includes('--name-status')) { return 'M\0src/app.ts\0'; }
+                if (args.includes('--find-renames')) { return 'diff --git a/src/app.ts b/src/app.ts\n+new\n'; }
+                return '';
+            }),
+            exec: vi.fn(async (args: readonly string[]) => {
+                if (args.includes('--stat')) { return ' src/app.ts | 1 +\n'; }
+                if (args.includes('--pretty=format:%s')) { return 'fix(changes): old\n'; }
+                return '';
+            }),
+        });
+        const generateCommitMessage = new GenerateCommitMessageUseCase({
+            generateCommitMessage: vi.fn(async () => '{"message":"fix(changes): generate message"}'),
+        });
+        const provider = makeProvider(repo, generateCommitMessage);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/generateCommitMessage', requestId: 'generate-1' });
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual({
+            type: 'changes/generatedCommitMessage',
+            requestId: 'generate-1',
+            message: 'fix(changes): generate message',
+        }));
+    });
+
+    it('keeps the requestId when commit message generation fails', async () => {
+        const repo = makeRepo({
+            execRaw: vi.fn(async (args: readonly string[]) => {
+                if (args.includes('--name-status')) { return 'M\0src/app.ts\0'; }
+                if (args.includes('--find-renames')) { return 'diff --git a/src/app.ts b/src/app.ts\n+new\n'; }
+                return '';
+            }),
+            exec: vi.fn(async (args: readonly string[]) => args.includes('--stat') ? ' src/app.ts | 1 +\n' : ''),
+        });
+        const generateCommitMessage = new GenerateCommitMessageUseCase({
+            generateCommitMessage: vi.fn(async () => { throw new Error('No language model available'); }),
+        });
+        const provider = makeProvider(repo, generateCommitMessage);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/generateCommitMessage', requestId: 'generate-1' });
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/error',
+            requestId: 'generate-1',
+            message: 'No language model available',
+            error: expect.objectContaining({
+                code: 'languageModelFailed',
+                operation: 'changes/generateCommitMessage',
+            }),
+        })));
+    });
+
+    it('generates a commit message from a known submodule repository', async () => {
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+            execRaw: vi.fn(async (args: readonly string[]) => {
+                if (args.includes('--name-status')) { return 'M\0src/lib.ts\0'; }
+                if (args.includes('--find-renames')) { return 'diff --git a/src/lib.ts b/src/lib.ts\n+new\n'; }
+                return '';
+            }),
+            exec: vi.fn(async (args: readonly string[]) => {
+                if (args.includes('--stat')) { return ' src/lib.ts | 1 +\n'; }
+                if (args.includes('--pretty=format:%s')) { return 'fix(lib): old\n'; }
+                return '';
+            }),
+        });
+        const generateCommitMessage = new GenerateCommitMessageUseCase({
+            generateCommitMessage: vi.fn(async () => '{"message":"fix(lib): generate message"}'),
+        });
+        const provider = makeProvider(repo, generateCommitMessage);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/generateSubmoduleCommitMessage',
+            requestId: 'sub-generate-1',
+            submodulePath: 'modules/lib',
+        });
+
+        await vi.waitFor(() => expect(repo.execRaw).toHaveBeenCalledWith([
+            '-C',
+            'modules/lib',
+            'diff',
+            '--cached',
+            '--name-status',
+            '-z',
+            '--',
+        ], expect.any(AbortSignal)));
+        await vi.waitFor(() => expect(view.messages).toContainEqual({
+            type: 'changes/submoduleGeneratedCommitMessage',
+            requestId: 'sub-generate-1',
+            path: 'modules/lib',
+            message: 'fix(lib): generate message',
+        }));
     });
 
     it('keeps the requestId when loading stash files fails', async () => {

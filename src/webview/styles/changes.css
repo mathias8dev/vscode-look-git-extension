@@ -146,6 +146,34 @@
     min-width: 0;
 }
 
+.commit-generate-button {
+    flex: 0 0 var(--look-git-control-min-height, 28px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--look-git-control-min-height, 28px);
+    border: 1px solid var(--vscode-button-border, transparent);
+    border-right: none;
+    border-radius: 2px 0 0 2px;
+    padding: 0;
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, #cccccc));
+    background: var(--vscode-button-secondaryBackground, transparent);
+    font: inherit;
+    font-size: inherit;
+}
+
+.commit-generate-button:hover:not(:disabled) {
+    background: var(--vscode-button-secondaryHoverBackground, var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1)));
+}
+
+.commit-generate-button:disabled {
+    opacity: 0.45;
+}
+
+.commit-generate-button .codicon {
+    font-size: inherit;
+}
+
 .commit-main-button {
     flex: 1;
     min-width: 0;
@@ -165,6 +193,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.commit-main-button-with-generate {
+    border-radius: 0;
 }
 
 .commit-main-button:hover:not(:disabled) {
@@ -832,4 +864,3 @@
 .empty-state-subtitle {
     font-size: inherit;
 }
-

@@ -22,6 +22,19 @@ export interface CommitResultPush {
     readonly error?: ProtocolError;
 }
 
+export interface GeneratedCommitMessageResponse {
+    readonly type: 'changes/generatedCommitMessage';
+    readonly requestId: RequestId;
+    readonly message: string;
+}
+
+export interface SubmoduleGeneratedCommitMessageResponse {
+    readonly type: 'changes/submoduleGeneratedCommitMessage';
+    readonly requestId: RequestId;
+    readonly path: string;
+    readonly message: string;
+}
+
 export interface SubmoduleCommitResultPush {
     readonly type: 'changes/submoduleCommitResult';
     readonly path: string;
@@ -149,6 +162,17 @@ export interface CommitMessage {
     readonly mode: CommitMode;
 }
 
+export interface GenerateCommitMessageRequest {
+    readonly type: 'changes/generateCommitMessage';
+    readonly requestId: RequestId;
+}
+
+export interface GenerateSubmoduleCommitMessageRequest {
+    readonly type: 'changes/generateSubmoduleCommitMessage';
+    readonly requestId: RequestId;
+    readonly submodulePath: string;
+}
+
 export interface SubmoduleCommitMessage {
     readonly type: 'changes/submoduleCommit';
     readonly submodulePath: string;
@@ -262,7 +286,9 @@ export type ChangesExtensionToWebviewMessage =
     | WebviewFontSizeChangedPush
     | StatusDataPush
     | CommitResultPush
+    | GeneratedCommitMessageResponse
     | SubmoduleCommitResultPush
+    | SubmoduleGeneratedCommitMessageResponse
     | StashFilesResponse
     | SubmoduleStatusResponse
     | SubmoduleStashFilesResponse
@@ -278,7 +304,7 @@ export type ChangesWebviewToExtensionMessage =
     | DiscardFileMessage | DiscardFilesMessage | DiscardAllMessage
     | MarkResolvedMessage | MarkResolvedFilesMessage
     | AcceptOursMessage | AcceptTheirsMessage | AcceptOursFilesMessage | AcceptTheirsFilesMessage | AcceptAllTheirsMessage
-    | CommitMessage | SubmoduleCommitMessage | OpenFileMessage | OpenSubmoduleMessage | OpenMergeEditorMessage | OpenDiffMessage | OpenSubmoduleDiffMessage
+    | CommitMessage | GenerateCommitMessageRequest | SubmoduleCommitMessage | GenerateSubmoduleCommitMessageRequest | OpenFileMessage | OpenSubmoduleMessage | OpenMergeEditorMessage | OpenDiffMessage | OpenSubmoduleDiffMessage
     | SubmoduleFileMessage | SubmoduleBulkMessage
     | StashMessage | StashStagedMessage | StashPopMessage | StashApplyMessage | StashDropMessage
     | GetStashFilesRequest | OpenStashDiffMessage

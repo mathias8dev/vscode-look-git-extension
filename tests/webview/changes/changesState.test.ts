@@ -138,6 +138,131 @@ describe('changesState', () => {
         expect(state.commitFeedback).toEqual({ success: true, message: undefined });
     });
 
+    it('tracks generated commit message requests and responses', () => {
+        const requested = reduceChangesState(createInitialChangesState(), {
+            type: 'requestCommitMessageGeneration',
+            requestId: 'generate-1',
+        });
+        const ignored = reduceChangesState(requested, {
+            type: 'message',
+            message: {
+                type: 'changes/generatedCommitMessage',
+                requestId: 'old-generate',
+                message: 'fix: ignore stale suggestion',
+            },
+        });
+        const received = reduceChangesState(ignored, {
+            type: 'message',
+            message: {
+                type: 'changes/generatedCommitMessage',
+                requestId: 'generate-1',
+                message: 'feat(changes): generate commit messages',
+            },
+        });
+
+        expect(requested.commitMessageGenerationRequestId).toBe('generate-1');
+        expect(ignored.generatedCommitMessage).toBeUndefined();
+        expect(received.commitMessageGenerationRequestId).toBeUndefined();
+        expect(received.generatedCommitMessage).toEqual({
+            requestId: 'generate-1',
+            message: 'feat(changes): generate commit messages',
+        });
+    });
+
+    it('keeps language model generation errors near the commit composer', () => {
+        const requested = reduceChangesState(createInitialChangesState(), {
+            type: 'requestCommitMessageGeneration',
+            requestId: 'generate-1',
+        });
+        const failed = reduceChangesState(requested, {
+            type: 'message',
+            message: {
+                type: 'changes/error',
+                requestId: 'generate-1',
+                message: 'No language model available',
+                error: {
+                    code: 'languageModelFailed',
+                    message: 'No language model available',
+                    recoverable: true,
+                },
+            },
+        });
+
+        expect(failed.commitMessageGenerationRequestId).toBeUndefined();
+        expect(failed.commitMessageGenerationError).toEqual(expect.objectContaining({
+            message: 'No language model available',
+        }));
+    });
+
+    it('tracks generated commit message requests per submodule', () => {
+        const withStatus = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: statusDataMessage({
+                submodules: [{ path: 'modules/lib', name: 'lib', status: SubmoduleStatus.Dirty }],
+            }),
+        });
+        const requested = reduceChangesState(withStatus, {
+            type: 'requestSubmoduleCommitMessageGeneration',
+            path: 'modules/lib',
+            requestId: 'sub-generate-1',
+        });
+        const received = reduceChangesState(requested, {
+            type: 'message',
+            message: {
+                type: 'changes/submoduleGeneratedCommitMessage',
+                requestId: 'sub-generate-1',
+                path: 'modules/lib',
+                message: 'fix(lib): update module',
+            },
+        });
+
+        expect(requested.submoduleCommitMessageGenerationRequestIdByPath).toEqual({
+            'modules/lib': 'sub-generate-1',
+        });
+        expect(received.submoduleCommitMessageGenerationRequestIdByPath).toEqual({});
+        expect(received.generatedSubmoduleCommitMessageByPath['modules/lib']).toEqual({
+            requestId: 'sub-generate-1',
+            message: 'fix(lib): update module',
+        });
+    });
+
+    it('stores language model errors per submodule and prunes removed submodule suggestions', () => {
+        const withStatus = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: statusDataMessage({
+                submodules: [{ path: 'modules/lib', name: 'lib', status: SubmoduleStatus.Dirty }],
+            }),
+        });
+        const requested = reduceChangesState(withStatus, {
+            type: 'requestSubmoduleCommitMessageGeneration',
+            path: 'modules/lib',
+            requestId: 'sub-generate-1',
+        });
+        const failed = reduceChangesState(requested, {
+            type: 'message',
+            message: {
+                type: 'changes/error',
+                requestId: 'sub-generate-1',
+                message: 'No language model available',
+                error: {
+                    code: 'languageModelFailed',
+                    message: 'No language model available',
+                    recoverable: true,
+                },
+            },
+        });
+        const removed = reduceChangesState(failed, {
+            type: 'message',
+            message: statusDataMessage({ submodules: [] }),
+        });
+
+        expect(failed.submoduleCommitMessageGenerationRequestIdByPath).toEqual({});
+        expect(failed.submoduleCommitMessageGenerationErrorByPath['modules/lib']).toEqual(expect.objectContaining({
+            message: 'No language model available',
+        }));
+        expect(removed.submoduleCommitMessageGenerationErrorByPath).toEqual({});
+    });
+
     it('remembers commit messages locally', () => {
         const state = reduceChangesState(createInitialChangesState(), {
             type: 'rememberCommitMessage',

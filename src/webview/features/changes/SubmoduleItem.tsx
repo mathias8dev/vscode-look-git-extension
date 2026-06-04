@@ -3,6 +3,7 @@ import { SubmoduleStatus } from '../../../protocol/shared/repo';
 import type { StashFileEntry, SubmoduleEntry, SubmoduleStatusData } from '../../../protocol/changes/types';
 import { ConflictState } from '../../../protocol/changes/types';
 import type { CommitMode } from '../../../protocol/changes/types';
+import type { ProtocolError } from '../../../protocol/shared/base';
 import { Codicon } from '../../shared/Codicon';
 import { IconButton } from '../../shared/IconButton';
 import { SubmoduleAction } from './submoduleCommands';
@@ -10,7 +11,7 @@ import type { ChangeBulkAction, ChangeRowAction } from './changeCommands';
 import { ChangeSectionView } from './ChangeSectionView';
 import type { ChangeListItem, ChangeSection } from './changeTree';
 import { ChangeSectionId } from './changeTree';
-import { ChangeSelectionMode, ChangesViewMode, type CommitFeedback } from './changesState';
+import { ChangeSelectionMode, ChangesViewMode, type CommitFeedback, type GeneratedCommitMessage } from './changesState';
 import { CommitComposer } from './CommitComposer';
 import { changesItemContext } from './context-menu-model';
 import { OperationBanner } from './OperationBanner';
@@ -30,7 +31,11 @@ interface SubmoduleItemProps {
     readonly onBulkAction: (action: ChangeBulkAction) => void;
     readonly onOperationAction: (conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly commitFeedback: CommitFeedback | undefined;
+    readonly commitMessageGenerating: boolean;
+    readonly generatedCommitMessage: GeneratedCommitMessage | undefined;
+    readonly commitMessageGenerationError: ProtocolError | undefined;
     readonly onCommit: (message: string, mode: CommitMode) => void;
+    readonly onGenerateCommitMessage: () => void;
     readonly onCreateStash: (message: string) => void;
     readonly onToggleStash: (index: number) => void;
     readonly onStashAction: (index: number, action: StashEntryAction) => void;
@@ -55,7 +60,11 @@ export function SubmoduleItem({
     onBulkAction,
     onOperationAction,
     commitFeedback,
+    commitMessageGenerating,
+    generatedCommitMessage,
+    commitMessageGenerationError,
     onCommit,
+    onGenerateCommitMessage,
     onCreateStash,
     onToggleStash,
     onStashAction,
@@ -65,7 +74,13 @@ export function SubmoduleItem({
     const needsAction = submodule.status !== SubmoduleStatus.Clean;
     const sections = statusData ? buildSubmoduleSections(statusData) : [];
     const visibleItemIds = sections.flatMap((section) => section.items.map((item) => item.id));
-    const showCommitComposer = statusData ? statusData.staged.length > 0 || commitFeedback !== undefined : false;
+    const showCommitComposer = statusData
+        ? statusData.staged.length > 0
+            || commitFeedback !== undefined
+            || commitMessageGenerating
+            || generatedCommitMessage !== undefined
+            || commitMessageGenerationError !== undefined
+        : false;
     const hasVisibleDetails = showCommitComposer || visibleItemIds.length > 0 || (statusData?.stashes.length ?? 0) > 0;
     return (
         <article className="submodule-item">
@@ -118,6 +133,10 @@ export function SubmoduleItem({
                                     conflictState={commitConflictState(statusData)}
                                     feedback={commitFeedback}
                                     focusRequest={0}
+                                    generatingMessage={commitMessageGenerating}
+                                    generatedMessage={generatedCommitMessage}
+                                    generationError={commitMessageGenerationError}
+                                    onGenerateMessage={onGenerateCommitMessage}
                                     onCommit={onCommit}
                                 />
                             ) : null}

@@ -120,7 +120,11 @@ function renderSubmodule(status: SubmoduleStatusData): void {
             onBulkAction={vi.fn()}
             onOperationAction={vi.fn()}
             commitFeedback={undefined}
+            commitMessageGenerating={false}
+            generatedCommitMessage={undefined}
+            commitMessageGenerationError={undefined}
             onCommit={vi.fn()}
+            onGenerateCommitMessage={vi.fn()}
             onCreateStash={vi.fn()}
             onToggleStash={vi.fn()}
             onStashAction={vi.fn()}

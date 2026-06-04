@@ -27,6 +27,7 @@ interface ChangesAppProps {
     readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onBulkAction: (action: ChangeBulkAction) => void;
     readonly onCommit: (message: string, mode: CommitMode) => void;
+    readonly onGenerateCommitMessage: () => void;
     readonly onOperationAction: (conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly onCreateStash: (kind: CreateStashKind, message: string) => void;
     readonly onToggleStash: (index: number) => void;
@@ -38,6 +39,7 @@ interface ChangesAppProps {
     readonly onSubmoduleBulkAction: (submodulePath: string, action: ChangeBulkAction) => void;
     readonly onSubmoduleOperationAction: (submodulePath: string, conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly onSubmoduleCommit: (submodulePath: string, message: string, mode: CommitMode) => void;
+    readonly onGenerateCommitMessageForSubmodule: (submodulePath: string) => void;
     readonly onSubmoduleCreateStash: (submodulePath: string, message: string) => void;
     readonly onToggleSubmoduleStash: (submodulePath: string, index: number) => void;
     readonly onSubmoduleStashAction: (submodulePath: string, index: number, action: StashEntryAction) => void;
@@ -51,6 +53,7 @@ export function ChangesApp({
     onRowAction,
     onBulkAction,
     onCommit,
+    onGenerateCommitMessage,
     onOperationAction,
     onCreateStash,
     onToggleStash,
@@ -62,6 +65,7 @@ export function ChangesApp({
     onSubmoduleBulkAction,
     onSubmoduleOperationAction,
     onSubmoduleCommit,
+    onGenerateCommitMessageForSubmodule,
     onSubmoduleCreateStash,
     onToggleSubmoduleStash,
     onSubmoduleStashAction,
@@ -90,6 +94,10 @@ export function ChangesApp({
                     conflictState={state.status.conflictState}
                     feedback={state.commitFeedback}
                     focusRequest={state.commitFocusRequest}
+                    generatingMessage={state.commitMessageGenerationRequestId !== undefined}
+                    generatedMessage={state.generatedCommitMessage}
+                    generationError={state.commitMessageGenerationError}
+                    onGenerateMessage={onGenerateCommitMessage}
                     onCommit={onCommit}
                 />
             ) : null}
@@ -122,6 +130,9 @@ export function ChangesApp({
                         expandedStashKeys={state.expandedSubmoduleStashKeys}
                         stashFilesByKey={state.submoduleStashFilesByKey}
                         commitFeedbackByPath={state.submoduleCommitFeedbackByPath}
+                        commitMessageGenerationRequestIdByPath={state.submoduleCommitMessageGenerationRequestIdByPath}
+                        generatedCommitMessageByPath={state.generatedSubmoduleCommitMessageByPath}
+                        commitMessageGenerationErrorByPath={state.submoduleCommitMessageGenerationErrorByPath}
                         onToggle={onToggleSubmodule}
                         onAction={onSubmoduleAction}
                         onUpdateAll={() => onSubmoduleAction('', SubmoduleAction.UpdateAll)}
@@ -129,6 +140,7 @@ export function ChangesApp({
                         onBulkAction={onSubmoduleBulkAction}
                         onOperationAction={onSubmoduleOperationAction}
                         onCommit={onSubmoduleCommit}
+                        onGenerateCommitMessage={onGenerateCommitMessageForSubmodule}
                         onCreateStash={onSubmoduleCreateStash}
                         onToggleStash={onToggleSubmoduleStash}
                         onStashAction={onSubmoduleStashAction}

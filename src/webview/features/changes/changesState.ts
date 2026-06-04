@@ -34,7 +34,13 @@ export interface ChangesState {
     readonly error: ProtocolError | undefined;
     readonly commitFocusRequest: number;
     readonly commitFeedback: CommitFeedback | undefined;
+    readonly commitMessageGenerationRequestId: string | undefined;
+    readonly generatedCommitMessage: GeneratedCommitMessage | undefined;
+    readonly commitMessageGenerationError: ProtocolError | undefined;
     readonly submoduleCommitFeedbackByPath: Readonly<Record<string, CommitFeedback>>;
+    readonly submoduleCommitMessageGenerationRequestIdByPath: Readonly<Record<string, string>>;
+    readonly generatedSubmoduleCommitMessageByPath: Readonly<Record<string, GeneratedCommitMessage>>;
+    readonly submoduleCommitMessageGenerationErrorByPath: Readonly<Record<string, ProtocolError>>;
     readonly collapsedSectionIds: readonly ChangeSectionId[];
     readonly selectedItemIds: readonly string[];
     readonly selectionAnchorId: string | undefined;
@@ -61,6 +67,11 @@ export interface CommitFeedback {
     readonly message: string | undefined;
 }
 
+export interface GeneratedCommitMessage {
+    readonly requestId: string;
+    readonly message: string;
+}
+
 export interface SelectChangeInput {
     readonly itemId: string;
     readonly visibleItemIds: readonly string[];
@@ -73,6 +84,9 @@ export type ChangesAction =
     | { readonly type: 'setSortMode'; readonly sortMode: ChangesSortMode }
     | { readonly type: 'setPathFilter'; readonly pathFilter: string }
     | { readonly type: 'rememberCommitMessage'; readonly message: string }
+    | { readonly type: 'requestCommitMessageGeneration'; readonly requestId: string }
+    | { readonly type: 'requestSubmoduleCommitMessageGeneration'; readonly path: string; readonly requestId: string }
+    | { readonly type: 'clearSubmoduleCommitMessageGeneration'; readonly path: string }
     | { readonly type: 'toggleSection'; readonly sectionId: ChangeSectionId }
     | { readonly type: 'selectChange'; readonly selection: SelectChangeInput }
     | { readonly type: 'clearSelection' }
@@ -93,7 +107,13 @@ export function createInitialChangesState(preferences: ChangesStatePreferences =
         error: undefined,
         commitFocusRequest: 0,
         commitFeedback: undefined,
+        commitMessageGenerationRequestId: undefined,
+        generatedCommitMessage: undefined,
+        commitMessageGenerationError: undefined,
         submoduleCommitFeedbackByPath: {},
+        submoduleCommitMessageGenerationRequestIdByPath: {},
+        generatedSubmoduleCommitMessageByPath: {},
+        submoduleCommitMessageGenerationErrorByPath: {},
         collapsedSectionIds: preferences.collapsedSectionIds ?? [],
         selectedItemIds: [],
         selectionAnchorId: undefined,
@@ -119,7 +139,39 @@ export function reduceChangesState(state: ChangesState, action: ChangesAction): 
         case 'setPathFilter':
             return { ...state, pathFilter: action.pathFilter, selectedItemIds: [], selectionAnchorId: undefined };
         case 'rememberCommitMessage':
-            return { ...state, commitMessageHistory: rememberCommitMessage(state.commitMessageHistory, action.message) };
+            return {
+                ...state,
+                commitMessageHistory: rememberCommitMessage(state.commitMessageHistory, action.message),
+                commitMessageGenerationRequestId: undefined,
+                generatedCommitMessage: undefined,
+                commitMessageGenerationError: undefined,
+            };
+        case 'requestCommitMessageGeneration':
+            return {
+                ...state,
+                commitMessageGenerationRequestId: action.requestId,
+                generatedCommitMessage: undefined,
+                commitMessageGenerationError: undefined,
+                commitFeedback: undefined,
+            };
+        case 'requestSubmoduleCommitMessageGeneration':
+            return {
+                ...state,
+                submoduleCommitMessageGenerationRequestIdByPath: {
+                    ...state.submoduleCommitMessageGenerationRequestIdByPath,
+                    [action.path]: action.requestId,
+                },
+                generatedSubmoduleCommitMessageByPath: withoutKey(state.generatedSubmoduleCommitMessageByPath, action.path),
+                submoduleCommitMessageGenerationErrorByPath: withoutKey(state.submoduleCommitMessageGenerationErrorByPath, action.path),
+                submoduleCommitFeedbackByPath: withoutKey(state.submoduleCommitFeedbackByPath, action.path),
+            };
+        case 'clearSubmoduleCommitMessageGeneration':
+            return {
+                ...state,
+                submoduleCommitMessageGenerationRequestIdByPath: withoutKey(state.submoduleCommitMessageGenerationRequestIdByPath, action.path),
+                generatedSubmoduleCommitMessageByPath: withoutKey(state.generatedSubmoduleCommitMessageByPath, action.path),
+                submoduleCommitMessageGenerationErrorByPath: withoutKey(state.submoduleCommitMessageGenerationErrorByPath, action.path),
+            };
         case 'toggleSection':
             return { ...state, collapsedSectionIds: toggledSection(state.collapsedSectionIds, action.sectionId) };
         case 'selectChange':
@@ -153,6 +205,8 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 status: message.data,
                 loading: false,
                 error: undefined,
+                generatedCommitMessage: undefined,
+                commitMessageGenerationError: undefined,
                 selectedItemIds: [],
                 selectionAnchorId: undefined,
                 expandedStashIndexes: keepKnownStashIndexes(state.expandedStashIndexes, state.status.stashes, message.data.stashes),
@@ -167,28 +221,84 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 expandedSubmoduleStashKeys: keepKnownSubmoduleStashKeys(state.expandedSubmoduleStashKeys, submodulePaths),
                 submoduleStashFilesByKey: keepKnownSubmoduleStashFilesByPath(state.submoduleStashFilesByKey, submodulePaths),
                 submoduleCommitFeedbackByPath: keepKnownRecord(state.submoduleCommitFeedbackByPath, submodulePaths),
+                submoduleCommitMessageGenerationRequestIdByPath: keepKnownRecord(state.submoduleCommitMessageGenerationRequestIdByPath, submodulePaths),
+                generatedSubmoduleCommitMessageByPath: keepKnownRecord(state.generatedSubmoduleCommitMessageByPath, submodulePaths),
+                submoduleCommitMessageGenerationErrorByPath: keepKnownRecord(state.submoduleCommitMessageGenerationErrorByPath, submodulePaths),
             };
         }
         case 'changes/error':
         case 'error': {
             const failedSubmodulePath = submodulePathFromStatusRequestId(message.requestId);
+            const failedCommitMessageGeneration = state.commitMessageGenerationRequestId === message.requestId;
+            const failedSubmoduleCommitMessageGenerationPath = pathForRequestId(
+                state.submoduleCommitMessageGenerationRequestIdByPath,
+                message.requestId,
+            );
+            const protocolError = readProtocolError(message);
             return {
                 ...state,
                 loading: false,
-                error: readProtocolError(message),
+                error: protocolError,
+                commitMessageGenerationRequestId: failedCommitMessageGeneration ? undefined : state.commitMessageGenerationRequestId,
+                commitMessageGenerationError: failedCommitMessageGeneration ? protocolError : state.commitMessageGenerationError,
+                submoduleCommitMessageGenerationRequestIdByPath: failedSubmoduleCommitMessageGenerationPath
+                    ? withoutKey(state.submoduleCommitMessageGenerationRequestIdByPath, failedSubmoduleCommitMessageGenerationPath)
+                    : state.submoduleCommitMessageGenerationRequestIdByPath,
+                submoduleCommitMessageGenerationErrorByPath: failedSubmoduleCommitMessageGenerationPath && protocolError
+                    ? { ...state.submoduleCommitMessageGenerationErrorByPath, [failedSubmoduleCommitMessageGenerationPath]: protocolError }
+                    : state.submoduleCommitMessageGenerationErrorByPath,
                 loadingSubmoduleStatusPaths: failedSubmodulePath
                     ? state.loadingSubmoduleStatusPaths.filter((path) => path !== failedSubmodulePath)
                     : state.loadingSubmoduleStatusPaths,
             };
         }
+        case 'changes/generatedCommitMessage':
+            if (state.commitMessageGenerationRequestId !== message.requestId) { return state; }
+            return {
+                ...state,
+                error: undefined,
+                commitMessageGenerationRequestId: undefined,
+                commitMessageGenerationError: undefined,
+                generatedCommitMessage: {
+                    requestId: message.requestId,
+                    message: message.message,
+                },
+            };
+        case 'changes/submoduleGeneratedCommitMessage':
+            if (state.submoduleCommitMessageGenerationRequestIdByPath[message.path] !== message.requestId) { return state; }
+            return {
+                ...state,
+                error: undefined,
+                submoduleCommitMessageGenerationRequestIdByPath: withoutKey(state.submoduleCommitMessageGenerationRequestIdByPath, message.path),
+                submoduleCommitMessageGenerationErrorByPath: withoutKey(state.submoduleCommitMessageGenerationErrorByPath, message.path),
+                generatedSubmoduleCommitMessageByPath: {
+                    ...state.generatedSubmoduleCommitMessageByPath,
+                    [message.path]: {
+                        requestId: message.requestId,
+                        message: message.message,
+                    },
+                },
+            };
         case 'changes/commitResult':
             return message.success
-                ? { ...state, error: undefined, commitFeedback: { success: true, message: undefined } }
+                ? {
+                    ...state,
+                    error: undefined,
+                    generatedCommitMessage: undefined,
+                    commitMessageGenerationError: undefined,
+                    commitFeedback: { success: true, message: undefined },
+                }
                 : { ...state, error: message.error, commitFeedback: { success: false, message: message.message } };
         case 'changes/submoduleCommitResult':
             return {
                 ...state,
                 error: message.success ? undefined : message.error,
+                generatedSubmoduleCommitMessageByPath: message.success
+                    ? withoutKey(state.generatedSubmoduleCommitMessageByPath, message.path)
+                    : state.generatedSubmoduleCommitMessageByPath,
+                submoduleCommitMessageGenerationErrorByPath: message.success
+                    ? withoutKey(state.submoduleCommitMessageGenerationErrorByPath, message.path)
+                    : state.submoduleCommitMessageGenerationErrorByPath,
                 submoduleCommitFeedbackByPath: {
                     ...state.submoduleCommitFeedbackByPath,
                     [message.path]: {
@@ -273,6 +383,20 @@ export function submoduleStashKey(submodulePath: string, index: number): string 
 
 function keepKnownPaths(paths: readonly string[], knownPaths: ReadonlySet<string>): readonly string[] {
     return paths.filter((path) => knownPaths.has(path));
+}
+
+function pathForRequestId(requestIdsByPath: Readonly<Record<string, string>>, requestId: string | undefined): string | undefined {
+    if (!requestId) { return undefined; }
+    return Object.entries(requestIdsByPath).find(([, id]) => id === requestId)?.[0];
+}
+
+function withoutKey<TValue>(record: Readonly<Record<string, TValue>>, key: string): Readonly<Record<string, TValue>> {
+    if (!Object.prototype.hasOwnProperty.call(record, key)) { return record; }
+    const next: Record<string, TValue> = {};
+    for (const [recordKey, value] of Object.entries(record)) {
+        if (recordKey !== key) { next[recordKey] = value; }
+    }
+    return next;
 }
 
 function uniquePaths(paths: readonly string[]): readonly string[] {

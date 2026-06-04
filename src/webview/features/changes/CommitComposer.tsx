@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { CommitMode } from '../../../protocol/changes/types';
-import type { ConflictState } from '../../../protocol/changes/types';
-import type { CommitFeedback } from './changesState';
+import { CommitMode, ConflictState } from '../../../protocol/changes/types';
+import type { ProtocolError } from '../../../protocol/shared/base';
+import type { CommitFeedback, GeneratedCommitMessage } from './changesState';
 import { canSubmitCommit, commitBlockReason } from './commitComposerModel';
 
 interface CommitComposerProps {
@@ -9,6 +9,11 @@ interface CommitComposerProps {
     readonly conflictState: ConflictState;
     readonly feedback: CommitFeedback | undefined;
     readonly focusRequest: number;
+    readonly generatingMessage: boolean;
+    readonly generatedMessage: GeneratedCommitMessage | undefined;
+    readonly generationError: ProtocolError | undefined;
+    readonly showGenerateMessage?: boolean;
+    readonly onGenerateMessage: () => void;
     readonly onCommit: (message: string, mode: CommitMode) => void;
 }
 
@@ -24,16 +29,29 @@ const MORE_OPTIONS: readonly CommitOption[] = [
     { mode: CommitMode.CommitSync, label: 'Commit & Sync', icon: 'repo-sync' },
 ];
 
-export function CommitComposer({ stagedCount, conflictState, feedback, focusRequest, onCommit }: CommitComposerProps) {
+export function CommitComposer({
+    stagedCount,
+    conflictState,
+    feedback,
+    focusRequest,
+    generatingMessage,
+    generatedMessage,
+    generationError,
+    showGenerateMessage = true,
+    onGenerateMessage,
+    onCommit,
+}: CommitComposerProps) {
     const [message, setMessage] = useState('');
     const [showMore, setShowMore] = useState(false);
     const textAreaRef = useRef<HTMLTextAreaElement>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
+    const appliedGeneratedRequestIdRef = useRef<string | undefined>(undefined);
 
     const canCommit = canSubmitCommit({ message, mode: CommitMode.Commit, stagedCount, conflictState });
     const blockedReason = commitBlockReason({ message, mode: CommitMode.Commit, stagedCount, conflictState });
+    const canGenerateMessage = showGenerateMessage && stagedCount > 0 && conflictState === ConflictState.None && !generatingMessage;
 
     useEffect(() => {
         if (!showMore) { return; }
@@ -45,6 +63,14 @@ export function CommitComposer({ stagedCount, conflictState, feedback, focusRequ
         if (focusRequest === 0) { return; }
         textAreaRef.current?.focus();
     }, [focusRequest]);
+
+    useEffect(() => {
+        if (!generatedMessage) { return; }
+        if (appliedGeneratedRequestIdRef.current === generatedMessage.requestId) { return; }
+        appliedGeneratedRequestIdRef.current = generatedMessage.requestId;
+        setMessage(generatedMessage.message);
+        textAreaRef.current?.focus();
+    }, [generatedMessage]);
 
     useEffect(() => {
         if (!showMore) { return; }
@@ -105,7 +131,9 @@ export function CommitComposer({ stagedCount, conflictState, feedback, focusRequ
                     }
                 }}
             />
-            {!canCommit && blockedReason ? (
+            {generationError ? (
+                <span className="commit-hint commit-hint-error">{generationError.message}</span>
+            ) : !canCommit && blockedReason ? (
                 <span className="commit-hint">{blockedReason}</span>
             ) : feedback && !feedback.success ? (
                 <span className="commit-hint commit-hint-error">{feedback.message}</span>
@@ -113,9 +141,21 @@ export function CommitComposer({ stagedCount, conflictState, feedback, focusRequ
                 <span className="commit-hint">Committed successfully.</span>
             ) : null}
             <div ref={wrapperRef} className="commit-primary-row">
+                {showGenerateMessage ? (
+                    <button
+                        type="button"
+                        className="commit-generate-button"
+                        disabled={!canGenerateMessage}
+                        title={generatingMessage ? 'Generating commit message' : 'Generate commit message'}
+                        aria-label={generatingMessage ? 'Generating commit message' : 'Generate commit message'}
+                        onClick={onGenerateMessage}
+                    >
+                        <i className={`codicon ${generatingMessage ? 'codicon-loading codicon-modifier-spin' : 'codicon-sparkle'}`} aria-hidden="true" />
+                    </button>
+                ) : null}
                 <button
                     type="button"
-                    className="commit-main-button"
+                    className={`commit-main-button${showGenerateMessage ? ' commit-main-button-with-generate' : ''}`}
                     disabled={!canCommit}
                     onClick={() => submitCommit(CommitMode.Commit)}
                 >

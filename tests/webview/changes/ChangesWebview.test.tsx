@@ -154,6 +154,70 @@ describe('ChangesWebview', () => {
             status: 'M',
         });
     });
+
+    it('requests and applies a generated commit message for staged changes', async () => {
+        const api = createMockVsCodeApi();
+        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+        render(<ChangesWebview />);
+        sendStatusDataWithStagedChange();
+
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Generate commit message' })).toBeEnabled());
+        fireEvent.click(screen.getByRole('button', { name: 'Generate commit message' }));
+
+        const request = generatedCommitMessageRequest(api.messages);
+        expect(request).toEqual(expect.objectContaining({
+            type: 'changes/generateCommitMessage',
+        }));
+
+        sendToWebview({
+            type: 'changes/generatedCommitMessage',
+            requestId: request.requestId,
+            message: 'fix(changes): generate commit messages',
+        });
+
+        await waitFor(() => expect(screen.getByLabelText('Commit message')).toHaveValue('fix(changes): generate commit messages'));
+    });
+
+    it('requests and applies a generated commit message inside a submodule composer', async () => {
+        const api = createMockVsCodeApi();
+        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+        render(<ChangesWebview />);
+        sendStatusDataWithSubmodule();
+
+        await waitFor(() => expect(screen.getByText('lib')).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Show changes' }));
+        await waitFor(() => expect(submoduleStatusRequests(api.messages).length).toBe(1));
+        sendToWebview({
+            type: 'changes/submoduleStatusData',
+            requestId: 'changes:submodule-status:modules/lib',
+            path: 'modules/lib',
+            data: {
+                staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'src/inner.ts' }],
+                unstaged: [],
+                conflicts: [],
+                conflictState: ConflictState.None,
+                stashes: [],
+            },
+        });
+
+        await waitFor(() => expect(screen.getByTitle('src/inner.ts')).toBeInTheDocument());
+        const generateButton = enabledGenerateButton();
+        fireEvent.click(generateButton);
+
+        const request = generatedSubmoduleCommitMessageRequest(api.messages);
+        expect(request.submodulePath).toBe('modules/lib');
+
+        sendToWebview({
+            type: 'changes/submoduleGeneratedCommitMessage',
+            requestId: request.requestId,
+            path: 'modules/lib',
+            message: 'fix(lib): update inner module',
+        });
+
+        await waitFor(() => expect(screen.getByDisplayValue('fix(lib): update inner module')).toBeInTheDocument());
+    });
 });
 
 function sendStatusData(): void {
@@ -184,6 +248,65 @@ function sendStatusDataWithSubmodule(): void {
             submodules: [{ path: 'modules/lib', name: 'lib', status: SubmoduleStatus.Dirty }],
         },
     });
+}
+
+function sendStatusDataWithStagedChange(): void {
+    sendToWebview({
+        type: 'changes/statusData',
+        data: {
+            repositoryState: RepositoryState.Available,
+            staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'src/app.ts' }],
+            unstaged: [],
+            conflicts: [],
+            conflictState: ConflictState.None,
+            stashes: [],
+            submodules: [],
+        },
+    });
+}
+
+function generatedCommitMessageRequest(messages: readonly unknown[]): { readonly type: 'changes/generateCommitMessage'; readonly requestId: string } {
+    const request = messages.find((message): message is { readonly type: 'changes/generateCommitMessage'; readonly requestId: string } => {
+        return typeof message === 'object'
+            && message !== null
+            && 'type' in message
+            && message.type === 'changes/generateCommitMessage'
+            && 'requestId' in message
+            && typeof message.requestId === 'string';
+    });
+    if (!request) { throw new Error('Expected generated commit message request.'); }
+    return request;
+}
+
+function generatedSubmoduleCommitMessageRequest(messages: readonly unknown[]): {
+    readonly type: 'changes/generateSubmoduleCommitMessage';
+    readonly requestId: string;
+    readonly submodulePath: string;
+} {
+    const request = messages.find((message): message is {
+        readonly type: 'changes/generateSubmoduleCommitMessage';
+        readonly requestId: string;
+        readonly submodulePath: string;
+    } => {
+        return typeof message === 'object'
+            && message !== null
+            && 'type' in message
+            && message.type === 'changes/generateSubmoduleCommitMessage'
+            && 'requestId' in message
+            && typeof message.requestId === 'string'
+            && 'submodulePath' in message
+            && typeof message.submodulePath === 'string';
+    });
+    if (!request) { throw new Error('Expected generated submodule commit message request.'); }
+    return request;
+}
+
+function enabledGenerateButton(): HTMLElement {
+    const button = screen.getAllByRole('button', { name: 'Generate commit message' }).find((candidate) => {
+        return candidate instanceof HTMLButtonElement && !candidate.disabled;
+    });
+    if (!button) { throw new Error('Expected enabled generate commit message button.'); }
+    return button;
 }
 
 function submoduleStatusRequests(messages: readonly unknown[]): readonly unknown[] {
