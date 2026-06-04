@@ -2,6 +2,14 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [0.7.0] - 2026-06-05
+
+### Added
+
+#### Changes Panel
+- Add `Apply Patch...` to the native Changes panel menu and Command Palette, with clipboard/file sources, working-tree or staged apply modes, preflight validation, conflict-aware refresh, output details, and VS Code toast feedback
+- Add `Create Patch...` for selected change rows, including staged, unstaged, untracked, and submodule-scoped selections with copy-to-clipboard or save-to-file destinations
+
 ## [0.6.0] - 2026-06-04
 
 ### Added
