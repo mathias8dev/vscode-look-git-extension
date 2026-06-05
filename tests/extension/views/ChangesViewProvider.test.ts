@@ -10,7 +10,7 @@ import type { ActiveRepositoryAccessor } from '../../../src/extension/repositori
 import { GenerateCommitMessageUseCase } from '../../../src/application/usecases/changes/generate-commit-message';
 import { ExplainSelectedChangesUseCase } from '../../../src/application/usecases/changes/explain-selected-changes';
 import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
-import { createSubmoduleFixture } from '../../helpers/gitRepo';
+import { createConflictWorkflowFixture, createSubmoduleFixture } from '../../helpers/gitRepo';
 import { env, getCommandCalls, getInputBoxOptions, getWarningMessages, setErrorChoice, setInputBoxValue, setQuickPickValue, setQuickPickValues, setWarningChoice, window as mockWindow, workspace as mockWorkspace } from '../../mocks/vscode';
 
 function makeRepo(overrides: Partial<GitRepository> = {}): GitRepository {
@@ -101,6 +101,27 @@ function makeRemoteCommands(): RemoteCommandBackend {
     };
 }
 
+function conflictStageExecRaw(expectedCwd?: string): GitRepository['execRaw'] {
+    return vi.fn(async (args: readonly string[]) => {
+        const effectiveArgs = args[0] === '-C' ? args.slice(2) : args;
+        if (expectedCwd) {
+            expect(args.slice(0, 2)).toEqual(['-C', expectedCwd]);
+        }
+        if (effectiveArgs[0] === 'ls-files') {
+            return [
+                `100644 ${'1'.repeat(40)} 1\tsrc/conflict.ts`,
+                `100644 ${'2'.repeat(40)} 2\tsrc/conflict.ts`,
+                `100644 ${'3'.repeat(40)} 3\tsrc/conflict.ts`,
+                '',
+            ].join('\0');
+        }
+        if (effectiveArgs[0] === 'cat-file') {
+            return `content ${effectiveArgs[2] ?? ''}\n`;
+        }
+        return '';
+    });
+}
+
 function makeMutableAccessor(initialRepo: GitRepository | undefined): {
     readonly accessor: ActiveRepositoryAccessor;
     setRepository(repo: GitRepository | undefined): void;
@@ -130,6 +151,28 @@ function assertUriWithPath(value: unknown, expectedPathPart: string): void {
     expect(isUriLike(value)).toBe(true);
     if (!isUriLike(value)) { throw new Error('Expected a URI-like value with a path.'); }
     expect(value.path).toContain(expectedPathPart);
+}
+
+interface MergeEditorOpenArgs {
+    readonly base: { readonly scheme: string; readonly path: string };
+    readonly input1: { readonly title: string; readonly uri: { readonly scheme: string; readonly path: string } };
+    readonly input2: { readonly title: string; readonly uri: { readonly scheme: string; readonly path: string } };
+    readonly output: { readonly scheme: string; readonly path: string };
+}
+
+function isMergeEditorOpenArgs(value: unknown): value is MergeEditorOpenArgs {
+    return typeof value === 'object'
+        && value !== null
+        && 'base' in value
+        && 'input1' in value
+        && 'input2' in value
+        && 'output' in value;
+}
+
+function mergeEditorOpenArgs(value: unknown): MergeEditorOpenArgs {
+    expect(isMergeEditorOpenArgs(value)).toBe(true);
+    if (!isMergeEditorOpenArgs(value)) { throw new Error('Expected merge editor open args.'); }
+    return value;
 }
 
 function isGitUriLike(value: unknown): value is { readonly scheme: string; readonly query: string } {
@@ -1294,22 +1337,32 @@ describe('ChangesViewProvider', () => {
     });
 
     it('opens conflicts with the VS Code merge editor', async () => {
-        const repo = makeRepo();
+        const repo = makeRepo({ execRaw: conflictStageExecRaw() });
         const provider = makeProvider(repo);
         const view = makeWebviewView();
         provider.resolveWebviewView(view);
 
         view.messageHandler?.({ type: 'changes/openMergeEditor', filePath: 'src/conflict.ts' });
 
-        await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === 'git.openMergeEditor')).toBe(true));
-        const call = getCommandCalls().find((entry) => entry.command === 'git.openMergeEditor');
-        assertUriWithPath(call?.args[0], 'src/conflict.ts');
+        await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === '_open.mergeEditor')).toBe(true));
+        const call = getCommandCalls().find((entry) => entry.command === '_open.mergeEditor');
+        const args = mergeEditorOpenArgs(call?.args[0]);
+        expect(args.base.scheme).toBe('lookgit-diff');
+        expect(args.input1.title).toBe('Incoming');
+        expect(args.input1.uri.scheme).toBe('lookgit-diff');
+        expect(args.input2.title).toBe('Current');
+        expect(args.input2.uri.scheme).toBe('lookgit-diff');
+        assertUriWithPath(args.output, 'src/conflict.ts');
+        await vi.waitFor(() => expect(repo.execRaw).toHaveBeenCalledWith(['cat-file', '-p', '3'.repeat(40)]));
+        await vi.waitFor(() => expect(repo.execRaw).toHaveBeenCalledWith(['cat-file', '-p', '2'.repeat(40)]));
+        expect(getCommandCalls().some((entry) => entry.command === 'git.openMergeEditor')).toBe(false);
         expect(getCommandCalls().some((entry) => entry.command === 'merge-conflict.accept.select')).toBe(false);
         expect(getCommandCalls().some((entry) => entry.command === 'vscode.open')).toBe(false);
     });
 
     it('opens submodule conflicts with the VS Code merge editor', async () => {
         const repo = makeRepo({
+            execRaw: conflictStageExecRaw('modules/lib'),
             getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
             getSubmoduleStatus: vi.fn(async () => [{ path: 'modules/lib', status: ' ' as const }]),
         });
@@ -1323,11 +1376,41 @@ describe('ChangesViewProvider', () => {
             filePath: 'src/conflict.ts',
         });
 
-        await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === 'git.openMergeEditor')).toBe(true));
-        const call = getCommandCalls().find((entry) => entry.command === 'git.openMergeEditor');
-        assertUriWithPath(call?.args[0], 'modules/lib/src/conflict.ts');
+        await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === '_open.mergeEditor')).toBe(true));
+        const call = getCommandCalls().find((entry) => entry.command === '_open.mergeEditor');
+        const args = mergeEditorOpenArgs(call?.args[0]);
+        expect(args.input1.title).toBe('Incoming');
+        expect(args.input2.title).toBe('Current');
+        assertUriWithPath(args.output, 'modules/lib/src/conflict.ts');
+        await vi.waitFor(() => expect(repo.execRaw).toHaveBeenCalledWith(['-C', 'modules/lib', 'cat-file', '-p', '3'.repeat(40)], undefined));
+        expect(getCommandCalls().some((entry) => entry.command === 'git.openMergeEditor')).toBe(false);
         expect(getCommandCalls().some((entry) => entry.command === 'merge-conflict.accept.select')).toBe(false);
         expect(getCommandCalls().some((entry) => entry.command === 'vscode.open')).toBe(false);
+    });
+
+    it('opens a real Git merge conflict with the modern merge editor input', async () => {
+        const fixture = createConflictWorkflowFixture();
+        try {
+            expect(() => fixture.git(['merge', 'incoming'])).toThrow();
+            const repo = new GitProcessRepository(fixture.cwd);
+            const provider = makeProvider(repo);
+            const view = makeWebviewView();
+            provider.resolveWebviewView(view);
+
+            view.messageHandler?.({ type: 'changes/openMergeEditor', filePath: 'conflict.txt' });
+
+            await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === '_open.mergeEditor')).toBe(true));
+            const call = getCommandCalls().find((entry) => entry.command === '_open.mergeEditor');
+            const args = mergeEditorOpenArgs(call?.args[0]);
+            expect(args.base.scheme).toBe('lookgit-diff');
+            expect(args.input1.title).toBe('Incoming');
+            expect(args.input1.uri.scheme).toBe('lookgit-diff');
+            expect(args.input2.title).toBe('Current');
+            expect(args.input2.uri.scheme).toBe('lookgit-diff');
+            assertUriWithPath(args.output, 'conflict.txt');
+        } finally {
+            fixture.cleanup();
+        }
     });
 
     it('continues and aborts active merge or rebase operations', async () => {

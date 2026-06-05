@@ -20,12 +20,11 @@ import { GenerateCommitMessageUseCase } from '../../application/usecases/changes
 import { VscodeLanguageModelCommitMessageGenerator } from '../adapters/vscode/vscode-language-model-commit-message-generator';
 import { ScopedGitRepository } from '../git/scoped-git-repository';
 import { createErrorPayload, isAbortError } from './errorSerialization';
+import { openThreeWayMergeEditor } from '../utils/merge-editor';
 
 type PostMessage = (msg: ChangesExtensionToWebviewMessage) => void;
 type RefreshCallback = () => Promise<void>;
 type RepositoryUpdatedCallback = () => Promise<void>;
-
-const OpenMergeEditorCommand = 'git.openMergeEditor';
 
 export class ChangesMessageRouter {
     private knownSubmodulePaths: ReadonlySet<string> | undefined;
@@ -400,8 +399,7 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/openMergeEditor': {
-                const uri = vscode.Uri.file(path.join(repo.cwd, msg.filePath));
-                await openMergeEditor(uri);
+                await openThreeWayMergeEditor(repo, msg.filePath);
                 break;
             }
 
@@ -487,8 +485,7 @@ export class ChangesMessageRouter {
 
             case 'changes/submoduleOpenMergeEditor': {
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                const uri = vscode.Uri.file(path.join(repo.cwd, submodulePath, msg.filePath));
-                await openMergeEditor(uri);
+                await openThreeWayMergeEditor(new ScopedGitRepository(repo, submodulePath), msg.filePath);
                 break;
             }
 
@@ -1352,8 +1349,4 @@ function toProtocolConflictState(state: 'none' | 'merge' | 'rebase'): ConflictSt
         case 'rebase': return ConflictState.Rebase;
         default: return ConflictState.None;
     }
-}
-
-async function openMergeEditor(uri: vscode.Uri): Promise<void> {
-    await vscode.commands.executeCommand(OpenMergeEditorCommand, uri);
 }

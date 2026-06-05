@@ -24,6 +24,10 @@ export function registerReadonlyDiffDocumentProvider(): vscode.Disposable {
     return vscode.workspace.registerTextDocumentContentProvider(lookGitDiffScheme, provider);
 }
 
+export function createReadonlyDocumentUri(title: string, content: string, extension: string): vscode.Uri {
+    return provider.createUri(title, content, extension);
+}
+
 export async function openReadonlyDiffDocument(title: string, content: string): Promise<void> {
     const uri = provider.createUri(title, content || `${title}\n`, 'diff');
     const document = await vscode.workspace.openTextDocument(uri);
