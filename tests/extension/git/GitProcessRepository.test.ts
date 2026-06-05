@@ -122,6 +122,33 @@ describe('GitProcessRepository', () => {
         expect(expectItem(log, 1).message).toBe('first');
     });
 
+    it('getLog returns an empty list for an initialized repo without commits', async () => {
+        const r = repo();
+        const git = new GitProcessRepository(r.cwd);
+
+        await expect(git.getLog(5, 0)).resolves.toEqual([]);
+    });
+
+    it('getGraphLog returns an empty list for an initialized repo without commits', async () => {
+        const r = repo();
+        const git = new GitProcessRepository(r.cwd);
+
+        await expect(git.getGraphLog(20)).resolves.toEqual([]);
+    });
+
+    it('getGraphLog still shows fetched remote commits when local HEAD has no commit', async () => {
+        const remote = repo();
+        remote.commitFile('remote.txt', 'remote\n', 'feat(graph): remote only');
+        const local = repo();
+        local.git(['remote', 'add', 'origin', remote.cwd]);
+        local.git(['fetch', '-q', 'origin', 'main:refs/remotes/origin/main']);
+
+        const git = new GitProcessRepository(local.cwd);
+        const graph = await git.getGraphLog(20);
+
+        expect(graph.map((commit) => commit.message)).toEqual(['feat(graph): remote only']);
+    });
+
     it('getLogForRef returns commits reachable from the selected branch', async () => {
         const r = repo();
         r.write('base.txt', 'base');

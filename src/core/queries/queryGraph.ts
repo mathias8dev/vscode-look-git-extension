@@ -29,11 +29,18 @@ export async function queryGraphLog(
     if (filters.dateFrom) { args.push(`--since=${filters.dateFrom}T00:00:00`); }
     if (filters.dateTo)   { args.push(`--until=${filters.dateTo}T23:59:59`); }
     for (const author of filters.authors ?? []) { args.push(`--author=${author}`); }
+    const usesDefaultRefs = !branches?.length;
     if (branches?.length) { args.push(...branches); }
     else { args.push('HEAD', '--branches', '--tags', '--remotes'); }
     if (pathFilter) { args.push('--', pathFilter); }
 
-    const output = await execRawReadonly(args, signal);
+    let output: string;
+    try {
+        output = await execRawReadonly(args, signal);
+    } catch (error) {
+        if (!usesDefaultRefs || !isUnbornHeadHistoryError(error)) { throw error; }
+        output = await execRawReadonly(removeFirstHeadRevision(args), signal);
+    }
     let commits = parseGraphLog(output);
 
     if (search) {
@@ -57,7 +64,13 @@ export async function queryCommitLog(
     const format = ['%H', '%h', '%s', '%an', '%ae', '%aI', '%P'].join(LOG_FIELD_SEP) + LOG_RECORD_SEP;
     const args = ['log', `--format=${format}`, `--max-count=${limit}`, `--skip=${skip}`];
     if (ref) { args.push(ref); }
-    const output = await execRawReadonly(args, signal);
+    let output: string;
+    try {
+        output = await execRawReadonly(args, signal);
+    } catch (error) {
+        if (isUnbornCommitHistoryError(error, ref)) { return []; }
+        throw error;
+    }
     return parseCommitLog(output);
 }
 
@@ -178,6 +191,40 @@ async function queryGitlinkPaths(execRawReadonly: GitExec, parents: string[], co
 
 function markSubmodules(files: GitFileChange[], paths: Set<string>): GitFileChange[] {
     return files.map((f) => paths.has(f.filePath) ? { ...f, isSubmodule: true } : f);
+}
+
+function removeFirstHeadRevision(args: readonly string[]): string[] {
+    const headIndex = args.indexOf('HEAD');
+    if (headIndex < 0) { return [...args]; }
+    return [...args.slice(0, headIndex), ...args.slice(headIndex + 1)];
+}
+
+function isUnbornCommitHistoryError(error: unknown, ref: string | undefined): boolean {
+    const text = gitErrorText(error).toLowerCase();
+    if (text.includes('does not have any commits yet')) { return true; }
+    if (ref && ref.toUpperCase() !== 'HEAD') { return false; }
+    return isUnbornHeadHistoryError(error);
+}
+
+function isUnbornHeadHistoryError(error: unknown): boolean {
+    const text = gitErrorText(error).toLowerCase();
+    return text.includes("ambiguous argument 'head'")
+        && text.includes('unknown revision or path not in the working tree');
+}
+
+function gitErrorText(error: unknown): string {
+    return [
+        error instanceof Error ? error.message : String(error),
+        stringErrorProperty(error, 'stderr'),
+        stringErrorProperty(error, 'stdout'),
+    ].filter((part) => part.length > 0).join('\n');
+}
+
+function stringErrorProperty(error: unknown, propertyName: 'stderr' | 'stdout'): string {
+    if (typeof error !== 'object' || error === null) { return ''; }
+    const descriptor = Object.getOwnPropertyDescriptor(error, propertyName);
+    const value: unknown = descriptor?.value;
+    return typeof value === 'string' ? value : '';
 }
 
 function commitMatchesSearch(commit: GitGraphCommit, search: string): boolean {

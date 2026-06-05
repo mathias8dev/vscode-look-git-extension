@@ -16,6 +16,14 @@ All notable changes to Look Git are documented in this file.
 #### Changes Panel
 - Default the changes view to list mode while preserving the user's selected list/tree mode in VS Code webview state
 
+### Fixed
+
+#### Commit History
+- Show an empty history state instead of a Git error for initialized repositories that do not have any commits yet
+
+#### Look Graph
+- Handle repositories without a local `HEAD` commit while still rendering fetched remote refs when available
+
 ## [0.7.0] - 2026-06-05
 
 ### Added

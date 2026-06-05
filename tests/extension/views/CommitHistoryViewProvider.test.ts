@@ -117,6 +117,28 @@ describe('CommitHistoryViewProvider error propagation', () => {
         }));
     });
 
+    it('posts an empty history payload when the active repository has no commits yet', async () => {
+        const repo = makeRepositoryMock({
+            getLog: vi.fn(async () => []),
+            getAllBranches: vi.fn(async () => []),
+            getAllTags: vi.fn(async () => []),
+        });
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual({
+            type: 'history/data',
+            data: {
+                commits: [],
+                page: { offset: 0, limit: 50 },
+                hasMore: false,
+            },
+        }));
+        expect(view.messages.some((message) => isRecord(message) && message.type === 'history/error')).toBe(false);
+    });
+
     it('responds to explicit page requests with hasMore', async () => {
         const repo = makeRepositoryMock({
             getLog: vi.fn(async () => [
