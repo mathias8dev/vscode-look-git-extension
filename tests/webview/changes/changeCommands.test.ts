@@ -5,6 +5,8 @@ import {
     bulkActionsFor,
     messageForBulkAction,
     messageForChangesToolbarCommand,
+    messageForExplainRepositoryChanges,
+    messageForExplainSelection,
     messageForRowAction,
     rowActionsFor,
 } from '../../../src/webview/features/changes/changeCommands';
@@ -119,6 +121,26 @@ describe('changeCommands', () => {
     it('creates protocol messages for toolbar commands', () => {
         expect(messageForChangesToolbarCommand('openGraph')).toEqual({ type: 'changes/toolbarCommand', command: 'openGraph' });
         expect(messageForChangesToolbarCommand('fetchAll')).toEqual({ type: 'changes/toolbarCommand', command: 'fetchAll' });
+    });
+
+    it('creates protocol messages for AI review actions', () => {
+        const target = {
+            kind: 'selection',
+            filePaths: ['src/a.ts'],
+            stageFilePaths: [],
+            unstageFilePaths: [],
+            discardFilePaths: [],
+            stashFilePaths: [],
+            patchStagedFilePaths: ['src/a.ts'],
+            patchUnstagedFilePaths: [],
+            patchUntrackedFilePaths: [],
+            stashIncludeUntracked: false,
+        } as const;
+        expect(messageForExplainSelection(target)).toEqual({ type: 'changes/explainSelection', target });
+        expect(messageForExplainRepositoryChanges('modules/lib')).toEqual({
+            type: 'changes/explainRepositoryChanges',
+            submodulePath: 'modules/lib',
+        });
     });
 
     it('offers section bulk actions only where they make sense', () => {

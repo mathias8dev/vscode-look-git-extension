@@ -1,4 +1,5 @@
 import type { ChangesToolbarCommand, ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
+import type { ChangesSelectionContextTarget } from '../../../protocol/changes/types';
 import type { CodiconName } from '../../shared/Codicon';
 import { ChangeSectionId, type ChangeListItem, type ChangeSection } from './changeTree';
 
@@ -158,4 +159,14 @@ export function messageForChangesToolbarCommand(command: ChangesToolbarCommand):
         type: 'changes/toolbarCommand',
         command,
     };
+}
+
+export function messageForExplainSelection(target: ChangesSelectionContextTarget): ChangesWebviewToExtensionMessage {
+    return { type: 'changes/explainSelection', target };
+}
+
+export function messageForExplainRepositoryChanges(submodulePath?: string): ChangesWebviewToExtensionMessage {
+    return submodulePath
+        ? { type: 'changes/explainRepositoryChanges', submodulePath }
+        : { type: 'changes/explainRepositoryChanges' };
 }

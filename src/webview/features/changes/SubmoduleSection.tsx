@@ -28,8 +28,10 @@ interface SubmoduleSectionProps {
     readonly onContextTarget: (path: string) => void;
     readonly onAction: (path: string, action: SubmoduleAction) => void;
     readonly onUpdateAll: () => void;
+    readonly onReviewChanges: (submodulePath: string) => void;
     readonly onRowAction: (submodulePath: string, item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onBulkAction: (submodulePath: string, action: ChangeBulkAction) => void;
+    readonly onExplainSelection: (target: ChangesSelectionContextTarget) => void;
     readonly onSelectionContextTarget: (target: ChangesSelectionContextTarget) => void;
     readonly onOperationAction: (submodulePath: string, conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly onCommit: (submodulePath: string, message: string, mode: CommitMode) => void;
@@ -57,8 +59,10 @@ export function SubmoduleSection({
     onContextTarget,
     onAction,
     onUpdateAll,
+    onReviewChanges,
     onRowAction,
     onBulkAction,
+    onExplainSelection,
     onSelectionContextTarget,
     onOperationAction,
     onCommit,
@@ -108,6 +112,7 @@ export function SubmoduleSection({
                                 onToggle={() => onToggle(submodule.path)}
                                 onOpenContextMenu={() => onContextTarget(submodule.path)}
                                 onAction={(action) => onAction(submodule.path, action)}
+                                onReviewChanges={() => onReviewChanges(submodule.path)}
                                 expandedStashIndexes={stashEntries
                                     .map((stash) => stash.index)
                                     .filter((index) => expandedStashKeys.includes(submoduleStashKey(submodule.path, index)))}
@@ -118,6 +123,7 @@ export function SubmoduleSection({
                                 }, {})}
                                 onRowAction={(item, action) => onRowAction(submodule.path, item, action)}
                                 onBulkAction={(action) => onBulkAction(submodule.path, action)}
+                                onExplainSelection={onExplainSelection}
                                 onSelectionContextTarget={onSelectionContextTarget}
                                 onOperationAction={(conflictState, action) => onOperationAction(submodule.path, conflictState, action)}
                                 commitFeedback={commitFeedbackByPath[submodule.path]}

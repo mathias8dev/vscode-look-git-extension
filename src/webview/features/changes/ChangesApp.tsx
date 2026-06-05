@@ -10,7 +10,7 @@ import { EmptyState } from './EmptyState';
 import { OperationBanner } from './OperationBanner';
 import { StashList } from './StashList';
 import { SubmoduleSection } from './SubmoduleSection';
-import { buildChangeSections, ChangeSectionId, type ChangeListItem } from './changeTree';
+import { buildChangeSections, ChangeSectionId, type ChangeListItem, type ChangeSection } from './changeTree';
 import {
     ChangeSelectionMode,
     getChangeCount,
@@ -28,6 +28,7 @@ interface ChangesAppProps {
     readonly onSelectItem: (item: ChangeListItem, mode: ChangeSelectionMode, visibleItemIds: readonly string[]) => void;
     readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onBulkAction: (action: ChangeBulkAction) => void;
+    readonly onExplainSelection: (target: ChangesSelectionContextTarget) => void;
     readonly onSelectionContextTarget: (target: ChangesSelectionContextTarget) => void;
     readonly onCommit: (message: string, mode: CommitMode) => void;
     readonly onCommitComposerContextTarget: (message: string) => void;
@@ -42,6 +43,8 @@ interface ChangesAppProps {
     readonly onToggleSubmodule: (path: string) => void;
     readonly onSubmoduleRowAction: (submodulePath: string, item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onSubmoduleBulkAction: (submodulePath: string, action: ChangeBulkAction) => void;
+    readonly onExplainSubmoduleChanges: (submodulePath: string) => void;
+    readonly onExplainSubmoduleSelection: (target: ChangesSelectionContextTarget) => void;
     readonly onSubmoduleSelectionContextTarget: (target: ChangesSelectionContextTarget) => void;
     readonly onSubmoduleOperationAction: (submodulePath: string, conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly onSubmoduleCommit: (submodulePath: string, message: string, mode: CommitMode) => void;
@@ -59,6 +62,7 @@ export function ChangesApp({
     onSelectItem,
     onRowAction,
     onBulkAction,
+    onExplainSelection,
     onSelectionContextTarget,
     onCommit,
     onCommitComposerContextTarget,
@@ -73,6 +77,8 @@ export function ChangesApp({
     onToggleSubmodule,
     onSubmoduleRowAction,
     onSubmoduleBulkAction,
+    onExplainSubmoduleChanges,
+    onExplainSubmoduleSelection,
     onSubmoduleSelectionContextTarget,
     onSubmoduleOperationAction,
     onSubmoduleCommit,
@@ -160,6 +166,7 @@ export function ChangesApp({
                         onOpenSelectionContext={openSelectionContext}
                         onRowAction={onRowAction}
                         onBulkAction={onBulkAction}
+                        onReview={reviewHandlerFor(section, (target) => onExplainSelection(target))}
                         onStash={stashHandlerFor(section.id, onCreateStash)}
                         stashTitle={stashTitleFor(section.id)}
                     />
@@ -181,8 +188,10 @@ export function ChangesApp({
                         onContextTarget={onSubmoduleContextTarget}
                         onAction={onSubmoduleAction}
                         onUpdateAll={() => onSubmoduleAction('', SubmoduleAction.UpdateAll)}
+                        onReviewChanges={onExplainSubmoduleChanges}
                         onRowAction={onSubmoduleRowAction}
                         onBulkAction={onSubmoduleBulkAction}
+                        onExplainSelection={onExplainSubmoduleSelection}
                         onSelectionContextTarget={onSubmoduleSelectionContextTarget}
                         onOperationAction={onSubmoduleOperationAction}
                         onCommit={onSubmoduleCommit}
@@ -213,6 +222,16 @@ function hasPatchableSelection(target: ReturnType<typeof changesSelectionTarget>
     return target.patchStagedFilePaths.length > 0
         || target.patchUnstagedFilePaths.length > 0
         || target.patchUntrackedFilePaths.length > 0;
+}
+
+function reviewHandlerFor(
+    section: ChangeSection,
+    onExplainSelection: (target: ChangesSelectionContextTarget) => void,
+): ((section: ChangeSection) => void) | undefined {
+    const target = changesSelectionTarget(section.items);
+    return hasPatchableSelection(target)
+        ? () => onExplainSelection(target)
+        : undefined;
 }
 
 function operationBannerFor(

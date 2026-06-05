@@ -20,6 +20,7 @@ interface ChangeSectionViewProps {
     readonly onOpenSelectionContext: (item: ChangeListItem) => void;
     readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onBulkAction: (action: ChangeBulkAction) => void;
+    readonly onReview?: (section: ChangeSection) => void;
     readonly onStash?: (message: string) => void;
     readonly stashTitle?: string;
     readonly showWhenEmpty?: boolean;
@@ -37,6 +38,7 @@ export function ChangeSectionView({
     onOpenSelectionContext,
     onRowAction,
     onBulkAction,
+    onReview,
     onStash,
     stashTitle = 'Stash changes',
     showWhenEmpty = false,
@@ -99,6 +101,13 @@ export function ChangeSectionView({
                             onClick={() => onBulkAction(descriptor.action)}
                         />
                     ))}
+                    {onReview ? (
+                        <IconButton
+                            icon="comment-discussion"
+                            title={reviewTitleFor(section.title)}
+                            onClick={() => onReview(section)}
+                        />
+                    ) : null}
                     {onStash ? (
                         <IconButton
                             icon="git-stash"
@@ -166,4 +175,11 @@ export function ChangeSectionView({
             )}
         </section>
     );
+}
+
+function reviewTitleFor(title: string): string {
+    if (title === 'Changes') { return 'Review changes'; }
+    if (title === 'Staged') { return 'Review staged changes'; }
+    if (title === 'Conflicts') { return 'Review conflicts'; }
+    return `Review ${title.toLowerCase()}`;
 }

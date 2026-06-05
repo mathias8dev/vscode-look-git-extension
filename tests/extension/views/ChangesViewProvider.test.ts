@@ -752,6 +752,59 @@ describe('ChangesViewProvider', () => {
         disposables.forEach((disposable) => disposable.dispose());
     });
 
+    it('webview section review message opens a markdown explanation for patchable changes', async () => {
+        const explainDiff = vi.fn(async () => 'Reviewed the section.');
+        const repo = makeRepo({
+            execRaw: vi.fn(async (args: readonly string[]) => args.includes('--cached')
+                ? 'diff --git a/src/staged.ts b/src/staged.ts\n+staged\n'
+                : 'diff --git a/src/app.ts b/src/app.ts\n+app\n'),
+        });
+        const provider = makeProvider(repo, undefined, new ExplainSelectedChangesUseCase({ explainDiff }));
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/explainSelection',
+            target: {
+                kind: 'selection',
+                filePaths: ['src/staged.ts', 'src/app.ts'],
+                stageFilePaths: [],
+                unstageFilePaths: ['src/staged.ts'],
+                discardFilePaths: [],
+                stashFilePaths: ['src/staged.ts'],
+                patchStagedFilePaths: ['src/staged.ts'],
+                patchUnstagedFilePaths: ['src/app.ts'],
+                patchUntrackedFilePaths: [],
+                stashIncludeUntracked: false,
+            },
+        });
+
+        await vi.waitFor(() => expect(repo.execRaw).toHaveBeenCalledWith([
+            'diff',
+            '--cached',
+            '--find-renames',
+            '--find-copies',
+            '--unified=3',
+            '--',
+            'src/staged.ts',
+        ], expect.any(AbortSignal)));
+        await vi.waitFor(() => expect(repo.execRaw).toHaveBeenCalledWith([
+            'diff',
+            '--find-renames',
+            '--find-copies',
+            '--unified=3',
+            '--',
+            'src/app.ts',
+        ], expect.any(AbortSignal)));
+        expect(explainDiff).toHaveBeenCalledWith(expect.objectContaining({
+            selectedItems: ['staged: src/staged.ts', 'unstaged: src/app.ts'],
+        }), expect.any(AbortSignal));
+        expect(mockWorkspace.documents.at(-1)).toEqual(expect.objectContaining({
+            language: 'markdown',
+            content: expect.stringContaining('Reviewed the section.'),
+        }));
+    });
+
     it('native selection explain diff command runs inside selected submodule changes', async () => {
         const explainDiff = vi.fn(async () => 'Submodule change explained.');
         const repo = makeRepo({
@@ -797,6 +850,70 @@ describe('ChangesViewProvider', () => {
         }));
         expect(mockWindow.shownDocuments).toHaveLength(1);
         disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('webview submodule review message reviews the current submodule status', async () => {
+        const explainDiff = vi.fn(async () => 'Reviewed submodule changes.');
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+            execRaw: vi.fn(async (args: readonly string[]) => {
+                if (args.includes('submodule')) { return ''; }
+                if (args.includes('status')) { return 'M  src/staged.ts\0 M src/inner.ts\0UU src/conflict.ts\0'; }
+                if (args.includes('--cached')) { return 'diff --git a/src/staged.ts b/src/staged.ts\n+staged\n'; }
+                return 'diff --git a/src/inner.ts b/src/inner.ts\n+inner\n';
+            }),
+        });
+        const provider = makeProvider(repo, undefined, new ExplainSelectedChangesUseCase({ explainDiff }));
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/explainRepositoryChanges', submodulePath: 'modules/lib' });
+
+        await vi.waitFor(() => expect(repo.execRaw).toHaveBeenCalledWith([
+            '-C',
+            'modules/lib',
+            'status',
+            '--porcelain=v1',
+            '-z',
+            '-u',
+        ], expect.any(AbortSignal)));
+        expect(repo.execRaw).toHaveBeenCalledWith([
+            '-C',
+            'modules/lib',
+            'diff',
+            '--cached',
+            '--find-renames',
+            '--find-copies',
+            '--unified=3',
+            '--',
+            'src/staged.ts',
+        ], expect.any(AbortSignal));
+        expect(repo.execRaw).toHaveBeenCalledWith([
+            '-C',
+            'modules/lib',
+            'diff',
+            '--find-renames',
+            '--find-copies',
+            '--unified=3',
+            '--',
+            'src/inner.ts',
+        ], expect.any(AbortSignal));
+        expect(repo.execRaw).not.toHaveBeenCalledWith([
+            '-C',
+            'modules/lib',
+            'diff',
+            '--find-renames',
+            '--find-copies',
+            '--unified=3',
+            '--',
+            'src/conflict.ts',
+        ], expect.any(AbortSignal));
+        expect(mockWorkspace.documents.at(-1)).toEqual(expect.objectContaining({
+            content: expect.stringContaining('Submodule: `modules/lib`'),
+        }));
+        expect(mockWorkspace.documents.at(-1)).toEqual(expect.objectContaining({
+            content: expect.stringContaining('Reviewed submodule changes.'),
+        }));
     });
 
     it('native selection explain diff command reports language model failures in VS Code', async () => {

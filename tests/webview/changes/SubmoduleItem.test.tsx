@@ -136,18 +136,50 @@ describe('SubmoduleItem', () => {
 
     it('exposes submodule toolbar actions from the row header', () => {
         const onAction = vi.fn<(action: SubmoduleAction) => void>();
+        const onReviewChanges = vi.fn();
         renderSubmodule({
             statusData: statusData(),
             onAction,
+            onReviewChanges,
         });
 
         fireEvent.click(screen.getByRole('button', { name: 'Refresh submodule changes' }));
         fireEvent.click(screen.getByRole('button', { name: 'Pull submodule' }));
         fireEvent.click(screen.getByRole('button', { name: 'Push submodule' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Review submodule changes' }));
 
         expect(onAction).toHaveBeenCalledWith(SubmoduleAction.Refresh);
         expect(onAction).toHaveBeenCalledWith(SubmoduleAction.Pull);
         expect(onAction).toHaveBeenCalledWith(SubmoduleAction.Push);
+        expect(onReviewChanges).toHaveBeenCalledOnce();
+    });
+
+    it('reviews staged sections inside submodules and leaves conflicts without review', () => {
+        const onExplainSelection = vi.fn();
+        renderSubmodule({
+            statusData: statusData({
+                conflicts: [{ indexStatus: 'U', workTreeStatus: 'U', filePath: 'src/conflict.ts' }],
+                staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'src/staged.ts' }],
+            }),
+            onExplainSelection,
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Review staged changes' }));
+
+        expect(onExplainSelection).toHaveBeenCalledWith({
+            kind: 'selection',
+            submodulePath: 'modules/lib',
+            filePaths: ['src/staged.ts'],
+            stageFilePaths: [],
+            unstageFilePaths: ['src/staged.ts'],
+            discardFilePaths: [],
+            stashFilePaths: ['src/staged.ts'],
+            patchStagedFilePaths: ['src/staged.ts'],
+            patchUnstagedFilePaths: [],
+            patchUntrackedFilePaths: [],
+            stashIncludeUntracked: false,
+        });
+        expect(screen.queryByRole('button', { name: 'Review conflicts' })).not.toBeInTheDocument();
     });
 
     it('marks the submodule more button as a native VS Code context menu target', () => {
@@ -220,7 +252,9 @@ function renderSubmodule(input: {
     readonly loadingStatus?: boolean;
     readonly focusRequest?: number;
     readonly onAction?: (action: SubmoduleAction) => void;
+    readonly onReviewChanges?: () => void;
     readonly onOpenContextMenu?: () => void;
+    readonly onExplainSelection?: Parameters<typeof SubmoduleItem>[0]['onExplainSelection'];
     readonly onSelectionContextTarget?: Parameters<typeof SubmoduleItem>[0]['onSelectionContextTarget'];
     readonly onOperationAction?: (conflictState: ConflictState.Merge | ConflictState.Rebase, action: OperationAction) => void;
 }): void {
@@ -234,10 +268,12 @@ function renderSubmodule(input: {
             onToggle={vi.fn()}
             onOpenContextMenu={input.onOpenContextMenu ?? vi.fn()}
             onAction={input.onAction ?? vi.fn()}
+            onReviewChanges={input.onReviewChanges ?? vi.fn()}
             expandedStashIndexes={[]}
             stashFilesByIndex={{}}
             onRowAction={vi.fn()}
             onBulkAction={vi.fn()}
+            onExplainSelection={input.onExplainSelection ?? vi.fn()}
             onSelectionContextTarget={input.onSelectionContextTarget ?? vi.fn()}
             onOperationAction={input.onOperationAction ?? vi.fn()}
             commitFeedback={undefined}

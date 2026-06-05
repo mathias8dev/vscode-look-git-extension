@@ -10,14 +10,14 @@ import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '../messa
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
 import { ScopedGitRepository } from '../git/scoped-git-repository';
 import type { RemoteCommandBackend } from '../../application/ports/remote-command-backend';
-import type { GitRepository } from '../../application/ports/git-repository';
+import type { GitRepository, GitStatus } from '../../application/ports/git-repository';
 import { createErrorPayload, isAbortError } from '../messaging/errorSerialization';
 import { getWebviewHtml } from './webviewHtml';
 import { GetChangesStatusUseCase } from '../../application/usecases/changes/get-changes-status';
 import { GenerateCommitMessageUseCase } from '../../application/usecases/changes/generate-commit-message';
 import { CreateChangesPatchResultKind, type CreateChangesPatchResult, type CreateChangesPatchUseCase } from '../../application/usecases/changes/create-changes-patch';
 import { ApplyPatchMode, ApplyPatchResultKind, ApplyPatchUseCase } from '../../application/usecases/changes/apply-patch';
-import { ExplainSelectedChangesUseCase } from '../../application/usecases/changes/explain-selected-changes';
+import { ExplainSelectedChangesUseCase, type ExplainSelectedChangesInput } from '../../application/usecases/changes/explain-selected-changes';
 import { VscodeLanguageModelCommitMessageGenerator } from '../adapters/vscode/vscode-language-model-commit-message-generator';
 import { VscodeLanguageModelDiffExplainer } from '../adapters/vscode/vscode-language-model-diff-explainer';
 import { defaultCreateChangesPatch } from '../adapters/vscode/default-create-changes-patch';
@@ -233,6 +233,14 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 this.contextTarget = msg.target;
                 return;
             }
+            if (msg.type === 'changes/explainSelection') {
+                void this.explainSelectedDiff(msg.target);
+                return;
+            }
+            if (msg.type === 'changes/explainRepositoryChanges') {
+                void this.explainRepositoryChanges(msg.submodulePath);
+                return;
+            }
             void this.router!.handle(msg);
         });
 
@@ -298,30 +306,87 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async explainSelectedDiff(target: Extract<ChangesContextTarget, { readonly kind: 'selection' }>): Promise<void> {
-        const selectedCount = target.patchStagedFilePaths.length + target.patchUnstagedFilePaths.length + target.patchUntrackedFilePaths.length;
-        if (selectedCount === 0) {
-            await vscode.window.showWarningMessage('No selected changes can be explained.');
+        try {
+            const baseRepo = this.repositories.requireRepository();
+            const repo = target.submodulePath
+                ? new ScopedGitRepository(baseRepo, await requireKnownSubmodulePath(baseRepo, target.submodulePath))
+                : baseRepo;
+            await this.explainChanges(repo, {
+                stagedFilePaths: target.patchStagedFilePaths,
+                unstagedFilePaths: target.patchUnstagedFilePaths,
+                untrackedFilePaths: target.patchUntrackedFilePaths,
+            }, {
+                progressTitle: 'Explaining selected diff...',
+                documentTitle: 'Selected Diff Explanation',
+                emptyWarning: 'No selected changes can be explained.',
+                scope: target.submodulePath,
+                scopeLabel: 'Submodule',
+            });
+        } catch (error) {
+            if (isAbortError(error)) { return; }
+            await showDiffExplanationError(error);
+        }
+    }
+
+    private async explainRepositoryChanges(submodulePath: string | undefined): Promise<void> {
+        try {
+            const baseRepo = this.repositories.requireRepository();
+            const repo = submodulePath
+                ? new ScopedGitRepository(baseRepo, await requireKnownSubmodulePath(baseRepo, submodulePath))
+                : baseRepo;
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: submodulePath ? 'Reviewing submodule changes...' : 'Reviewing changes...',
+                cancellable: true,
+            }, async (_progress, token) => withCancellationSignal(token, async (signal) => {
+                const input = explanationInputForStatus(await repo.getStatus(signal));
+                if (explanationInputCount(input) === 0) {
+                    await vscode.window.showWarningMessage(submodulePath ? 'No submodule changes can be reviewed.' : 'No changes can be reviewed.');
+                    return;
+                }
+                const result = await this.explainSelectedChanges.execute(repo, input, signal);
+                await openDiffExplanationDocument({
+                    title: submodulePath ? 'Submodule Changes Review' : 'Changes Review',
+                    scope: submodulePath,
+                    scopeLabel: submodulePath ? 'Submodule' : undefined,
+                    itemsTitle: 'Files',
+                    items: result.selectedFiles,
+                    explanation: result.explanation,
+                    diffTruncated: result.diffTruncated,
+                });
+            }));
+        } catch (error) {
+            if (isAbortError(error)) { return; }
+            await showDiffExplanationError(error);
+        }
+    }
+
+    private async explainChanges(
+        repo: GitRepository,
+        input: ExplainSelectedChangesInput,
+        options: {
+            readonly progressTitle: string;
+            readonly documentTitle: string;
+            readonly emptyWarning: string;
+            readonly scope?: string;
+            readonly scopeLabel?: string;
+        },
+    ): Promise<void> {
+        if (explanationInputCount(input) === 0) {
+            await vscode.window.showWarningMessage(options.emptyWarning);
             return;
         }
-        const baseRepo = this.repositories.requireRepository();
-        const repo = target.submodulePath
-            ? new ScopedGitRepository(baseRepo, await requireKnownSubmodulePath(baseRepo, target.submodulePath))
-            : baseRepo;
         try {
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
-                title: 'Explaining selected diff...',
+                title: options.progressTitle,
                 cancellable: true,
             }, async (_progress, token) => withCancellationSignal(token, async (signal) => {
-                const result = await this.explainSelectedChanges.execute(repo, {
-                    stagedFilePaths: target.patchStagedFilePaths,
-                    unstagedFilePaths: target.patchUnstagedFilePaths,
-                    untrackedFilePaths: target.patchUntrackedFilePaths,
-                }, signal);
+                const result = await this.explainSelectedChanges.execute(repo, input, signal);
                 await openDiffExplanationDocument({
-                    title: 'Selected Diff Explanation',
-                    scope: target.submodulePath,
-                    scopeLabel: 'Submodule',
+                    title: options.documentTitle,
+                    scope: options.scope,
+                    scopeLabel: options.scopeLabel,
                     itemsTitle: 'Files',
                     items: result.selectedFiles,
                     explanation: result.explanation,
@@ -722,6 +787,28 @@ function stringProperty(value: unknown, key: 'stdout' | 'stderr'): string | unde
     if (typeof value !== 'object' || value === null) { return undefined; }
     const property = Object.getOwnPropertyDescriptor(value, key)?.value;
     return typeof property === 'string' ? property : undefined;
+}
+
+function explanationInputForStatus(status: GitStatus): ExplainSelectedChangesInput {
+    const untracked = status.unstaged.filter(isUntrackedStatusEntry);
+    const trackedUnstaged = status.unstaged.filter((entry) => !isUntrackedStatusEntry(entry));
+    return {
+        stagedFilePaths: uniqueStatusPaths(status.staged),
+        unstagedFilePaths: uniqueStatusPaths(trackedUnstaged),
+        untrackedFilePaths: uniqueStatusPaths(untracked),
+    };
+}
+
+function explanationInputCount(input: ExplainSelectedChangesInput): number {
+    return input.stagedFilePaths.length + input.unstagedFilePaths.length + input.untrackedFilePaths.length;
+}
+
+function uniqueStatusPaths(entries: readonly GitStatus['staged'][number][]): readonly string[] {
+    return Array.from(new Set(entries.map((entry) => entry.filePath)));
+}
+
+function isUntrackedStatusEntry(entry: GitStatus['unstaged'][number]): boolean {
+    return entry.indexStatus === '?' || entry.workTreeStatus === '?';
 }
 
 async function requireKnownSubmodulePath(repo: { getSubmodulePaths(): Promise<ReadonlySet<string>> }, submodulePath: string): Promise<string> {

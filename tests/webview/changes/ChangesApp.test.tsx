@@ -31,7 +31,10 @@ describe('ChangesApp', () => {
                 onSelectItem={() => undefined}
                 onRowAction={() => undefined}
                 onBulkAction={() => undefined}
+                onExplainSelection={() => undefined}
+                onSelectionContextTarget={() => undefined}
                 onCommit={() => undefined}
+                onCommitComposerContextTarget={() => undefined}
                 onGenerateCommitMessage={() => undefined}
                 onOperationAction={() => undefined}
                 onCreateStash={() => undefined}
@@ -43,8 +46,12 @@ describe('ChangesApp', () => {
                 onToggleSubmodule={() => undefined}
                 onSubmoduleRowAction={() => undefined}
                 onSubmoduleBulkAction={() => undefined}
+                onExplainSubmoduleChanges={() => undefined}
+                onExplainSubmoduleSelection={() => undefined}
+                onSubmoduleSelectionContextTarget={() => undefined}
                 onSubmoduleOperationAction={() => undefined}
                 onSubmoduleCommit={() => undefined}
+                onSubmoduleCommitComposerContextTarget={() => undefined}
                 onGenerateCommitMessageForSubmodule={() => undefined}
                 onSubmoduleCreateStash={() => undefined}
                 onToggleSubmoduleStash={() => undefined}
@@ -83,7 +90,10 @@ describe('ChangesApp', () => {
                 onSelectItem={() => undefined}
                 onRowAction={() => undefined}
                 onBulkAction={() => undefined}
+                onExplainSelection={() => undefined}
+                onSelectionContextTarget={() => undefined}
                 onCommit={() => undefined}
+                onCommitComposerContextTarget={() => undefined}
                 onGenerateCommitMessage={() => undefined}
                 onOperationAction={() => undefined}
                 onCreateStash={onCreateStash}
@@ -95,8 +105,12 @@ describe('ChangesApp', () => {
                 onToggleSubmodule={() => undefined}
                 onSubmoduleRowAction={() => undefined}
                 onSubmoduleBulkAction={() => undefined}
+                onExplainSubmoduleChanges={() => undefined}
+                onExplainSubmoduleSelection={() => undefined}
+                onSubmoduleSelectionContextTarget={() => undefined}
                 onSubmoduleOperationAction={() => undefined}
                 onSubmoduleCommit={() => undefined}
+                onSubmoduleCommitComposerContextTarget={() => undefined}
                 onGenerateCommitMessageForSubmodule={() => undefined}
                 onSubmoduleCreateStash={() => undefined}
                 onToggleSubmoduleStash={() => undefined}

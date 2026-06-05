@@ -1,7 +1,14 @@
 import { useEffect, useReducer } from 'react';
 import type { ChangesExtensionToWebviewMessage, ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
 import type { CommitMode, StashFileEntry } from '../../protocol/changes/types';
-import { messageForBulkAction, messageForRowAction, type ChangeBulkAction, type ChangeRowAction } from '../features/changes/changeCommands';
+import {
+    messageForBulkAction,
+    messageForExplainRepositoryChanges,
+    messageForExplainSelection,
+    messageForRowAction,
+    type ChangeBulkAction,
+    type ChangeRowAction,
+} from '../features/changes/changeCommands';
 import type { ChangeListItem, ChangeSectionId } from '../features/changes/changeTree';
 import { messageForGenerateCommitMessage, messageForGenerateSubmoduleCommitMessage } from '../features/changes/commit-message-commands';
 import { ChangesApp } from '../features/changes/ChangesApp';
@@ -159,6 +166,7 @@ export function ChangesWebview() {
             }}
             onRowAction={(item: ChangeListItem, action: ChangeRowAction) => postToExtension(messageForRowAction(item, action))}
             onBulkAction={(action: ChangeBulkAction) => postToExtension(messageForBulkAction(action))}
+            onExplainSelection={(target) => postToExtension(messageForExplainSelection(target))}
             onSelectionContextTarget={(target) => postToExtension(messageForChangesContextTarget(target))}
             onCommit={(message: string, mode: CommitMode) => {
                 dispatch({ type: 'rememberCommitMessage', message });
@@ -190,6 +198,9 @@ export function ChangesWebview() {
                 postToExtension(messageForSubmoduleRowAction(submodulePath, item.entry, item.isStaged, action))}
             onSubmoduleBulkAction={(submodulePath: string, action: ChangeBulkAction) =>
                 postToExtension(messageForSubmoduleBulkAction(submodulePath, action))}
+            onExplainSubmoduleChanges={(submodulePath: string) =>
+                postToExtension(messageForExplainRepositoryChanges(submodulePath))}
+            onExplainSubmoduleSelection={(target) => postToExtension(messageForExplainSelection(target))}
             onSubmoduleSelectionContextTarget={(target) => postToExtension(messageForChangesContextTarget(target))}
             onSubmoduleOperationAction={(submodulePath: string, conflictState: ActiveConflictState, action: OperationAction) =>
                 postToExtension(messageForSubmoduleOperationAction(submodulePath, conflictState, action))}

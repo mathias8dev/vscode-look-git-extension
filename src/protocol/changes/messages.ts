@@ -1,7 +1,7 @@
 import type { RequestId, ErrorMessage, ProtocolError } from '../shared/base';
 import type { SerializedRepoContext } from '../shared/repo';
 import type { WebviewFontSizeChangedPush } from '../shared/ui';
-import type { StatusData, CommitMode, StashFileEntry, ConflictState, SubmoduleStatusData, ChangesContextTarget } from './types';
+import type { StatusData, CommitMode, StashFileEntry, ConflictState, SubmoduleStatusData, ChangesContextTarget, ChangesSelectionContextTarget } from './types';
 
 // ── Extension → Webview (push) ──────────────────────────────────────────────
 
@@ -153,6 +153,14 @@ export interface ChangesToolbarCommandMessage {
 export interface ChangesContextTargetMessage {
     readonly type: 'changes/contextTarget';
     readonly target: ChangesContextTarget;
+}
+export interface ExplainSelectionMessage {
+    readonly type: 'changes/explainSelection';
+    readonly target: ChangesSelectionContextTarget;
+}
+export interface ExplainRepositoryChangesMessage {
+    readonly type: 'changes/explainRepositoryChanges';
+    readonly submodulePath?: string;
 }
 export interface SubmoduleToolbarCommandMessage {
     readonly type: 'changes/submoduleToolbarCommand';
@@ -342,7 +350,7 @@ export type ChangesExtensionToWebviewMessage =
     | ErrorMessage;
 
 export type ChangesWebviewToExtensionMessage =
-    | ChangesReadyMessage | ViewModeChangedMessage | ChangesPreferencesChangedMessage | ChangesToolbarCommandMessage | ChangesContextTargetMessage | SubmoduleToolbarCommandMessage
+    | ChangesReadyMessage | ViewModeChangedMessage | ChangesPreferencesChangedMessage | ChangesToolbarCommandMessage | ChangesContextTargetMessage | ExplainSelectionMessage | ExplainRepositoryChangesMessage | SubmoduleToolbarCommandMessage
     | StageFileMessage | UnstageFileMessage | StageFilesMessage | UnstageFilesMessage | StageAllMessage | UnstageAllMessage
     | DiscardFileMessage | DiscardFilesMessage | DiscardAllMessage
     | MarkResolvedMessage | MarkResolvedFilesMessage

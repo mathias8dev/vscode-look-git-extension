@@ -2,6 +2,15 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [0.8.0] - 2026-06-05
+
+### Added
+
+#### AI
+- Add `Explain this diff` for selected Changes rows, Look Graph commits, and Commit History commits using the VS Code language model API
+- Add review buttons to Changes, Staged, and submodule change bars to explain patchable diffs from the current section or submodule
+- Support explaining staged, unstaged, untracked, multi-file, multi-commit, and submodule-scoped diffs in read-only Markdown documents
+
 ## [0.7.0] - 2026-06-05
 
 ### Added

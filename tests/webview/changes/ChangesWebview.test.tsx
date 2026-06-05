@@ -167,6 +167,51 @@ describe('ChangesWebview', () => {
         });
     });
 
+    it('posts review requests from changes and staged section bars only', async () => {
+        const api = createMockVsCodeApi();
+        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+        render(<ChangesWebview />);
+        sendStatusDataWithReviewSections();
+
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Review changes' })).toBeInTheDocument());
+
+        fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Review staged changes' }));
+
+        expect(api.messages).toContainEqual({
+            type: 'changes/explainSelection',
+            target: {
+                kind: 'selection',
+                filePaths: ['src/app.ts', 'src/new.ts'],
+                stageFilePaths: ['src/app.ts', 'src/new.ts'],
+                unstageFilePaths: [],
+                discardFilePaths: ['src/app.ts', 'src/new.ts'],
+                stashFilePaths: ['src/app.ts', 'src/new.ts'],
+                patchStagedFilePaths: [],
+                patchUnstagedFilePaths: ['src/app.ts'],
+                patchUntrackedFilePaths: ['src/new.ts'],
+                stashIncludeUntracked: true,
+            },
+        });
+        expect(api.messages).toContainEqual({
+            type: 'changes/explainSelection',
+            target: {
+                kind: 'selection',
+                filePaths: ['src/staged.ts'],
+                stageFilePaths: [],
+                unstageFilePaths: ['src/staged.ts'],
+                discardFilePaths: [],
+                stashFilePaths: ['src/staged.ts'],
+                patchStagedFilePaths: ['src/staged.ts'],
+                patchUnstagedFilePaths: [],
+                patchUntrackedFilePaths: [],
+                stashIncludeUntracked: false,
+            },
+        });
+        expect(screen.queryByRole('button', { name: 'Review conflicts' })).not.toBeInTheDocument();
+    });
+
     it('keeps expanded submodules open after parent status refreshes and reloads their details', async () => {
         const api = createMockVsCodeApi();
         const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
@@ -348,6 +393,7 @@ describe('ChangesWebview', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Refresh submodule changes' }));
         fireEvent.click(screen.getByRole('button', { name: 'Pull submodule' }));
         fireEvent.click(screen.getByRole('button', { name: 'Push submodule' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Review submodule changes' }));
         fireEvent.click(screen.getByRole('button', { name: 'More submodule actions' }));
 
         expect(api.messages).toContainEqual({
@@ -364,6 +410,10 @@ describe('ChangesWebview', () => {
             type: 'changes/submoduleToolbarCommand',
             submodulePath: 'modules/lib',
             command: 'push',
+        });
+        expect(api.messages).toContainEqual({
+            type: 'changes/explainRepositoryChanges',
+            submodulePath: 'modules/lib',
         });
         expect(api.messages).toContainEqual({
             type: 'changes/contextTarget',
@@ -436,6 +486,25 @@ function sendStatusDataWithMultipleChanges(): void {
             ],
             conflicts: [],
             conflictState: ConflictState.None,
+            stashes: [],
+            submodules: [],
+        },
+    });
+}
+
+function sendStatusDataWithReviewSections(): void {
+    sendToWebview({
+        type: 'changes/statusData',
+        data: {
+            repositoryState: RepositoryState.Available,
+            currentBranch: 'main',
+            staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'src/staged.ts' }],
+            unstaged: [
+                { indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/app.ts' },
+                { indexStatus: '?', workTreeStatus: '?', filePath: 'src/new.ts' },
+            ],
+            conflicts: [{ indexStatus: 'U', workTreeStatus: 'U', filePath: 'src/conflict.ts' }],
+            conflictState: ConflictState.Merge,
             stashes: [],
             submodules: [],
         },

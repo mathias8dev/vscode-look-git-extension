@@ -29,10 +29,12 @@ interface SubmoduleItemProps {
     readonly onToggle: () => void;
     readonly onOpenContextMenu: () => void;
     readonly onAction: (action: SubmoduleAction) => void;
+    readonly onReviewChanges: () => void;
     readonly expandedStashIndexes: readonly number[];
     readonly stashFilesByIndex: Readonly<Record<number, readonly StashFileEntry[]>>;
     readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
     readonly onBulkAction: (action: ChangeBulkAction) => void;
+    readonly onExplainSelection: (target: ChangesSelectionContextTarget) => void;
     readonly onSelectionContextTarget: (target: ChangesSelectionContextTarget) => void;
     readonly onOperationAction: (conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly commitFeedback: CommitFeedback | undefined;
@@ -63,10 +65,12 @@ export function SubmoduleItem({
     onToggle,
     onOpenContextMenu,
     onAction,
+    onReviewChanges,
     expandedStashIndexes,
     stashFilesByIndex,
     onRowAction,
     onBulkAction,
+    onExplainSelection,
     onSelectionContextTarget,
     onOperationAction,
     commitFeedback,
@@ -180,6 +184,11 @@ export function SubmoduleItem({
                         title="Push submodule"
                         onClick={() => onAction(SubmoduleAction.Push)}
                     />
+                    <IconButton
+                        icon="comment-discussion"
+                        title="Review submodule changes"
+                        onClick={onReviewChanges}
+                    />
                     {needsAction ? (
                         <IconButton
                             icon="arrow-down"
@@ -242,6 +251,7 @@ export function SubmoduleItem({
                                     onOpenSelectionContext={openSelectionContext}
                                     onRowAction={onRowAction}
                                     onBulkAction={onBulkAction}
+                                    onReview={reviewHandlerFor(section, submodule.path, (target) => onExplainSelection(target))}
                                     onStash={section.id === ChangeSectionId.Unstaged ? onCreateStash : undefined}
                                 />
                             ))}
@@ -269,6 +279,17 @@ function hasPatchableSelection(target: ReturnType<typeof changesSelectionTarget>
     return target.patchStagedFilePaths.length > 0
         || target.patchUnstagedFilePaths.length > 0
         || target.patchUntrackedFilePaths.length > 0;
+}
+
+function reviewHandlerFor(
+    section: ChangeSection,
+    submodulePath: string,
+    onExplainSelection: (target: ChangesSelectionContextTarget) => void,
+): ((section: ChangeSection) => void) | undefined {
+    const target = changesSelectionTarget(section.items, submodulePath);
+    return hasPatchableSelection(target)
+        ? () => onExplainSelection(target)
+        : undefined;
 }
 
 function openNativeContextMenu(event: MouseEvent<HTMLButtonElement>, onOpenContextMenu: () => void): void {

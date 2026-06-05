@@ -3,6 +3,7 @@ export type CodiconName =
     | 'check'
     | 'chevron-down'
     | 'chevron-right'
+    | 'comment-discussion'
     | 'discard'
     | 'diff'
     | 'fold-down'

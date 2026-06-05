@@ -139,10 +139,12 @@ function renderSubmodule(status: SubmoduleStatusData): void {
             onToggle={vi.fn()}
             onOpenContextMenu={vi.fn()}
             onAction={vi.fn()}
+            onReviewChanges={vi.fn()}
             expandedStashIndexes={[]}
             stashFilesByIndex={{}}
             onRowAction={vi.fn()}
             onBulkAction={vi.fn()}
+            onExplainSelection={vi.fn()}
             onSelectionContextTarget={vi.fn()}
             onOperationAction={vi.fn()}
             commitFeedback={undefined}
