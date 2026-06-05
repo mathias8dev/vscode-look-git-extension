@@ -1293,6 +1293,43 @@ describe('ChangesViewProvider', () => {
         await vi.waitFor(() => expect(repo.stageFile).toHaveBeenCalledWith('src/d.ts'));
     });
 
+    it('opens conflicts with the VS Code merge editor', async () => {
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/openMergeEditor', filePath: 'src/conflict.ts' });
+
+        await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === 'git.openMergeEditor')).toBe(true));
+        const call = getCommandCalls().find((entry) => entry.command === 'git.openMergeEditor');
+        assertUriWithPath(call?.args[0], 'src/conflict.ts');
+        expect(getCommandCalls().some((entry) => entry.command === 'merge-conflict.accept.select')).toBe(false);
+        expect(getCommandCalls().some((entry) => entry.command === 'vscode.open')).toBe(false);
+    });
+
+    it('opens submodule conflicts with the VS Code merge editor', async () => {
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+            getSubmoduleStatus: vi.fn(async () => [{ path: 'modules/lib', status: ' ' as const }]),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/submoduleOpenMergeEditor',
+            submodulePath: 'modules/lib',
+            filePath: 'src/conflict.ts',
+        });
+
+        await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === 'git.openMergeEditor')).toBe(true));
+        const call = getCommandCalls().find((entry) => entry.command === 'git.openMergeEditor');
+        assertUriWithPath(call?.args[0], 'modules/lib/src/conflict.ts');
+        expect(getCommandCalls().some((entry) => entry.command === 'merge-conflict.accept.select')).toBe(false);
+        expect(getCommandCalls().some((entry) => entry.command === 'vscode.open')).toBe(false);
+    });
+
     it('continues and aborts active merge or rebase operations', async () => {
         setWarningChoice('Abort');
         const repo = makeRepo();

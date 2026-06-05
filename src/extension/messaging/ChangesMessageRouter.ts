@@ -25,6 +25,8 @@ type PostMessage = (msg: ChangesExtensionToWebviewMessage) => void;
 type RefreshCallback = () => Promise<void>;
 type RepositoryUpdatedCallback = () => Promise<void>;
 
+const OpenMergeEditorCommand = 'git.openMergeEditor';
+
 export class ChangesMessageRouter {
     private knownSubmodulePaths: ReadonlySet<string> | undefined;
     private commitMessageGenerationAbortController: AbortController | undefined;
@@ -399,11 +401,7 @@ export class ChangesMessageRouter {
 
             case 'changes/openMergeEditor': {
                 const uri = vscode.Uri.file(path.join(repo.cwd, msg.filePath));
-                try {
-                    await vscode.commands.executeCommand('merge-conflict.accept.select', uri);
-                } catch {
-                    await vscode.commands.executeCommand('vscode.open', uri);
-                }
+                await openMergeEditor(uri);
                 break;
             }
 
@@ -490,11 +488,7 @@ export class ChangesMessageRouter {
             case 'changes/submoduleOpenMergeEditor': {
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 const uri = vscode.Uri.file(path.join(repo.cwd, submodulePath, msg.filePath));
-                try {
-                    await vscode.commands.executeCommand('merge-conflict.accept.select', uri);
-                } catch {
-                    await vscode.commands.executeCommand('vscode.open', uri);
-                }
+                await openMergeEditor(uri);
                 break;
             }
 
@@ -1358,4 +1352,8 @@ function toProtocolConflictState(state: 'none' | 'merge' | 'rebase'): ConflictSt
         case 'rebase': return ConflictState.Rebase;
         default: return ConflictState.None;
     }
+}
+
+async function openMergeEditor(uri: vscode.Uri): Promise<void> {
+    await vscode.commands.executeCommand(OpenMergeEditorCommand, uri);
 }
