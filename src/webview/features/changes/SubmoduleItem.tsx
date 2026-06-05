@@ -104,6 +104,7 @@ export function SubmoduleItem({
             canStage: target.stageFilePaths.length > 0,
             canUnstage: target.unstageFilePaths.length > 0,
             canStash: target.stashFilePaths.length > 0,
+            canExplainDiff: hasPatchableSelection(target),
             canCreatePatch: hasPatchableSelection(target),
             canDiscard: target.discardFilePaths.length > 0,
         });

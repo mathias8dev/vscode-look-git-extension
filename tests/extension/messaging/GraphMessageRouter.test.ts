@@ -8,10 +8,11 @@ import { LOG_FIELD_SEP, LOG_RECORD_SEP } from '../../../src/core/parsing/parseLo
 import type { GitRepository } from '../../../src/application/ports/git-repository';
 import { GetGraphDataUseCase, type GraphDataResult } from '../../../src/application/usecases/graph/get-graph-data';
 import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessageRouter';
+import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
 import { GraphOperationCategory, GraphOperationStatus, type GraphDataResponse, type GraphExtensionToWebviewMessage, type GraphSubmodulesPush, type WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
 import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
-import { commands, env, resetMockVscode, setInputBoxValue, setInputBoxValues, setQuickPickValue, setWarningChoice, setWarningChoices, Uri, window, workspace } from '../../mocks/vscode';
+import { commands, env, lm, resetMockVscode, setInputBoxValue, setInputBoxValues, setQuickPickValue, setWarningChoice, setWarningChoices, Uri, window, workspace } from '../../mocks/vscode';
 
 describe('GraphMessageRouter graph data', () => {
     beforeEach(resetMockVscode);
@@ -689,6 +690,108 @@ describe('GraphMessageRouter commit commands', () => {
 
         expect(env.clipboard.value).toBe('patch a\n\npatch b\n');
         expect(window.infoMessages).toContain('Patch copied to clipboard.');
+    });
+
+    it('explains selected commit diffs in a readonly markdown document', async () => {
+        const disposable = registerReadonlyDiffDocumentProvider();
+        try {
+            lm.setResponse('Commit diff explained.');
+            const repo = makeRepositoryMock({
+                exec: vi.fn(async (args) => args[0] === 'rev-list' ? 'b\na' : ''),
+                execRaw: vi.fn(async (args) => `commit ${args.at(-1)}\n`),
+            });
+            const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+            await router.handle({ type: 'graph/commitCommand', command: 'explainDiff', hash: 'b', hashes: ['a', 'b'] });
+
+            expect(vi.mocked(repo.execRaw)).toHaveBeenNthCalledWith(1, [
+                'show',
+                '--format=fuller',
+                '--find-renames',
+                '--find-copies',
+                '--unified=3',
+                '--stat',
+                '--patch',
+                'a',
+            ], expect.any(AbortSignal));
+            expect(vi.mocked(repo.execRaw)).toHaveBeenNthCalledWith(2, [
+                'show',
+                '--format=fuller',
+                '--find-renames',
+                '--find-copies',
+                '--unified=3',
+                '--stat',
+                '--patch',
+                'b',
+            ], expect.any(AbortSignal));
+            expect(lm.requests[0]?.messages).toEqual([expect.objectContaining({
+                content: expect.stringContaining('Selected commits:'),
+            })]);
+            const document = workspace.documents.at(-1);
+            expect(document).toEqual(expect.objectContaining({
+                uri: expect.objectContaining({ scheme: 'lookgit-diff' }),
+                language: 'markdown',
+                isDirty: false,
+                content: expect.stringContaining('Commit diff explained.'),
+            }));
+            expect(window.shownDocuments).toHaveLength(1);
+        } finally {
+            disposable.dispose();
+        }
+    });
+
+    it('explains selected commit diffs inside the selected submodule scope', async () => {
+        const disposable = registerReadonlyDiffDocumentProvider();
+        try {
+            lm.setResponse('Submodule commit diff explained.');
+            const repo = makeRepositoryMock({
+                getSubmoduleStatus: vi.fn(async () => [submodule('modules/auth-kit', ' ')]),
+                exec: vi.fn(async (args) => args[0] === '-C' && args[1] === 'modules/auth-kit' && args[2] === 'rev-list' ? 'sub-b\nsub-a' : ''),
+                execRaw: vi.fn(async (args) => `submodule commit ${args.at(-1)}\n`),
+            });
+            const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+            await router.handle({
+                type: 'graph/commitCommand',
+                command: 'explainDiff',
+                hash: 'sub-b',
+                hashes: ['sub-a', 'sub-b'],
+                repositoryScope: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
+            });
+
+            expect(vi.mocked(repo.execRaw)).toHaveBeenNthCalledWith(1, [
+                '-C',
+                'modules/auth-kit',
+                'show',
+                '--format=fuller',
+                '--find-renames',
+                '--find-copies',
+                '--unified=3',
+                '--stat',
+                '--patch',
+                'sub-a',
+            ], expect.any(AbortSignal));
+            expect(vi.mocked(repo.execRaw)).toHaveBeenNthCalledWith(2, [
+                '-C',
+                'modules/auth-kit',
+                'show',
+                '--format=fuller',
+                '--find-renames',
+                '--find-copies',
+                '--unified=3',
+                '--stat',
+                '--patch',
+                'sub-b',
+            ], expect.any(AbortSignal));
+            expect(workspace.documents.at(-1)).toEqual(expect.objectContaining({
+                content: expect.stringContaining('Submodule: `modules/auth-kit`'),
+            }));
+            expect(workspace.documents.at(-1)).toEqual(expect.objectContaining({
+                content: expect.stringContaining('Submodule commit diff explained.'),
+            }));
+        } finally {
+            disposable.dispose();
+        }
     });
 
     it('confirms destructive commit commands', async () => {

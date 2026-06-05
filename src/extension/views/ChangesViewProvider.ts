@@ -17,9 +17,13 @@ import { GetChangesStatusUseCase } from '../../application/usecases/changes/get-
 import { GenerateCommitMessageUseCase } from '../../application/usecases/changes/generate-commit-message';
 import { CreateChangesPatchResultKind, type CreateChangesPatchResult, type CreateChangesPatchUseCase } from '../../application/usecases/changes/create-changes-patch';
 import { ApplyPatchMode, ApplyPatchResultKind, ApplyPatchUseCase } from '../../application/usecases/changes/apply-patch';
+import { ExplainSelectedChangesUseCase } from '../../application/usecases/changes/explain-selected-changes';
 import { VscodeLanguageModelCommitMessageGenerator } from '../adapters/vscode/vscode-language-model-commit-message-generator';
+import { VscodeLanguageModelDiffExplainer } from '../adapters/vscode/vscode-language-model-diff-explainer';
 import { defaultCreateChangesPatch } from '../adapters/vscode/default-create-changes-patch';
 import { toSerializedRepoContext } from '../mapping/toProtocol';
+import { openDiffExplanationDocument, showDiffExplanationError } from '../utils/diff-explanation-document';
+import { withCancellationSignal } from '../utils/vscode-cancellation';
 import { webviewFontSizeMessage } from './webview-font';
 
 const APPLY_PATCH_FROM_CLIPBOARD = 'From Clipboard';
@@ -57,6 +61,7 @@ enum ChangesSelectionCommandKind {
     Stage,
     Unstage,
     Stash,
+    ExplainDiff,
     CreatePatch,
     Discard,
 }
@@ -157,6 +162,7 @@ const CHANGES_SELECTION_NATIVE_COMMANDS: readonly ChangesSelectionCommandDescrip
     { id: 'lookGit.changes.selection.stage', kind: ChangesSelectionCommandKind.Stage },
     { id: 'lookGit.changes.selection.unstage', kind: ChangesSelectionCommandKind.Unstage },
     { id: 'lookGit.changes.selection.stash', kind: ChangesSelectionCommandKind.Stash },
+    { id: 'lookGit.changes.selection.explainDiff', kind: ChangesSelectionCommandKind.ExplainDiff },
     { id: 'lookGit.changes.selection.createPatch', kind: ChangesSelectionCommandKind.CreatePatch },
     { id: 'lookGit.changes.selection.discard', kind: ChangesSelectionCommandKind.Discard },
 ];
@@ -206,6 +212,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         private readonly generateCommitMessage = new GenerateCommitMessageUseCase(new VscodeLanguageModelCommitMessageGenerator()),
         private readonly createChangesPatch: CreateChangesPatchUseCase = defaultCreateChangesPatch,
         private readonly applyPatch = new ApplyPatchUseCase(),
+        private readonly explainSelectedChanges = new ExplainSelectedChangesUseCase(new VscodeLanguageModelDiffExplainer()),
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -276,6 +283,9 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             case ChangesSelectionCommandKind.Stash:
                 await this.stashSelectedFiles(target.submodulePath, target.stashFilePaths, target.stashIncludeUntracked);
                 return;
+            case ChangesSelectionCommandKind.ExplainDiff:
+                await this.explainSelectedDiff(target);
+                return;
             case ChangesSelectionCommandKind.CreatePatch:
                 await this.createPatchFromSelectedChanges(target);
                 return;
@@ -284,6 +294,43 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     ? { type: 'changes/submoduleDiscardFiles', submodulePath: target.submodulePath, filePaths: target.discardFilePaths }
                     : { type: 'changes/discardFiles', filePaths: target.discardFilePaths });
                 return;
+        }
+    }
+
+    private async explainSelectedDiff(target: Extract<ChangesContextTarget, { readonly kind: 'selection' }>): Promise<void> {
+        const selectedCount = target.patchStagedFilePaths.length + target.patchUnstagedFilePaths.length + target.patchUntrackedFilePaths.length;
+        if (selectedCount === 0) {
+            await vscode.window.showWarningMessage('No selected changes can be explained.');
+            return;
+        }
+        const baseRepo = this.repositories.requireRepository();
+        const repo = target.submodulePath
+            ? new ScopedGitRepository(baseRepo, await requireKnownSubmodulePath(baseRepo, target.submodulePath))
+            : baseRepo;
+        try {
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Explaining selected diff...',
+                cancellable: true,
+            }, async (_progress, token) => withCancellationSignal(token, async (signal) => {
+                const result = await this.explainSelectedChanges.execute(repo, {
+                    stagedFilePaths: target.patchStagedFilePaths,
+                    unstagedFilePaths: target.patchUnstagedFilePaths,
+                    untrackedFilePaths: target.patchUntrackedFilePaths,
+                }, signal);
+                await openDiffExplanationDocument({
+                    title: 'Selected Diff Explanation',
+                    scope: target.submodulePath,
+                    scopeLabel: 'Submodule',
+                    itemsTitle: 'Files',
+                    items: result.selectedFiles,
+                    explanation: result.explanation,
+                    diffTruncated: result.diffTruncated,
+                });
+            }));
+        } catch (error) {
+            if (isAbortError(error)) { return; }
+            await showDiffExplanationError(error);
         }
     }
 

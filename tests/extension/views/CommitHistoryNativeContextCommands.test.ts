@@ -6,11 +6,12 @@ import * as vscode from 'vscode';
 import type { HistoryCommitContextTarget, HistoryContextTarget, HistoryFileContextTarget } from '../../../src/protocol/history/types';
 import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
 import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHistoryViewProvider';
-import { createBareGitRepo, createTempGitRepo, removeDirSyncWithRetry, type TempGitRepo } from '../../helpers/gitRepo';
+import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
+import { createBareGitRepo, createSubmoduleFixture, createTempGitRepo, removeDirSyncWithRetry, type TempGitRepo } from '../../helpers/gitRepo';
 import { executingRemoteCommandBackend } from '../../helpers/executing-remote-command-backend';
 import { makeWebviewView, resetVscodeMock, type MockWebviewView } from '../../helpers/providerRuntime';
 import { makeRepositoryAccessor } from '../../helpers/repositoryMock';
-import { env, getCommandCalls, setInputBoxValue, setInputBoxValues, setQuickPickValue, setWarningChoice, window } from '../../mocks/vscode';
+import { env, getCommandCalls, lm, setInputBoxValue, setInputBoxValues, setQuickPickValue, setWarningChoice, window, workspace } from '../../mocks/vscode';
 
 describe('CommitHistoryViewProvider native context command semantics', () => {
     const repos: TempGitRepo[] = [];
@@ -56,6 +57,16 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
         expect(readFileSync(patchPath, 'utf8')).toMatch(/Subject: \[PATCH\] feat: head/);
         expect(window.infoMessages).toContain(`Patch saved to ${patchPath}.`);
 
+        lm.setResponse('History commit diff explained.');
+        await vscode.commands.executeCommand('lookGit.history.explainDiff');
+        expect(workspace.documents.at(-1)).toEqual(expect.objectContaining({
+            uri: expect.objectContaining({ scheme: 'lookgit-diff' }),
+            language: 'markdown',
+            isDirty: false,
+            content: expect.stringContaining('History commit diff explained.'),
+        }));
+        expect(window.shownDocuments).toHaveLength(1);
+
         fixture.write('head.txt', 'head local\n');
         await vscode.commands.executeCommand('lookGit.history.compareWithLocal');
         expect(getCommandCalls().at(-1)?.command).toBe('vscode.changes');
@@ -96,6 +107,39 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
         setQuickPickValue(worktreePath);
         await vscode.commands.executeCommand('lookGit.history.compareCommitWithWorktree');
         expect(getCommandCalls().at(-1)?.command).toBe('vscode.changes');
+    });
+
+    it('explains commits from the selected submodule history scope', async () => {
+        const { parent, subPath, cleanup } = createSubmoduleFixture();
+        try {
+            parent.git(['-C', subPath, 'config', 'user.email', 'test@example.com']);
+            parent.git(['-C', subPath, 'config', 'user.name', 'Test User']);
+            writeFileSync(join(parent.cwd, subPath, 'inner.txt'), 'inner\n');
+            parent.git(['-C', subPath, 'add', 'inner.txt']);
+            parent.git(['-C', subPath, 'commit', '-q', '-m', 'feat: inner']);
+            const submoduleHead = parent.gitTrim(['-C', subPath, 'rev-parse', 'HEAD']);
+            const { view } = await createHistoryHarness(parent.cwd);
+
+            setQuickPickValue(`Submodule: ${subPath}`);
+            await vscode.commands.executeCommand('lookGit.history.selectRepositoryScope');
+            setCommitTarget(view, { kind: 'commit', hash: submoduleHead, hashes: [submoduleHead], canUndoCommit: false });
+
+            lm.setResponse('Submodule history diff explained.');
+            await vscode.commands.executeCommand('lookGit.history.explainDiff');
+
+            expect(workspace.documents.at(-1)).toEqual(expect.objectContaining({
+                uri: expect.objectContaining({ scheme: 'lookgit-diff' }),
+                language: 'markdown',
+                isDirty: false,
+                content: expect.stringContaining(`Submodule: \`${subPath}\``),
+            }));
+            expect(workspace.documents.at(-1)).toEqual(expect.objectContaining({
+                content: expect.stringContaining('Submodule history diff explained.'),
+            }));
+            expect(window.shownDocuments).toHaveLength(1);
+        } finally {
+            cleanup();
+        }
     });
 
     it('applies checkout, reset, undo, revert, cherry-pick, drop, and push semantics from native commands', async () => {
@@ -224,6 +268,7 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
         const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo), async () => {}, executingRemoteCommandBackend);
         const view = makeWebviewView();
 
+        disposables.push(registerReadonlyDiffDocumentProvider());
         disposables.push(...provider.registerNativeContextCommands());
         provider.resolveWebviewView(view);
 

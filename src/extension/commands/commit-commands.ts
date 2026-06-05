@@ -9,10 +9,20 @@ import type { CommitReferenceActions } from '../../application/usecases/commits/
 import { defaultCommitReferenceActions } from '../adapters/vscode/default-commit-reference-actions';
 import { CreateCommitPatchResultKind, type CreateCommitPatchUseCase, type CreateCommitPatchResult } from '../../application/usecases/commits/create-commit-patch';
 import { defaultCreateCommitPatch } from '../adapters/vscode/default-create-commit-patch';
+import { type ExplainCommitDiffUseCase } from '../../application/usecases/commits/explain-commit-diff';
+import { defaultExplainCommitDiff } from '../adapters/vscode/default-explain-commit-diff';
 import { orderSelectedCommits } from '../../application/usecases/commits/order-selected-commits';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
 import { showModalWarningMessage } from '../utils/confirmation';
+import { openDiffExplanationDocument, showDiffExplanationError } from '../utils/diff-explanation-document';
+import { isAbortError } from '../messaging/errorSerialization';
+import { withCancellationSignal } from '../utils/vscode-cancellation';
 import { assertNoUnmergedFiles, compareRefWithPickedWorktree, openChangesWithWorkingTree, promptNewWorktreePath } from './git-command-helpers';
+
+export interface CommitCommandDiffExplanationScope {
+    readonly label: string;
+    readonly value: string;
+}
 
 export async function runCommitCommand(
     repo: GitRepository,
@@ -22,6 +32,8 @@ export async function runCommitCommand(
     remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
     commitReferenceActions: CommitReferenceActions = defaultCommitReferenceActions,
     createCommitPatch: CreateCommitPatchUseCase = defaultCreateCommitPatch,
+    explainCommitDiffUseCase: ExplainCommitDiffUseCase = defaultExplainCommitDiff,
+    diffExplanationScope?: CommitCommandDiffExplanationScope,
 ): Promise<boolean> {
     const selected = normalizeSelectedHashes(hash, hashes);
     switch (command) {
@@ -30,6 +42,9 @@ export async function runCommitCommand(
             return false;
         case 'createPatch':
             await showCommitPatchNotification(await createCommitPatch.execute(repo, selected));
+            return false;
+        case 'explainDiff':
+            await explainCommitDiff(repo, selected, explainCommitDiffUseCase, diffExplanationScope);
             return false;
         case 'cherryPick':
             await assertNoUnmergedFiles(repo, 'cherry-picking commits');
@@ -81,6 +96,35 @@ export async function runCommitCommand(
         case 'compareCommitWithWorktree':
             await compareRefWithPickedWorktree(repo, hash, `Diff ${hash.substring(0, 7)}`);
             return false;
+    }
+}
+
+async function explainCommitDiff(
+    repo: GitRepository,
+    hashes: readonly string[],
+    useCase: ExplainCommitDiffUseCase,
+    scope: CommitCommandDiffExplanationScope | undefined,
+): Promise<void> {
+    try {
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Explaining commit diff...',
+            cancellable: true,
+        }, async (_progress, token) => withCancellationSignal(token, async (signal) => {
+            const result = await useCase.execute(repo, hashes, signal);
+            await openDiffExplanationDocument({
+                title: 'Commit Diff Explanation',
+                scope: scope?.value,
+                scopeLabel: scope?.label,
+                itemsTitle: 'Commits',
+                items: result.selectedCommits,
+                explanation: result.explanation,
+                diffTruncated: result.diffTruncated,
+            });
+        }));
+    } catch (error) {
+        if (isAbortError(error)) { return; }
+        await showDiffExplanationError(error);
     }
 }
 

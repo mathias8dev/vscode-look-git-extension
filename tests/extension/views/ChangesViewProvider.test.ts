@@ -8,6 +8,7 @@ import type { GitRepository } from '../../../src/application/ports/git-repositor
 import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../../src/application/ports/remote-command-backend';
 import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
 import { GenerateCommitMessageUseCase } from '../../../src/application/usecases/changes/generate-commit-message';
+import { ExplainSelectedChangesUseCase } from '../../../src/application/usecases/changes/explain-selected-changes';
 import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
 import { createSubmoduleFixture } from '../../helpers/gitRepo';
 import { env, getCommandCalls, getInputBoxOptions, getWarningMessages, setErrorChoice, setInputBoxValue, setQuickPickValue, setQuickPickValues, setWarningChoice, window as mockWindow, workspace as mockWorkspace } from '../../mocks/vscode';
@@ -85,8 +86,12 @@ function makeAccessor(repo: GitRepository | undefined): ActiveRepositoryAccessor
     };
 }
 
-function makeProvider(repo: GitRepository | undefined, generateCommitMessage?: GenerateCommitMessageUseCase): ChangesViewProvider {
-    return new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), async () => {}, undefined, undefined, generateCommitMessage);
+function makeProvider(
+    repo: GitRepository | undefined,
+    generateCommitMessage?: GenerateCommitMessageUseCase,
+    explainSelectedChanges?: ExplainSelectedChangesUseCase,
+): ChangesViewProvider {
+    return new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), async () => {}, undefined, undefined, generateCommitMessage, undefined, undefined, explainSelectedChanges);
 }
 
 function makeRemoteCommands(): RemoteCommandBackend {
@@ -686,6 +691,151 @@ describe('ChangesViewProvider', () => {
         await vi.waitFor(() => expect(repo.execRaw).toHaveBeenNthCalledWith(1, ['diff', '--cached', '--binary', '--', 'src/staged.ts']));
         expect(repo.execRaw).toHaveBeenNthCalledWith(2, ['diff', '--binary', '--', 'src/app.ts']);
         expect(mockWindow.infoMessages).toContain('Patch copied to clipboard.');
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('native selection explain diff command opens a markdown explanation', async () => {
+        const explainDiff = vi.fn(async () => '## Summary\nChanged the selected files.');
+        const repo = makeRepo({
+            execRaw: vi.fn(async (args: readonly string[]) => args.includes('--cached')
+                ? 'diff --git a/src/staged.ts b/src/staged.ts\n+staged\n'
+                : 'diff --git a/src/app.ts b/src/app.ts\n+unstaged\n'),
+        });
+        const provider = makeProvider(repo, undefined, new ExplainSelectedChangesUseCase({ explainDiff }));
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/contextTarget',
+            target: {
+                kind: 'selection',
+                filePaths: ['src/app.ts', 'src/staged.ts'],
+                stageFilePaths: ['src/app.ts'],
+                unstageFilePaths: ['src/staged.ts'],
+                discardFilePaths: ['src/app.ts'],
+                stashFilePaths: ['src/app.ts', 'src/staged.ts'],
+                patchStagedFilePaths: ['src/staged.ts'],
+                patchUnstagedFilePaths: ['src/app.ts'],
+                patchUntrackedFilePaths: [],
+                stashIncludeUntracked: false,
+            },
+        });
+
+        await vscode.commands.executeCommand('lookGit.changes.selection.explainDiff');
+
+        await vi.waitFor(() => expect(repo.execRaw).toHaveBeenNthCalledWith(1, [
+            'diff',
+            '--cached',
+            '--find-renames',
+            '--find-copies',
+            '--unified=3',
+            '--',
+            'src/staged.ts',
+        ], expect.any(AbortSignal)));
+        expect(repo.execRaw).toHaveBeenNthCalledWith(2, [
+            'diff',
+            '--find-renames',
+            '--find-copies',
+            '--unified=3',
+            '--',
+            'src/app.ts',
+        ], expect.any(AbortSignal));
+        expect(explainDiff).toHaveBeenCalledWith(expect.objectContaining({
+            selectedItems: ['staged: src/staged.ts', 'unstaged: src/app.ts'],
+        }), expect.any(AbortSignal));
+        expect(mockWorkspace.documents.at(-1)).toEqual(expect.objectContaining({
+            language: 'markdown',
+            content: expect.stringContaining('Changed the selected files.'),
+        }));
+        expect(mockWindow.shownDocuments).toHaveLength(1);
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('native selection explain diff command runs inside selected submodule changes', async () => {
+        const explainDiff = vi.fn(async () => 'Submodule change explained.');
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+            execRaw: vi.fn(async () => 'diff --git a/src/lib.ts b/src/lib.ts\n+lib\n'),
+        });
+        const provider = makeProvider(repo, undefined, new ExplainSelectedChangesUseCase({ explainDiff }));
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/contextTarget',
+            target: {
+                kind: 'selection',
+                submodulePath: 'modules/lib',
+                filePaths: ['src/lib.ts'],
+                stageFilePaths: ['src/lib.ts'],
+                unstageFilePaths: [],
+                discardFilePaths: ['src/lib.ts'],
+                stashFilePaths: ['src/lib.ts'],
+                patchStagedFilePaths: [],
+                patchUnstagedFilePaths: ['src/lib.ts'],
+                patchUntrackedFilePaths: [],
+                stashIncludeUntracked: false,
+            },
+        });
+
+        await vscode.commands.executeCommand('lookGit.changes.selection.explainDiff');
+
+        await vi.waitFor(() => expect(repo.execRaw).toHaveBeenCalledWith([
+            '-C',
+            'modules/lib',
+            'diff',
+            '--find-renames',
+            '--find-copies',
+            '--unified=3',
+            '--',
+            'src/lib.ts',
+        ], expect.any(AbortSignal)));
+        expect(mockWorkspace.documents.at(-1)).toEqual(expect.objectContaining({
+            content: expect.stringContaining('Submodule: `modules/lib`'),
+        }));
+        expect(mockWindow.shownDocuments).toHaveLength(1);
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('native selection explain diff command reports language model failures in VS Code', async () => {
+        setErrorChoice('Show Output');
+        const repo = makeRepo({
+            execRaw: vi.fn(async () => 'diff --git a/src/app.ts b/src/app.ts\n+app\n'),
+        });
+        const provider = makeProvider(repo, undefined, new ExplainSelectedChangesUseCase({
+            explainDiff: vi.fn(async () => { throw new Error('No language model available'); }),
+        }));
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/contextTarget',
+            target: {
+                kind: 'selection',
+                filePaths: ['src/app.ts'],
+                stageFilePaths: ['src/app.ts'],
+                unstageFilePaths: [],
+                discardFilePaths: ['src/app.ts'],
+                stashFilePaths: ['src/app.ts'],
+                patchStagedFilePaths: [],
+                patchUnstagedFilePaths: ['src/app.ts'],
+                patchUntrackedFilePaths: [],
+                stashIncludeUntracked: false,
+            },
+        });
+
+        await vscode.commands.executeCommand('lookGit.changes.selection.explainDiff');
+
+        expect(mockWindow.errorMessages).toContain('Could not explain selected diff.');
+        expect(mockWindow.outputChannels.at(-1)).toEqual(expect.objectContaining({
+            name: 'Look Git',
+            shown: true,
+            lines: expect.arrayContaining(['Diff explanation failed.', 'No language model available']),
+        }));
+        expect(mockWindow.shownDocuments).toHaveLength(0);
         disposables.forEach((disposable) => disposable.dispose());
     });
 

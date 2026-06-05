@@ -23,6 +23,7 @@ describe('Graph native context menu manifest', () => {
 
         for (const command of [
             'lookGit.graph.commit.copyRevisionNumber',
+            'lookGit.graph.commit.explainDiff',
             'lookGit.graph.commit.goToParentCommit',
             'lookGit.graph.branch.checkout',
             'lookGit.graph.branch.removeBranchWorktree',
@@ -35,6 +36,10 @@ describe('Graph native context menu manifest', () => {
         expect(webviewContextMenu).toEqual(expect.arrayContaining([
             expect.objectContaining({
                 command: 'lookGit.graph.commit.copyRevisionNumber',
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.graph.commit.explainDiff',
                 when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
             }),
             expect.objectContaining({

@@ -185,6 +185,7 @@ describe('SubmoduleItem', () => {
 
         expect(staged).toHaveAttribute('aria-selected', 'true');
         expect(staged.getAttribute('data-vscode-context')).toContain('changesSelection');
+        expect(staged.getAttribute('data-vscode-context')).toContain('changesSelectionCanExplainDiff');
         fireEvent.contextMenu(staged);
 
         expect(onSelectionContextTarget).toHaveBeenCalledWith({

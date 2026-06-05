@@ -13,6 +13,7 @@ import { webviewFontSizeMessage } from './webview-font';
 const GRAPH_COMMIT_COMMANDS: readonly { readonly id: string; readonly command: CommitCommand }[] = [
     { id: 'lookGit.graph.commit.copyRevisionNumber', command: 'copyRevisionNumber' },
     { id: 'lookGit.graph.commit.createPatch', command: 'createPatch' },
+    { id: 'lookGit.graph.commit.explainDiff', command: 'explainDiff' },
     { id: 'lookGit.graph.commit.cherryPick', command: 'cherryPick' },
     { id: 'lookGit.graph.commit.checkoutRevision', command: 'checkoutRevision' },
     { id: 'lookGit.graph.commit.showRepositoryAtRevision', command: 'showRepositoryAtRevision' },

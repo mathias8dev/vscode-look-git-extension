@@ -83,6 +83,12 @@
         "icon": "$(diff-added)"
       },
       {
+        "command": "lookGit.history.explainDiff",
+        "title": "Explain this diff",
+        "category": "Look Git",
+        "icon": "$(sparkle)"
+      },
+      {
         "command": "lookGit.history.cherryPick",
         "title": "Cherry-Pick",
         "category": "Look Git",
@@ -426,6 +432,12 @@
         "command": "lookGit.changes.selection.stash",
         "title": "Stash Selected Changes",
         "category": "Look Git"
+      },
+      {
+        "command": "lookGit.changes.selection.explainDiff",
+        "title": "Explain this diff",
+        "category": "Look Git",
+        "icon": "$(sparkle)"
       },
       {
         "command": "lookGit.changes.selection.createPatch",
@@ -859,6 +871,12 @@
         "title": "Create Patch...",
         "category": "Look Git",
         "icon": "$(diff-added)"
+      },
+      {
+        "command": "lookGit.graph.commit.explainDiff",
+        "title": "Explain this diff",
+        "category": "Look Git",
+        "icon": "$(sparkle)"
       },
       {
         "command": "lookGit.graph.commit.cherryPick",
@@ -1863,9 +1881,14 @@
           "group": "2_changes_selection@1"
         },
         {
+          "command": "lookGit.changes.selection.explainDiff",
+          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSelection' && changesSelectionCanExplainDiff",
+          "group": "2_changes_selection@2"
+        },
+        {
           "command": "lookGit.changes.selection.createPatch",
           "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSelection' && changesSelectionCanCreatePatch",
-          "group": "2_changes_selection@2"
+          "group": "2_changes_selection@3"
         },
         {
           "command": "lookGit.changes.selection.discard",
@@ -1948,9 +1971,14 @@
           "group": "1_history_copy@2"
         },
         {
-          "command": "lookGit.history.cherryPick",
+          "command": "lookGit.history.explainDiff",
           "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
           "group": "1_history_copy@3"
+        },
+        {
+          "command": "lookGit.history.cherryPick",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "1_history_copy@4"
         },
         {
           "command": "lookGit.history.checkoutRevision",
@@ -2058,9 +2086,14 @@
           "group": "1_graph_commit_copy@2"
         },
         {
-          "command": "lookGit.graph.commit.cherryPick",
+          "command": "lookGit.graph.commit.explainDiff",
           "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
           "group": "1_graph_commit_copy@3"
+        },
+        {
+          "command": "lookGit.graph.commit.cherryPick",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "1_graph_commit_copy@4"
         },
         {
           "command": "lookGit.graph.commit.checkoutRevision",

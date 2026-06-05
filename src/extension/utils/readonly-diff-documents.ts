@@ -10,9 +10,9 @@ class ReadonlyDiffDocumentProvider implements vscode.TextDocumentContentProvider
         return this.contents.get(uri.toString()) ?? '';
     }
 
-    createUri(title: string, content: string): vscode.Uri {
+    createUri(title: string, content: string, extension: string): vscode.Uri {
         const name = sanitizeTitle(title);
-        const uri = vscode.Uri.parse(`${lookGitDiffScheme}:/${++this.nextId}/${name}.diff`);
+        const uri = vscode.Uri.parse(`${lookGitDiffScheme}:/${++this.nextId}/${name}.${extension}`);
         this.contents.set(uri.toString(), content);
         return uri;
     }
@@ -25,7 +25,13 @@ export function registerReadonlyDiffDocumentProvider(): vscode.Disposable {
 }
 
 export async function openReadonlyDiffDocument(title: string, content: string): Promise<void> {
-    const uri = provider.createUri(title, content || `${title}\n`);
+    const uri = provider.createUri(title, content || `${title}\n`, 'diff');
+    const document = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(document, { preview: false });
+}
+
+export async function openReadonlyMarkdownDocument(title: string, content: string): Promise<void> {
+    const uri = provider.createUri(title, content || `${title}\n`, 'md');
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preview: false });
 }

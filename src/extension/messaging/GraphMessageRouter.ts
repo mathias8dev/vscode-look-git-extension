@@ -308,7 +308,7 @@ export class GraphMessageRouter {
 
     private async handleCommitCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/commitCommand' }>): Promise<void> {
         const repo = await this.repositoryForScope(msg.repositoryScope);
-        const shouldRefresh = await runCommitCommand(repo, msg.command, msg.hash, msg.hashes, this.remoteCommands);
+        const shouldRefresh = await runCommitCommand(repo, msg.command, msg.hash, msg.hashes, this.remoteCommands, undefined, undefined, undefined, diffExplanationScopeFor(msg.repositoryScope));
         if (shouldRefresh) { await this.refreshAfterRepositoryChange(); }
     }
 
@@ -560,11 +560,17 @@ function graphCommitOperation(msg: Extract<GraphWebviewToExtensionMessage, { rea
         case 'newWorktreeFromCommit':
         case 'copyRevisionNumber':
         case 'createPatch':
+        case 'explainDiff':
         case 'showRepositoryAtRevision':
         case 'compareWithLocal':
         case 'compareCommitWithWorktree':
             return undefined;
     }
+}
+
+function diffExplanationScopeFor(scope: GraphRepositoryScope | undefined): { readonly label: string; readonly value: string } | undefined {
+    if (scope?.kind !== 'submodule' || !scope.path) { return undefined; }
+    return { label: 'Submodule', value: scope.path };
 }
 
 async function createDiffUris(cwd: string, msg: OpenDiffRequest): Promise<{ readonly left: vscode.Uri; readonly right: vscode.Uri }> {

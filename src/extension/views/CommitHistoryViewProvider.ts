@@ -25,6 +25,7 @@ const MAIN_REPOSITORY_SCOPE_LABEL = 'Main Repository';
 const HISTORY_COMMIT_COMMANDS: readonly { readonly id: string; readonly command: CommitCommand }[] = [
     { id: 'lookGit.history.copyRevisionNumber', command: 'copyRevisionNumber' },
     { id: 'lookGit.history.createPatch', command: 'createPatch' },
+    { id: 'lookGit.history.explainDiff', command: 'explainDiff' },
     { id: 'lookGit.history.cherryPick', command: 'cherryPick' },
     { id: 'lookGit.history.checkoutRevision', command: 'checkoutRevision' },
     { id: 'lookGit.history.showRepositoryAtRevision', command: 'showRepositoryAtRevision' },
@@ -332,7 +333,17 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
         try {
             const repo = this.requireHistoryRepository();
-            const shouldRefresh = await runCommitCommand(repo, command, target.hash, target.hashes, this.remoteCommands);
+            const shouldRefresh = await runCommitCommand(
+                repo,
+                command,
+                target.hash,
+                target.hashes,
+                this.remoteCommands,
+                undefined,
+                undefined,
+                undefined,
+                this.selectedRepositoryScope ? { label: 'Submodule', value: this.selectedRepositoryScope.path } : undefined,
+            );
             if (shouldRefresh) { await this.refresh(); }
         } catch (error) {
             this.postHistoryError(error, `history/${command}`, 'gitOperationFailed');

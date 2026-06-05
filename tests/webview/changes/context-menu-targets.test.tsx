@@ -8,12 +8,30 @@ import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 import { ChangeRow } from '../../../src/webview/features/changes/ChangeRow';
 import type { ChangeListItem, ChangeTreeNode } from '../../../src/webview/features/changes/changeTree';
 import { ChangeSectionId } from '../../../src/webview/features/changes/changeTree';
+import { changesSelectionContext } from '../../../src/webview/features/changes/context-menu-model';
 import { SubmoduleItem } from '../../../src/webview/features/changes/SubmoduleItem';
 import { StashFileRow } from '../../../src/webview/features/changes/StashFileRow';
 import { StashItem } from '../../../src/webview/features/changes/StashItem';
 import { TreeNodeView } from '../../../src/webview/features/changes/TreeNodeView';
 
 describe('changes native context menu targets', () => {
+    it('exposes the explain diff flag on selected change rows', () => {
+        const context: unknown = JSON.parse(changesSelectionContext({
+            canStage: true,
+            canUnstage: false,
+            canStash: true,
+            canExplainDiff: true,
+            canCreatePatch: true,
+            canDiscard: true,
+        }));
+
+        expect(context).toEqual(expect.objectContaining({
+            webviewSection: 'changesSelection',
+            preventDefaultContextMenuItems: true,
+            changesSelectionCanExplainDiff: true,
+        }));
+    });
+
     it('suppresses default VS Code context menu items on file rows', () => {
         render(
             <ChangeRow

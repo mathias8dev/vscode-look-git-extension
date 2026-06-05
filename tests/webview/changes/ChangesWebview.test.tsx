@@ -145,6 +145,7 @@ describe('ChangesWebview', () => {
         await waitFor(() => expect(second).toHaveAttribute('aria-selected', 'true'));
         expect(second.getAttribute('data-vscode-context')).toContain('changesSelection');
         expect(second.getAttribute('data-vscode-context')).toContain('changesSelectionCanStage');
+        expect(second.getAttribute('data-vscode-context')).toContain('changesSelectionCanExplainDiff');
         expect(second.getAttribute('data-vscode-context')).toContain('changesSelectionCanCreatePatch');
 
         fireEvent.contextMenu(second);

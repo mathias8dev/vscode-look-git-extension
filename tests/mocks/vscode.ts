@@ -37,6 +37,27 @@ export class MarkdownString {
     constructor(public value: string) {}
 }
 
+export class CancellationTokenSource {
+    private readonly emitter = new EventEmitter<void>();
+    private readonly tokenState = {
+        isCancellationRequested: false,
+        onCancellationRequested: (listener: () => unknown) => this.emitter.event(listener),
+    };
+    public readonly token: {
+        readonly isCancellationRequested: boolean;
+        onCancellationRequested(listener: () => unknown): { readonly dispose: () => void };
+    } = this.tokenState;
+
+    cancel(): void {
+        this.tokenState.isCancellationRequested = true;
+        this.emitter.fire();
+    }
+
+    dispose(): void {
+        this.emitter.dispose();
+    }
+}
+
 class TestUri {
     constructor(
         public scheme: string,
@@ -136,6 +157,57 @@ export const env = {
     },
 };
 
+type MockLanguageModelRequest = {
+    readonly messages: readonly unknown[];
+    readonly options: unknown;
+    readonly token: unknown;
+};
+
+type MockLanguageModelChat = {
+    readonly vendor: string;
+    sendRequest(messages: readonly unknown[], options: unknown, token: unknown): Promise<{ readonly text: AsyncIterable<string> }>;
+};
+
+export const LanguageModelChatMessage = {
+    User(content: string) {
+        return { role: 'user', content };
+    },
+};
+
+export const lm = {
+    models: [] as MockLanguageModelChat[],
+    requests: [] as MockLanguageModelRequest[],
+    selectChatModels() {
+        return Promise.resolve(this.models);
+    },
+    setResponse(text: string, vendor = 'copilot'): void {
+        this.models = [{
+            vendor,
+            sendRequest: async (messages, options, token) => {
+                this.requests.push({ messages, options, token });
+                return { text: textChunks(text) };
+            },
+        }];
+    },
+    reset(): void {
+        this.models = [];
+        this.requests = [];
+    },
+};
+
+async function* textChunks(text: string): AsyncIterable<string> {
+    yield text;
+}
+
+type MockCancellationToken = {
+    readonly isCancellationRequested: boolean;
+    onCancellationRequested(listener: () => unknown): { readonly dispose: () => void };
+};
+
+type MockProgress = {
+    report(value: unknown): void;
+};
+
 export const window = {
     errorMessages: [] as string[],
     infoMessages: [] as string[],
@@ -203,7 +275,13 @@ export const window = {
         this.terminals.push(terminal);
         return terminal;
     },
-    withProgress(_opts: unknown, task: () => unknown) { return Promise.resolve(task()); },
+    withProgress(_opts: unknown, task: (progress: MockProgress, token: MockCancellationToken) => unknown) {
+        const token: MockCancellationToken = {
+            isCancellationRequested: false,
+            onCancellationRequested: () => ({ dispose() {} }),
+        };
+        return Promise.resolve(task({ report() {} }, token));
+    },
     reset() {
         this.errorMessages = [];
         this.infoMessages = [];
@@ -232,6 +310,7 @@ export function resetMockVscode(): void {
     commands.reset();
     extensions.reset();
     env.clipboard.reset();
+    lm.reset();
     window.reset();
     workspace.reset();
 }
@@ -359,7 +438,7 @@ export const workspace = {
             const document = {
                 uri: input,
                 content: provider?.provideTextDocumentContent(input) ?? '',
-                language: input.path.endsWith('.diff') ? 'diff' : undefined,
+                language: languageForPath(input.path),
                 isDirty: false,
             };
             this.documents.push(document);
@@ -377,3 +456,9 @@ export const workspace = {
         this.fs.reset();
     },
 };
+
+function languageForPath(path: string): string | undefined {
+    if (path.endsWith('.diff')) { return 'diff'; }
+    if (path.endsWith('.md')) { return 'markdown'; }
+    return undefined;
+}

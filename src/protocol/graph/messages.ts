@@ -183,6 +183,7 @@ export interface WorktreeCommandRequest {
 export type CommitCommand =
     | 'copyRevisionNumber'
     | 'createPatch'
+    | 'explainDiff'
     | 'cherryPick'
     | 'checkoutRevision'
     | 'showRepositoryAtRevision'

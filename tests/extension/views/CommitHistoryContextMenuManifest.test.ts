@@ -21,11 +21,16 @@ describe('Commit History native context menu manifest', () => {
         const webviewContextMenu = pkg.contributes?.menus?.['webview/context'] ?? [];
 
         expect(commands).toContain('lookGit.history.copyRevisionNumber');
+        expect(commands).toContain('lookGit.history.explainDiff');
         expect(commands).toContain('lookGit.history.openFileDiff');
         expect(webviewContextMenu).toEqual(expect.arrayContaining([
             expect.objectContaining({
                 command: 'lookGit.history.copyRevisionNumber',
                 when: expect.stringContaining("webviewId == 'lookGit.commitHistory'"),
+            }),
+            expect.objectContaining({
+                command: 'lookGit.history.explainDiff',
+                when: expect.stringContaining("webviewSection == 'historyCommit'"),
             }),
             expect.objectContaining({
                 command: 'lookGit.history.openFileDiff',
