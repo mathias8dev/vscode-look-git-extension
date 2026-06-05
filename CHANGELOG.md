@@ -2,6 +2,13 @@
 
 All notable changes to Look Git are documented in this file.
 
+## Unreleased
+
+### Added
+
+#### Commit History
+- Show selection checkboxes beside every commit after the first commit is selected, with the selected commit checked by default, so multi-commit actions are easier to discover and adjust
+
 ## [0.9.1] - 2026-06-05
 
 ### Fixed

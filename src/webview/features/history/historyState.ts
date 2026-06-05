@@ -6,6 +6,8 @@ import type { ProtocolError } from '../../../protocol/shared/base';
 export interface HistoryState {
     readonly commits: readonly HistoryCommit[];
     readonly expandedHashes: readonly string[];
+    readonly selectedHashes: readonly string[];
+    readonly selectionAnchorHash: string | undefined;
     readonly detailsByHash: Readonly<Record<string, HistoryCommitDetails>>;
     readonly detailsLoadingHash: string | undefined;
     readonly loading: boolean;
@@ -19,6 +21,7 @@ export interface HistoryState {
 export type HistoryAction =
     | { readonly type: 'message'; readonly message: HistoryExtensionToWebviewMessage }
     | { readonly type: 'toggleCommit'; readonly hash: string }
+    | { readonly type: 'selectCommit'; readonly hash: string; readonly mode: HistoryCommitSelectionMode; readonly visibleHashes: readonly string[] }
     | { readonly type: 'startLoadingDetails'; readonly hash: string }
     | { readonly type: 'startRefresh' }
     | { readonly type: 'startLoadMore' }
@@ -29,6 +32,8 @@ export function createInitialHistoryState(): HistoryState {
     return {
         commits: [],
         expandedHashes: [],
+        selectedHashes: [],
+        selectionAnchorHash: undefined,
         detailsByHash: {},
         detailsLoadingHash: undefined,
         loading: true,
@@ -46,6 +51,8 @@ export function reduceHistoryState(state: HistoryState, action: HistoryAction): 
             return reduceMessage(state, action.message);
         case 'toggleCommit':
             return toggleCommit(state, action.hash);
+        case 'selectCommit':
+            return selectCommit(state, action.hash, action.mode, action.visibleHashes);
         case 'startLoadingDetails':
             return { ...state, detailsLoadingHash: action.hash };
         case 'startRefresh':
@@ -71,7 +78,7 @@ function reduceMessage(state: HistoryState, message: HistoryExtensionToWebviewMe
         case 'history/commitDetailsResponse':
             return applyCommitDetails(state, message.details);
         case 'history/selectCommit':
-            return toggleCommit(state, message.hash);
+            return toggleCommit(selectCommit(state, message.hash, HistoryCommitSelectionMode.Replace, [message.hash]), message.hash);
         case 'history/applyFileViewMode':
             return state;
         case 'history/operationStatus':
@@ -103,16 +110,72 @@ function toggleCommit(state: HistoryState, hash: string): HistoryState {
     return { ...state, expandedHashes: [...state.expandedHashes, hash] };
 }
 
+export enum HistoryCommitSelectionMode {
+    Replace,
+    Toggle,
+    Range,
+}
+
+function selectCommit(
+    state: HistoryState,
+    hash: string,
+    mode: HistoryCommitSelectionMode,
+    visibleHashes: readonly string[],
+): HistoryState {
+    switch (mode) {
+        case HistoryCommitSelectionMode.Replace:
+            return { ...state, selectedHashes: [hash], selectionAnchorHash: hash };
+        case HistoryCommitSelectionMode.Toggle:
+            return toggleCommitSelection(state, hash);
+        case HistoryCommitSelectionMode.Range:
+            return selectCommitRange(state, hash, visibleHashes);
+    }
+}
+
+function toggleCommitSelection(state: HistoryState, hash: string): HistoryState {
+    const selected = new Set(state.selectedHashes);
+    if (selected.has(hash)) {
+        selected.delete(hash);
+    } else {
+        selected.add(hash);
+    }
+    const selectedHashes = Array.from(selected);
+    return {
+        ...state,
+        selectedHashes,
+        selectionAnchorHash: selected.has(hash) ? hash : selectedHashes.at(-1),
+    };
+}
+
+function selectCommitRange(state: HistoryState, hash: string, visibleHashes: readonly string[]): HistoryState {
+    const anchor = state.selectionAnchorHash ?? hash;
+    const anchorIndex = visibleHashes.indexOf(anchor);
+    const focusIndex = visibleHashes.indexOf(hash);
+    if (anchorIndex === -1 || focusIndex === -1) {
+        return { ...state, selectedHashes: [hash], selectionAnchorHash: hash };
+    }
+    const start = Math.min(anchorIndex, focusIndex);
+    const end = Math.max(anchorIndex, focusIndex);
+    return {
+        ...state,
+        selectedHashes: visibleHashes.slice(start, end + 1),
+        selectionAnchorHash: anchor,
+    };
+}
+
 function applyData(state: HistoryState, data: HistoryData): HistoryState {
     const commits = data.page.offset === 0
         ? data.commits
         : appendUniqueCommits(state.commits, data.commits);
     const commitHashes = new Set(commits.map((c) => c.hash));
     const expandedHashes = state.expandedHashes.filter((h) => commitHashes.has(h));
+    const selectedHashes = state.selectedHashes.filter((h) => commitHashes.has(h));
     return {
         ...state,
         commits,
         expandedHashes,
+        selectedHashes,
+        selectionAnchorHash: selectedHashes.includes(state.selectionAnchorHash ?? '') ? state.selectionAnchorHash : selectedHashes.at(0),
         detailsLoadingHash: expandedHashes.includes(state.detailsLoadingHash ?? '') ? state.detailsLoadingHash : undefined,
         loading: false,
         loadingMore: false,

@@ -1,4 +1,4 @@
-import type { HistoryState } from './historyState';
+import { HistoryCommitSelectionMode, type HistoryState } from './historyState';
 import type { HistoryToolbarCommand } from '../../../protocol/history/messages';
 import { OperationStatus } from '../../../protocol/shared/operation';
 import type { HistoryCommit, HistoryCommitFile, HistoryContextTarget } from '../../../protocol/history/types';
@@ -15,6 +15,7 @@ interface CommitHistoryAppProps {
     readonly fileViewMode: 'list' | 'tree';
     readonly onQueryChange: (query: string) => void;
     readonly onToggleCommit: (hash: string) => void;
+    readonly onSelectCommit: (hash: string, mode: HistoryCommitSelectionMode, visibleHashes: readonly string[]) => void;
     readonly onOpenFileDiff: (hash: string, file: HistoryCommitFile) => void;
     readonly onContextTarget: (target: HistoryContextTarget) => void;
     readonly onLoadMore: () => void;
@@ -27,12 +28,35 @@ export function CommitHistoryApp({
     fileViewMode,
     onQueryChange,
     onToggleCommit,
+    onSelectCommit,
     onOpenFileDiff,
     onContextTarget,
     onLoadMore,
     onCopyHash,
 }: CommitHistoryAppProps) {
     const commits = filterHistoryCommits(state.commits, query);
+    const visibleHashes = commits.map((commit) => commit.hash);
+    const selectedHashSet = new Set(state.selectedHashes);
+    const showSelectionCheckboxes = state.selectedHashes.length > 0;
+
+    const selectCommit = (hash: string, mode: HistoryCommitSelectionMode) => {
+        onSelectCommit(hash, mode, visibleHashes);
+        if (mode === HistoryCommitSelectionMode.Replace) {
+            onToggleCommit(hash);
+        }
+    };
+
+    const commitContextTarget = (commit: HistoryCommit): HistoryContextTarget => {
+        const hashes = selectedHashSet.has(commit.hash) ? state.selectedHashes : [commit.hash];
+        return {
+            kind: 'commit',
+            hash: commit.hash,
+            hashes,
+            childHash: childHash(state.commits, commit.hash),
+            parentHash: commit.parentHashes[0],
+            canUndoCommit: state.commits[0]?.hash === commit.hash,
+        };
+    };
 
     return (
         <main className="history-shell">
@@ -80,18 +104,19 @@ export function CommitHistoryApp({
                             <CommitHistoryRow
                                 commit={commit}
                                 expanded={expanded}
+                                selected={selectedHashSet.has(commit.hash)}
+                                showSelectionCheckbox={showSelectionCheckboxes}
                                 childHash={childHash(state.commits, commit.hash)}
                                 parentHash={commit.parentHashes[0]}
                                 canUndoCommit={state.commits[0]?.hash === commit.hash}
-                                onSelect={onToggleCommit}
-                                onContextMenu={() => onContextTarget({
-                                    kind: 'commit',
-                                    hash: commit.hash,
-                                    hashes: [commit.hash],
-                                    childHash: childHash(state.commits, commit.hash),
-                                    parentHash: commit.parentHashes[0],
-                                    canUndoCommit: state.commits[0]?.hash === commit.hash,
-                                })}
+                                hasMultipleSelectedCommits={selectedHashSet.has(commit.hash) && state.selectedHashes.length > 1}
+                                onSelect={selectCommit}
+                                onContextMenu={() => {
+                                    if (!selectedHashSet.has(commit.hash)) {
+                                        onSelectCommit(commit.hash, HistoryCommitSelectionMode.Replace, visibleHashes);
+                                    }
+                                    onContextTarget(commitContextTarget(commit));
+                                }}
                             />
                             {expanded ? (
                                 <div className="history-item-expanded">

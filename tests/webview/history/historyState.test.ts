@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryCommit } from '../../../src/protocol/history/types';
 import { OperationStatus } from '../../../src/protocol/shared/operation';
-import { createInitialHistoryState, reduceHistoryState } from '../../../src/webview/features/history/historyState';
+import { createInitialHistoryState, HistoryCommitSelectionMode, reduceHistoryState } from '../../../src/webview/features/history/historyState';
 
 describe('historyState', () => {
     it('replaces commits for the first page', () => {
@@ -59,6 +59,8 @@ describe('historyState', () => {
             ...createInitialHistoryState(),
             commits: [commit('a111111', 'feat: first')],
             expandedHashes: ['a111111'],
+            selectedHashes: ['a111111'],
+            selectionAnchorHash: 'a111111',
         }, {
             type: 'message',
             message: {
@@ -72,6 +74,8 @@ describe('historyState', () => {
         });
 
         expect(selected.expandedHashes).toEqual([]);
+        expect(selected.selectedHashes).toEqual([]);
+        expect(selected.selectionAnchorHash).toBeUndefined();
     });
 
     it('marks selected commits as loading until details arrive', () => {
@@ -100,6 +104,41 @@ describe('historyState', () => {
 
         expect(loaded.detailsLoadingHash).toBeUndefined();
         expect(loaded.detailsByHash.a111111?.files).toEqual([{ status: 'M', filePath: 'src/a.ts' }]);
+    });
+
+    it('selects commits independently from expansion', () => {
+        const state = {
+            ...createInitialHistoryState(),
+            commits: [
+                commit('a111111', 'feat: first'),
+                commit('b222222', 'feat: second'),
+                commit('c333333', 'feat: third'),
+            ],
+        };
+
+        const replaced = reduceHistoryState(state, {
+            type: 'selectCommit',
+            hash: 'a111111',
+            mode: HistoryCommitSelectionMode.Replace,
+            visibleHashes: ['a111111', 'b222222', 'c333333'],
+        });
+        const toggled = reduceHistoryState(replaced, {
+            type: 'selectCommit',
+            hash: 'c333333',
+            mode: HistoryCommitSelectionMode.Toggle,
+            visibleHashes: ['a111111', 'b222222', 'c333333'],
+        });
+        const ranged = reduceHistoryState(toggled, {
+            type: 'selectCommit',
+            hash: 'b222222',
+            mode: HistoryCommitSelectionMode.Range,
+            visibleHashes: ['a111111', 'b222222', 'c333333'],
+        });
+
+        expect(replaced.expandedHashes).toEqual([]);
+        expect(replaced.selectedHashes).toEqual(['a111111']);
+        expect(toggled.selectedHashes).toEqual(['a111111', 'c333333']);
+        expect(ranged.selectedHashes).toEqual(['b222222', 'c333333']);
     });
 
     it('does not reload details already cached for a commit', () => {

@@ -398,7 +398,9 @@ describe('ChangesWebview', () => {
         });
 
         await waitFor(() => expect(screen.getByDisplayValue('fix(lib): update inner module')).toBeInTheDocument());
-        fireEvent.click(screen.getAllByRole('button', { name: 'More commit options' })[1]);
+        const submoduleMoreButton = screen.getAllByRole('button', { name: 'More commit options' }).at(1);
+        if (!submoduleMoreButton) { throw new Error('Expected submodule commit options button.'); }
+        fireEvent.click(submoduleMoreButton);
         expect(api.messages).toContainEqual({
             type: 'changes/contextTarget',
             target: {

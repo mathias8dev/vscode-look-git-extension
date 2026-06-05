@@ -13,8 +13,10 @@ describe('GraphCommitRow', () => {
                 childHash={undefined}
                 parentHash={undefined}
                 canUndoCommit={false}
+                hasMultipleSelectedCommits={false}
                 style={{}}
                 onSelect={() => undefined}
+                onMoveFocus={() => undefined}
                 onOpenContextMenu={() => undefined}
                 onBranchDoubleClick={() => undefined}
             />,
@@ -27,8 +29,10 @@ describe('GraphCommitRow', () => {
                 childHash={undefined}
                 parentHash={undefined}
                 canUndoCommit={false}
+                hasMultipleSelectedCommits={false}
                 style={{}}
                 onSelect={() => undefined}
+                onMoveFocus={() => undefined}
                 onOpenContextMenu={() => undefined}
                 onBranchDoubleClick={() => undefined}
             />,
@@ -47,8 +51,10 @@ describe('GraphCommitRow', () => {
                 childHash={undefined}
                 parentHash={undefined}
                 canUndoCommit={false}
+                hasMultipleSelectedCommits={false}
                 style={{}}
                 onSelect={() => undefined}
+                onMoveFocus={() => undefined}
                 onOpenContextMenu={() => undefined}
                 onBranchDoubleClick={() => undefined}
             />,
@@ -67,9 +73,11 @@ describe('GraphCommitRow', () => {
                 childHash={undefined}
                 parentHash={undefined}
                 canUndoCommit={false}
+                hasMultipleSelectedCommits={false}
                 rowHeight={35}
                 style={{ height: 35 }}
                 onSelect={() => undefined}
+                onMoveFocus={() => undefined}
                 onOpenContextMenu={() => undefined}
                 onBranchDoubleClick={() => undefined}
             />,
@@ -87,8 +95,10 @@ describe('GraphCommitRow', () => {
                 childHash={undefined}
                 parentHash={undefined}
                 canUndoCommit={false}
+                hasMultipleSelectedCommits={false}
                 style={{}}
                 onSelect={() => undefined}
+                onMoveFocus={() => undefined}
                 onOpenContextMenu={() => undefined}
                 onBranchDoubleClick={() => undefined}
             />,

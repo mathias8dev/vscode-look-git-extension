@@ -277,6 +277,7 @@ export function run(): Promise<void> {
                 await runEditMessageActionE2E();
                 await runFixupActionE2E();
                 await runSquashActionE2E();
+                await runCommitHistorySquashSelectionE2E();
                 await runDropActionE2E();
             },
         },
@@ -1432,12 +1433,60 @@ async function runSquashActionE2E(): Promise<void> {
         await withPatchedVscode({ inputBoxValues: ['feat: squashed selected commits'] }, async () => {
             await router.handle({ type: 'graph/commitCommand', command: 'squashInto', hash: newer, hashes: [newer, older] });
         });
-        assert.equal(git(fixture.cwd, ['rev-list', '--count', 'HEAD']), '3');
-        assert.equal(git(fixture.cwd, ['log', '--format=%s', '--reverse']), 'feat: base\nfeat: squashed selected commits\nfeat: tail');
+        assert.equal(git(fixture.cwd, ['rev-list', '--count', 'HEAD']), '4');
+        assert.equal(git(fixture.cwd, ['log', '--format=%s', '--reverse']), 'feat: base\nfeat: head\nfeat: squashed selected commits\nfeat: tail');
         assert.equal(git(fixture.cwd, ['show', 'HEAD~1:older.txt']), 'older');
         assert.equal(git(fixture.cwd, ['show', 'HEAD~1:newer.txt']), 'newer');
         assertNoGraphError(messages);
     });
+}
+
+async function runCommitHistorySquashSelectionE2E(): Promise<void> {
+    const fixture = createTempGitRepo();
+    try {
+        fixture.commitFile('base.txt', 'base\n', 'feat: base');
+        const older = fixture.commitFile('older.txt', 'older\n', 'feat: older');
+        const newer = fixture.commitFile('newer.txt', 'newer\n', 'feat: newer');
+        fixture.commitFile('tail.txt', 'tail\n', 'feat: tail');
+        const { view, provider } = await historyHarnessFor(fixture.cwd);
+
+        sendHistoryMessage(view, {
+            type: 'history/contextTarget',
+            target: {
+                kind: 'commit',
+                hash: newer,
+                hashes: [newer],
+                canUndoCommit: false,
+            },
+        });
+        await provider.runCommitContextCommand('squashInto');
+        const singleSelectionError = view.messages.find((message) => message.type === 'history/error' && message.error.operation === 'history/squashInto');
+        assert.ok(singleSelectionError && singleSelectionError.type === 'history/error');
+        assert.equal(singleSelectionError.message, 'Select at least two commits to squash.');
+        assert.equal(git(fixture.cwd, ['log', '--format=%s', '--reverse']), 'feat: base\nfeat: older\nfeat: newer\nfeat: tail');
+
+        view.messages.splice(0);
+        sendHistoryMessage(view, {
+            type: 'history/contextTarget',
+            target: {
+                kind: 'commit',
+                hash: newer,
+                hashes: [newer, older],
+                canUndoCommit: false,
+            },
+        });
+        await withPatchedVscode({ inputBoxValues: ['feat: history squash multi-select'] }, async () => {
+            await provider.runCommitContextCommand('squashInto');
+        });
+
+        assert.equal(git(fixture.cwd, ['rev-list', '--count', 'HEAD']), '3');
+        assert.equal(git(fixture.cwd, ['log', '--format=%s', '--reverse']), 'feat: base\nfeat: history squash multi-select\nfeat: tail');
+        assert.equal(git(fixture.cwd, ['show', 'HEAD~1:older.txt']), 'older');
+        assert.equal(git(fixture.cwd, ['show', 'HEAD~1:newer.txt']), 'newer');
+        assert.ok(view.messages.some((message) => message.type === 'history/data'), 'Expected commit history to refresh after a successful squash.');
+    } finally {
+        fixture.cleanup();
+    }
 }
 
 async function runDropActionE2E(): Promise<void> {

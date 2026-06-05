@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import type { GitFileChange } from '../../../src/application/ports/git-repository';
 import type { RemoteCommandBackend } from '../../../src/application/ports/remote-command-backend';
 import { OperationStatus } from '../../../src/protocol/shared/operation';
+import { ConflictState } from '../../../src/protocol/changes/types';
 import { RepoKind } from '../../../src/core/git/domain/RepoContext';
 import { LOG_FIELD_SEP, LOG_RECORD_SEP } from '../../../src/core/parsing/parseLog';
 import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHistoryViewProvider';
@@ -586,7 +587,7 @@ describe('CommitHistoryViewProvider error propagation', () => {
                 staged: [],
                 unstaged: [],
                 conflicts: [{ indexStatus: 'U', workTreeStatus: 'U', filePath: 'src/conflict.ts' }],
-                conflictState: 'merge',
+                conflictState: ConflictState.Merge,
             })),
         });
         commands.failCommand('git.pull', new Error('Automatic merge failed; fix conflicts and then commit the result.'));

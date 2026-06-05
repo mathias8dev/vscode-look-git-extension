@@ -349,7 +349,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async runCommitContextCommand(command: CommitCommand): Promise<void> {
+    async runCommitContextCommand(command: CommitCommand): Promise<void> {
         const target = this.contextTarget;
         if (target?.kind !== 'commit') {
             this.postHistoryError(new Error('No history commit is selected for this command.'), 'history/contextCommand', 'validationFailed');

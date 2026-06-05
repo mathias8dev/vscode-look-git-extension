@@ -134,10 +134,10 @@ async function showCommitPatchNotification(result: CreateCommitPatchResult): Pro
         case CreateCommitPatchResultKind.Cancelled:
             return;
         case CreateCommitPatchResultKind.CopiedToClipboard:
-            await vscode.window.showInformationMessage('Patch copied to clipboard.');
+            void vscode.window.showInformationMessage('Patch copied to clipboard.');
             return;
         case CreateCommitPatchResultKind.SavedToFile:
-            await vscode.window.showInformationMessage(`Patch saved to ${result.filePath ?? 'file'}.`);
+            void vscode.window.showInformationMessage(`Patch saved to ${result.filePath ?? 'file'}.`);
             return;
     }
 }

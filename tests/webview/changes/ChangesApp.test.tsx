@@ -28,6 +28,8 @@ describe('ChangesApp', () => {
             <ChangesApp
                 state={state}
                 onSectionToggle={() => undefined}
+                onClearPathFilter={() => undefined}
+                onToggleShowConflictsOnly={() => undefined}
                 onSelectItem={() => undefined}
                 onRowAction={() => undefined}
                 onBulkAction={() => undefined}
@@ -88,6 +90,8 @@ describe('ChangesApp', () => {
             <ChangesApp
                 state={state}
                 onSectionToggle={() => undefined}
+                onClearPathFilter={() => undefined}
+                onToggleShowConflictsOnly={() => undefined}
                 onSelectItem={() => undefined}
                 onRowAction={() => undefined}
                 onBulkAction={() => undefined}

@@ -42,6 +42,25 @@
     cursor: pointer;
 }
 
+.history-row-selection-active {
+    grid-template-columns: 16px 14px minmax(0, 1fr) auto;
+}
+
+.history-row-selection-checkbox {
+    width: 1em;
+    height: 1em;
+    min-width: 1em;
+    margin: 0;
+    justify-self: center;
+    accent-color: var(--vscode-checkbox-selectBackground, var(--vscode-button-background, #0e639c));
+    cursor: pointer;
+}
+
+.history-row-selection-checkbox:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder, #007fd4);
+    outline-offset: 1px;
+}
+
 .history-row:hover {
     background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
 }

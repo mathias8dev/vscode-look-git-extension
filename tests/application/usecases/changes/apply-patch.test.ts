@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApplyPatchMode, ApplyPatchResultKind, ApplyPatchUseCase } from '../../../../src/application/usecases/changes/apply-patch';
+import { ConflictState } from '../../../../src/protocol/changes/types';
 import { makeRepositoryMock } from '../../../helpers/repositoryMock';
 
 describe('ApplyPatchUseCase', () => {
@@ -25,7 +26,7 @@ describe('ApplyPatchUseCase', () => {
                 staged: [],
                 unstaged: [],
                 conflicts: [{ indexStatus: 'U', workTreeStatus: 'U', filePath: 'src/app.ts' }],
-                conflictState: 'merge',
+                conflictState: ConflictState.Merge,
             })),
         });
 

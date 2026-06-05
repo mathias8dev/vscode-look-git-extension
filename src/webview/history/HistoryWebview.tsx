@@ -81,6 +81,7 @@ export function HistoryWebview() {
             fileViewMode={fileViewMode}
             onQueryChange={setQuery}
             onToggleCommit={(hash: string) => dispatch({ type: 'toggleCommit', hash })}
+            onSelectCommit={(hash, mode, visibleHashes) => dispatch({ type: 'selectCommit', hash, mode, visibleHashes })}
             onOpenFileDiff={handleOpenFileDiff}
             onContextTarget={handleContextTarget}
             onLoadMore={handleLoadMore}

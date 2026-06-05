@@ -3,13 +3,14 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { HistoryCommit, HistoryCommitFile, HistoryContextTarget } from '../../../src/protocol/history/types';
-import type { HistoryState } from '../../../src/webview/features/history/historyState';
+import { HistoryCommitSelectionMode, type HistoryState } from '../../../src/webview/features/history/historyState';
 import { CommitHistoryApp } from '../../../src/webview/features/history/CommitHistoryApp';
 import { createInitialHistoryState } from '../../../src/webview/features/history/historyState';
 
 describe('CommitHistoryApp', () => {
     it('renders commits and dispatches selection', () => {
-        const onSelectCommit = vi.fn<(hash: string) => void>();
+        const onSelectCommit = vi.fn<(hash: string, mode: HistoryCommitSelectionMode, visibleHashes: readonly string[]) => void>();
+        const onToggleCommit = vi.fn<(hash: string) => void>();
 
         renderApp({
             state: {
@@ -22,13 +23,99 @@ describe('CommitHistoryApp', () => {
                 loading: false,
             },
             onSelectCommit,
+            onToggleCommit,
         });
 
         fireEvent.click(screen.getByRole('option', { name: /feat: add graph history/ }));
 
         expect(screen.getByText('feat: add graph history')).toBeInTheDocument();
         expect(screen.getByText('fix: repair renderer')).toBeInTheDocument();
-        expect(onSelectCommit).toHaveBeenCalledWith('abc123456789');
+        expect(onSelectCommit).toHaveBeenCalledWith('abc123456789', HistoryCommitSelectionMode.Replace, ['abc123456789', 'def123456789']);
+        expect(onToggleCommit).toHaveBeenCalledWith('abc123456789');
+    });
+
+    it('dispatches toggle and range commit selection without expanding every selected commit', () => {
+        const onSelectCommit = vi.fn<(hash: string, mode: HistoryCommitSelectionMode, visibleHashes: readonly string[]) => void>();
+        const onToggleCommit = vi.fn<(hash: string) => void>();
+
+        renderApp({
+            state: {
+                ...createInitialHistoryState(),
+                commits: [
+                    commit('a11111111111', 'feat: first'),
+                    commit('b22222222222', 'feat: second'),
+                    commit('c33333333333', 'feat: third'),
+                ],
+                loadedCount: 3,
+                loading: false,
+                selectedHashes: ['a11111111111'],
+                selectionAnchorHash: 'a11111111111',
+            },
+            onSelectCommit,
+            onToggleCommit,
+        });
+
+        fireEvent.click(screen.getByRole('option', { name: /feat: second/ }), { ctrlKey: true });
+        fireEvent.click(screen.getByRole('option', { name: /feat: third/ }), { shiftKey: true });
+
+        expect(onSelectCommit).toHaveBeenNthCalledWith(1, 'b22222222222', HistoryCommitSelectionMode.Toggle, ['a11111111111', 'b22222222222', 'c33333333333']);
+        expect(onSelectCommit).toHaveBeenNthCalledWith(2, 'c33333333333', HistoryCommitSelectionMode.Range, ['a11111111111', 'b22222222222', 'c33333333333']);
+        expect(onToggleCommit).not.toHaveBeenCalled();
+    });
+
+    it('shows commit selection checkboxes only after a commit is selected', () => {
+        const onSelectCommit = vi.fn<(hash: string, mode: HistoryCommitSelectionMode, visibleHashes: readonly string[]) => void>();
+        const onToggleCommit = vi.fn<(hash: string) => void>();
+        const commits = [
+            commit('a11111111111', 'feat: first'),
+            commit('b22222222222', 'feat: second'),
+        ];
+
+        const { rerender } = renderApp({
+            state: {
+                ...createInitialHistoryState(),
+                commits,
+                loadedCount: 2,
+                loading: false,
+            },
+            onSelectCommit,
+            onToggleCommit,
+        });
+
+        expect(screen.queryByRole('checkbox', { name: /Select commit/ })).not.toBeInTheDocument();
+
+        rerender(
+            <CommitHistoryApp
+                state={{
+                    ...createInitialHistoryState(),
+                    commits,
+                    loadedCount: 2,
+                    loading: false,
+                    selectedHashes: ['a11111111111'],
+                    selectionAnchorHash: 'a11111111111',
+                }}
+                query=""
+                fileViewMode="tree"
+                onQueryChange={() => undefined}
+                onToggleCommit={onToggleCommit}
+                onSelectCommit={onSelectCommit}
+                onOpenFileDiff={() => undefined}
+                onContextTarget={() => undefined}
+                onLoadMore={() => undefined}
+                onCopyHash={() => undefined}
+            />,
+        );
+
+        const selectedCheckbox = screen.getByRole('checkbox', { name: 'Select commit feat: first' });
+        const unselectedCheckbox = screen.getByRole('checkbox', { name: 'Select commit feat: second' });
+
+        expect(selectedCheckbox).toBeChecked();
+        expect(unselectedCheckbox).not.toBeChecked();
+
+        fireEvent.click(unselectedCheckbox);
+
+        expect(onSelectCommit).toHaveBeenCalledWith('b22222222222', HistoryCommitSelectionMode.Toggle, ['a11111111111', 'b22222222222']);
+        expect(onToggleCommit).not.toHaveBeenCalled();
     });
 
     it('renders local remote and tag badges on commit rows', () => {
@@ -63,6 +150,8 @@ describe('CommitHistoryApp', () => {
                     { ...commit('child123456789', 'feat: child'), parentHashes: ['parent123456789'] },
                     commit('parent123456789', 'feat: parent'),
                 ],
+                selectedHashes: ['parent123456789', 'child123456789'],
+                selectionAnchorHash: 'child123456789',
                 loadedCount: 2,
                 loading: false,
             },
@@ -73,11 +162,11 @@ describe('CommitHistoryApp', () => {
         fireEvent.contextMenu(row);
 
         expect(row.getAttribute('data-vscode-context')).toContain('"webviewSection":"historyCommit"');
-        expect(row.getAttribute('data-vscode-context')).toContain('"historyHasMultipleSelectedCommits":false');
+        expect(row.getAttribute('data-vscode-context')).toContain('"historyHasMultipleSelectedCommits":true');
         expect(onContextTarget).toHaveBeenCalledWith({
             kind: 'commit',
             hash: 'parent123456789',
-            hashes: ['parent123456789'],
+            hashes: ['parent123456789', 'child123456789'],
             childHash: 'child123456789',
             parentHash: undefined,
             canUndoCommit: false,
@@ -292,7 +381,8 @@ function renderApp(props: {
     readonly query?: string;
     readonly fileViewMode?: 'list' | 'tree';
     readonly onQueryChange?: (query: string) => void;
-    readonly onSelectCommit?: (hash: string) => void;
+    readonly onToggleCommit?: (hash: string) => void;
+    readonly onSelectCommit?: (hash: string, mode: HistoryCommitSelectionMode, visibleHashes: readonly string[]) => void;
     readonly onOpenFileDiff?: (hash: string, file: HistoryCommitFile) => void;
     readonly onContextTarget?: (target: HistoryContextTarget) => void;
     readonly onLoadMore?: () => void;
@@ -304,7 +394,8 @@ function renderApp(props: {
             query={props.query ?? ''}
             fileViewMode={props.fileViewMode ?? 'tree'}
             onQueryChange={props.onQueryChange ?? (() => undefined)}
-            onToggleCommit={props.onSelectCommit ?? (() => undefined)}
+            onToggleCommit={props.onToggleCommit ?? (() => undefined)}
+            onSelectCommit={props.onSelectCommit ?? (() => undefined)}
             onOpenFileDiff={props.onOpenFileDiff ?? (() => undefined)}
             onContextTarget={props.onContextTarget ?? (() => undefined)}
             onLoadMore={props.onLoadMore ?? (() => undefined)}

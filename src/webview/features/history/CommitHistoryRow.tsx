@@ -1,34 +1,39 @@
+import type { KeyboardEvent, MouseEvent } from 'react';
 import type { HistoryCommit, HistoryCommitRef } from '../../../protocol/history/types';
 import { formatHistoryDate, formatRelativeDate } from './historyModel';
+import { HistoryCommitSelectionMode } from './historyState';
 
 interface CommitHistoryRowProps {
     readonly commit: HistoryCommit;
     readonly expanded: boolean;
+    readonly selected: boolean;
+    readonly showSelectionCheckbox: boolean;
     readonly childHash: string | undefined;
     readonly parentHash: string | undefined;
     readonly canUndoCommit: boolean;
-    readonly onSelect: (hash: string) => void;
+    readonly hasMultipleSelectedCommits: boolean;
+    readonly onSelect: (hash: string, mode: HistoryCommitSelectionMode) => void;
     readonly onContextMenu: () => void;
 }
 
-export function CommitHistoryRow({ commit, expanded, childHash, parentHash, canUndoCommit, onSelect, onContextMenu }: CommitHistoryRowProps) {
+export function CommitHistoryRow({ commit, expanded, selected, showSelectionCheckbox, childHash, parentHash, canUndoCommit, hasMultipleSelectedCommits, onSelect, onContextMenu }: CommitHistoryRowProps) {
     return (
-        <button
-            type="button"
+        <div
             role="option"
-            aria-selected={expanded}
+            tabIndex={0}
+            aria-selected={selected}
             aria-expanded={expanded}
-            className="history-row"
+            className={`history-row${showSelectionCheckbox ? ' history-row-selection-active' : ''}`}
             title={`${commit.message}\n${commit.hash}`}
             data-vscode-context={JSON.stringify({
                 webviewSection: 'historyCommit',
                 historyCanGoToChild: childHash !== undefined,
                 historyCanGoToParent: parentHash !== undefined,
                 historyCanUndoCommit: canUndoCommit,
-                historyHasMultipleSelectedCommits: false,
+                historyHasMultipleSelectedCommits: hasMultipleSelectedCommits,
                 preventDefaultContextMenuItems: true,
             })}
-            onClick={() => onSelect(commit.hash)}
+            onClick={(event) => onSelect(commit.hash, selectionModeForEvent(event))}
             onContextMenu={onContextMenu}
             onKeyDown={(event) => {
                 if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -37,9 +42,24 @@ export function CommitHistoryRow({ commit, expanded, childHash, parentHash, canU
                     const idx = rows.indexOf(event.currentTarget);
                     const next = event.key === 'ArrowDown' ? rows[idx + 1] : rows[idx - 1];
                     next?.focus();
+                    return;
+                }
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onSelect(commit.hash, selectionModeForEvent(event));
                 }
             }}
         >
+            {showSelectionCheckbox ? (
+                <input
+                    type="checkbox"
+                    className="history-row-selection-checkbox"
+                    aria-label={`Select commit ${commit.message}`}
+                    checked={selected}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={() => onSelect(commit.hash, HistoryCommitSelectionMode.Toggle)}
+                />
+            ) : null}
             <i className={`codicon codicon-chevron-${expanded ? 'down' : 'right'} history-row-chevron`} aria-hidden="true" />
             <span className="history-row-main">
                 <span className="history-row-title">
@@ -59,8 +79,14 @@ export function CommitHistoryRow({ commit, expanded, childHash, parentHash, canU
                 </span>
             </span>
             <span className="history-row-hash">{commit.shortHash}</span>
-        </button>
+        </div>
     );
+}
+
+function selectionModeForEvent(event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>): HistoryCommitSelectionMode {
+    if (event.shiftKey) { return HistoryCommitSelectionMode.Range; }
+    if (event.metaKey || event.ctrlKey) { return HistoryCommitSelectionMode.Toggle; }
+    return HistoryCommitSelectionMode.Replace;
 }
 
 function HistoryRefBadge({ refInfo }: { readonly refInfo: HistoryCommitRef }) {
