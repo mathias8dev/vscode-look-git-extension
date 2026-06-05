@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useState } from 'react';
 import type { HistoryExtensionToWebviewMessage } from '../../protocol/history/messages';
 import type { HistoryCommitFile, HistoryContextTarget } from '../../protocol/history/types';
+import { OperationStatus } from '../../protocol/shared/operation';
 import { CommitHistoryApp } from '../features/history/CommitHistoryApp';
 import { createInitialHistoryState, reduceHistoryState } from '../features/history/historyState';
 import { messageForHistoryCommitDetails, messageForHistoryContextTarget, messageForHistoryDataRequest, messageForHistoryOpenDiff, messageForHistoryReady } from '../features/history/historyCommands';
@@ -9,6 +10,7 @@ import { vscodeApi } from '../platform/vscodeHost';
 
 const PAGE_LIMIT = 50;
 const ERROR_NOTICE_TIMEOUT_MS = 8000;
+const OPERATION_NOTICE_TIMEOUT_MS = 5000;
 
 export function HistoryWebview() {
     const [state, dispatch] = useReducer(reduceHistoryState, undefined, createInitialHistoryState);
@@ -37,6 +39,13 @@ export function HistoryWebview() {
         const timeout = window.setTimeout(() => dispatch({ type: 'clearError' }), ERROR_NOTICE_TIMEOUT_MS);
         return () => window.clearTimeout(timeout);
     }, [state.error]);
+
+    useEffect(() => {
+        if (!state.operationStatus || state.operationStatus.status === OperationStatus.Running) { return undefined; }
+        const operationId = state.operationStatus.operationId;
+        const timeout = window.setTimeout(() => dispatch({ type: 'clearOperationStatus', operationId }), OPERATION_NOTICE_TIMEOUT_MS);
+        return () => window.clearTimeout(timeout);
+    }, [state.operationStatus]);
 
     useEffect(() => {
         const pending = state.expandedHashes.find(

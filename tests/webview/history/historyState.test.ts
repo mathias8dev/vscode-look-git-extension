@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryCommit } from '../../../src/protocol/history/types';
+import { OperationStatus } from '../../../src/protocol/shared/operation';
 import { createInitialHistoryState, reduceHistoryState } from '../../../src/webview/features/history/historyState';
 
 describe('historyState', () => {
@@ -185,6 +186,27 @@ describe('historyState', () => {
 
         expect(state.error?.message).toBe('failed');
         expect(state.loading).toBe(false);
+    });
+
+    it('tracks operation status and ignores stale completed operations', () => {
+        const running = reduceHistoryState(createInitialHistoryState(), {
+            type: 'message',
+            message: { type: 'history/operationStatus', operationId: 'op-1', status: OperationStatus.Running, command: 'pull' },
+        });
+        const staleSuccess = reduceHistoryState(running, {
+            type: 'message',
+            message: { type: 'history/operationStatus', operationId: 'op-0', status: OperationStatus.Success, command: 'fetchAll' },
+        });
+        const success = reduceHistoryState(running, {
+            type: 'message',
+            message: { type: 'history/operationStatus', operationId: 'op-1', status: OperationStatus.Success, command: 'pull' },
+        });
+        const cleared = reduceHistoryState(success, { type: 'clearOperationStatus', operationId: 'op-1' });
+
+        expect(running.operationStatus?.status).toBe(OperationStatus.Running);
+        expect(staleSuccess.operationStatus?.operationId).toBe('op-1');
+        expect(success.operationStatus?.status).toBe(OperationStatus.Success);
+        expect(cleared.operationStatus).toBeUndefined();
     });
 });
 

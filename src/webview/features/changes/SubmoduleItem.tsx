@@ -88,8 +88,13 @@ export function SubmoduleItem({
     const [collapsedSectionIds, setCollapsedSectionIds] = useState<readonly ChangeSectionId[]>([]);
     const [selectedItemIds, setSelectedItemIds] = useState<readonly string[]>([]);
     const [selectionAnchorId, setSelectionAnchorId] = useState<string | undefined>(undefined);
+    const [showConflictsOnly, setShowConflictsOnly] = useState(false);
     const needsAction = submodule.status !== SubmoduleStatus.Clean;
-    const sections = statusData ? buildSubmoduleSections(statusData) : [];
+    const allSections = statusData ? buildSubmoduleSections(statusData) : [];
+    const conflictsOnly = showConflictsOnly && (statusData?.conflicts.length ?? 0) > 0;
+    const sections = conflictsOnly
+        ? allSections.filter((section) => section.id === ChangeSectionId.Conflicts)
+        : allSections;
     const visibleItems = sections
         .filter((section) => !collapsedSectionIds.includes(section.id))
         .flatMap((section) => section.items);
@@ -143,7 +148,10 @@ export function SubmoduleItem({
             || generatedCommitMessage !== undefined
             || commitMessageGenerationError !== undefined
         : false;
-    const hasVisibleDetails = showCommitComposer || visibleItemIds.length > 0 || (statusData?.stashes.length ?? 0) > 0;
+    const hasVisibleDetails = (!conflictsOnly && showCommitComposer)
+        || visibleItemIds.length > 0
+        || (!conflictsOnly && (statusData?.stashes.length ?? 0) > 0);
+
     return (
         <article className="submodule-item">
             <header className="submodule-item-header" data-vscode-context={changesItemContext()}>
@@ -220,8 +228,14 @@ export function SubmoduleItem({
                         <p className="stash-placeholder">Loading changes…</p>
                     ) : (
                         <div className="submodule-change-areas">
-                            {operationBannerFor(statusData.conflictState, statusData.conflicts.length, onOperationAction)}
-                            {showCommitComposer ? (
+                            {operationBannerFor(
+                                statusData.conflictState,
+                                statusData.conflicts.length,
+                                conflictsOnly,
+                                () => setShowConflictsOnly(!conflictsOnly),
+                                onOperationAction,
+                            )}
+                            {!conflictsOnly && showCommitComposer ? (
                                 <CommitComposer
                                     stagedCount={statusData.staged.length}
                                     conflictState={commitConflictState(statusData)}
@@ -255,15 +269,17 @@ export function SubmoduleItem({
                                     onStash={section.id === ChangeSectionId.Unstaged ? onCreateStash : undefined}
                                 />
                             ))}
-                            <StashList
-                                title="Stashed"
-                                stashes={statusData.stashes}
-                                expandedIndexes={expandedStashIndexes}
-                                filesByIndex={stashFilesByIndex}
-                                onToggleStash={onToggleStash}
-                                onStashAction={onStashAction}
-                                onStashFileDiff={onStashFileDiff}
-                            />
+                            {!conflictsOnly ? (
+                                <StashList
+                                    title="Stashed"
+                                    stashes={statusData.stashes}
+                                    expandedIndexes={expandedStashIndexes}
+                                    filesByIndex={stashFilesByIndex}
+                                    onToggleStash={onToggleStash}
+                                    onStashAction={onStashAction}
+                                    onStashFileDiff={onStashFileDiff}
+                                />
+                            ) : null}
                             {!hasVisibleDetails ? (
                                 <p className="stash-placeholder">No changes inside submodule</p>
                             ) : null}
@@ -348,6 +364,8 @@ function buildSubmoduleSections(statusData: SubmoduleStatusData): readonly Chang
 function operationBannerFor(
     conflictState: ConflictState,
     conflictCount: number,
+    conflictsOnly: boolean,
+    onToggleConflictsOnly: () => void,
     onOperationAction: (conflictState: ActiveConflictState, action: OperationAction) => void,
 ) {
     if (conflictState === ConflictState.None) { return null; }
@@ -355,6 +373,8 @@ function operationBannerFor(
         <OperationBanner
             conflictState={conflictState}
             conflictCount={conflictCount}
+            conflictsOnly={conflictsOnly}
+            onToggleConflictsOnly={onToggleConflictsOnly}
             onAction={(action) => onOperationAction(conflictState, action)}
         />
     );

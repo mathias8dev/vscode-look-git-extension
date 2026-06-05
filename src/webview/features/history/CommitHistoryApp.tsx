@@ -1,9 +1,12 @@
 import type { HistoryState } from './historyState';
+import type { HistoryToolbarCommand } from '../../../protocol/history/messages';
+import { OperationStatus } from '../../../protocol/shared/operation';
 import type { HistoryCommit, HistoryCommitFile, HistoryContextTarget } from '../../../protocol/history/types';
 import { CommitHistoryFileList } from './CommitHistoryFileList';
 import { CommitHistoryRow } from './CommitHistoryRow';
 import { filterHistoryCommits, formatHistoryDate, historyEmptyLabel, parseCommitMessage, formatRelativeDate } from './historyModel';
 import { ErrorNotice } from '../../shared/ErrorNotice';
+import { OperationNotice } from '../../shared/OperationNotice';
 import { SearchInput } from '../../shared/SearchInput';
 
 interface CommitHistoryAppProps {
@@ -42,6 +45,12 @@ export function CommitHistoryApp({
             />
 
             <ErrorNotice error={state.error} />
+            {state.operationStatus ? (
+                <OperationNotice
+                    status={state.operationStatus.status}
+                    message={historyOperationMessage(state.operationStatus.command, state.operationStatus.status)}
+                />
+            ) : null}
 
             <section className="history-list" role="listbox" aria-label="Commits">
                 {state.loading && state.commits.length === 0 ? (
@@ -138,6 +147,48 @@ export function CommitHistoryApp({
             </section>
         </main>
     );
+}
+
+function historyOperationMessage(command: HistoryToolbarCommand, status: OperationStatus): string {
+    const label = historyOperationLabel(command);
+    switch (status) {
+        case OperationStatus.Running:
+            return `${sentenceCase(label)}...`;
+        case OperationStatus.Success:
+            return `${pastTense(label)}.`;
+        case OperationStatus.Failed:
+            return `Could not ${label}.`;
+        case OperationStatus.Conflict:
+            return `${sentenceCase(label)} stopped with conflicts.`;
+    }
+}
+
+function historyOperationLabel(command: HistoryToolbarCommand): string {
+    switch (command) {
+        case 'fetchAll':
+            return 'fetch all remotes';
+        case 'pull':
+            return 'pull';
+        case 'push':
+            return 'push';
+        case 'selectRepositoryScope':
+            return 'select repository';
+        case 'selectBranch':
+            return 'select branch';
+        case 'goToCurrent':
+            return 'go to current item';
+    }
+}
+
+function pastTense(label: string): string {
+    if (label.startsWith('fetch ')) { return sentenceCase(label.replace(/^fetch /, 'fetched ')); }
+    if (label === 'pull') { return 'Pulled'; }
+    if (label === 'push') { return 'Pushed'; }
+    return `${sentenceCase(label)} completed`;
+}
+
+function sentenceCase(value: string): string {
+    return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function childHash(commits: readonly HistoryCommit[], hash: string): string | undefined {

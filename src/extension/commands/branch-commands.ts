@@ -6,6 +6,7 @@ import { CheckoutBranchUseCase } from '../../application/usecases/branches/check
 import type { BranchCommand } from '../../protocol/graph/messages';
 import type { GitWorktree } from '../../core/git/domain/GitWorktree';
 import { showModalWarningMessage } from '../utils/confirmation';
+import { showBranchNameInput } from '../utils/branch-name-input';
 import {
     assertNoUnmergedFiles,
     compareRefWithPickedWorktree,
@@ -28,7 +29,7 @@ export async function runBranchCommand(
             await checkoutBranch.execute(repo, { branch, isRemote });
             return true;
         case 'newBranchFrom': {
-            const name = await vscode.window.showInputBox({
+            const name = await showBranchNameInput({
                 prompt: `Create branch from "${branch}":`,
                 value: isRemote ? localBranchNameForRemote(branch) : undefined,
             });
@@ -74,7 +75,7 @@ export async function runBranchCommand(
             return true;
         }
         case 'rename': {
-            const name = await vscode.window.showInputBox({ prompt: `Rename "${branch}" to:`, value: branch });
+            const name = await showBranchNameInput({ prompt: `Rename "${branch}" to:`, value: branch });
             if (!name || name === branch) { return false; }
             await repo.renameBranch(branch, name);
             return true;
@@ -123,12 +124,12 @@ async function createWorktreeFromBranch(repo: GitRepository, branch: string, isR
     }
 
     if (worktreeForBranch(worktrees, branch)) {
-        const branchName = await vscode.window.showInputBox({
+        const branchName = await showBranchNameInput({
             prompt: `Branch "${branch}" is already checked out. New branch name for worktree:`,
             value: `${branch}-worktree`,
         });
-        if (!branchName?.trim()) { return false; }
-        await repo.exec(['worktree', 'add', '-b', branchName.trim(), worktreePath, branch]);
+        if (!branchName) { return false; }
+        await repo.exec(['worktree', 'add', '-b', branchName, worktreePath, branch]);
         return true;
     }
 
@@ -150,27 +151,26 @@ async function createWorktreeFromRemoteBranch(
             await repo.exec(['worktree', 'add', worktreePath, defaultLocalName]);
             return true;
         }
-        const branchName = await vscode.window.showInputBox({
+        const branchName = await showBranchNameInput({
             prompt: `Branch "${defaultLocalName}" is already checked out. New branch name for worktree:`,
             value: `${defaultLocalName}-worktree`,
         });
-        if (!branchName?.trim()) { return false; }
-        await repo.exec(['worktree', 'add', '-b', branchName.trim(), worktreePath, remoteBranch]);
+        if (!branchName) { return false; }
+        await repo.exec(['worktree', 'add', '-b', branchName, worktreePath, remoteBranch]);
         return true;
     }
 
-    const branchName = await vscode.window.showInputBox({
+    const branchName = await showBranchNameInput({
         prompt: `Local branch name for worktree from "${remoteBranch}":`,
         value: defaultLocalName,
     });
-    if (!branchName?.trim()) { return false; }
-    const trimmed = branchName.trim();
-    if (localBranches.includes(trimmed)) {
-        if (worktreeForBranch(worktrees, trimmed)) { throw new Error(`Branch "${trimmed}" is already checked out in another worktree.`); }
-        await repo.exec(['worktree', 'add', worktreePath, trimmed]);
+    if (!branchName) { return false; }
+    if (localBranches.includes(branchName)) {
+        if (worktreeForBranch(worktrees, branchName)) { throw new Error(`Branch "${branchName}" is already checked out in another worktree.`); }
+        await repo.exec(['worktree', 'add', worktreePath, branchName]);
         return true;
     }
-    await repo.exec(['worktree', 'add', '-b', trimmed, worktreePath, remoteBranch]);
+    await repo.exec(['worktree', 'add', '-b', branchName, worktreePath, remoteBranch]);
     return true;
 }
 

@@ -144,6 +144,7 @@ export function GraphTable({
                                 childHash={childHash(rows, row.commit.hash)}
                                 parentHash={parentHash(rows, row.commit.hash)}
                                 canUndoCommit={rows[0]?.commit.hash === row.commit.hash}
+                                hasMultipleSelectedCommits={selectedHashSet.has(row.commit.hash) && selectedHashes.length > 1}
                                 style={rowStyle}
                                 rowHeight={rowHeight}
                                 onSelect={onSelectCommit}

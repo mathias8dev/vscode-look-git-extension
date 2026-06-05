@@ -1,4 +1,5 @@
 import type { RequestId, ErrorMessage, ProtocolError } from '../shared/base';
+import type { OperationStatus } from '../shared/operation';
 import type { SerializedRepoContext } from '../shared/repo';
 import type { WebviewFontSizeChangedPush } from '../shared/ui';
 import type { StatusData, CommitMode, StashFileEntry, ConflictState, SubmoduleStatusData, ChangesContextTarget, ChangesSelectionContextTarget } from './types';
@@ -70,6 +71,14 @@ export interface ChangesErrorPush {
     readonly requestId?: RequestId;
     readonly message: string;
     readonly error: ProtocolError;
+}
+
+export interface ChangesOperationStatusPush {
+    readonly type: 'changes/operationStatus';
+    readonly operationId: string;
+    readonly status: OperationStatus;
+    readonly command: ChangesToolbarCommand;
+    readonly target?: string;
 }
 
 export type ChangesViewPreference = 'list' | 'tree';
@@ -211,6 +220,8 @@ export interface SubmoduleCommitMessage {
 export interface OpenFileMessage     { readonly type: 'changes/openFile'; readonly filePath: string; }
 export interface OpenSubmoduleMessage { readonly type: 'changes/openSubmodule'; readonly filePath: string; }
 export interface OpenMergeEditorMessage { readonly type: 'changes/openMergeEditor'; readonly filePath: string; }
+export interface OpenFirstMergeEditorMessage { readonly type: 'changes/openFirstMergeEditor'; }
+export interface OpenAllMergeEditorsMessage { readonly type: 'changes/openAllMergeEditors'; }
 
 export interface OpenDiffMessage {
     readonly type: 'changes/openDiff';
@@ -261,6 +272,15 @@ export interface SubmoduleBulkMessage {
         | 'changes/submoduleUnstageAll'
         | 'changes/submoduleDiscardAll'
         | 'changes/submoduleAcceptAllTheirs';
+    readonly submodulePath: string;
+}
+
+export interface SubmoduleOpenAllMergeEditorsMessage {
+    readonly type: 'changes/submoduleOpenAllMergeEditors';
+    readonly submodulePath: string;
+}
+export interface SubmoduleOpenFirstMergeEditorMessage {
+    readonly type: 'changes/submoduleOpenFirstMergeEditor';
     readonly submodulePath: string;
 }
 
@@ -346,6 +366,7 @@ export type ChangesExtensionToWebviewMessage =
     | ApplySortModePush
     | FocusCommitComposerPush
     | FocusSubmoduleCommitComposerPush
+    | ChangesOperationStatusPush
     | ChangesErrorPush
     | ErrorMessage;
 
@@ -355,8 +376,8 @@ export type ChangesWebviewToExtensionMessage =
     | DiscardFileMessage | DiscardFilesMessage | DiscardAllMessage
     | MarkResolvedMessage | MarkResolvedFilesMessage
     | AcceptOursMessage | AcceptTheirsMessage | AcceptOursFilesMessage | AcceptTheirsFilesMessage | AcceptAllTheirsMessage
-    | CommitMessage | GenerateCommitMessageRequest | SubmoduleCommitMessage | GenerateSubmoduleCommitMessageRequest | OpenFileMessage | OpenSubmoduleMessage | OpenMergeEditorMessage | OpenDiffMessage | OpenSubmoduleDiffMessage
-    | SubmoduleFileMessage | SubmoduleFilesMessage | SubmoduleBulkMessage
+    | CommitMessage | GenerateCommitMessageRequest | SubmoduleCommitMessage | GenerateSubmoduleCommitMessageRequest | OpenFileMessage | OpenSubmoduleMessage | OpenMergeEditorMessage | OpenFirstMergeEditorMessage | OpenAllMergeEditorsMessage | OpenDiffMessage | OpenSubmoduleDiffMessage
+    | SubmoduleFileMessage | SubmoduleFilesMessage | SubmoduleBulkMessage | SubmoduleOpenAllMergeEditorsMessage | SubmoduleOpenFirstMergeEditorMessage
     | StashMessage | StashStagedMessage | StashSelectedFilesMessage | StashPopMessage | StashApplyMessage | StashDropMessage
     | GetStashFilesRequest | OpenStashDiffMessage
     | SubmoduleStashMessage | SubmoduleStashSelectedFilesMessage | SubmoduleStashPopMessage | SubmoduleStashApplyMessage | SubmoduleStashDropMessage

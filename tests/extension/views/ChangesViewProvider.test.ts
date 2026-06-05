@@ -6,6 +6,7 @@ import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepos
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import type { GitRepository } from '../../../src/application/ports/git-repository';
 import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../../src/application/ports/remote-command-backend';
+import { OperationStatus } from '../../../src/protocol/shared/operation';
 import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
 import { GenerateCommitMessageUseCase } from '../../../src/application/usecases/changes/generate-commit-message';
 import { ExplainSelectedChangesUseCase } from '../../../src/application/usecases/changes/explain-selected-changes';
@@ -101,17 +102,24 @@ function makeRemoteCommands(): RemoteCommandBackend {
     };
 }
 
-function conflictStageExecRaw(expectedCwd?: string): GitRepository['execRaw'] {
+function conflictStageExecRaw(expectedCwd?: string, conflictPaths: readonly string[] = ['src/conflict.ts']): GitRepository['execRaw'] {
     return vi.fn(async (args: readonly string[]) => {
         const effectiveArgs = args[0] === '-C' ? args.slice(2) : args;
         if (expectedCwd) {
             expect(args.slice(0, 2)).toEqual(['-C', expectedCwd]);
         }
+        if (effectiveArgs[0] === 'status') {
+            return conflictPaths.map((filePath) => `UU ${filePath}`).join('\0') + '\0';
+        }
+        if (effectiveArgs[0] === 'submodule') {
+            return '';
+        }
         if (effectiveArgs[0] === 'ls-files') {
+            const filePath = effectiveArgs.at(-1) ?? conflictPaths[0] ?? 'src/conflict.ts';
             return [
-                `100644 ${'1'.repeat(40)} 1\tsrc/conflict.ts`,
-                `100644 ${'2'.repeat(40)} 2\tsrc/conflict.ts`,
-                `100644 ${'3'.repeat(40)} 3\tsrc/conflict.ts`,
+                `100644 ${'1'.repeat(40)} 1\t${filePath}`,
+                `100644 ${'2'.repeat(40)} 2\t${filePath}`,
+                `100644 ${'3'.repeat(40)} 3\t${filePath}`,
                 '',
             ].join('\0');
         }
@@ -399,6 +407,16 @@ describe('ChangesViewProvider', () => {
         expect(repo.exec).toHaveBeenNthCalledWith(1, ['apply', '--check', '--3way', expect.any(String)]);
         expect(repo.exec).toHaveBeenNthCalledWith(2, ['apply', '--3way', expect.any(String)]);
         await vi.waitFor(() => expect(mockWindow.infoMessages).toContain('Patch applied.'));
+        expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/operationStatus',
+            status: OperationStatus.Running,
+            command: 'applyPatch',
+        }));
+        expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/operationStatus',
+            status: OperationStatus.Success,
+            command: 'applyPatch',
+        }));
         expect(onRepositoryUpdated).toHaveBeenCalledOnce();
         disposables.forEach((disposable) => disposable.dispose());
     });
@@ -421,6 +439,41 @@ describe('ChangesViewProvider', () => {
         expect(repo.exec).toHaveBeenNthCalledWith(1, ['apply', '--check', '--3way', '--index', expect.any(String)]);
         expect(repo.exec).toHaveBeenNthCalledWith(2, ['apply', '--3way', '--index', expect.any(String)]);
         await vi.waitFor(() => expect(mockWindow.infoMessages).toContain('Patch applied and staged.'));
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('native apply patch command reports conflicts with an open-all action', async () => {
+        setQuickPickValues(['From Clipboard', 'Apply to Working Tree']);
+        setWarningChoice('Open All in Merge Editor');
+        env.clipboard.value = 'diff --git a/src/app.ts b/src/app.ts\n';
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const repo = makeRepo({
+            execRaw: conflictStageExecRaw(undefined, ['src/app.ts']),
+        });
+        const provider = new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), onRepositoryUpdated);
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+
+        provider.resolveWebviewView(view);
+        await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
+        vi.mocked(repo.getStatus).mockReset();
+        vi.mocked(repo.getStatus).mockResolvedValue({
+            staged: [],
+            unstaged: [],
+            conflicts: [{ indexStatus: 'U', workTreeStatus: 'U', filePath: 'src/app.ts' }],
+            conflictState: 'none' as const,
+        });
+
+        await vscode.commands.executeCommand('lookGit.changes.applyPatch');
+
+        await vi.waitFor(() => expect(mockWindow.warningMessages.some((entry) => entry.message === 'Patch applied with conflicts. 1 unresolved conflict.')).toBe(true));
+        await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === '_open.mergeEditor')).toBe(true));
+        expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/operationStatus',
+            status: OperationStatus.Conflict,
+            command: 'applyPatch',
+        }));
+        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
         disposables.forEach((disposable) => disposable.dispose());
     });
 
@@ -487,6 +540,91 @@ describe('ChangesViewProvider', () => {
         expect(repo.push).not.toHaveBeenCalled();
         expect(repo.exec).not.toHaveBeenCalledWith(['fetch']);
         await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
+    });
+
+    it('toolbar pull conflicts refresh dependent views and show an actionable notification', async () => {
+        setWarningChoice('Open All in Merge Editor');
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const remoteCommands = makeRemoteCommands();
+        vi.mocked(remoteCommands.runVscode).mockRejectedValue(new Error('Automatic merge failed; fix conflicts and then commit the result.'));
+        const repo = makeRepo({
+            execRaw: conflictStageExecRaw(undefined, ['src/conflict.ts']),
+        });
+        const provider = new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), onRepositoryUpdated, remoteCommands);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
+        vi.mocked(repo.getStatus).mockReset();
+        vi.mocked(repo.getStatus)
+            .mockResolvedValueOnce({ staged: [], unstaged: [], conflicts: [], conflictState: 'none' as const })
+            .mockResolvedValue({
+                staged: [],
+                unstaged: [],
+                conflicts: [{ indexStatus: 'U', workTreeStatus: 'U', filePath: 'src/conflict.ts' }],
+                conflictState: 'merge' as const,
+            });
+
+        view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'pull' });
+
+        await vi.waitFor(() => expect(remoteCommands.runVscode).toHaveBeenCalledWith(repo, VscodeRemoteCommand.Pull));
+        await vi.waitFor(() => expect(mockWindow.warningMessages.some((entry) => entry.message === 'Pull stopped with conflicts. 1 unresolved conflict.')).toBe(true));
+        await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === '_open.mergeEditor')).toBe(true));
+        expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/operationStatus',
+            status: OperationStatus.Running,
+            command: 'pull',
+        }));
+        expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/operationStatus',
+            status: OperationStatus.Conflict,
+            command: 'pull',
+        }));
+        expect(view.messages).not.toContainEqual(expect.objectContaining({ type: 'changes/error' }));
+        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
+    });
+
+    it('toolbar merge conflicts are treated as an actionable repository state', async () => {
+        setQuickPickValue('feature/conflict');
+        setWarningChoice('Open All in Merge Editor');
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const repo = makeRepo({
+            execRaw: conflictStageExecRaw(undefined, ['src/conflict.ts']),
+            getAllBranches: vi.fn(async () => [{
+                name: 'feature/conflict',
+                isRemote: false,
+                isCurrent: false,
+                hash: 'feature123',
+                ahead: 0,
+                behind: 0,
+            }]),
+            merge: vi.fn(async () => { throw new Error('Automatic merge failed; fix conflicts and then commit the result.'); }),
+        });
+        const provider = new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), onRepositoryUpdated);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
+        vi.mocked(repo.getStatus).mockReset();
+        vi.mocked(repo.getStatus)
+            .mockResolvedValueOnce({ staged: [], unstaged: [], conflicts: [], conflictState: 'none' as const })
+            .mockResolvedValue({
+                staged: [],
+                unstaged: [],
+                conflicts: [{ indexStatus: 'U', workTreeStatus: 'U', filePath: 'src/conflict.ts' }],
+                conflictState: 'merge' as const,
+            });
+
+        view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'mergeBranch' });
+
+        await vi.waitFor(() => expect(repo.merge).toHaveBeenCalledWith('feature/conflict'));
+        await vi.waitFor(() => expect(mockWindow.warningMessages.some((entry) => entry.message === 'Merge stopped with conflicts. 1 unresolved conflict.')).toBe(true));
+        await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === '_open.mergeEditor')).toBe(true));
+        expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/operationStatus',
+            status: OperationStatus.Conflict,
+            command: 'mergeBranch',
+        }));
+        expect(view.messages).not.toContainEqual(expect.objectContaining({ type: 'changes/error' }));
+        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
     });
 
     it('submodule toolbar pull push and fetch run against the selected submodule repository', async () => {
@@ -1114,6 +1252,27 @@ describe('ChangesViewProvider', () => {
         expect(getCommandCalls()).not.toContainEqual({ command: 'git.push', args: [] });
     });
 
+    it('toolbar create branch replaces spaces in the entered branch name', async () => {
+        setInputBoxValue('feature from changes');
+        const repo = makeRepo();
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'createBranch' });
+
+        await vi.waitFor(() => expect(repo.checkoutNewBranch).toHaveBeenCalledWith('feature-from-changes'));
+        const inputOptions = getInputBoxOptions().at(-1) as { readonly validateInput?: (value: string) => unknown } | undefined;
+        expect(inputOptions?.validateInput?.('feature bad:name')).toEqual({
+            message: 'feature bad:name -> feature-bad-name',
+            severity: vscode.InputBoxValidationSeverity.Info,
+        });
+        expect(inputOptions?.validateInput?.('HEAD')).toEqual({
+            message: 'HEAD is reserved.',
+            severity: vscode.InputBoxValidationSeverity.Error,
+        });
+    });
+
     it('toolbar fetch all delegates to VS Code Git all-remotes semantics', async () => {
         const repo = makeRepo();
         const onRepositoryUpdated = vi.fn(async () => {});
@@ -1360,6 +1519,60 @@ describe('ChangesViewProvider', () => {
         expect(getCommandCalls().some((entry) => entry.command === 'vscode.open')).toBe(false);
     });
 
+    it('opens every active conflict with the VS Code merge editor', async () => {
+        const repo = makeRepo({
+            execRaw: conflictStageExecRaw(undefined, ['src/a.ts', 'src/b.ts']),
+            getStatus: vi.fn(async () => ({
+                staged: [],
+                unstaged: [],
+                conflicts: [
+                    { indexStatus: 'U', workTreeStatus: 'U', filePath: 'src/a.ts' },
+                    { indexStatus: 'U', workTreeStatus: 'U', filePath: 'src/b.ts' },
+                ],
+                conflictState: 'merge' as const,
+            })),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/openAllMergeEditors' });
+
+        await vi.waitFor(() => expect(getCommandCalls().filter((call) => call.command === '_open.mergeEditor')).toHaveLength(2));
+        const outputs = getCommandCalls()
+            .filter((call) => call.command === '_open.mergeEditor')
+            .map((call) => mergeEditorOpenArgs(call.args[0]).output.path);
+        expect(outputs).toEqual(expect.arrayContaining([
+            expect.stringContaining('src/a.ts'),
+            expect.stringContaining('src/b.ts'),
+        ]));
+        expect(getCommandCalls().some((entry) => entry.command === 'git.openMergeEditor')).toBe(false);
+    });
+
+    it('opens the first active conflict with the VS Code merge editor', async () => {
+        const repo = makeRepo({
+            execRaw: conflictStageExecRaw(undefined, ['src/a.ts', 'src/b.ts']),
+            getStatus: vi.fn(async () => ({
+                staged: [],
+                unstaged: [],
+                conflicts: [
+                    { indexStatus: 'U', workTreeStatus: 'U', filePath: 'src/a.ts' },
+                    { indexStatus: 'U', workTreeStatus: 'U', filePath: 'src/b.ts' },
+                ],
+                conflictState: 'merge' as const,
+            })),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'changes/openFirstMergeEditor' });
+
+        await vi.waitFor(() => expect(getCommandCalls().filter((call) => call.command === '_open.mergeEditor')).toHaveLength(1));
+        const call = getCommandCalls().find((entry) => entry.command === '_open.mergeEditor');
+        expect(mergeEditorOpenArgs(call?.args[0]).output.path).toContain('src/a.ts');
+    });
+
     it('opens submodule conflicts with the VS Code merge editor', async () => {
         const repo = makeRepo({
             execRaw: conflictStageExecRaw('modules/lib'),
@@ -1386,6 +1599,52 @@ describe('ChangesViewProvider', () => {
         expect(getCommandCalls().some((entry) => entry.command === 'git.openMergeEditor')).toBe(false);
         expect(getCommandCalls().some((entry) => entry.command === 'merge-conflict.accept.select')).toBe(false);
         expect(getCommandCalls().some((entry) => entry.command === 'vscode.open')).toBe(false);
+    });
+
+    it('opens every active submodule conflict with the VS Code merge editor', async () => {
+        const repo = makeRepo({
+            execRaw: conflictStageExecRaw('modules/lib', ['src/a.ts', 'src/b.ts']),
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+            getSubmoduleStatus: vi.fn(async () => [{ path: 'modules/lib', status: ' ' as const }]),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/submoduleOpenAllMergeEditors',
+            submodulePath: 'modules/lib',
+        });
+
+        await vi.waitFor(() => expect(getCommandCalls().filter((call) => call.command === '_open.mergeEditor')).toHaveLength(2));
+        const outputs = getCommandCalls()
+            .filter((call) => call.command === '_open.mergeEditor')
+            .map((call) => mergeEditorOpenArgs(call.args[0]).output.path);
+        expect(outputs).toEqual(expect.arrayContaining([
+            expect.stringContaining('modules/lib/src/a.ts'),
+            expect.stringContaining('modules/lib/src/b.ts'),
+        ]));
+        expect(getCommandCalls().some((entry) => entry.command === 'git.openMergeEditor')).toBe(false);
+    });
+
+    it('opens the first active submodule conflict with the VS Code merge editor', async () => {
+        const repo = makeRepo({
+            execRaw: conflictStageExecRaw('modules/lib', ['src/a.ts', 'src/b.ts']),
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
+            getSubmoduleStatus: vi.fn(async () => [{ path: 'modules/lib', status: ' ' as const }]),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({
+            type: 'changes/submoduleOpenFirstMergeEditor',
+            submodulePath: 'modules/lib',
+        });
+
+        await vi.waitFor(() => expect(getCommandCalls().filter((call) => call.command === '_open.mergeEditor')).toHaveLength(1));
+        const call = getCommandCalls().find((entry) => entry.command === '_open.mergeEditor');
+        expect(mergeEditorOpenArgs(call?.args[0]).output.path).toContain('modules/lib/src/a.ts');
     });
 
     it('opens a real Git merge conflict with the modern merge editor input', async () => {

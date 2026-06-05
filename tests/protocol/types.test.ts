@@ -61,6 +61,7 @@ describe('protocol discriminated unions', () => {
                 case 'changes/applySortMode': return msg.sortMode satisfies string;
                 case 'changes/focusCommitComposer': return;
                 case 'changes/focusSubmoduleCommitComposer': return msg.path satisfies string;
+                case 'changes/operationStatus': return msg.operationId satisfies string;
                 case 'changes/error': return msg.error.recoverable satisfies boolean;
                 case 'error': return msg.error.message satisfies string;
             }
@@ -77,6 +78,7 @@ describe('protocol discriminated unions', () => {
                 case 'history/commitDetailsResponse': return msg.details.files satisfies readonly unknown[];
                 case 'history/selectCommit': return msg.hash satisfies string;
                 case 'history/applyFileViewMode': return msg.mode satisfies string;
+                case 'history/operationStatus': return msg.operationId satisfies string;
                 case 'history/error': return msg.error.recoverable satisfies boolean;
                 case 'error': return msg.error.message satisfies string;
             }
@@ -130,6 +132,8 @@ describe('protocol discriminated unions', () => {
                 case 'changes/openFile': return msg.filePath satisfies string;
                 case 'changes/openSubmodule': return msg.filePath satisfies string;
                 case 'changes/openMergeEditor': return msg.filePath satisfies string;
+                case 'changes/openFirstMergeEditor': return;
+                case 'changes/openAllMergeEditors': return;
                 case 'changes/openDiff': return msg.indexStatus satisfies string;
                 case 'changes/openSubmoduleDiff': return msg.submodulePath satisfies string;
                 case 'changes/submoduleOpenFile': return msg.filePath satisfies string;
@@ -137,6 +141,8 @@ describe('protocol discriminated unions', () => {
                 case 'changes/submoduleUnstageFile': return msg.submodulePath satisfies string;
                 case 'changes/submoduleDiscardFile': return msg.submodulePath satisfies string;
                 case 'changes/submoduleOpenMergeEditor': return msg.submodulePath satisfies string;
+                case 'changes/submoduleOpenFirstMergeEditor': return msg.submodulePath satisfies string;
+                case 'changes/submoduleOpenAllMergeEditors': return msg.submodulePath satisfies string;
                 case 'changes/submoduleMarkResolved': return msg.submodulePath satisfies string;
                 case 'changes/submoduleAcceptOurs': return msg.submodulePath satisfies string;
                 case 'changes/submoduleAcceptTheirs': return msg.submodulePath satisfies string;

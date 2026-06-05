@@ -24,6 +24,7 @@
 
 @media (prefers-reduced-motion: no-preference) {
     .error-notice,
+    .operation-notice,
     .changes-banner,
     .stash-files,
     .submodule-files,
@@ -31,7 +32,6 @@
     .history-item-expanded,
     .history-file-tree,
     .history-details,
-    .graph-operation-notice,
     .graph-details-panel,
     .graph-details-file-tree,
     .graph-details-meta {
@@ -55,7 +55,7 @@
     .graph-resource-row,
     .graph-row,
     .graph-row-wip,
-    .graph-operation-notice,
+    .operation-notice,
     .commit-file-node,
     .commit-file-leaf-clickable,
     .commit-file-folder-header,

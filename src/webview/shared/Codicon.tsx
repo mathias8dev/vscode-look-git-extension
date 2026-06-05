@@ -6,6 +6,7 @@ export type CodiconName =
     | 'comment-discussion'
     | 'discard'
     | 'diff'
+    | 'error'
     | 'fold-down'
     | 'fold-up'
     | 'folder-opened'
@@ -20,7 +21,8 @@ export type CodiconName =
     | 'search'
     | 'source-control'
     | 'trash'
-    | 'unarchive';
+    | 'unarchive'
+    | 'warning';
 
 interface CodiconProps {
     readonly name: CodiconName;

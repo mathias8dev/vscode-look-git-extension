@@ -104,6 +104,8 @@ export function messageForSubmoduleBulkAction(
             return { type: 'changes/submoduleUnstageAll', submodulePath };
         case ChangeBulkAction.DiscardAll:
             return { type: 'changes/submoduleDiscardAll', submodulePath };
+        case ChangeBulkAction.OpenAllMergeEditors:
+            return { type: 'changes/submoduleOpenAllMergeEditors', submodulePath };
         case ChangeBulkAction.AcceptAllTheirs:
             return { type: 'changes/submoduleAcceptAllTheirs', submodulePath };
     }
@@ -115,6 +117,10 @@ export function messageForSubmoduleOperationAction(
     action: OperationAction,
 ): ChangesWebviewToExtensionMessage {
     switch (action) {
+        case OperationAction.OpenFirstMergeEditor:
+            return { type: 'changes/submoduleOpenFirstMergeEditor', submodulePath };
+        case OperationAction.OpenAllMergeEditors:
+            return { type: 'changes/submoduleOpenAllMergeEditors', submodulePath };
         case OperationAction.AcceptAllTheirs:
             return { type: 'changes/submoduleAcceptAllTheirs', submodulePath };
         case OperationAction.Continue:

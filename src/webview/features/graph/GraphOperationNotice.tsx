@@ -3,6 +3,8 @@ import {
     GraphOperationStatus,
     type GraphOperationStatusPush,
 } from '../../../protocol/graph/messages';
+import { OperationStatus } from '../../../protocol/shared/operation';
+import { OperationNotice } from '../../shared/OperationNotice';
 
 interface GraphOperationNoticeProps {
     readonly operation: GraphOperationStatusPush | undefined;
@@ -10,27 +12,22 @@ interface GraphOperationNoticeProps {
 
 export function GraphOperationNotice({ operation }: GraphOperationNoticeProps) {
     if (!operation) { return null; }
-    const icon = iconForOperationStatus(operation.status);
     return (
-        <section
-            className={`graph-operation-notice graph-operation-notice-${operation.status}`}
-            role={operation.status === GraphOperationStatus.Failed ? 'alert' : 'status'}
-            aria-live="polite"
-        >
-            <i className={icon} aria-hidden="true" />
-            <span>{operationText(operation)}</span>
-        </section>
+        <OperationNotice
+            status={operationStatus(operation.status)}
+            message={operationText(operation)}
+        />
     );
 }
 
-function iconForOperationStatus(status: GraphOperationStatus): string {
+function operationStatus(status: GraphOperationStatus): OperationStatus {
     switch (status) {
         case GraphOperationStatus.Running:
-            return 'codicon codicon-loading codicon-modifier-spin';
+            return OperationStatus.Running;
         case GraphOperationStatus.Success:
-            return 'codicon codicon-check';
+            return OperationStatus.Success;
         case GraphOperationStatus.Failed:
-            return 'codicon codicon-error';
+            return OperationStatus.Failed;
     }
 }
 
@@ -108,7 +105,7 @@ function commitOperationLabel(command: string, target: string): string {
         case 'undoCommit': return `undo commit${target}`;
         case 'editCommitMessage': return `edit commit message for${target}`;
         case 'fixup': return `fixup${target}`;
-        case 'squashInto': return `squash into${target}`;
+        case 'squashInto': return `squash commits${target}`;
         case 'dropCommit': return `drop${target}`;
         case 'interactiveRebaseFromHere': return `start interactive rebase from${target}`;
         case 'pushAllUpToHere': return `push commits up to${target}`;

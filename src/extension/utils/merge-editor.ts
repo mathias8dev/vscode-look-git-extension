@@ -6,6 +6,7 @@ import { detectConflictStateFromFiles } from '../../core/parsing/parseStatus';
 import { createReadonlyDocumentUri } from './readonly-diff-documents';
 
 const OpenMergeEditorCommand = '_open.mergeEditor';
+const OpenAllConflictsAction = 'Open All in Merge Editor';
 
 enum ConflictStage {
     Base = 1,
@@ -41,6 +42,34 @@ export async function openThreeWayMergeEditor(repo: GitRepository, filePath: str
         input2: isRebase ? incoming : current,
         output,
     });
+}
+
+export async function openAllThreeWayMergeEditors(repo: GitRepository, filePaths: readonly string[]): Promise<void> {
+    if (filePaths.length === 0) {
+        await vscode.window.showInformationMessage('No conflicts to open.');
+        return;
+    }
+    for (const filePath of filePaths) {
+        await openThreeWayMergeEditor(repo, filePath);
+    }
+}
+
+export async function notifyConflictsDetected(
+    repo: GitRepository,
+    message: string,
+    filePaths: readonly string[],
+    mergeEditorFilePaths: readonly string[] = filePaths,
+): Promise<void> {
+    if (filePaths.length === 0) { return; }
+    const actions = mergeEditorFilePaths.length > 0 ? [OpenAllConflictsAction] : [];
+    const choice = await vscode.window.showWarningMessage(
+        `${message} ${conflictCountText(filePaths.length)}.`,
+        { modal: false },
+        ...actions,
+    );
+    if (choice === OpenAllConflictsAction) {
+        await openAllThreeWayMergeEditors(repo, mergeEditorFilePaths);
+    }
 }
 
 async function readConflictStages(repo: GitRepository, filePath: string): Promise<{
@@ -87,4 +116,8 @@ async function isRebaseInProgress(repo: GitRepository): Promise<boolean> {
 function fileExtension(filePath: string): string {
     const extension = path.extname(filePath).replace(/^\./, '');
     return extension || 'txt';
+}
+
+function conflictCountText(count: number): string {
+    return count === 1 ? '1 unresolved conflict' : `${count} unresolved conflicts`;
 }

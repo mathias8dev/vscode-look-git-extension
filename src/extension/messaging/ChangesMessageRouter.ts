@@ -3,15 +3,17 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import type { GitRepository } from '../../application/ports/git-repository';
 import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
-import type { ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage, ChangesExtensionToWebviewMessage } from '../../protocol/changes/messages';
+import type { ChangesOperationStatusPush, ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage, ChangesExtensionToWebviewMessage } from '../../protocol/changes/messages';
 import { CommitMode, ConflictState, RepositoryState } from '../../protocol/changes/types';
 import type { StatusData, StatusEntry } from '../../protocol/changes/types';
 import type { ErrorCode, RequestId } from '../../protocol/shared/base';
+import { OperationStatus } from '../../protocol/shared/operation';
 import { SubmoduleStatus } from '../../protocol/shared/repo';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
 import { CliRemoteCommandKind, VscodeRemoteCommand, type RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { confirmTypedPhrase, showModalWarningMessage } from '../utils/confirmation';
+import { showBranchNameInput } from '../utils/branch-name-input';
 import { openReadonlyDiffDocument } from '../utils/readonly-diff-documents';
 import { toProtocolSubmoduleStatus } from '../mapping/toProtocol';
 import { detectConflictStateFromFiles, parsePorcelainStatus } from '../../core/parsing/parseStatus';
@@ -20,7 +22,7 @@ import { GenerateCommitMessageUseCase } from '../../application/usecases/changes
 import { VscodeLanguageModelCommitMessageGenerator } from '../adapters/vscode/vscode-language-model-commit-message-generator';
 import { ScopedGitRepository } from '../git/scoped-git-repository';
 import { createErrorPayload, isAbortError } from './errorSerialization';
-import { openThreeWayMergeEditor } from '../utils/merge-editor';
+import { notifyConflictsDetected, openAllThreeWayMergeEditors, openThreeWayMergeEditor } from '../utils/merge-editor';
 
 type PostMessage = (msg: ChangesExtensionToWebviewMessage) => void;
 type RefreshCallback = () => Promise<void>;
@@ -30,6 +32,7 @@ export class ChangesMessageRouter {
     private knownSubmodulePaths: ReadonlySet<string> | undefined;
     private commitMessageGenerationAbortController: AbortController | undefined;
     private readonly submoduleCommitMessageGenerationAbortControllers = new Map<string, AbortController>();
+    private operationSequence = 0;
 
     constructor(
         private readonly repositories: ActiveRepositoryAccessor,
@@ -403,6 +406,16 @@ export class ChangesMessageRouter {
                 break;
             }
 
+            case 'changes/openFirstMergeEditor': {
+                await this.openFirstMergeEditor(repo);
+                break;
+            }
+
+            case 'changes/openAllMergeEditors': {
+                await this.openAllMergeEditors(repo);
+                break;
+            }
+
             case 'changes/openDiff': {
                 if (msg.isSubmodule) {
                     await openSubmoduleGitlinkDiff(repo, msg);
@@ -486,6 +499,18 @@ export class ChangesMessageRouter {
             case 'changes/submoduleOpenMergeEditor': {
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
                 await openThreeWayMergeEditor(new ScopedGitRepository(repo, submodulePath), msg.filePath);
+                break;
+            }
+
+            case 'changes/submoduleOpenFirstMergeEditor': {
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                await this.openFirstMergeEditor(new ScopedGitRepository(repo, submodulePath));
+                break;
+            }
+
+            case 'changes/submoduleOpenAllMergeEditors': {
+                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                await this.openAllMergeEditors(new ScopedGitRepository(repo, submodulePath));
                 break;
             }
 
@@ -791,37 +816,48 @@ export class ChangesMessageRouter {
         if (await this.handleGlobalToolbarCommand(command)) { return; }
         switch (command) {
             case 'pull':
-                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Pull);
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Pull, 'Pull stopped with conflicts.'));
                 return;
             case 'push':
-                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Push);
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Push));
                 return;
             case 'fetch':
-                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Fetch);
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Fetch));
                 return;
             case 'fetchAll':
-                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.FetchAll);
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.FetchAll));
                 return;
             case 'sync':
-                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Sync);
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Sync, 'Sync stopped with conflicts.'));
                 return;
             case 'pullRebase':
-                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PullRebase);
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PullRebase, 'Pull with rebase stopped with conflicts.'));
                 return;
             case 'pullFrom':
-                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PullFrom);
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PullFrom, 'Pull from remote stopped with conflicts.'));
                 return;
             case 'pushForce':
-                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PushForce);
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PushForce));
                 return;
             case 'pushTo':
-                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PushTo);
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PushTo));
                 return;
             case 'pushToForce':
-                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PushToForce);
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PushToForce));
                 return;
             case 'fetchPrune':
-                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.FetchPrune);
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.FetchPrune));
                 return;
             case 'checkout': {
                 const branch = await pickBranch(repo, 'Checkout branch');
@@ -847,26 +883,26 @@ export class ChangesMessageRouter {
             case 'mergeBranch': {
                 const branch = await pickBranch(repo, 'Merge branch');
                 if (!branch) { return; }
-                await repo.merge(branch);
-                await this.refresh();
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runRepositoryMutationWithConflictNotice(repo, () => repo.merge(branch), 'Merge stopped with conflicts.'));
                 return;
             }
             case 'rebaseBranch': {
                 const branch = await pickBranch(repo, 'Rebase current branch onto');
                 if (!branch) { return; }
-                await repo.rebase(branch);
-                await this.refresh();
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runRepositoryMutationWithConflictNotice(repo, () => repo.rebase(branch), 'Rebase stopped with conflicts.'));
                 return;
             }
             case 'createBranch': {
-                const branch = await inputText('Create branch');
+                const branch = await inputBranchName('Create branch');
                 if (!branch) { return; }
                 await repo.checkoutNewBranch(branch);
                 await this.refresh();
                 return;
             }
             case 'createBranchFrom': {
-                const branch = await inputText('Create branch');
+                const branch = await inputBranchName('Create branch');
                 if (!branch) { return; }
                 const startPoint = await pickRef(repo, 'Create branch from');
                 if (!startPoint) { return; }
@@ -894,11 +930,13 @@ export class ChangesMessageRouter {
                 return;
             }
             case 'deleteRemoteBranch': {
-                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.DeleteRemoteBranch);
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.DeleteRemoteBranch));
                 return;
             }
             case 'publishBranch': {
-                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Publish);
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Publish));
                 return;
             }
             case 'addRemote': {
@@ -1000,11 +1038,13 @@ export class ChangesMessageRouter {
                 return;
             }
             case 'deleteRemoteTag': {
-                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.DeleteRemoteTag);
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.DeleteRemoteTag));
                 return;
             }
             case 'pushTags': {
-                await this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PushTags);
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PushTags));
                 return;
             }
         }
@@ -1026,9 +1066,117 @@ export class ChangesMessageRouter {
         return false;
     }
 
-    private async runVscodeRemoteToolbarCommand(repo: GitRepository, command: VscodeRemoteCommand): Promise<void> {
-        await this.remoteCommands.runVscode(repo, command);
-        await this.refreshAfterRepositoryUpdate();
+    private async openAllMergeEditors(repo: GitRepository): Promise<void> {
+        const status = await repo.getStatus();
+        await openAllThreeWayMergeEditors(repo, status.conflicts.filter((entry) => !entry.isSubmodule).map((entry) => entry.filePath));
+    }
+
+    private async openFirstMergeEditor(repo: GitRepository): Promise<void> {
+        const status = await repo.getStatus();
+        const conflict = status.conflicts.find((entry) => !entry.isSubmodule);
+        if (!conflict) {
+            await vscode.window.showInformationMessage('No conflicts to open.');
+            return;
+        }
+        await openThreeWayMergeEditor(repo, conflict.filePath);
+    }
+
+    private async runTrackedToolbarOperation(
+        command: ChangesToolbarCommand,
+        operation: () => Promise<OperationStatus | undefined>,
+    ): Promise<void> {
+        const operationId = this.nextOperationId();
+        this.postChangesOperation({
+            operationId,
+            status: OperationStatus.Running,
+            command,
+        });
+        try {
+            const status = await operation();
+            this.postChangesOperation({
+                operationId,
+                status: status ?? OperationStatus.Success,
+                command,
+            });
+        } catch (error) {
+            this.postChangesOperation({
+                operationId,
+                status: OperationStatus.Failed,
+                command,
+            });
+            throw error;
+        }
+    }
+
+    private async runRepositoryMutationWithConflictNotice(
+        repo: GitRepository,
+        mutation: () => Promise<void>,
+        conflictMessage: string,
+    ): Promise<OperationStatus | undefined> {
+        const existingConflicts = await conflictFileSet(repo);
+        try {
+            await mutation();
+            await this.refreshAfterRepositoryUpdate();
+            return await this.notifyNewConflicts(repo, existingConflicts, conflictMessage)
+                ? OperationStatus.Conflict
+                : undefined;
+        } catch (error) {
+            if (await this.refreshAndNotifyNewConflicts(repo, existingConflicts, conflictMessage)) { return OperationStatus.Conflict; }
+            throw error;
+        }
+    }
+
+    private async runVscodeRemoteToolbarCommand(
+        repo: GitRepository,
+        command: VscodeRemoteCommand,
+        conflictMessage?: string,
+    ): Promise<OperationStatus | undefined> {
+        const existingConflicts = conflictMessage ? await conflictFileSet(repo) : undefined;
+        try {
+            await this.remoteCommands.runVscode(repo, command);
+            await this.refreshAfterRepositoryUpdate();
+            if (existingConflicts && conflictMessage) {
+                return await this.notifyNewConflicts(repo, existingConflicts, conflictMessage)
+                    ? OperationStatus.Conflict
+                    : undefined;
+            }
+            return undefined;
+        } catch (error) {
+            if (existingConflicts && conflictMessage && await this.refreshAndNotifyNewConflicts(repo, existingConflicts, conflictMessage)) {
+                return OperationStatus.Conflict;
+            }
+            throw error;
+        }
+    }
+
+    private async refreshAndNotifyNewConflicts(
+        repo: GitRepository,
+        existingConflicts: ReadonlySet<string>,
+        message: string,
+    ): Promise<boolean> {
+        await this.refresh();
+        const didNotify = await this.notifyNewConflicts(repo, existingConflicts, message);
+        if (didNotify) {
+            await this.onRepositoryUpdated();
+        }
+        return didNotify;
+    }
+
+    private async notifyNewConflicts(
+        repo: GitRepository,
+        existingConflicts: ReadonlySet<string>,
+        message: string,
+    ): Promise<boolean> {
+        const status = await repo.getStatus();
+        const conflictPaths = status.conflicts.map((entry) => entry.filePath);
+        if (!hasNewConflicts(conflictPaths, existingConflicts)) { return false; }
+        await notifyConflictsDetected(
+            repo,
+            message,
+            conflictPaths,
+            status.conflicts.filter((entry) => !entry.isSubmodule).map((entry) => entry.filePath),
+        );
+        return true;
     }
 
     private async refreshAfterRepositoryUpdate(): Promise<void> {
@@ -1051,6 +1199,15 @@ export class ChangesMessageRouter {
                 recoverable: true,
             }),
         });
+    }
+
+    private postChangesOperation(operation: Omit<ChangesOperationStatusPush, 'type'>): void {
+        this.postMessage({ type: 'changes/operationStatus', ...operation });
+    }
+
+    private nextOperationId(): string {
+        this.operationSequence += 1;
+        return `changes-op-${this.operationSequence}`;
     }
 
     private async requireKnownSubmodulePath(repo: GitRepository, requestedPath: string): Promise<string> {
@@ -1088,10 +1245,14 @@ function errorCodeFor(msg: ChangesWebviewToExtensionMessage): ErrorCode {
         case 'changes/openFile':
         case 'changes/openSubmodule':
         case 'changes/openMergeEditor':
+        case 'changes/openFirstMergeEditor':
+        case 'changes/openAllMergeEditors':
         case 'changes/openDiff':
         case 'changes/openSubmoduleDiff':
         case 'changes/submoduleOpenFile':
         case 'changes/submoduleOpenMergeEditor':
+        case 'changes/submoduleOpenFirstMergeEditor':
+        case 'changes/submoduleOpenAllMergeEditors':
         case 'changes/openSubmoduleStashDiff':
         case 'changes/openStashDiff':
             return 'vscodeCommandFailed';
@@ -1106,10 +1267,27 @@ function errorCodeFor(msg: ChangesWebviewToExtensionMessage): ErrorCode {
     }
 }
 
+async function conflictFileSet(repo: GitRepository): Promise<ReadonlySet<string>> {
+    try {
+        const status = await repo.getStatus();
+        return new Set(status.conflicts.map((entry) => entry.filePath));
+    } catch {
+        return new Set();
+    }
+}
+
+function hasNewConflicts(conflictPaths: readonly string[], existingConflicts: ReadonlySet<string>): boolean {
+    return conflictPaths.some((filePath) => !existingConflicts.has(filePath));
+}
+
 async function inputText(placeHolder: string, value?: string): Promise<string | undefined> {
     const input = await vscode.window.showInputBox({ placeHolder, value });
     const trimmed = input?.trim();
     return trimmed || undefined;
+}
+
+async function inputBranchName(placeHolder: string, value?: string): Promise<string | undefined> {
+    return showBranchNameInput({ placeHolder, value });
 }
 
 async function pickBranch(repo: GitRepository, placeHolder: string): Promise<string | undefined> {

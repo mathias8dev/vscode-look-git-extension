@@ -149,8 +149,9 @@
       },
       {
         "command": "lookGit.history.squashInto",
-        "title": "Squash Into...",
-        "category": "Look Git"
+        "title": "Squash Commits...",
+        "category": "Look Git",
+        "enablement": "historyHasMultipleSelectedCommits"
       },
       {
         "command": "lookGit.history.dropCommit",
@@ -939,8 +940,9 @@
       },
       {
         "command": "lookGit.graph.commit.squashInto",
-        "title": "Squash Into...",
-        "category": "Look Git"
+        "title": "Squash Commits...",
+        "category": "Look Git",
+        "enablement": "graphCommitHasMultipleSelectedCommits"
       },
       {
         "command": "lookGit.graph.commit.dropCommit",

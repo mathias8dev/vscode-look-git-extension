@@ -73,6 +73,7 @@ describe('CommitHistoryApp', () => {
         fireEvent.contextMenu(row);
 
         expect(row.getAttribute('data-vscode-context')).toContain('"webviewSection":"historyCommit"');
+        expect(row.getAttribute('data-vscode-context')).toContain('"historyHasMultipleSelectedCommits":false');
         expect(onContextTarget).toHaveBeenCalledWith({
             kind: 'commit',
             hash: 'parent123456789',

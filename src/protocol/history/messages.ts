@@ -1,4 +1,5 @@
 import type { ErrorMessage, Pagination, ProtocolError, RequestId } from '../shared/base';
+import type { OperationStatus } from '../shared/operation';
 import type { SerializedRepoContext } from '../shared/repo';
 import type { WebviewFontSizeChangedPush } from '../shared/ui';
 import type { HistoryCommitDetails, HistoryContextTarget, HistoryData } from './types';
@@ -42,6 +43,13 @@ export interface HistoryApplyFileViewModePush {
     readonly mode: 'list' | 'tree';
 }
 
+export interface HistoryOperationStatusPush {
+    readonly type: 'history/operationStatus';
+    readonly operationId: string;
+    readonly status: OperationStatus;
+    readonly command: HistoryToolbarCommand;
+}
+
 export type HistoryExtensionToWebviewMessage =
     | RepoContextChangedPush
     | WebviewFontSizeChangedPush
@@ -50,6 +58,7 @@ export type HistoryExtensionToWebviewMessage =
     | HistoryCommitDetailsResponse
     | HistorySelectCommitPush
     | HistoryApplyFileViewModePush
+    | HistoryOperationStatusPush
     | HistoryErrorPush
     | ErrorMessage;
 

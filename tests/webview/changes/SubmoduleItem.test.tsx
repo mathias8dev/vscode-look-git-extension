@@ -127,10 +127,13 @@ describe('SubmoduleItem', () => {
 
         expect(screen.getByText('Merge in progress')).toBeInTheDocument();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Open First' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Open All' }));
+        expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
         fireEvent.click(screen.getByRole('button', { name: 'Abort' }));
 
-        expect(onOperationAction).toHaveBeenCalledWith(ConflictState.Merge, OperationAction.Continue);
+        expect(onOperationAction).toHaveBeenCalledWith(ConflictState.Merge, OperationAction.OpenFirstMergeEditor);
+        expect(onOperationAction).toHaveBeenCalledWith(ConflictState.Merge, OperationAction.OpenAllMergeEditors);
         expect(onOperationAction).toHaveBeenCalledWith(ConflictState.Merge, OperationAction.Abort);
     });
 

@@ -76,7 +76,7 @@ describe('Graph worktree context commands against real git repos', () => {
         expect(fixture.gitTrim(['-C', worktreePath, 'status', '--short'])).toBe('');
         expect(fixture.gitTrim(['-C', worktreePath, 'stash', 'list'])).toMatch(/wip\(worktrees\): context stash/);
 
-        setInputBoxValue('feature/from-worktree-head');
+        setInputBoxValue('feature/from worktree head');
         await router.handle({ type: 'graph/worktreeCommand', command: 'newBranch', path: worktreePath });
         expect(fixture.gitTrim(['-C', worktreePath, 'branch', '--show-current'])).toBe('feature/from-worktree-head');
 

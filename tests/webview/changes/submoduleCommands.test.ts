@@ -56,9 +56,21 @@ describe('submoduleCommands', () => {
             type: 'changes/submoduleAcceptAllTheirs',
             submodulePath: 'modules/lib',
         });
+        expect(messageForSubmoduleBulkAction('modules/lib', ChangeBulkAction.OpenAllMergeEditors)).toEqual({
+            type: 'changes/submoduleOpenAllMergeEditors',
+            submodulePath: 'modules/lib',
+        });
     });
 
     it('maps operation actions to submodule-scoped messages', () => {
+        expect(messageForSubmoduleOperationAction('modules/lib', ConflictState.Merge, OperationAction.OpenFirstMergeEditor)).toEqual({
+            type: 'changes/submoduleOpenFirstMergeEditor',
+            submodulePath: 'modules/lib',
+        });
+        expect(messageForSubmoduleOperationAction('modules/lib', ConflictState.Merge, OperationAction.OpenAllMergeEditors)).toEqual({
+            type: 'changes/submoduleOpenAllMergeEditors',
+            submodulePath: 'modules/lib',
+        });
         expect(messageForSubmoduleOperationAction('modules/lib', ConflictState.Merge, OperationAction.Continue)).toEqual({
             type: 'changes/submoduleContinueOp',
             submodulePath: 'modules/lib',

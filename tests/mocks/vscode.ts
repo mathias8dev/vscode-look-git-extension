@@ -2,6 +2,7 @@
 
 export const TreeItemCollapsibleState = { None: 0, Collapsed: 1, Expanded: 2 } as const;
 export const ProgressLocation = { Notification: 15 } as const;
+export const InputBoxValidationSeverity = { Info: 1, Warning: 2, Error: 3 } as const;
 
 export class TreeItem {
     public description: unknown;

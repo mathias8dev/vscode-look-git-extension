@@ -1425,15 +1425,17 @@ async function runFixupActionE2E(): Promise<void> {
 }
 
 async function runSquashActionE2E(): Promise<void> {
-    await withTempCommitRepo(async ({ fixture, base, router, messages }) => {
-        fixture.write('squash.txt', 'squash\n');
-        fixture.git(['add', 'squash.txt']);
-        await withPatchedVscode({ inputBoxValues: ['fix: staged squash'] }, async () => {
-            await router.handle({ type: 'graph/commitCommand', command: 'squashInto', hash: base, hashes: [base] });
+    await withTempCommitRepo(async ({ fixture, router, messages }) => {
+        const older = fixture.commitFile('older.txt', 'older\n', 'feat: older');
+        const newer = fixture.commitFile('newer.txt', 'newer\n', 'feat: newer');
+        fixture.commitFile('tail.txt', 'tail\n', 'feat: tail');
+        await withPatchedVscode({ inputBoxValues: ['feat: squashed selected commits'] }, async () => {
+            await router.handle({ type: 'graph/commitCommand', command: 'squashInto', hash: newer, hashes: [newer, older] });
         });
-        assert.equal(git(fixture.cwd, ['rev-list', '--count', 'HEAD']), '2');
-        assert.match(git(fixture.cwd, ['log', '--format=%B', '--reverse']), /feat: base\n\nfix: staged squash/);
-        assert.equal(git(fixture.cwd, ['show', 'HEAD~1:squash.txt']), 'squash');
+        assert.equal(git(fixture.cwd, ['rev-list', '--count', 'HEAD']), '3');
+        assert.equal(git(fixture.cwd, ['log', '--format=%s', '--reverse']), 'feat: base\nfeat: squashed selected commits\nfeat: tail');
+        assert.equal(git(fixture.cwd, ['show', 'HEAD~1:older.txt']), 'older');
+        assert.equal(git(fixture.cwd, ['show', 'HEAD~1:newer.txt']), 'newer');
         assertNoGraphError(messages);
     });
 }

@@ -1,4 +1,5 @@
-import type { HistoryExtensionToWebviewMessage } from '../../../protocol/history/messages';
+import { OperationStatus } from '../../../protocol/shared/operation';
+import type { HistoryExtensionToWebviewMessage, HistoryOperationStatusPush } from '../../../protocol/history/messages';
 import type { HistoryCommit, HistoryCommitDetails, HistoryData } from '../../../protocol/history/types';
 import type { ProtocolError } from '../../../protocol/shared/base';
 
@@ -12,6 +13,7 @@ export interface HistoryState {
     readonly hasMore: boolean;
     readonly loadedCount: number;
     readonly error: ProtocolError | undefined;
+    readonly operationStatus: HistoryOperationStatusPush | undefined;
 }
 
 export type HistoryAction =
@@ -20,7 +22,8 @@ export type HistoryAction =
     | { readonly type: 'startLoadingDetails'; readonly hash: string }
     | { readonly type: 'startRefresh' }
     | { readonly type: 'startLoadMore' }
-    | { readonly type: 'clearError' };
+    | { readonly type: 'clearError' }
+    | { readonly type: 'clearOperationStatus'; readonly operationId: string };
 
 export function createInitialHistoryState(): HistoryState {
     return {
@@ -33,6 +36,7 @@ export function createInitialHistoryState(): HistoryState {
         hasMore: false,
         loadedCount: 0,
         error: undefined,
+        operationStatus: undefined,
     };
 }
 
@@ -52,6 +56,10 @@ export function reduceHistoryState(state: HistoryState, action: HistoryAction): 
                 : state;
         case 'clearError':
             return { ...state, error: undefined };
+        case 'clearOperationStatus':
+            return state.operationStatus?.operationId === action.operationId
+                ? { ...state, operationStatus: undefined }
+                : state;
     }
 }
 
@@ -66,6 +74,8 @@ function reduceMessage(state: HistoryState, message: HistoryExtensionToWebviewMe
             return toggleCommit(state, message.hash);
         case 'history/applyFileViewMode':
             return state;
+        case 'history/operationStatus':
+            return reduceHistoryOperationStatus(state, message);
         case 'history/error':
         case 'error':
             return { ...state, loading: false, loadingMore: false, detailsLoadingHash: undefined, error: message.error };
@@ -74,6 +84,13 @@ function reduceMessage(state: HistoryState, message: HistoryExtensionToWebviewMe
         case 'ui/fontSizeChanged':
             return state;
     }
+}
+
+function reduceHistoryOperationStatus(state: HistoryState, message: HistoryOperationStatusPush): HistoryState {
+    if (message.status !== OperationStatus.Running && state.operationStatus?.operationId && state.operationStatus.operationId !== message.operationId) {
+        return state;
+    }
+    return { ...state, operationStatus: message };
 }
 
 function toggleCommit(state: HistoryState, hash: string): HistoryState {

@@ -25,6 +25,7 @@ export function CommitHistoryRow({ commit, expanded, childHash, parentHash, canU
                 historyCanGoToChild: childHash !== undefined,
                 historyCanGoToParent: parentHash !== undefined,
                 historyCanUndoCommit: canUndoCommit,
+                historyHasMultipleSelectedCommits: false,
                 preventDefaultContextMenuItems: true,
             })}
             onClick={() => onSelect(commit.hash)}

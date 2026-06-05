@@ -147,6 +147,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     private async runCommitContextCommand(command: CommitCommand): Promise<void> {
         const target = this.contextTarget;
         if (target?.kind !== 'commit') { return; }
+        if (command === 'squashInto' && target.hashes.length < 2) { return; }
         await this.router?.handle({ type: 'graph/commitCommand', command, hash: target.hash, hashes: target.hashes, repositoryScope: target.repositoryScope });
     }
 

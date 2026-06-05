@@ -3,7 +3,7 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
-import type { ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
+import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush, ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
 import { CommitMode, type ChangesContextTarget } from '../../protocol/changes/types';
 import type { RepoContext } from '../../core/git/domain/RepoContext';
 import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '../messaging/ChangesMessageRouter';
@@ -11,6 +11,7 @@ import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backen
 import { ScopedGitRepository } from '../git/scoped-git-repository';
 import type { RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import type { GitRepository, GitStatus } from '../../application/ports/git-repository';
+import { OperationStatus } from '../../protocol/shared/operation';
 import { createErrorPayload, isAbortError } from '../messaging/errorSerialization';
 import { getWebviewHtml } from './webviewHtml';
 import { GetChangesStatusUseCase } from '../../application/usecases/changes/get-changes-status';
@@ -23,6 +24,7 @@ import { VscodeLanguageModelDiffExplainer } from '../adapters/vscode/vscode-lang
 import { defaultCreateChangesPatch } from '../adapters/vscode/default-create-changes-patch';
 import { toSerializedRepoContext } from '../mapping/toProtocol';
 import { openDiffExplanationDocument, showDiffExplanationError } from '../utils/diff-explanation-document';
+import { notifyConflictsDetected } from '../utils/merge-editor';
 import { withCancellationSignal } from '../utils/vscode-cancellation';
 import { webviewFontSizeMessage } from './webview-font';
 
@@ -202,6 +204,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     private contextTarget?: ChangesContextTarget;
     private viewAsTree = false;
     private readonly refreshDebounceMs = 50;
+    private operationSequence = 0;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -547,20 +550,34 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         const mode = await pickApplyPatchMode();
         if (mode === undefined) { return; }
         const tempFile = await writeTempPatchFile(patchContent);
+        const operationId = this.nextOperationId();
+        this.postChangesOperation({ operationId, status: OperationStatus.Running, command: 'applyPatch' });
         try {
             try {
                 await this.applyPatch.preflight(repo, tempFile, mode);
             } catch (error) {
+                this.postChangesOperation({ operationId, status: OperationStatus.Failed, command: 'applyPatch' });
                 await showApplyPatchPreflightError(error);
                 return;
             }
             const result = await this.applyPatch.execute(repo, tempFile, mode);
             await Promise.all([this.refresh(), this.onRepositoryUpdated()]);
             if (result.kind === ApplyPatchResultKind.AppliedWithConflicts) {
-                await vscode.window.showWarningMessage('Patch applied with conflicts.');
+                this.postChangesOperation({ operationId, status: OperationStatus.Conflict, command: 'applyPatch' });
+                const status = await repo.getStatus();
+                await notifyConflictsDetected(
+                    repo,
+                    'Patch applied with conflicts.',
+                    status.conflicts.map((entry) => entry.filePath),
+                    status.conflicts.filter((entry) => !entry.isSubmodule).map((entry) => entry.filePath),
+                );
                 return;
             }
+            this.postChangesOperation({ operationId, status: OperationStatus.Success, command: 'applyPatch' });
             await vscode.window.showInformationMessage(mode === ApplyPatchMode.Index ? 'Patch applied and staged.' : 'Patch applied.');
+        } catch (error) {
+            this.postChangesOperation({ operationId, status: OperationStatus.Failed, command: 'applyPatch' });
+            await vscode.window.showErrorMessage(`Could not apply patch: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             await fs.rm(path.dirname(tempFile), { recursive: true, force: true });
         }
@@ -696,6 +713,19 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     notifyFontSizeChanged(): void {
         void this.view?.webview.postMessage(webviewFontSizeMessage());
+    }
+
+    private postChangesOperation(operation: Omit<ChangesOperationStatusPush, 'type'>): void {
+        this.postMessage({ type: 'changes/operationStatus', ...operation });
+    }
+
+    private postMessage(message: ChangesExtensionToWebviewMessage): void {
+        void this.view?.webview.postMessage(message);
+    }
+
+    private nextOperationId(): string {
+        this.operationSequence += 1;
+        return `changes-provider-op-${this.operationSequence}`;
     }
 
     private renderWebviewHtml(webviewView: vscode.WebviewView): void {

@@ -17,6 +17,7 @@ import { showModalWarningMessage } from '../utils/confirmation';
 import { openDiffExplanationDocument, showDiffExplanationError } from '../utils/diff-explanation-document';
 import { isAbortError } from '../messaging/errorSerialization';
 import { withCancellationSignal } from '../utils/vscode-cancellation';
+import { showBranchNameInput } from '../utils/branch-name-input';
 import { assertNoUnmergedFiles, compareRefWithPickedWorktree, openChangesWithWorkingTree, promptNewWorktreePath } from './git-command-helpers';
 
 export interface CommitCommandDiffExplanationScope {
@@ -73,10 +74,10 @@ export async function runCommitCommand(
             await editCommitMessage(repo, hash);
             return true;
         case 'fixup':
-            await autosquashStagedChanges(repo, hash, 'fixup');
+            await fixupStagedChanges(repo, hash);
             return true;
         case 'squashInto':
-            await autosquashStagedChanges(repo, hash, 'squash');
+            await squashSelectedCommits(repo, selected);
             return true;
         case 'dropCommit':
             await dropCommits(repo, await orderSelectedCommits(repo, selected, 'newestFirst'));
@@ -159,11 +160,11 @@ async function showRepositoryAtRevision(
 async function createWorktreeFromCommit(repo: GitRepository, hash: string): Promise<boolean> {
     const worktreePath = await promptNewWorktreePath(repo, `Worktree path for ${hash.substring(0, 7)}:`);
     if (!worktreePath) { return false; }
-    const branchName = await vscode.window.showInputBox({
+    const branchName = await showBranchNameInput({
         prompt: `New branch name from ${hash.substring(0, 7)}:`,
     });
-    if (!branchName?.trim()) { return false; }
-    await repo.exec(['worktree', 'add', '-b', branchName.trim(), worktreePath, hash]);
+    if (!branchName) { return false; }
+    await repo.exec(['worktree', 'add', '-b', branchName, worktreePath, hash]);
     return true;
 }
 
@@ -282,28 +283,129 @@ async function writeCommitMessageFile(message: string): Promise<string> {
     return filePath;
 }
 
-async function autosquashStagedChanges(repo: GitRepository, hash: string, mode: 'fixup' | 'squash'): Promise<void> {
-    await assertNoUnmergedFiles(repo, mode === 'fixup' ? 'fixing up commits' : 'squashing commits');
+async function fixupStagedChanges(repo: GitRepository, hash: string): Promise<void> {
+    await assertNoUnmergedFiles(repo, 'fixing up commits');
     const stagedFiles = await repo.execRaw(['diff', '--cached', '--name-only']);
-    if (!stagedFiles.trim()) { throw new Error('Stage changes before using Fixup or Squash Into.'); }
+    if (!stagedFiles.trim()) { throw new Error('Stage changes before using Fixup.'); }
     const dirtyUnstaged = await repo.execRaw(['diff', '--name-only']);
-    if (dirtyUnstaged.trim()) { throw new Error('Fixup and Squash Into require a clean unstaged working tree.'); }
+    if (dirtyUnstaged.trim()) { throw new Error('Fixup requires a clean unstaged working tree.'); }
     const parents = (await repo.exec(['show', '-s', '--format=%P', hash])).split(/\s+/).filter(Boolean);
-    if (parents.length > 1) { throw new Error('Fixup and Squash Into are not supported for merge commits.'); }
+    if (parents.length > 1) { throw new Error('Fixup is not supported for merge commits.'); }
 
-    if (mode === 'fixup') {
-        await repo.exec(['commit', '--fixup', hash, '--no-edit']);
-    } else {
-        const message = await vscode.window.showInputBox({ prompt: 'Squash commit message:' });
-        if (!message?.trim()) { return; }
-        await repo.exec(['commit', '--squash', hash, '-m', message]);
-    }
+    await repo.exec(['commit', '--fixup', hash, '--no-edit']);
 
     const branch = await repo.getCurrentBranch();
     const rebaseArgs = parents[0]
         ? ['rebase', '--autosquash', '--autostash', parents[0], branch]
         : ['rebase', '--autosquash', '--autostash', '--root', branch];
     await repo.execWithEnv(rebaseArgs, { GIT_SEQUENCE_EDITOR: 'true', GIT_EDITOR: 'true' });
+}
+
+async function squashSelectedCommits(repo: GitRepository, hashes: readonly string[]): Promise<void> {
+    await assertNoUnmergedFiles(repo, 'squashing commits');
+    const ordered = await orderSelectedCommits(repo, hashes, 'oldestFirst');
+    if (ordered.length < 2) { throw new Error('Select at least two commits to squash.'); }
+
+    const range = await validateSquashCommitRange(repo, ordered);
+    const defaultMessage = firstCommitMessageLine(await repo.getCommitMessage(ordered[0]!));
+    const message = await vscode.window.showInputBox({
+        prompt: `Squash ${ordered.length} commits into one message:`,
+        value: defaultMessage,
+    });
+    if (!message?.trim()) { return; }
+
+    const messageFile = await writeCommitMessageFile(message.trim());
+    try {
+        const rewritten = await createSquashedCommit(repo, ordered[0]!, range.newestHash, range.parentHash, messageFile);
+        await replaceCommitRangeWithSquashedCommit(repo, range.newestHash, rewritten);
+    } finally {
+        await fs.rm(path.dirname(messageFile), { recursive: true, force: true });
+    }
+}
+
+interface SquashCommitRange {
+    readonly parentHash: string | undefined;
+    readonly newestHash: string;
+}
+
+async function validateSquashCommitRange(repo: GitRepository, hashes: readonly string[]): Promise<SquashCommitRange> {
+    let previousHash: string | undefined;
+    let parentHash: string | undefined;
+    for (const [index, hash] of hashes.entries()) {
+        const parents = (await repo.exec(['show', '-s', '--format=%P', hash])).split(/\s+/).filter(Boolean);
+        if (parents.length > 1) { throw new Error('Squash Commits is not supported for merge commits.'); }
+        if (index === 0) {
+            parentHash = parents[0];
+        } else if (parents[0] !== previousHash) {
+            throw new Error('Squash Commits requires a contiguous linear commit selection.');
+        }
+        previousHash = hash;
+    }
+    const newestHash = hashes.at(-1);
+    if (!newestHash) { throw new Error('Select at least two commits to squash.'); }
+    return { parentHash, newestHash };
+}
+
+async function createSquashedCommit(
+    repo: GitRepository,
+    oldestHash: string,
+    newestHash: string,
+    parentHash: string | undefined,
+    messageFile: string,
+): Promise<string> {
+    const tree = await repo.exec(['show', '-s', '--format=%T', newestHash]);
+    const [authorName, authorEmail, authorDate] = (await repo.exec(['show', '-s', '--format=%an%x00%ae%x00%aI', oldestHash])).split('\0');
+    if (!authorName || !authorEmail || !authorDate) { throw new Error('Could not read commit author metadata.'); }
+    const parentArgs = parentHash ? ['-p', parentHash] : [];
+    return repo.execWithEnv(
+        ['commit-tree', tree, ...parentArgs, '-F', messageFile],
+        {
+            GIT_AUTHOR_NAME: authorName,
+            GIT_AUTHOR_EMAIL: authorEmail,
+            GIT_AUTHOR_DATE: authorDate,
+        },
+    );
+}
+
+async function replaceCommitRangeWithSquashedCommit(repo: GitRepository, newestHash: string, rewritten: string): Promise<void> {
+    const currentBranch = await repo.getCurrentBranch();
+    const branches = await localBranchesContaining(repo, newestHash);
+    const head = await repo.exec(['rev-parse', 'HEAD']);
+    if (branches.length === 0 && head !== newestHash) {
+        throw new Error('Squash Commits requires a local branch that contains the selected commits.');
+    }
+    if (branches.length === 0) {
+        await repo.exec(['reset', '--soft', rewritten]);
+        return;
+    }
+
+    try {
+        for (const branch of orderBranchesForRewrite(branches, currentBranch)) {
+            await replaceCommitRangeOnBranch(repo, branch, newestHash, rewritten);
+        }
+    } finally {
+        if (currentBranch !== 'HEAD' && await repo.getCurrentBranch().catch(() => 'HEAD') !== currentBranch) {
+            await repo.checkout(currentBranch);
+        }
+    }
+}
+
+async function replaceCommitRangeOnBranch(repo: GitRepository, branch: string, newestHash: string, rewritten: string): Promise<void> {
+    const branchTip = await repo.exec(['rev-parse', branch]);
+    const currentBranch = await repo.getCurrentBranch();
+    if (branchTip === newestHash) {
+        if (branch === currentBranch) {
+            await repo.exec(['reset', '--soft', rewritten]);
+        } else {
+            await repo.exec(['update-ref', `refs/heads/${branch}`, rewritten, newestHash]);
+        }
+        return;
+    }
+    await repo.exec(['rebase', '--autostash', '--onto', rewritten, newestHash, branch]);
+}
+
+function firstCommitMessageLine(message: string): string {
+    return message.split(/\r?\n/)[0]?.trim() ?? '';
 }
 
 async function dropCommits(repo: GitRepository, hashes: readonly string[]): Promise<void> {

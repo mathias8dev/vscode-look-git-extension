@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import type { GitFileChange } from '../../../src/application/ports/git-repository';
 import type { RemoteCommandBackend } from '../../../src/application/ports/remote-command-backend';
+import { OperationStatus } from '../../../src/protocol/shared/operation';
 import { RepoKind } from '../../../src/core/git/domain/RepoContext';
 import { LOG_FIELD_SEP, LOG_RECORD_SEP } from '../../../src/core/parsing/parseLog';
 import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHistoryViewProvider';
@@ -447,6 +448,16 @@ describe('CommitHistoryViewProvider error propagation', () => {
         expect(repo.push).not.toHaveBeenCalled();
         await vi.waitFor(() => expect(onRepositoryUpdated).toHaveBeenCalledTimes(3));
         expect(repo.getLog).toHaveBeenCalled();
+        expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'history/operationStatus',
+            status: OperationStatus.Running,
+            command: 'fetchAll',
+        }));
+        expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'history/operationStatus',
+            status: OperationStatus.Success,
+            command: 'push',
+        }));
     });
 
     it('publishes from the history toolbar when the current branch has no upstream', async () => {
@@ -562,6 +573,35 @@ describe('CommitHistoryViewProvider error propagation', () => {
                 recoverable: true,
             }),
         })));
+        expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'history/operationStatus',
+            status: OperationStatus.Failed,
+            command: 'fetchAll',
+        }));
+    });
+
+    it('reports a history pull as conflict when the repository enters a conflicted state', async () => {
+        const repo = makeRepositoryMock({
+            getStatus: vi.fn(async () => ({
+                staged: [],
+                unstaged: [],
+                conflicts: [{ indexStatus: 'U', workTreeStatus: 'U', filePath: 'src/conflict.ts' }],
+                conflictState: 'merge',
+            })),
+        });
+        commands.failCommand('git.pull', new Error('Automatic merge failed; fix conflicts and then commit the result.'));
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'pull' });
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'history/operationStatus',
+            status: OperationStatus.Conflict,
+            command: 'pull',
+        })));
+        expect(view.messages).not.toContainEqual(expect.objectContaining({ type: 'history/error' }));
     });
 
     it('opens commit history file diffs with parent and commit git URIs', async () => {

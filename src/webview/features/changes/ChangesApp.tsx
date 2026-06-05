@@ -1,7 +1,10 @@
 import { useMemo } from 'react';
+import type { ChangesToolbarCommand } from '../../../protocol/changes/messages';
 import { ConflictState, RepositoryState } from '../../../protocol/changes/types';
 import type { ChangesSelectionContextTarget, CommitMode, StashFileEntry } from '../../../protocol/changes/types';
+import { OperationStatus } from '../../../protocol/shared/operation';
 import { ErrorNotice } from '../../shared/ErrorNotice';
+import { OperationNotice } from '../../shared/OperationNotice';
 import type { ChangeBulkAction, ChangeRowAction } from './changeCommands';
 import { ChangeSectionView } from './ChangeSectionView';
 import { changesSelectionTarget, isChangeListItem } from './changeSelectionModel';
@@ -34,6 +37,7 @@ interface ChangesAppProps {
     readonly onCommitComposerContextTarget: (message: string) => void;
     readonly onGenerateCommitMessage: () => void;
     readonly onClearPathFilter: () => void;
+    readonly onToggleShowConflictsOnly: (showConflictsOnly: boolean) => void;
     readonly onOperationAction: (conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly onCreateStash: (kind: CreateStashKind, message: string) => void;
     readonly onToggleStash: (index: number) => void;
@@ -69,6 +73,7 @@ export function ChangesApp({
     onCommitComposerContextTarget,
     onGenerateCommitMessage,
     onClearPathFilter,
+    onToggleShowConflictsOnly,
     onOperationAction,
     onCreateStash,
     onToggleStash,
@@ -92,9 +97,15 @@ export function ChangesApp({
     onSubmoduleStashFileDiff,
 }: ChangesAppProps) {
     const rawSections = useMemo(() => buildChangeSections(state.status), [state.status]);
+    const visibleRawSections = useMemo(
+        () => state.showConflictsOnly
+            ? rawSections.filter((section) => section.id === ChangeSectionId.Conflicts)
+            : rawSections,
+        [rawSections, state.showConflictsOnly],
+    );
     const sections = useMemo(
-        () => filterAndSortSections(rawSections, state.pathFilter, state.sortMode),
-        [rawSections, state.pathFilter, state.sortMode],
+        () => filterAndSortSections(visibleRawSections, state.pathFilter, state.sortMode),
+        [visibleRawSections, state.pathFilter, state.sortMode],
     );
     const visibleItems = useMemo(() => flattenedItems(sections), [sections]);
     const visibleItemIds = useMemo(() => visibleItems.map((item) => item.id), [visibleItems]);
@@ -130,10 +141,23 @@ export function ChangesApp({
     return (
         <main className="changes-shell">
             <ErrorNotice error={state.error} />
+            {state.operationStatus ? (
+                <OperationNotice
+                    status={state.operationStatus.status}
+                    message={changesOperationMessage(state.operationStatus.command, state.operationStatus.status)}
+                    detail={state.operationStatus.target}
+                />
+            ) : null}
 
-            {!state.loading && hasRepository ? operationBannerFor(state.status.conflictState, state.status.conflicts.length, onOperationAction) : null}
+            {!state.loading && hasRepository ? operationBannerFor(
+                state.status.conflictState,
+                state.status.conflicts.length,
+                state.showConflictsOnly,
+                onToggleShowConflictsOnly,
+                onOperationAction,
+            ) : null}
 
-            {!state.loading && hasRepository ? (
+            {!state.loading && hasRepository && !state.showConflictsOnly ? (
                 <CommitComposer
                     stagedCount={state.status.staged.length}
                     conflictState={state.status.conflictState}
@@ -213,7 +237,7 @@ export function ChangesApp({
                         onStashFileDiff={onSubmoduleStashFileDiff}
                     />
                 ) : null}
-                {!state.loading && hasRepository && state.status.stashes.length > 0 ? (
+                {!state.loading && hasRepository && !state.showConflictsOnly && state.status.stashes.length > 0 ? (
                     <StashList
                         stashes={state.status.stashes}
                         expandedIndexes={state.expandedStashIndexes}
@@ -247,6 +271,8 @@ function reviewHandlerFor(
 function operationBannerFor(
     conflictState: ConflictState,
     conflictCount: number,
+    conflictsOnly: boolean,
+    onToggleConflictsOnly: (showConflictsOnly: boolean) => void,
     onOperationAction: (conflictState: ActiveConflictState, action: OperationAction) => void,
 ) {
     if (conflictState === ConflictState.None) { return null; }
@@ -254,9 +280,75 @@ function operationBannerFor(
         <OperationBanner
             conflictState={conflictState}
             conflictCount={conflictCount}
+            conflictsOnly={conflictsOnly}
+            onToggleConflictsOnly={() => onToggleConflictsOnly(!conflictsOnly)}
             onAction={(action) => onOperationAction(conflictState, action)}
         />
     );
+}
+
+function changesOperationMessage(command: ChangesToolbarCommand, status: OperationStatus): string {
+    const label = changesOperationLabel(command);
+    switch (status) {
+        case OperationStatus.Running:
+            return `${sentenceCase(label)}...`;
+        case OperationStatus.Success:
+            return `${pastTense(label)}.`;
+        case OperationStatus.Failed:
+            return `Could not ${label}.`;
+        case OperationStatus.Conflict:
+            return `${sentenceCase(label)} stopped with conflicts.`;
+    }
+}
+
+function changesOperationLabel(command: ChangesToolbarCommand): string {
+    switch (command) {
+        case 'fetchAll':
+            return 'fetch all remotes';
+        case 'fetchPrune':
+            return 'fetch and prune';
+        case 'pullRebase':
+            return 'pull with rebase';
+        case 'pullFrom':
+            return 'pull from remote';
+        case 'pushForce':
+            return 'force push';
+        case 'pushTo':
+            return 'push to remote';
+        case 'pushToForce':
+            return 'force push to remote';
+        case 'mergeBranch':
+            return 'merge branch';
+        case 'rebaseBranch':
+            return 'rebase branch';
+        case 'deleteRemoteBranch':
+            return 'delete remote branch';
+        case 'publishBranch':
+            return 'publish branch';
+        case 'deleteRemoteTag':
+            return 'delete remote tag';
+        case 'pushTags':
+            return 'push tags';
+        case 'applyPatch':
+            return 'apply patch';
+        default:
+            return command.replace(/([A-Z])/g, ' $1').replace(/\s+/g, ' ').toLowerCase();
+    }
+}
+
+function pastTense(label: string): string {
+    if (label.startsWith('fetch ')) { return sentenceCase(label.replace(/^fetch /, 'fetched ')); }
+    if (label.startsWith('pull ')) { return sentenceCase(label.replace(/^pull /, 'pulled ')); }
+    if (label.startsWith('push ')) { return sentenceCase(label.replace(/^push /, 'pushed ')); }
+    if (label.startsWith('force push')) { return sentenceCase(label.replace(/^force push/, 'force pushed')); }
+    if (label.startsWith('merge ')) { return sentenceCase(label.replace(/^merge /, 'merged ')); }
+    if (label.startsWith('rebase ')) { return sentenceCase(label.replace(/^rebase /, 'rebased ')); }
+    if (label === 'apply patch') { return 'Patch applied'; }
+    return `${sentenceCase(label)} completed`;
+}
+
+function sentenceCase(value: string): string {
+    return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function stashHandlerFor(

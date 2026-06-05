@@ -1,6 +1,7 @@
 import { useEffect, useReducer } from 'react';
 import type { ChangesExtensionToWebviewMessage, ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
 import type { CommitMode, StashFileEntry } from '../../protocol/changes/types';
+import { OperationStatus } from '../../protocol/shared/operation';
 import {
     messageForBulkAction,
     messageForExplainRepositoryChanges,
@@ -45,6 +46,7 @@ import { applyWebviewFontSize, isWebviewFontSizeMessage } from '../platform/font
 import { vscodeApi } from '../platform/vscodeHost';
 
 const COMMIT_FEEDBACK_TIMEOUT_MS = 5000;
+const OPERATION_NOTICE_TIMEOUT_MS = 5000;
 
 export function ChangesWebview() {
     const [state, dispatch] = useReducer(
@@ -75,6 +77,13 @@ export function ChangesWebview() {
         const timeout = window.setTimeout(() => dispatch({ type: 'clearCommitFeedback' }), COMMIT_FEEDBACK_TIMEOUT_MS);
         return () => window.clearTimeout(timeout);
     }, [state.commitFeedback]);
+
+    useEffect(() => {
+        if (!state.operationStatus || state.operationStatus.status === OperationStatus.Running) { return undefined; }
+        const operationId = state.operationStatus.operationId;
+        const timeout = window.setTimeout(() => dispatch({ type: 'clearOperationStatus', operationId }), OPERATION_NOTICE_TIMEOUT_MS);
+        return () => window.clearTimeout(timeout);
+    }, [state.operationStatus]);
 
     useEffect(() => {
         const successfulSubmodulePaths = Object.entries(state.submoduleCommitFeedbackByPath)
@@ -182,6 +191,8 @@ export function ChangesWebview() {
                 postToExtension(message);
             }}
             onClearPathFilter={() => dispatch({ type: 'setPathFilter', pathFilter: '' })}
+            onToggleShowConflictsOnly={(showConflictsOnly: boolean) =>
+                dispatch({ type: 'setShowConflictsOnly', showConflictsOnly })}
             onOperationAction={(conflictState: ActiveConflictState, action: OperationAction) => {
                 postToExtension(messageForOperationAction(conflictState, action));
             }}

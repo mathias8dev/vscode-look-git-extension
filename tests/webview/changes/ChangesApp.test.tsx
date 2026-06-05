@@ -61,6 +61,7 @@ describe('ChangesApp', () => {
         );
 
         expect(markup).toContain('Merge in progress');
+        expect(markup).toContain('Open All');
         expect(markup).toContain('Continue');
         expect(markup).toContain('Abort');
         expect(markup).not.toContain('<h1>Changes</h1>');

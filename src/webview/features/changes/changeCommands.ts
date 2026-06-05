@@ -19,6 +19,7 @@ export enum ChangeBulkAction {
     StageAll = 'stageAll',
     UnstageAll = 'unstageAll',
     DiscardAll = 'discardAll',
+    OpenAllMergeEditors = 'openAllMergeEditors',
     AcceptAllTheirs = 'acceptAllTheirs',
 }
 
@@ -100,9 +101,13 @@ export function bulkActionsFor(section: ChangeSection): readonly ChangeActionDes
             : [];
     }
     if (section.id === ChangeSectionId.Conflicts) {
-        return section.items.length > 0
-            ? [{ action: ChangeBulkAction.AcceptAllTheirs, icon: 'fold-down', label: 'Accept All Theirs', title: 'Accept incoming for all conflicts' }]
-            : [];
+        if (section.items.length === 0) { return []; }
+        const actions: ChangeActionDescriptor<ChangeBulkAction>[] = [];
+        if (section.items.some((item) => !item.entry.isSubmodule)) {
+            actions.push({ action: ChangeBulkAction.OpenAllMergeEditors, icon: 'git-merge', label: 'Open All', title: 'Open all conflicts in the merge editor' });
+        }
+        actions.push({ action: ChangeBulkAction.AcceptAllTheirs, icon: 'fold-down', label: 'Accept All Theirs', title: 'Accept incoming for all conflicts' });
+        return actions;
     }
     return [];
 }
@@ -149,6 +154,8 @@ export function messageForBulkAction(action: ChangeBulkAction): ChangesWebviewTo
             return { type: 'changes/unstageAll' };
         case ChangeBulkAction.DiscardAll:
             return { type: 'changes/discardAll' };
+        case ChangeBulkAction.OpenAllMergeEditors:
+            return { type: 'changes/openAllMergeEditors' };
         case ChangeBulkAction.AcceptAllTheirs:
             return { type: 'changes/acceptAllTheirs' };
     }

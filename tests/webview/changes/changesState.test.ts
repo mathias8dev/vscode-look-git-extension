@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createInitialChangesState, getChangeCount, reduceChangesState, ChangesViewMode, ChangesSortMode, ChangeSelectionMode, submoduleStashKey } from '../../../src/webview/features/changes/changesState';
 import { ChangeSectionId } from '../../../src/webview/features/changes/changeTree';
 import { ConflictState } from '../../../src/protocol/changes/types';
+import { OperationStatus } from '../../../src/protocol/shared/operation';
 import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 
 describe('changesState', () => {
@@ -597,6 +598,45 @@ describe('changesState', () => {
         expect(unknownStatus.submoduleStatusByPath).toEqual({});
         expect(staleFiles.submoduleStashFilesByKey).toEqual({});
     });
+
+    it('tracks operation status and ignores stale completed operations', () => {
+        const running = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: { type: 'changes/operationStatus', operationId: 'op-1', status: OperationStatus.Running, command: 'pull' },
+        });
+        const staleSuccess = reduceChangesState(running, {
+            type: 'message',
+            message: { type: 'changes/operationStatus', operationId: 'op-0', status: OperationStatus.Success, command: 'fetch' },
+        });
+        const success = reduceChangesState(running, {
+            type: 'message',
+            message: { type: 'changes/operationStatus', operationId: 'op-1', status: OperationStatus.Success, command: 'pull' },
+        });
+        const cleared = reduceChangesState(success, { type: 'clearOperationStatus', operationId: 'op-1' });
+
+        expect(running.operationStatus?.status).toBe(OperationStatus.Running);
+        expect(staleSuccess.operationStatus?.operationId).toBe('op-1');
+        expect(success.operationStatus?.status).toBe(OperationStatus.Success);
+        expect(cleared.operationStatus).toBeUndefined();
+    });
+
+    it('clears conflicts-only mode after conflicts disappear', () => {
+        const withConflicts = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: statusDataMessage({
+                conflicts: [{ indexStatus: 'U', workTreeStatus: 'U', filePath: 'conflict.txt' }],
+                conflictState: ConflictState.Merge,
+            }),
+        });
+        const conflictsOnly = reduceChangesState(withConflicts, { type: 'setShowConflictsOnly', showConflictsOnly: true });
+        const resolved = reduceChangesState(conflictsOnly, {
+            type: 'message',
+            message: statusDataMessage({ conflicts: [], conflictState: ConflictState.Merge }),
+        });
+
+        expect(conflictsOnly.showConflictsOnly).toBe(true);
+        expect(resolved.showConflictsOnly).toBe(false);
+    });
 });
 
 function statusDataMessage(overrides: Partial<Parameters<typeof createStatusData>[0]> = {}) {
@@ -609,12 +649,14 @@ function statusDataMessage(overrides: Partial<Parameters<typeof createStatusData
 function createStatusData(overrides: {
     readonly stashes?: readonly { readonly index: number; readonly message: string }[];
     readonly submodules?: readonly { readonly path: string; readonly name: string; readonly status: SubmoduleStatus }[];
+    readonly conflicts?: readonly { readonly indexStatus: string; readonly workTreeStatus: string; readonly filePath: string }[];
+    readonly conflictState?: ConflictState;
 } = {}) {
     return {
         staged: [],
         unstaged: [],
-        conflicts: [],
-        conflictState: ConflictState.None,
+        conflicts: overrides.conflicts ?? [],
+        conflictState: overrides.conflictState ?? ConflictState.None,
         stashes: overrides.stashes ?? [],
         submodules: overrides.submodules ?? [],
     };

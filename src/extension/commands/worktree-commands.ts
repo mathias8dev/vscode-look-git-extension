@@ -5,6 +5,7 @@ import { CliRemoteCommandKind, type RemoteCommandBackend } from '../../applicati
 import type { WorktreeCommand } from '../../protocol/graph/messages';
 import { parsePorcelainStatus } from '../../core/parsing/parseStatus';
 import { showModalWarningMessage } from '../utils/confirmation';
+import { showBranchNameInput } from '../utils/branch-name-input';
 import { openChangesWithWorkingTree } from './git-command-helpers';
 
 export async function runWorktreeCommand(
@@ -64,8 +65,8 @@ export async function runWorktreeCommand(
         case 'stash':
             return stashWorktree(repo, requireWorktreePath(wtPath));
         case 'newBranch': {
-            const branch = await vscode.window.showInputBox({ prompt: 'New branch from worktree HEAD:' });
-            if (!branch?.trim()) { return false; }
+            const branch = await showBranchNameInput({ prompt: 'New branch from worktree HEAD:' });
+            if (!branch) { return false; }
             await repo.exec(['-C', requireWorktreePath(wtPath), 'checkout', '-b', branch]);
             return true;
         }
@@ -87,7 +88,7 @@ export async function runWorktreeCommand(
         case 'add': {
             const p = await vscode.window.showInputBox({ prompt: 'Worktree path (absolute):' });
             if (!p) { return false; }
-            const b = await vscode.window.showInputBox({ prompt: 'Branch name:' });
+            const b = await showBranchNameInput({ prompt: 'Branch name:' });
             if (!b) { return false; }
             const branches = await repo.getAllBranches();
             const createNew = !branches.some((br) => br.name === b);

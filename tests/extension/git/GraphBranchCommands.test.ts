@@ -7,7 +7,15 @@ import type { GraphExtensionToWebviewMessage } from '../../../src/protocol/graph
 import { makeRepositoryAccessor } from '../../helpers/repositoryMock';
 import { createBareGitRepo, createTempGitRepo, type TempGitRepo } from '../../helpers/gitRepo';
 import { executingRemoteCommandBackend } from '../../helpers/executing-remote-command-backend';
-import { commands, resetMockVscode, setInputBoxValue, setWarningChoice, window } from '../../mocks/vscode';
+import {
+    InputBoxValidationSeverity,
+    commands,
+    getInputBoxOptions,
+    resetMockVscode,
+    setInputBoxValue,
+    setWarningChoice,
+    window,
+} from '../../mocks/vscode';
 
 describe('Graph branch commands against real git repos', () => {
     let fixture: TempGitRepo;
@@ -73,14 +81,23 @@ describe('Graph branch commands against real git repos', () => {
         fixture.git(['checkout', '-q', 'main']);
         const router = routerFor(fixture.cwd);
 
-        setInputBoxValue('created/from-source');
+        setInputBoxValue('created from source');
         await router.handle({ type: 'graph/branchCommand', command: 'newBranchFrom', branch: 'source', isRemote: false });
-        expect(fixture.gitTrim(['rev-parse', 'created/from-source'])).toBe(source);
-        expect(fixture.gitTrim(['branch', '--show-current'])).toBe('created/from-source');
+        expect(fixture.gitTrim(['rev-parse', 'created-from-source'])).toBe(source);
+        expect(fixture.gitTrim(['branch', '--show-current'])).toBe('created-from-source');
 
         setInputBoxValue('renamed/from-source');
-        await router.handle({ type: 'graph/branchCommand', command: 'rename', branch: 'created/from-source', isRemote: false });
+        await router.handle({ type: 'graph/branchCommand', command: 'rename', branch: 'created-from-source', isRemote: false });
         expect(fixture.gitTrim(['rev-parse', 'renamed/from-source'])).toBe(source);
+        const renameInputOptions = getInputBoxOptions().at(-1) as { readonly validateInput?: (value: string) => unknown } | undefined;
+        expect(renameInputOptions?.validateInput?.('feature bad:name')).toEqual({
+            message: 'feature bad:name -> feature-bad-name',
+            severity: InputBoxValidationSeverity.Info,
+        });
+        expect(renameInputOptions?.validateInput?.('HEAD')).toEqual({
+            message: 'HEAD is reserved.',
+            severity: InputBoxValidationSeverity.Error,
+        });
 
         fixture.git(['checkout', '-q', 'main']);
         setWarningChoice('Delete');

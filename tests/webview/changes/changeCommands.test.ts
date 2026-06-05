@@ -116,6 +116,7 @@ describe('changeCommands', () => {
         expect(messageForBulkAction(ChangeBulkAction.StageAll)).toEqual({ type: 'changes/stageAll' });
         expect(messageForBulkAction(ChangeBulkAction.UnstageAll)).toEqual({ type: 'changes/unstageAll' });
         expect(messageForBulkAction(ChangeBulkAction.DiscardAll)).toEqual({ type: 'changes/discardAll' });
+        expect(messageForBulkAction(ChangeBulkAction.OpenAllMergeEditors)).toEqual({ type: 'changes/openAllMergeEditors' });
     });
 
     it('creates protocol messages for toolbar commands', () => {
@@ -153,7 +154,23 @@ describe('changeCommands', () => {
         ]);
         expect(bulkActionsFor(unstaged).find((action) => action.action === ChangeBulkAction.DiscardAll)?.icon).toBe('discard');
         expect(bulkActionsFor(staged).map((action) => action.action)).toEqual([ChangeBulkAction.UnstageAll]);
-        expect(bulkActionsFor(conflicts).map((action) => action.action)).toEqual([ChangeBulkAction.AcceptAllTheirs]);
+        expect(bulkActionsFor(conflicts).map((action) => action.action)).toEqual([
+            ChangeBulkAction.OpenAllMergeEditors,
+            ChangeBulkAction.AcceptAllTheirs,
+        ]);
         expect(messageForBulkAction(ChangeBulkAction.AcceptAllTheirs)).toEqual({ type: 'changes/acceptAllTheirs' });
+    });
+
+    it('does not offer open-all merge editors for submodule gitlink conflicts', () => {
+        const conflicts: ChangeSection = {
+            id: ChangeSectionId.Conflicts,
+            title: 'Conflicts',
+            items: [{
+                ...item(ChangeSectionId.Conflicts, 'modules/lib'),
+                entry: { indexStatus: 'U', workTreeStatus: 'U', filePath: 'modules/lib', isSubmodule: true },
+            }],
+        };
+
+        expect(bulkActionsFor(conflicts).map((action) => action.action)).toEqual([ChangeBulkAction.AcceptAllTheirs]);
     });
 });

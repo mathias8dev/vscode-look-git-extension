@@ -5,10 +5,11 @@ import * as os from 'os';
 import type { GitBranch, GitCommit, GitFileChange, GitRepository, GitTag } from '../../application/ports/git-repository';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import type { ErrorCode, Pagination } from '../../protocol/shared/base';
+import { OperationStatus } from '../../protocol/shared/operation';
 import type { RepoContext } from '../../core/git/domain/RepoContext';
 import type { CommitCommand } from '../../protocol/graph/messages';
 import type { HistoryCommitDetails, HistoryCommitRef, HistoryContextTarget, HistoryData } from '../../protocol/history/types';
-import type { HistoryCommitDetailsRequest, HistoryDataRequest, HistoryExtensionToWebviewMessage, HistoryOpenDiffRequest, HistoryToolbarCommand, HistoryWebviewToExtensionMessage } from '../../protocol/history/messages';
+import type { HistoryCommitDetailsRequest, HistoryDataRequest, HistoryExtensionToWebviewMessage, HistoryOpenDiffRequest, HistoryOperationStatusPush, HistoryToolbarCommand, HistoryWebviewToExtensionMessage } from '../../protocol/history/messages';
 import { runCommitCommand } from '../commands/commit-commands';
 import { createErrorPayload } from '../messaging/errorSerialization';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
@@ -65,6 +66,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     private selectedHistoryRef: string | undefined;
     private selectedRepositoryScope: HistoryRepositoryScope | undefined;
     private refCache?: HistoryRefCache;
+    private operationSequence = 0;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -243,14 +245,37 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async runVscodeGitToolbarOperation(operation: 'fetchAll' | 'pull' | 'push', command: VscodeRemoteCommand): Promise<void> {
+        const operationId = this.nextOperationId();
         try {
             const repo = this.requireHistoryRepository();
+            const existingConflicts = operation === 'pull' ? await conflictFileSet(repo) : undefined;
+            this.postHistoryOperation({ operationId, status: OperationStatus.Running, command: operation });
             await this.remoteCommands.runVscode(repo, command);
             await Promise.all([
                 this.onRepositoryUpdated(),
                 this.refresh(),
             ]);
+            if (existingConflicts && await hasNewConflicts(repo, existingConflicts)) {
+                this.postHistoryOperation({ operationId, status: OperationStatus.Conflict, command: operation });
+                return;
+            }
+            this.postHistoryOperation({ operationId, status: OperationStatus.Success, command: operation });
         } catch (error) {
+            if (operation === 'pull') {
+                try {
+                    await Promise.all([this.onRepositoryUpdated(), this.refresh()]);
+                    const repo = this.requireHistoryRepository();
+                    if (await hasAnyConflicts(repo)) {
+                        this.postHistoryOperation({ operationId, status: OperationStatus.Conflict, command: operation });
+                        return;
+                    }
+                } catch {
+                    this.postHistoryOperation({ operationId, status: OperationStatus.Failed, command: operation });
+                    this.postHistoryError(error, `history/${operation}`, 'gitOperationFailed');
+                    return;
+                }
+            }
+            this.postHistoryOperation({ operationId, status: OperationStatus.Failed, command: operation });
             this.postHistoryError(error, `history/${operation}`, 'gitOperationFailed');
         }
     }
@@ -330,6 +355,10 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             this.postHistoryError(new Error('No history commit is selected for this command.'), 'history/contextCommand', 'validationFailed');
             return;
         }
+        if (command === 'squashInto' && target.hashes.length < 2) {
+            this.postHistoryError(new Error('Select at least two commits to squash.'), 'history/squashInto', 'validationFailed');
+            return;
+        }
 
         try {
             const repo = this.requireHistoryRepository();
@@ -396,6 +425,15 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 recoverable: true,
             }),
         });
+    }
+
+    private postHistoryOperation(operation: Omit<HistoryOperationStatusPush, 'type'>): void {
+        this.postMessage({ type: 'history/operationStatus', ...operation });
+    }
+
+    private nextOperationId(): string {
+        this.operationSequence += 1;
+        return `history-op-${this.operationSequence}`;
     }
 
     async notifyRepoChanged(context: RepoContext): Promise<void> {
@@ -578,6 +616,25 @@ function submoduleScopeOption(submodulePath: string): string {
 
 function submodulePathFromOption(option: string): string {
     return option.replace(/^Submodule: /, '');
+}
+
+async function conflictFileSet(repo: GitRepository): Promise<ReadonlySet<string>> {
+    try {
+        const status = await repo.getStatus();
+        return new Set(status.conflicts.map((entry) => entry.filePath));
+    } catch {
+        return new Set();
+    }
+}
+
+async function hasAnyConflicts(repo: GitRepository): Promise<boolean> {
+    const status = await repo.getStatus();
+    return status.conflicts.length > 0;
+}
+
+async function hasNewConflicts(repo: GitRepository, existingConflicts: ReadonlySet<string>): Promise<boolean> {
+    const status = await repo.getStatus();
+    return status.conflicts.some((entry) => !existingConflicts.has(entry.filePath));
 }
 
 async function createDiffUris(cwd: string, message: HistoryOpenDiffRequest): Promise<{ readonly left: vscode.Uri; readonly right: vscode.Uri }> {

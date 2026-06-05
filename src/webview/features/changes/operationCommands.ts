@@ -4,6 +4,8 @@ import { ConflictState } from '../../../protocol/changes/types';
 export type ActiveConflictState = Exclude<ConflictState, ConflictState.None>;
 
 export enum OperationAction {
+    OpenFirstMergeEditor = 'openFirstMergeEditor',
+    OpenAllMergeEditors = 'openAllMergeEditors',
     Continue = 'continue',
     Abort = 'abort',
     AcceptAllTheirs = 'acceptAllTheirs',
@@ -14,6 +16,10 @@ export function messageForOperationAction(
     action: OperationAction,
 ): ChangesWebviewToExtensionMessage {
     switch (action) {
+        case OperationAction.OpenFirstMergeEditor:
+            return { type: 'changes/openFirstMergeEditor' };
+        case OperationAction.OpenAllMergeEditors:
+            return { type: 'changes/openAllMergeEditors' };
         case OperationAction.Continue:
             return { type: 'changes/continueOp', conflictState };
         case OperationAction.Abort:

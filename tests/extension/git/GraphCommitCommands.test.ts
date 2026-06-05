@@ -23,7 +23,7 @@ describe('Graph commit commands against real git repos', () => {
         const head = fixture.commitFile('head.txt', 'head\n', 'feat: head');
         const router = routerFor(fixture.cwd);
 
-        setInputBoxValue('branch-at-base');
+        setInputBoxValue('branch at base');
         await router.handle({ type: 'graph/commitCommand', command: 'newBranch', hash: base, hashes: [base] });
         setInputBoxValue('tag-at-head');
         await router.handle({ type: 'graph/commitCommand', command: 'newTag', hash: head, hashes: [head] });
@@ -155,19 +155,54 @@ describe('Graph commit commands against real git repos', () => {
         expect(fixture.gitTrim(['show', 'HEAD~1:fixup.txt'])).toBe('fixup');
     });
 
-    it('squashes staged changes into the selected commit with both messages', async () => {
+    it('squashes multiple selected commits into one commit and preserves descendants', async () => {
         const base = fixture.commitFile('base.txt', 'base\n', 'feat: base');
-        fixture.commitFile('head.txt', 'head\n', 'feat: head');
-        fixture.write('squash.txt', 'squash\n');
-        fixture.git(['add', 'squash.txt']);
+        const older = fixture.commitFile('older.txt', 'older\n', 'feat: older');
+        const newer = fixture.commitFile('newer.txt', 'newer\n', 'feat: newer');
+        fixture.commitFile('tail.txt', 'tail\n', 'feat: tail');
         const router = routerFor(fixture.cwd);
 
-        setInputBoxValue('fix: staged squash');
+        setInputBoxValue('feat: squashed selected commits');
+        await router.handle({ type: 'graph/commitCommand', command: 'squashInto', hash: newer, hashes: [newer, older] });
+
+        expect(fixture.gitTrim(['rev-list', '--count', 'HEAD'])).toBe('3');
+        expect(fixture.gitTrim(['log', '--format=%s', '--reverse'])).toBe('feat: base\nfeat: squashed selected commits\nfeat: tail');
+        expect(fixture.gitTrim(['show', 'HEAD~1:older.txt'])).toBe('older');
+        expect(fixture.gitTrim(['show', 'HEAD~1:newer.txt'])).toBe('newer');
+        expect(fixture.gitTrim(['show', 'HEAD:tail.txt'])).toBe('tail');
+        expect(fixture.gitTrim(['rev-parse', 'HEAD~2'])).toBe(base);
+    });
+
+    it('rejects squash commits when only one commit is selected', async () => {
+        const base = fixture.commitFile('base.txt', 'base\n', 'feat: base');
+        const head = fixture.commitFile('head.txt', 'head\n', 'feat: head');
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = routerFor(fixture.cwd, messages);
+
         await router.handle({ type: 'graph/commitCommand', command: 'squashInto', hash: base, hashes: [base] });
 
-        expect(fixture.gitTrim(['rev-list', '--count', 'HEAD'])).toBe('2');
-        expect(fixture.gitTrim(['log', '--format=%B', '--reverse'])).toContain('feat: base\n\nfix: staged squash');
-        expect(fixture.gitTrim(['show', 'HEAD~1:squash.txt'])).toBe('squash');
+        expect(fixture.gitTrim(['rev-parse', 'HEAD'])).toBe(head);
+        expect(messages).toContainEqual(expect.objectContaining({
+            type: 'graph/error',
+            message: 'Select at least two commits to squash.',
+        }));
+    });
+
+    it('rejects squash commits when the selected commits are not contiguous', async () => {
+        fixture.commitFile('base.txt', 'base\n', 'feat: base');
+        const older = fixture.commitFile('older.txt', 'older\n', 'feat: older');
+        fixture.commitFile('middle.txt', 'middle\n', 'feat: middle');
+        const newer = fixture.commitFile('newer.txt', 'newer\n', 'feat: newer');
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = routerFor(fixture.cwd, messages);
+
+        await router.handle({ type: 'graph/commitCommand', command: 'squashInto', hash: newer, hashes: [newer, older] });
+
+        expect(fixture.gitTrim(['rev-list', '--count', 'HEAD'])).toBe('4');
+        expect(messages).toContainEqual(expect.objectContaining({
+            type: 'graph/error',
+            message: 'Squash Commits requires a contiguous linear commit selection.',
+        }));
     });
 
     it('drops multiple selected commits without depending on selection order', async () => {

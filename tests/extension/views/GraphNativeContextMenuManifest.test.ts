@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 interface PackageJson {
     readonly contributes?: {
-        readonly commands?: readonly { readonly command: string; readonly title: string }[];
+        readonly commands?: readonly { readonly command: string; readonly title: string; readonly enablement?: string }[];
         readonly menus?: {
             readonly 'webview/context'?: readonly {
                 readonly command: string;
@@ -19,6 +19,7 @@ describe('Graph native context menu manifest', () => {
     it('delegates commit, branch, and worktree graph menus to VS Code webview/context contributions', () => {
         const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as PackageJson;
         const commands = new Set((pkg.contributes?.commands ?? []).map((entry) => entry.command));
+        const graphSquashCommand = pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.graph.commit.squashInto');
         const webviewContextMenu = pkg.contributes?.menus?.['webview/context'] ?? [];
 
         for (const command of [
@@ -33,6 +34,10 @@ describe('Graph native context menu manifest', () => {
         ]) {
             expect(commands.has(command)).toBe(true);
         }
+        expect(graphSquashCommand).toMatchObject({
+            title: 'Squash Commits...',
+            enablement: 'graphCommitHasMultipleSelectedCommits',
+        });
         expect(webviewContextMenu).toEqual(expect.arrayContaining([
             expect.objectContaining({
                 command: 'lookGit.graph.commit.copyRevisionNumber',

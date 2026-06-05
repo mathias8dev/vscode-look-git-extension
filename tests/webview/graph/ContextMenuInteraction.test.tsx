@@ -101,7 +101,7 @@ describe('graph native context menu targets', () => {
                 rows={rows}
                 displayRows={displayRows}
                 branches={[]}
-                selectedHashes={['base1234567890abcdef']}
+                selectedHashes={['base1234567890abcdef', 'head1234567890abcdef']}
                 selectedWorktreePath={undefined}
                 hasMore={false}
                 loadingMore={false}
@@ -120,6 +120,7 @@ describe('graph native context menu targets', () => {
         expect(context).toContain('"webviewSection":"graphCommit"');
         expect(context).toContain('"graphCommitCanGoToChild":true');
         expect(context).toContain('"graphCommitCanGoToParent":false');
+        expect(context).toContain('"graphCommitHasMultipleSelectedCommits":true');
 
         fireEvent.contextMenu(row);
 
@@ -127,7 +128,7 @@ describe('graph native context menu targets', () => {
         expect(onContextTarget).toHaveBeenCalledWith({
             kind: 'commit',
             hash: 'base1234567890abcdef',
-            hashes: ['base1234567890abcdef'],
+            hashes: ['base1234567890abcdef', 'head1234567890abcdef'],
             childHash: 'head1234567890abcdef',
             parentHash: undefined,
             canUndoCommit: false,

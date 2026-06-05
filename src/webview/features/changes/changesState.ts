@@ -1,7 +1,8 @@
-import type { ChangesExtensionToWebviewMessage } from '../../../protocol/changes/messages';
+import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush } from '../../../protocol/changes/messages';
 import { ConflictState, RepositoryState } from '../../../protocol/changes/types';
 import type { StashFileEntry, StatusData, SubmoduleStatusData } from '../../../protocol/changes/types';
 import type { ProtocolError } from '../../../protocol/shared/base';
+import { OperationStatus } from '../../../protocol/shared/operation';
 import { readProtocolError } from '../../shared/useProtocolError';
 import { ChangeSectionId } from './changeTree';
 import { rememberCommitMessage } from './commitComposerModel';
@@ -30,9 +31,11 @@ export interface ChangesState {
     readonly viewMode: ChangesViewMode;
     readonly sortMode: ChangesSortMode;
     readonly pathFilter: string;
+    readonly showConflictsOnly: boolean;
     readonly commitMessageHistory: readonly string[];
     readonly loading: boolean;
     readonly error: ProtocolError | undefined;
+    readonly operationStatus: ChangesOperationStatusPush | undefined;
     readonly commitFocusRequest: number;
     readonly commitFeedback: CommitFeedback | undefined;
     readonly commitMessageGenerationRequestId: string | undefined;
@@ -85,6 +88,7 @@ export type ChangesAction =
     | { readonly type: 'setViewMode'; readonly viewMode: ChangesViewMode }
     | { readonly type: 'setSortMode'; readonly sortMode: ChangesSortMode }
     | { readonly type: 'setPathFilter'; readonly pathFilter: string }
+    | { readonly type: 'setShowConflictsOnly'; readonly showConflictsOnly: boolean }
     | { readonly type: 'rememberCommitMessage'; readonly message: string }
     | { readonly type: 'requestCommitMessageGeneration'; readonly requestId: string }
     | { readonly type: 'requestSubmoduleCommitMessageGeneration'; readonly path: string; readonly requestId: string }
@@ -94,6 +98,7 @@ export type ChangesAction =
     | { readonly type: 'clearSelection' }
     | { readonly type: 'toggleStash'; readonly index: number }
     | { readonly type: 'clearError' }
+    | { readonly type: 'clearOperationStatus'; readonly operationId: string }
     | { readonly type: 'clearCommitFeedback' }
     | { readonly type: 'clearSubmoduleCommitFeedback'; readonly path: string }
     | { readonly type: 'toggleSubmodule'; readonly path: string }
@@ -106,9 +111,11 @@ export function createInitialChangesState(preferences: ChangesStatePreferences =
         viewMode: preferences.viewMode ?? ChangesViewMode.List,
         sortMode: preferences.sortMode ?? ChangesSortMode.Path,
         pathFilter: preferences.pathFilter ?? '',
+        showConflictsOnly: false,
         commitMessageHistory: preferences.commitMessageHistory ?? [],
         loading: true,
         error: undefined,
+        operationStatus: undefined,
         commitFocusRequest: 0,
         commitFeedback: undefined,
         commitMessageGenerationRequestId: undefined,
@@ -143,6 +150,8 @@ export function reduceChangesState(state: ChangesState, action: ChangesAction): 
             return { ...state, sortMode: action.sortMode, selectedItemIds: [], selectionAnchorId: undefined };
         case 'setPathFilter':
             return { ...state, pathFilter: action.pathFilter, selectedItemIds: [], selectionAnchorId: undefined };
+        case 'setShowConflictsOnly':
+            return { ...state, showConflictsOnly: action.showConflictsOnly, selectedItemIds: [], selectionAnchorId: undefined };
         case 'rememberCommitMessage':
             return {
                 ...state,
@@ -197,6 +206,10 @@ export function reduceChangesState(state: ChangesState, action: ChangesAction): 
             return { ...state, expandedSubmoduleStashKeys: toggledPath(state.expandedSubmoduleStashKeys, action.key) };
         case 'clearError':
             return { ...state, error: undefined };
+        case 'clearOperationStatus':
+            return state.operationStatus?.operationId === action.operationId
+                ? { ...state, operationStatus: undefined }
+                : state;
     }
 }
 
@@ -214,6 +227,7 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 status: message.data,
                 loading: false,
                 error: undefined,
+                showConflictsOnly: message.data.conflicts.length > 0 ? state.showConflictsOnly : false,
                 generatedCommitMessage: undefined,
                 commitMessageGenerationError: undefined,
                 selectedItemIds: [],
@@ -369,6 +383,8 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
             return { ...state, viewMode: message.viewMode === ChangesViewMode.List ? ChangesViewMode.List : ChangesViewMode.Tree };
         case 'changes/applySortMode':
             return { ...state, sortMode: sortModeFromProtocol(message.sortMode), selectedItemIds: [], selectionAnchorId: undefined };
+        case 'changes/operationStatus':
+            return reduceChangesOperationStatus(state, message);
         case 'changes/focusCommitComposer':
             return { ...state, commitFocusRequest: state.commitFocusRequest + 1 };
         case 'changes/focusSubmoduleCommitComposer':
@@ -385,6 +401,13 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
         case 'ui/fontSizeChanged':
             return state;
     }
+}
+
+function reduceChangesOperationStatus(state: ChangesState, message: ChangesOperationStatusPush): ChangesState {
+    if (message.status !== OperationStatus.Running && state.operationStatus?.operationId && state.operationStatus.operationId !== message.operationId) {
+        return state;
+    }
+    return { ...state, operationStatus: message };
 }
 
 function sortModeFromProtocol(sortMode: 'name' | 'path' | 'status' | 'extension' | 'directory'): ChangesSortMode {

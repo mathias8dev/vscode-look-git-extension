@@ -217,14 +217,14 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
             expect(fixture.gitTrim(['log', '--format=%s', '--reverse'])).toBe('feat: base\nfeat: head');
         });
 
-        await withCommitPair(async ({ fixture, base, view }) => {
-            fixture.write('squash.txt', 'squash\n');
-            fixture.git(['add', 'squash.txt']);
-            setCommitTarget(view, { kind: 'commit', hash: base, hashes: [base], canUndoCommit: false });
-            setInputBoxValue('fix: staged squash');
+        await withCommitPair(async ({ fixture, base, head, view }) => {
+            setCommitTarget(view, { kind: 'commit', hash: head, hashes: [head, base], canUndoCommit: true });
+            setInputBoxValue('feat: squashed history commits');
             await vscode.commands.executeCommand('lookGit.history.squashInto');
-            expect(fixture.gitTrim(['show', 'HEAD~1:squash.txt'])).toBe('squash');
-            expect(fixture.gitTrim(['log', '--format=%B', '--reverse'])).toContain('fix: staged squash');
+            expect(fixture.gitTrim(['rev-list', '--count', 'HEAD'])).toBe('1');
+            expect(fixture.gitTrim(['show', 'HEAD:base.txt'])).toBe('base');
+            expect(fixture.gitTrim(['show', 'HEAD:head.txt'])).toBe('head');
+            expect(fixture.gitTrim(['log', '--format=%s', '--reverse'])).toBe('feat: squashed history commits');
         });
     });
 
