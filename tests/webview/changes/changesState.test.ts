@@ -5,9 +5,9 @@ import { ConflictState } from '../../../src/protocol/changes/types';
 import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 
 describe('changesState', () => {
-    it('starts in tree loading mode', () => {
+    it('starts in list loading mode', () => {
         expect(createInitialChangesState()).toEqual(expect.objectContaining({
-            viewMode: ChangesViewMode.Tree,
+            viewMode: ChangesViewMode.List,
             sortMode: ChangesSortMode.Path,
             pathFilter: '',
             loading: true,

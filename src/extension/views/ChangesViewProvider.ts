@@ -200,7 +200,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     private refreshAbortController?: AbortController;
     private refreshTimer?: ReturnType<typeof setTimeout>;
     private contextTarget?: ChangesContextTarget;
-    private viewAsTree = true;
+    private viewAsTree = false;
     private readonly refreshDebounceMs = 50;
 
     constructor(
@@ -252,7 +252,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
         void this.commands.executeCommand('setContext', 'lookGit.viewAsTree', this.viewAsTree);
         void this.commands.executeCommand('setContext', 'lookGit.changesViewAsTree', this.viewAsTree);
-        void this.commands.executeCommand('setContext', 'lookGit.changesViewMode', 'tree');
+        void this.commands.executeCommand('setContext', 'lookGit.changesViewMode', 'list');
         void this.commands.executeCommand('setContext', 'lookGit.changesSortMode', 'path');
         this.scheduleRefresh();
     }

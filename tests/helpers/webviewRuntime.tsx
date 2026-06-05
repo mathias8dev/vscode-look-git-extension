@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 
 export interface MockVsCodeApi {
     messages: unknown[];
+    state: unknown;
     postMessage(msg: unknown): void;
     getState(): unknown;
     setState(state: unknown): void;
@@ -18,12 +19,13 @@ declare global {
 }
 
 /** Install a fresh mock VS Code API and return it. Call before each render. */
-export function createMockVsCodeApi(): MockVsCodeApi {
+export function createMockVsCodeApi(initialState?: unknown): MockVsCodeApi {
     _api = {
         messages: [],
+        state: initialState,
         postMessage(msg: unknown) { this.messages.push(msg); },
-        getState() { return undefined; },
-        setState(_state: unknown) {},
+        getState() { return this.state; },
+        setState(state: unknown) { this.state = state; },
     };
     // Inject into global so platform.ts singleton picks it up.
     globalThis.acquireVsCodeApi = () => _api;

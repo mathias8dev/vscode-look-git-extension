@@ -313,6 +313,8 @@ describe('ChangesViewProvider', () => {
         const disposables = provider.registerNativeContextCommands();
 
         provider.resolveWebviewView(view);
+        expect(getCommandCalls()).toContainEqual({ command: 'setContext', args: ['lookGit.changesViewMode', 'list'] });
+        expect(getCommandCalls()).toContainEqual({ command: 'setContext', args: ['lookGit.changesViewAsTree', false] });
         await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
         vi.mocked(repo.getStatus).mockClear();
 

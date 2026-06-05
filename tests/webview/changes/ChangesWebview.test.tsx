@@ -24,7 +24,7 @@ describe('ChangesWebview', () => {
         await waitFor(() => expect(screen.getByLabelText('Repository changes')).toBeInTheDocument());
 
         expect(api.messages).toContainEqual({ type: 'changes/ready' });
-        expect(api.messages).toContainEqual({ type: 'changes/preferencesChanged', viewMode: 'tree', sortMode: 'path' });
+        expect(api.messages).toContainEqual({ type: 'changes/preferencesChanged', viewMode: 'list', sortMode: 'path' });
         expect(screen.queryByRole('heading', { level: 1, name: 'Changes' })).not.toBeInTheDocument();
         expect(screen.queryByLabelText('Refresh Changes')).not.toBeInTheDocument();
         expect(screen.queryByLabelText('Open Git Graph')).not.toBeInTheDocument();
@@ -44,21 +44,48 @@ describe('ChangesWebview', () => {
         expect(document.getElementById('root')?.style.fontSize).toBe('21px');
     });
 
-    it('applies native view-title mode and commit-focus messages', async () => {
+    it('starts as list and applies native view-title mode and commit-focus messages', async () => {
         const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendStatusData();
 
+        await waitFor(() => expect(screen.getByTitle('src/app.ts')).toBeInTheDocument());
+        expect(screen.queryByRole('button', { name: 'src' })).not.toBeInTheDocument();
+
+        act(() => sendToWebview({ type: 'changes/applyViewMode', viewMode: 'tree' }));
+
         await waitFor(() => expect(screen.getByRole('button', { name: 'src' })).toBeInTheDocument());
-        sendToWebview({ type: 'changes/applyViewMode', viewMode: 'list' });
+
+        act(() => sendToWebview({ type: 'changes/applyViewMode', viewMode: 'list' }));
 
         await waitFor(() => expect(screen.queryByRole('button', { name: 'src' })).not.toBeInTheDocument());
         expect(screen.getByTitle('src/app.ts')).toBeInTheDocument();
 
-        sendToWebview({ type: 'changes/focusCommitComposer' });
+        act(() => sendToWebview({ type: 'changes/focusCommitComposer' }));
 
         await waitFor(() => expect(screen.getByLabelText('Commit message')).toHaveFocus());
+    });
+
+    it('restores and persists the changes view mode preference', async () => {
+        const api = createMockVsCodeApi({ viewMode: 'tree', sortMode: 'status' });
+        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+        render(<ChangesWebview />);
+        sendStatusData();
+
+        await waitFor(() => expect(api.messages).toContainEqual({
+            type: 'changes/preferencesChanged',
+            viewMode: 'tree',
+            sortMode: 'status',
+        }));
+
+        act(() => sendToWebview({ type: 'changes/applyViewMode', viewMode: 'list' }));
+
+        await waitFor(() => expect(api.state).toEqual(expect.objectContaining({
+            viewMode: 'list',
+            sortMode: 'status',
+        })));
     });
 
     it('shows the current branch in the compact commit composer placeholder', async () => {

@@ -103,7 +103,7 @@ export type ChangesAction =
 export function createInitialChangesState(preferences: ChangesStatePreferences = {}): ChangesState {
     return {
         status: emptyStatusData(),
-        viewMode: preferences.viewMode ?? ChangesViewMode.Tree,
+        viewMode: preferences.viewMode ?? ChangesViewMode.List,
         sortMode: preferences.sortMode ?? ChangesSortMode.Path,
         pathFilter: preferences.pathFilter ?? '',
         commitMessageHistory: preferences.commitMessageHistory ?? [],

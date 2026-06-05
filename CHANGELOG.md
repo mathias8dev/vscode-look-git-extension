@@ -11,6 +11,11 @@ All notable changes to Look Git are documented in this file.
 - Add review buttons to Changes, Staged, and submodule change bars to explain patchable diffs from the current section or submodule
 - Support explaining staged, unstaged, untracked, multi-file, multi-commit, and submodule-scoped diffs in read-only Markdown documents
 
+### Changed
+
+#### Changes Panel
+- Default the changes view to list mode while preserving the user's selected list/tree mode in VS Code webview state
+
 ## [0.7.0] - 2026-06-05
 
 ### Added
