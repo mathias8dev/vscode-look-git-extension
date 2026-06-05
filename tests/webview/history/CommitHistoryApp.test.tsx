@@ -233,6 +233,26 @@ describe('CommitHistoryApp', () => {
         expect(onQueryChange).toHaveBeenCalledWith('graph');
     });
 
+    it('clears the search from the filtered empty state', () => {
+        const onQueryChange = vi.fn<(query: string) => void>();
+
+        renderApp({
+            state: {
+                ...createInitialHistoryState(),
+                commits: [commit('abc123456789', 'feat: add graph history')],
+                loadedCount: 1,
+                loading: false,
+            },
+            query: 'missing',
+            onQueryChange,
+        });
+
+        expect(screen.getByText('No matching commits')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+        expect(onQueryChange).toHaveBeenCalledWith('');
+    });
+
     it('dispatches load more when more commits are available', () => {
         const onLoadMore = vi.fn<() => void>();
 

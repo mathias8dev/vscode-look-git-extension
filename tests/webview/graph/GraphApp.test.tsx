@@ -253,6 +253,108 @@ describe('GraphApp', () => {
         expect(fetchButton).not.toHaveAttribute('aria-busy');
         expect(fetchButton).not.toBeDisabled();
     });
+
+    it('shows an actionable empty state for an initialized repository without commits', async () => {
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+
+        render(<GraphApp />);
+        await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
+        const initialRequest = latestGraphDataRequest(api.messages);
+
+        await act(async () => sendToWebview({
+            type: 'graph/dataResponse',
+            requestId: initialRequest.requestId,
+            data: graphData([]),
+        }));
+
+        expect(await screen.findByText('No commits yet')).toBeInTheDocument();
+        expect(screen.getByText('Create the initial commit from the Changes panel.')).toBeInTheDocument();
+    });
+
+    it('clears graph filters from the filtered empty state', async () => {
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+
+        render(<GraphApp />);
+        await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
+        const initialRequest = latestGraphDataRequest(api.messages);
+        await act(async () => sendToWebview({
+            type: 'graph/dataResponse',
+            requestId: initialRequest.requestId,
+            data: graphData([]),
+        }));
+
+        fireEvent.change(screen.getByLabelText('Search commits'), { target: { value: 'oauth' } });
+        await waitFor(() => expect(latestGraphDataRequest(api.messages).filters?.search).toBe('oauth'));
+        const filteredRequest = latestGraphDataRequest(api.messages);
+        await act(async () => sendToWebview({
+            type: 'graph/dataResponse',
+            requestId: filteredRequest.requestId,
+            data: graphData([]),
+        }));
+
+        expect(await screen.findByText('No matching commits')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+        await waitFor(() => expect(latestGraphDataRequest(api.messages).filters).toEqual({}));
+    });
+
+    it('moves graph row focus with arrow keys', async () => {
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+
+        render(<GraphApp />);
+        await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
+        const initialRequest = latestGraphDataRequest(api.messages);
+        await act(async () => sendToWebview({
+            type: 'graph/dataResponse',
+            requestId: initialRequest.requestId,
+            data: graphData([
+                graphCommit('bbbbbbb2222222', 'feat(graph): second commit', ['aaaaaaa1111111']),
+                graphCommit('aaaaaaa1111111', 'feat(graph): first commit'),
+            ]),
+        }));
+
+        const secondCommit = await screen.findByTitle('feat(graph): second commit');
+        const firstCommit = screen.getByTitle('feat(graph): first commit');
+        secondCommit.focus();
+
+        fireEvent.keyDown(secondCommit, { key: 'ArrowDown' });
+        expect(firstCommit).toHaveFocus();
+
+        fireEvent.keyDown(firstCommit, { key: 'ArrowUp' });
+        expect(secondCommit).toHaveFocus();
+    });
+
+    it('offers retry and output actions for graph errors with details', async () => {
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+
+        render(<GraphApp />);
+        await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
+        const initialRequest = latestGraphDataRequest(api.messages);
+
+        await act(async () => sendToWebview({
+            type: 'graph/error',
+            requestId: initialRequest.requestId,
+            message: 'Fetch failed: origin',
+            error: {
+                code: 'gitOperationFailed',
+                message: 'Fetch failed: origin',
+                operation: 'graph/repositoryCommand',
+                recoverable: true,
+                details: 'fatal: Authentication failed',
+            },
+        }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Fetch failed: origin');
+        fireEvent.click(screen.getByRole('button', { name: 'Show Output' }));
+        expect(api.messages).toContainEqual({ type: 'graph/showOutput' });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+        await waitFor(() => expect(graphDataRequests(api.messages).length).toBeGreaterThan(1));
+    });
 });
 
 class MockResizeObserver implements ResizeObserver {
@@ -281,6 +383,7 @@ interface GraphDataRequestLike {
     readonly requestId: string;
     readonly filters?: {
         readonly branches?: readonly string[];
+        readonly search?: string;
     };
     readonly repositoryScope?: unknown;
 }
@@ -318,5 +421,35 @@ function mainGraphDataWithAuthKitSubmodule() {
             branches: [{ name: 'feature/oauth', isRemote: false, isCurrent: true, hash: 'submodule-head' }],
             worktrees: [],
         }],
+    };
+}
+
+function graphData(commits: readonly ReturnType<typeof graphCommit>[]) {
+    return {
+        branches: [{ name: 'main', isRemote: false, isCurrent: true, hash: commits[0]?.hash ?? '' }],
+        tags: [],
+        commits,
+        currentBranch: 'main',
+        currentUser: 'Test User',
+        hasMore: false,
+        loadedCount: commits.length,
+        totalCount: commits.length,
+        hasRemotes: false,
+        worktrees: [],
+        worktreeWips: [],
+        submodules: [],
+    };
+}
+
+function graphCommit(hash: string, message: string, parents: readonly string[] = []) {
+    return {
+        hash,
+        shortHash: hash.substring(0, 7),
+        message,
+        authorName: 'Test User',
+        authorEmail: 'test@example.com',
+        authorDate: '2024-01-01T00:00:00Z',
+        parentHashes: parents,
+        refs: [],
     };
 }

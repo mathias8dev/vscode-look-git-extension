@@ -297,6 +297,11 @@
     background: color-mix(in srgb, var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d) 14%, transparent);
 }
 
+.branch-not-published {
+    color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
+    background: color-mix(in srgb, var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d) 14%, transparent);
+}
+
 .graph-resource-row {
     display: flex;
     align-items: center;
@@ -605,6 +610,38 @@
     padding: 24px;
     color: var(--vscode-descriptionForeground, #9d9d9d);
     font-size: inherit;
+}
+
+.graph-empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--look-git-space-sm);
+    padding: 32px 18px;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    text-align: center;
+    min-height: 180px;
+}
+
+.graph-empty-state-icon {
+    font-size: 2.1em;
+    opacity: 0.55;
+}
+
+.graph-empty-state-title {
+    font-weight: 600;
+    color: var(--vscode-foreground, #cccccc);
+}
+
+.graph-empty-state-subtitle {
+    font-size: inherit;
+    max-width: 360px;
+}
+
+.graph-empty-state-action {
+    margin-top: 4px;
 }
 
 /* ── Ref Badges ──────────────────────────────────────────────────────────── */

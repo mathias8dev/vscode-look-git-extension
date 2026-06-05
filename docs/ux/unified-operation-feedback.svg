@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="520" viewBox="0 0 920 520" role="img" aria-labelledby="title desc">
+  <title id="title">Unified operation feedback proposal</title>
+  <desc id="desc">Changes and history panels showing a shared compact operation feedback pattern for running and completed Git operations.</desc>
+  <defs>
+    <style>
+      .bg { fill: #1f1f1f; }
+      .panel { fill: #252526; }
+      .surface { fill: #2d2d30; }
+      .border { stroke: #3c3c3c; stroke-width: 1; }
+      .text { fill: #cccccc; font-family: "Segoe UI", Arial, sans-serif; }
+      .muted { fill: #9d9d9d; font-family: "Segoe UI", Arial, sans-serif; }
+      .strong { fill: #ffffff; font-family: "Segoe UI Semibold", "Segoe UI", Arial, sans-serif; }
+      .info { fill: #16324f; stroke: #3794ff; stroke-width: 1; }
+      .success { fill: #193819; stroke: #89d185; stroke-width: 1; }
+      .warn { fill: #473500; stroke: #cca700; stroke-width: 1; }
+      .button { fill: #333333; stroke: #5a5a5a; stroke-width: 1; }
+      .primary { fill: #0e639c; }
+      .row { fill: #2a2d2e; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="920" height="520" />
+  <rect class="panel border" x="24" y="24" width="410" height="472" />
+  <rect class="panel border" x="486" y="24" width="410" height="472" />
+
+  <rect class="surface border" x="24" y="24" width="410" height="34" />
+  <text class="strong" x="42" y="46" font-size="12">CHANGES</text>
+  <text class="muted" x="344" y="46" font-size="13">refresh graph ...</text>
+  <rect class="info" x="38" y="72" width="382" height="44" rx="4" />
+  <circle cx="60" cy="94" r="8" fill="none" stroke="#3794ff" stroke-width="2" />
+  <path d="M60 86 A8 8 0 0 1 68 94" fill="none" stroke="#3794ff" stroke-width="2" />
+  <text class="strong" x="78" y="91" font-size="13">Stashing selected changes...</text>
+  <text class="muted" x="78" y="109" font-size="12">3 files selected</text>
+  <rect class="row" x="38" y="136" width="382" height="28" />
+  <text class="text" x="58" y="155" font-size="13">src/webview/graph/GraphTable.tsx</text>
+  <text class="muted" x="390" y="155" font-size="12">M</text>
+  <rect class="row" x="38" y="166" width="382" height="28" />
+  <text class="text" x="58" y="185" font-size="13">src/core/queries/queryGraph.ts</text>
+  <text class="muted" x="390" y="185" font-size="12">M</text>
+  <rect class="success" x="38" y="410" width="382" height="44" rx="4" />
+  <circle cx="60" cy="432" r="8" fill="none" stroke="#89d185" stroke-width="2" />
+  <path d="M55 432 L59 436 L66 427" fill="none" stroke="#89d185" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  <text class="strong" x="78" y="430" font-size="13">Stashed selected changes.</text>
+  <text class="muted" x="78" y="448" font-size="12">Auto-dismisses after a short delay</text>
+
+  <rect class="surface border" x="486" y="24" width="410" height="34" />
+  <text class="strong" x="504" y="46" font-size="12">COMMIT HISTORY</text>
+  <text class="muted" x="818" y="46" font-size="13">fetch pull push</text>
+  <rect class="warn" x="500" y="72" width="382" height="58" rx="4" />
+  <circle cx="522" cy="101" r="8" fill="none" stroke="#cca700" stroke-width="2" />
+  <line x1="522" y1="95" x2="522" y2="102" stroke="#cca700" stroke-width="2" />
+  <circle cx="522" cy="107" r="1.5" fill="#cca700" />
+  <text class="strong" x="540" y="93" font-size="13">Branch is not published.</text>
+  <text class="muted" x="540" y="112" font-size="12">Create the upstream branch on a remote.</text>
+  <rect class="primary" x="700" y="88" width="94" height="26" rx="3" />
+  <text class="strong" x="718" y="106" font-size="12">Publish Branch</text>
+  <rect class="button" x="802" y="88" width="58" height="26" rx="3" />
+  <text class="text" x="819" y="106" font-size="12">Close</text>
+  <rect class="row" x="500" y="150" width="382" height="42" />
+  <text class="text" x="520" y="170" font-size="13">feat(graph): add operation notices</text>
+  <text class="muted" x="520" y="187" font-size="12">Mathias8dev</text>
+  <rect class="row" x="500" y="194" width="382" height="42" />
+  <text class="text" x="520" y="214" font-size="13">fix(changes): refresh after patch apply</text>
+  <text class="muted" x="520" y="231" font-size="12">Mathias8dev</text>
+</svg>

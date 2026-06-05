@@ -85,6 +85,7 @@ export interface GraphState {
     readonly submodules: readonly GraphSubmoduleInfo[];
     readonly currentBranch: string;
     readonly currentUser: string;
+    readonly hasRemotes: boolean;
     readonly hasMore: boolean;
     readonly loadedCount: number;
     readonly filters: GraphFilters;
@@ -117,6 +118,7 @@ export type GraphAction =
     | { readonly type: 'clearSelection' }
     | { readonly type: 'clearError' }
     | { readonly type: 'clearOperationStatus'; readonly operationId: string }
+    | { readonly type: 'clearFilters' }
     | { readonly type: 'refreshRequested' }
     | { readonly type: 'startLoadMore' };
 
@@ -131,6 +133,7 @@ export function createInitialGraphState(): GraphState {
         submodules: [],
         currentBranch: '',
         currentUser: '',
+        hasRemotes: false,
         hasMore: false,
         loadedCount: 0,
         filters: {},
@@ -217,6 +220,13 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
             return state.operationStatus?.operationId === action.operationId
                 ? { ...state, operationStatus: undefined }
                 : state;
+        case 'clearFilters':
+            return startGraphReload({
+                ...state,
+                filters: {},
+                selectedBranchFilter: undefined,
+                loadedCount: 0,
+            }, state.refreshVersion + 1);
         case 'refreshRequested':
             return startGraphReload(state, state.refreshVersion + 1);
         case 'startLoadMore':
@@ -385,6 +395,7 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
         repositoryScope: data.repositoryScope ?? state.repositoryScope,
         currentBranch,
         currentUser: data.currentUser,
+        hasRemotes: data.hasRemotes,
         hasMore: data.hasMore,
         loadedCount: data.loadedCount,
         loading: false,
@@ -419,6 +430,7 @@ function clearGraphContent(state: GraphState): GraphState {
         worktrees: [],
         submodules: [],
         currentBranch: '',
+        hasRemotes: false,
         hasMore: false,
         loadedCount: 0,
     };

@@ -39,6 +39,31 @@ describe('BranchPanel', () => {
         expect(markup).toContain('branch-current-indicator');
     });
 
+    it('marks local branches without upstream as not published when remotes exist', () => {
+        const markup = renderToStaticMarkup(
+            <BranchPanel
+                branches={[branch('feature/login')]}
+                worktrees={[]}
+                submodules={[]}
+                currentBranch="main"
+                hasRemotes
+                selectedBranchFilter={undefined}
+                selectedWorktreePath={undefined}
+                onSelectBranch={() => undefined}
+                onBranchCommand={() => undefined}
+                onFetch={() => undefined}
+                onSelectWorktree={() => undefined}
+                onOpenWorktree={() => undefined}
+                onAddWorktree={() => undefined}
+                onContextTarget={() => undefined}
+            />,
+        );
+
+        expect(markup).toContain('Branch is not published');
+        expect(markup).toContain('branch-not-published');
+        expect(markup).toContain('Publish');
+    });
+
     it('renders worktrees from graph data', () => {
         const markup = renderToStaticMarkup(
             <BranchPanel

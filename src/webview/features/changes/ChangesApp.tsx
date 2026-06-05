@@ -33,6 +33,7 @@ interface ChangesAppProps {
     readonly onCommit: (message: string, mode: CommitMode) => void;
     readonly onCommitComposerContextTarget: (message: string) => void;
     readonly onGenerateCommitMessage: () => void;
+    readonly onClearPathFilter: () => void;
     readonly onOperationAction: (conflictState: ActiveConflictState, action: OperationAction) => void;
     readonly onCreateStash: (kind: CreateStashKind, message: string) => void;
     readonly onToggleStash: (index: number) => void;
@@ -67,6 +68,7 @@ export function ChangesApp({
     onCommit,
     onCommitComposerContextTarget,
     onGenerateCommitMessage,
+    onClearPathFilter,
     onOperationAction,
     onCreateStash,
     onToggleStash,
@@ -151,7 +153,15 @@ export function ChangesApp({
                 {state.loading ? <EmptyState title="Loading" subtitle="Reading repository state…" icon="loading" iconSpin /> : null}
                 {!state.loading && !hasRepository ? <EmptyState title="No repository" subtitle="Open a Git repository to see changes" icon="source-control" /> : null}
                 {!state.loading && hasRepository && changeCount === 0 ? <EmptyState title="No changes" subtitle="Working tree is clean" icon="pass" /> : null}
-                {!state.loading && hasRepository && changeCount > 0 && visibleChangeCount === 0 ? <EmptyState title="No matches" subtitle="Adjust the path filter" icon="search" /> : null}
+                {!state.loading && hasRepository && changeCount > 0 && visibleChangeCount === 0 ? (
+                    <EmptyState
+                        title="No matches"
+                        subtitle="Adjust the path filter"
+                        icon="search"
+                        actionLabel={state.pathFilter.trim() ? 'Clear filters' : undefined}
+                        onAction={state.pathFilter.trim() ? onClearPathFilter : undefined}
+                    />
+                ) : null}
                 {!state.loading && hasRepository && visibleChangeCount > 0 ? sections.map((section) => (
                     <ChangeSectionView
                         key={section.id}

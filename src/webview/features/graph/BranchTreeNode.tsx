@@ -11,13 +11,14 @@ interface BranchTreeNodeProps {
     readonly node: BranchNode;
     readonly depth: number;
     readonly selectedBranch: string | undefined;
+    readonly hasRemotes: boolean;
     readonly expansionRequest: BranchTreeExpansionRequest;
     readonly onSelect: (fullName: string) => void;
     readonly onOpenContextMenu: (branch: BranchInfo) => void;
     readonly contextForBranch: (branch: BranchInfo) => Record<string, unknown>;
 }
 
-export function BranchTreeNode({ node, depth, selectedBranch, expansionRequest, onSelect, onOpenContextMenu, contextForBranch }: BranchTreeNodeProps) {
+export function BranchTreeNode({ node, depth, selectedBranch, hasRemotes, expansionRequest, onSelect, onOpenContextMenu, contextForBranch }: BranchTreeNodeProps) {
     const [localCollapse, setLocalCollapse] = useState<{ readonly version: number; readonly collapsed: boolean }>();
     const collapsed = localCollapse?.version === expansionRequest.version
         ? localCollapse.collapsed
@@ -45,6 +46,7 @@ export function BranchTreeNode({ node, depth, selectedBranch, expansionRequest, 
                         node={child}
                         depth={depth + 1}
                         selectedBranch={selectedBranch}
+                        hasRemotes={hasRemotes}
                         expansionRequest={expansionRequest}
                         onSelect={onSelect}
                         onOpenContextMenu={onOpenContextMenu}
@@ -58,6 +60,7 @@ export function BranchTreeNode({ node, depth, selectedBranch, expansionRequest, 
     const branch = node.branch;
     const isActive = selectedBranch === node.fullName;
     const isCurrent = branch?.isCurrent ?? false;
+    const isNotPublished = hasRemotes && branch !== undefined && !branch.isRemote && !branch.upstream;
 
     return (
         <button
@@ -78,6 +81,16 @@ export function BranchTreeNode({ node, depth, selectedBranch, expansionRequest, 
             />
             <span className="branch-node-name">{node.name}</span>
             {isCurrent && <span className="branch-current-indicator" aria-label="current branch" />}
+            {isNotPublished ? (
+                <span
+                    className="branch-tracking-indicator branch-not-published"
+                    title="Branch is not published"
+                    aria-label="Branch is not published"
+                >
+                    <i className="codicon codicon-cloud-upload" aria-hidden="true" />
+                    <span>Publish</span>
+                </span>
+            ) : null}
             {branch?.ahead ? (
                 <span
                     className="branch-tracking-indicator branch-ahead"

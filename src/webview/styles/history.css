@@ -319,6 +319,10 @@
     opacity: 0.5;
 }
 
+.history-empty-action {
+    margin-top: 4px;
+}
+
 .history-item-expanded {
     background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground, rgba(14, 99, 156, 0.4)) 14%, transparent);
     border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
@@ -458,4 +462,3 @@
     color: var(--vscode-foreground, #cccccc);
     font-family: var(--vscode-editor-font-family, inherit);
 }
-

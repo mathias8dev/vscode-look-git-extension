@@ -18,6 +18,10 @@ type CliOptions = {
 
 type ScenarioSetup = (target: string, outputRoot: string) => void;
 
+type RemoteFixtureSource = {
+    readonly origin: string;
+};
+
 const repoRoot = path.resolve(__dirname, '..');
 const defaultOutputRoot = path.join(repoRoot, '.look-git-fixtures');
 
@@ -34,14 +38,22 @@ const authors: readonly Author[] = [
 
 const scenarios = new Map<string, ScenarioSetup>([
     ['basics', setupBasics],
+    ['empty', setupEmptyRepo],
+    ['empty-repo', setupEmptyRepo],
     ['merge-conflicts', setupMergeConflicts],
     ['merge-conflics', setupMergeConflicts],
     ['graph-heavy', setupGraphHeavy],
     ['heavy-graph', setupGraphHeavy],
     ['rebase-conflicts', setupRebaseConflicts],
     ['remote', setupRemote],
+    ['remote-failure', setupRemoteUnavailable],
+    ['remote-offline', setupRemoteUnavailable],
+    ['remote-only', setupRemoteOnly],
+    ['remote-unavailable', setupRemoteUnavailable],
     ['remotes', setupRemote],
     ['submodules', setupSubmodules],
+    ['unpublished', setupUnpublishedBranch],
+    ['unpublished-branch', setupUnpublishedBranch],
     ['worktree', setupWorktrees],
     ['worktrees', setupWorktrees],
 ]);
@@ -117,7 +129,11 @@ function printHelp(): void {
         '  ./lookGit setup merge-conflicts',
         '  ./lookGit setup merge-conflics',
         '  ./lookGit setup graph-heavy',
+        '  ./lookGit setup empty-repo',
         '  ./lookGit setup remote',
+        '  ./lookGit setup remote-only',
+        '  ./lookGit setup unpublished-branch',
+        '  ./lookGit setup remote-unavailable',
         '  ./lookGit setup rebase-conflicts --output /tmp/look-git-fixtures',
         '  ./lookGit setup worktrees',
         '  ./lookGit setup all',
@@ -150,13 +166,28 @@ function printSummary(name: string, target: string): void {
 }
 
 function uniqueScenarios(): readonly string[] {
-    return ['basics', 'graph-heavy', 'merge-conflicts', 'rebase-conflicts', 'remote', 'submodules', 'worktrees'];
+    return [
+        'basics',
+        'empty-repo',
+        'graph-heavy',
+        'merge-conflicts',
+        'rebase-conflicts',
+        'remote',
+        'remote-only',
+        'remote-unavailable',
+        'submodules',
+        'unpublished-branch',
+        'worktrees',
+    ];
 }
 
 function canonicalScenarioName(name: string): string {
+    if (name === 'empty') { return 'empty-repo'; }
     if (name === 'worktree') { return 'worktrees'; }
     if (name === 'remotes') { return 'remote'; }
     if (name === 'heavy-graph') { return 'graph-heavy'; }
+    if (name === 'remote-failure' || name === 'remote-offline') { return 'remote-unavailable'; }
+    if (name === 'unpublished') { return 'unpublished-branch'; }
     return name === 'merge-conflics' ? 'merge-conflicts' : name;
 }
 
@@ -309,6 +340,13 @@ function setupBasics(target: string): void {
     write(target, 'notes/local.md', 'Untracked local note.\n');
     write(target, 'stash/wip.txt', 'stashed idea\n');
     git(target, ['stash', 'push', '-u', '-m', 'wip(core): stash fixture idea', '--', 'stash/wip.txt']);
+}
+
+function setupEmptyRepo(target: string): void {
+    initRepo(target);
+    write(target, 'README.md', '# Empty repository fixture\n\nNo commits yet.\n');
+    git(target, ['add', 'README.md']);
+    write(target, 'notes/first-commit-plan.md', 'Prepare the first commit from an unborn branch.\n');
 }
 
 function setupGraphHeavy(target: string): void {
@@ -602,6 +640,42 @@ function setupRemote(target: string, outputRoot: string): void {
     write(target, 'notes/remote-local.md', 'Local remote scenario note.\n');
 }
 
+function setupRemoteOnly(target: string, outputRoot: string): void {
+    const source = createRemoteStateSource(outputRoot, 'remote-only');
+
+    initRepo(target);
+    git(target, ['remote', 'add', 'origin', source.origin]);
+    git(target, ['fetch', '-q', 'origin']);
+    write(target, 'README.md', '# Remote-only local repository\n\nRemote refs exist, but HEAD has no commit yet.\n');
+    git(target, ['add', 'README.md']);
+    write(target, 'notes/remote-only-local.md', 'Local draft while only remote history exists.\n');
+}
+
+function setupRemoteUnavailable(target: string, outputRoot: string): void {
+    const source = createRemoteStateSource(outputRoot, 'remote-unavailable');
+
+    fs.rmSync(target, { recursive: true, force: true });
+    git(outputRoot, ['clone', '-q', source.origin, target]);
+    configureRepo(target);
+    git(target, ['remote', 'set-url', 'origin', path.join(path.dirname(source.origin), 'missing-origin.git')]);
+    write(target, 'src/local/rescue.ts', 'export const rescue = true;\n');
+    commit(target, 'fix(core): add local rescue change', { author: nextAuthor() });
+}
+
+function setupUnpublishedBranch(target: string, outputRoot: string): void {
+    const source = createRemoteStateSource(outputRoot, 'unpublished-branch');
+
+    fs.rmSync(target, { recursive: true, force: true });
+    git(outputRoot, ['clone', '-q', source.origin, target]);
+    configureRepo(target);
+    git(target, ['checkout', '-q', '-b', 'feature/not-published']);
+    write(target, 'src/graph/notPublished.ts', 'export const notPublished = true;\n');
+    commit(target, 'feat(graph): add unpublished branch surface', { author: nextAuthor() });
+    write(target, 'tests/graph/not-published.test.ts', 'export const notPublishedCovered = true;\n');
+    commit(target, 'test(graph): cover unpublished branch surface', { author: nextAuthor() });
+    write(target, 'notes/not-published-local.md', 'Local note before publishing the branch.\n');
+}
+
 function setupSubmodules(target: string, outputRoot: string): void {
     const sourceRoot = path.join(outputRoot, '.submodule-sources');
     fs.rmSync(sourceRoot, { recursive: true, force: true });
@@ -738,6 +812,41 @@ function createRemoteFixtureBranch(
         write(cwd, change.file, change.content);
         commit(cwd, change.message, { author: nextAuthor() });
     }
+}
+
+function createRemoteStateSource(outputRoot: string, namespace: string): RemoteFixtureSource {
+    const root = path.join(outputRoot, '.remote-state-sources', namespace);
+    const origin = path.join(root, 'origin.git');
+    const seed = path.join(root, 'seed');
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.mkdirSync(root, { recursive: true });
+
+    initBareRepo(origin);
+    initRepo(seed);
+    git(seed, ['remote', 'add', 'origin', origin]);
+    write(seed, 'README.md', `# ${namespace} fixture\n\nFocused remote state repository.\n`);
+    commit(seed, 'docs(core): add remote state overview', { author: nextAuthor() });
+    write(seed, 'src/core/remoteState.ts', `export const remoteState = "${namespace}";\n`);
+    commit(seed, 'feat(core): add remote state model', { author: nextAuthor() });
+    write(seed, 'src/graph/remoteState.ts', 'export const graphRemoteState = true;\n');
+    commit(seed, 'feat(graph): add remote state graph data', { author: nextAuthor() });
+    const base = git(seed, ['rev-parse', 'HEAD']).trim();
+    git(seed, ['push', '-q', 'origin', 'main']);
+
+    createRemoteFixtureBranch(seed, 'feature/remote-review', base, [
+        { file: 'src/review/remoteReview.ts', content: 'export const remoteReview = true;\n', message: 'feat(graph): add remote review branch' },
+        { file: 'docs/remote-review.md', content: '# Remote review\n', message: 'docs(graph): document remote review branch' },
+    ]);
+    git(seed, ['push', '-q', 'origin', 'feature/remote-review:feature/remote-review']);
+
+    createRemoteFixtureBranch(seed, 'release/remote-state', base, [
+        { file: 'CHANGELOG.md', content: '# Changelog\n\n## Remote state\n', message: 'docs(core): add remote state release notes' },
+        { file: 'VERSION', content: `${namespace}-fixture\n`, message: 'chore(core): bump remote state fixture version' },
+    ]);
+    git(seed, ['push', '-q', 'origin', 'release/remote-state:release/remote-state']);
+    git(seed, ['checkout', '-q', 'main']);
+
+    return { origin };
 }
 
 function checkoutTrackingBranch(cwd: string, remoteRef: string): void {

@@ -450,6 +450,20 @@ describe('ChangesWebview', () => {
             },
         });
     });
+
+    it('clears the path filter from the no matches empty state', async () => {
+        const api = createMockVsCodeApi({ pathFilter: 'missing', viewMode: 'list', sortMode: 'path' });
+        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+        render(<ChangesWebview />);
+        sendStatusDataWithMultipleChanges();
+
+        await waitFor(() => expect(screen.getByText('No matches')).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+        await waitFor(() => expect(screen.getByTitle('src/a.ts')).toBeInTheDocument());
+        expect(api.state).toEqual(expect.objectContaining({ pathFilter: '' }));
+    });
 });
 
 function sendStatusData(): void {

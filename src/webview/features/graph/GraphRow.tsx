@@ -19,9 +19,10 @@ interface GraphRowProps {
     readonly onSelect: (hash: string, mode: CommitSelectMode) => void;
     readonly onOpenContextMenu: (commit: GraphCommit) => void;
     readonly onBranchDoubleClick: (branch: string, isRemote: boolean) => void;
+    readonly onMoveFocus: (currentHash: string, direction: 'previous' | 'next') => void;
 }
 
-export function GraphCommitRow({ row, branches, selected, childHash, parentHash, canUndoCommit, rowHeight, style, onSelect, onOpenContextMenu, onBranchDoubleClick }: GraphRowProps) {
+export function GraphCommitRow({ row, branches, selected, childHash, parentHash, canUndoCommit, rowHeight, style, onSelect, onOpenContextMenu, onBranchDoubleClick, onMoveFocus }: GraphRowProps) {
     const { commit, laneData } = row;
     const refs = parseRefs(commit.refs, branches);
     const messageOffset = (getLaneDataMaxLane(laneData) + 1) * LANE_WIDTH + 4;
@@ -37,6 +38,7 @@ export function GraphCommitRow({ row, branches, selected, childHash, parentHash,
             aria-selected={selected}
             tabIndex={0}
             title={commit.message}
+            data-graph-commit-hash={commit.hash}
             data-vscode-context={JSON.stringify({
                 webviewSection: 'graphCommit',
                 graphCommitCanGoToChild: childHash !== undefined,
@@ -50,6 +52,11 @@ export function GraphCommitRow({ row, branches, selected, childHash, parentHash,
             }}
             onContextMenu={() => onOpenContextMenu(commit)}
             onKeyDown={(e) => {
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    onMoveFocus(commit.hash, e.key === 'ArrowDown' ? 'next' : 'previous');
+                    return;
+                }
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     onSelect(commit.hash, e.shiftKey ? 'range' : 'replace');

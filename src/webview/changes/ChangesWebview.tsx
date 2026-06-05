@@ -181,6 +181,7 @@ export function ChangesWebview() {
                 dispatch({ type: 'requestCommitMessageGeneration', requestId: message.requestId });
                 postToExtension(message);
             }}
+            onClearPathFilter={() => dispatch({ type: 'setPathFilter', pathFilter: '' })}
             onOperationAction={(conflictState: ActiveConflictState, action: OperationAction) => {
                 postToExtension(messageForOperationAction(conflictState, action));
             }}

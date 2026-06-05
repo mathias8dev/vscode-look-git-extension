@@ -16,6 +16,7 @@ interface BranchPanelProps {
     readonly submodules: readonly GraphSubmoduleInfo[];
     readonly repositoryScope?: GraphRepositoryScope;
     readonly currentBranch: string;
+    readonly hasRemotes?: boolean;
     readonly selectedBranchFilter: string | undefined;
     readonly selectedWorktreePath: string | undefined;
     readonly operationStatus?: GraphOperationStatusPush;
@@ -37,6 +38,7 @@ export function BranchPanel({
     submodules,
     repositoryScope = { kind: 'main' },
     currentBranch,
+    hasRemotes = false,
     selectedBranchFilter,
     selectedWorktreePath,
     operationStatus,
@@ -247,6 +249,7 @@ export function BranchPanel({
                                                 node={node}
                                                 depth={1}
                                                 selectedBranch={selectedBranchFilter}
+                                                hasRemotes={hasRemotes}
                                                 expansionRequest={treeExpansionRequest}
                                                 onSelect={handleSelect}
                                                 onOpenContextMenu={handleOpenContextMenu}
@@ -277,6 +280,7 @@ export function BranchPanel({
                                         node={node}
                                         depth={1}
                                         selectedBranch={selectedBranchFilter}
+                                        hasRemotes={hasRemotes}
                                         expansionRequest={treeExpansionRequest}
                                         onSelect={handleSelect}
                                         onOpenContextMenu={handleOpenContextMenu}

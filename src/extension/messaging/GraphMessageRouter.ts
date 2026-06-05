@@ -15,7 +15,7 @@ import {
     type GraphOperationStatusPush,
 } from '../../protocol/graph/messages';
 import type { GraphData, GraphFilters, GraphRepositoryScope, GraphSubmoduleInfo } from '../../protocol/graph/types';
-import type { ErrorCode, RequestId } from '../../protocol/shared/base';
+import type { ErrorCode, ProtocolError, RequestId } from '../../protocol/shared/base';
 import type { GitRepository } from '../../application/ports/git-repository';
 import { GetGraphDataUseCase, type GraphDataResult } from '../../application/usecases/graph/get-graph-data';
 import { GetCommitDetailsUseCase } from '../../application/usecases/graph/get-commit-details';
@@ -34,6 +34,7 @@ type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
 
 export class GraphMessageRouter {
     private readonly pending = new Map<string, AbortController>();
+    private outputChannel?: vscode.OutputChannel;
     private operationSequence = 0;
 
     constructor(
@@ -49,6 +50,8 @@ export class GraphMessageRouter {
     dispose(): void {
         for (const ctrl of this.pending.values()) { ctrl.abort(); }
         this.pending.clear();
+        this.outputChannel?.dispose();
+        this.outputChannel = undefined;
     }
 
     async handle(msg: GraphWebviewToExtensionMessage): Promise<void> {
@@ -87,6 +90,10 @@ export class GraphMessageRouter {
 
             case 'graph/refresh':
                 this.requestGraphRefresh();
+                break;
+
+            case 'graph/showOutput':
+                this.outputChannel?.show();
                 break;
 
             case 'graph/dataRequest': {
@@ -321,6 +328,7 @@ export class GraphMessageRouter {
             operation: options.operation,
             recoverable: true,
         });
+        this.appendGraphErrorToOutput(payload.error);
         this.postMessage({
             type: 'graph/error',
             requestId: options.requestId,
@@ -333,6 +341,18 @@ export class GraphMessageRouter {
 
     private postGraphOperation(operation: Omit<GraphOperationStatusPush, 'type'>): void {
         this.postMessage({ type: 'graph/operationStatus', ...operation });
+    }
+
+    private appendGraphErrorToOutput(error: ProtocolError): void {
+        const output = this.outputChannel ?? vscode.window.createOutputChannel('Look Git');
+        this.outputChannel = output;
+        output.appendLine(`[${new Date().toISOString()}] ${error.operation ?? 'graph'} failed`);
+        output.appendLine(error.message);
+        if (error.details) {
+            output.appendLine('');
+            output.appendLine(error.details);
+        }
+        output.appendLine('');
     }
 
     private nextOperationId(): string {

@@ -6,10 +6,12 @@ import { CommitDetailsPanel } from '../features/graph/CommitDetailsPanel';
 import { GraphTable } from '../features/graph/GraphTable';
 import { GraphToolbar } from '../features/graph/GraphToolbar';
 import { GraphOperationNotice } from '../features/graph/GraphOperationNotice';
+import { GraphEmptyState } from '../features/graph/GraphEmptyState';
 import {
     createInitialGraphState,
     reduceGraphState,
 } from '../features/graph/graphState';
+import { graphEmptyStateModel } from '../features/graph/graphEmptyStateModel';
 import {
     messageForCommitDetails,
     messageForGraphDataRequest,
@@ -46,6 +48,12 @@ const DETAILS_PANEL_STORAGE_KEY = 'lookGit.commitDetailsPanelWidth';
 export function GraphApp() {
     const [state, dispatch] = useReducer(reduceGraphState, undefined, createInitialGraphState);
     const scopeAnimationKey = graphScopeAnimationKey(state.repositoryScope);
+    const showGraphEmptyState = !state.loading && state.displayRows.length === 0 && !state.hasMore;
+    const emptyState = graphEmptyStateModel({
+        filters: state.filters,
+        selectedBranchFilter: state.selectedBranchFilter,
+        repositoryScope: state.repositoryScope,
+    });
 
     useEffect(() => {
         const onMessage = (event: MessageEvent<GraphExtensionToWebviewMessage>) => {
@@ -156,6 +164,14 @@ export function GraphApp() {
         vscodeApi.postMessage(messageForGraphContextTarget(contextTargetForScope(target, state.repositoryScope)));
     }, [state.repositoryScope]);
 
+    const handleMoveGraphFocus = useCallback((currentHash: string, direction: 'previous' | 'next') => {
+        const hashes = state.rows.map((row) => row.commit.hash);
+        const currentIndex = hashes.indexOf(currentHash);
+        const nextHash = direction === 'next' ? hashes[currentIndex + 1] : hashes[currentIndex - 1];
+        if (!nextHash) { return; }
+        document.querySelector<HTMLElement>(`[data-graph-commit-hash="${nextHash}"]`)?.focus();
+    }, [state.rows]);
+
     return (
         <div className="graph-shell">
             <ResizablePanel
@@ -177,6 +193,7 @@ export function GraphApp() {
                         submodules={state.submodules}
                         repositoryScope={state.repositoryScope}
                         currentBranch={state.currentBranch}
+                        hasRemotes={state.hasRemotes}
                         selectedBranchFilter={state.selectedBranchFilter}
                         selectedWorktreePath={state.selectedWorktreePath}
                         operationStatus={state.operationStatus}
@@ -207,7 +224,11 @@ export function GraphApp() {
 
                     <GraphOperationNotice operation={state.operationStatus} />
 
-                    <ErrorNotice error={state.error} />
+                    <ErrorNotice
+                        error={state.error}
+                        primaryAction={{ label: 'Retry', onClick: () => dispatch({ type: 'refreshRequested' }) }}
+                        secondaryAction={state.error?.details ? { label: 'Show Output', onClick: () => vscodeApi.postMessage({ type: 'graph/showOutput' }) } : undefined}
+                    />
 
                     {state.loading && state.rows.length === 0 ? (
                         <div className="graph-loading">
@@ -216,20 +237,32 @@ export function GraphApp() {
                         </div>
                     ) : null}
 
-                    <GraphTable
-                        rows={state.rows}
-                        displayRows={state.displayRows}
-                        branches={state.branches}
-                        selectedHashes={state.selectedHashes}
-                        selectedWorktreePath={state.selectedWorktreePath}
-                        hasMore={state.hasMore}
-                        loadingMore={state.loadingMore}
-                        onSelectCommit={handleSelectCommit}
-                        onSelectWorktree={handleSelectWorktree}
-                        onContextTarget={handleContextTarget}
-                        onLoadMore={handleLoadMore}
-                        onBranchDoubleClick={(branch, isRemote) => vscodeApi.postMessage(messageForBranchCheckout(branch, isRemote, state.repositoryScope))}
-                    />
+                    {showGraphEmptyState ? (
+                        <GraphEmptyState
+                            title={emptyState.title}
+                            subtitle={emptyState.subtitle}
+                            actionLabel={emptyState.actionLabel}
+                            onAction={emptyState.actionLabel ? () => dispatch({ type: 'clearFilters' }) : undefined}
+                        />
+                    ) : null}
+
+                    {!showGraphEmptyState && (!state.loading || state.displayRows.length > 0 || state.hasMore) ? (
+                        <GraphTable
+                            rows={state.rows}
+                            displayRows={state.displayRows}
+                            branches={state.branches}
+                            selectedHashes={state.selectedHashes}
+                            selectedWorktreePath={state.selectedWorktreePath}
+                            hasMore={state.hasMore}
+                            loadingMore={state.loadingMore}
+                            onSelectCommit={handleSelectCommit}
+                            onSelectWorktree={handleSelectWorktree}
+                            onContextTarget={handleContextTarget}
+                            onLoadMore={handleLoadMore}
+                            onBranchDoubleClick={(branch, isRemote) => vscodeApi.postMessage(messageForBranchCheckout(branch, isRemote, state.repositoryScope))}
+                            onMoveFocus={handleMoveGraphFocus}
+                        />
+                    ) : null}
                 </div>
             </div>
 

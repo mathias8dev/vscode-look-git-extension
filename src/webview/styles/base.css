@@ -74,14 +74,22 @@ h1 {
 
 .error-notice {
     margin-top: 16px;
-    display: grid;
-    gap: 6px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
     border: 1px solid var(--vscode-inputValidation-errorBorder, #f14c4c);
     border-radius: 4px;
     padding: 10px 12px;
     color: var(--vscode-inputValidation-errorForeground, var(--vscode-foreground, #cccccc));
     background: var(--vscode-inputValidation-errorBackground, transparent);
     line-height: 1.4;
+}
+
+.error-notice-content {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
 }
 
 .error-notice strong {
@@ -91,4 +99,47 @@ h1 {
 .error-notice span {
     color: var(--vscode-descriptionForeground, #9d9d9d);
     font-size: inherit;
+}
+
+.error-notice-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.error-notice-actions button,
+.empty-state-action,
+.history-empty-action,
+.graph-empty-state-action {
+    min-height: var(--look-git-control-min-height);
+    border: 1px solid var(--vscode-button-border, transparent);
+    border-radius: 3px;
+    padding: 0 10px;
+    font: inherit;
+    font-size: inherit;
+    cursor: pointer;
+}
+
+.error-notice-action-primary,
+.empty-state-action,
+.history-empty-action,
+.graph-empty-state-action {
+    color: var(--vscode-button-foreground, #ffffff);
+    background: var(--vscode-button-background, #0e639c);
+}
+
+.error-notice-action-primary:hover,
+.empty-state-action:hover,
+.history-empty-action:hover,
+.graph-empty-state-action:hover {
+    background: var(--vscode-button-hoverBackground, #1177bb);
+}
+
+.error-notice-action-secondary {
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, #cccccc));
+    background: var(--vscode-button-secondaryBackground, #333333);
+}
+
+.error-notice-action-secondary:hover {
+    background: var(--vscode-button-secondaryHoverBackground, #444444);
 }

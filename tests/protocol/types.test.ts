@@ -29,6 +29,7 @@ describe('protocol discriminated unions', () => {
             switch (msg.type) {
                 case 'graph/ready': return;
                 case 'graph/refresh': return;
+                case 'graph/showOutput': return;
                 case 'graph/dataRequest': return msg.requestId satisfies string;
                 case 'graph/loadMore': return msg.page satisfies { offset: number; limit: number };
                 case 'graph/commitDetailsRequest': return msg.hash satisfies string;

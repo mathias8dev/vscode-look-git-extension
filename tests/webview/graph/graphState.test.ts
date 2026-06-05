@@ -119,6 +119,24 @@ describe('graphState', () => {
         expect(refreshed.filters).toEqual({ search: 'needle' });
     });
 
+    it('clears graph filters and reloads data', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: graphData([], 0, false),
+            },
+        });
+        const filtered = reduceGraphState(loaded, { type: 'setBranchFilter', branch: 'feature/login' });
+        const cleared = reduceGraphState(filtered, { type: 'clearFilters' });
+
+        expect(cleared.filters).toEqual({});
+        expect(cleared.selectedBranchFilter).toBeUndefined();
+        expect(cleared.loading).toBe(true);
+        expect(cleared.activeGraphRequestId).toBe(graphRequestId(2, 'replace'));
+    });
+
     it('ignores commit details responses for commits that are no longer selected', () => {
         const selected = reduceGraphState(createInitialGraphState(), { type: 'selectCommit', hash: 'selected' });
         const stale = reduceGraphState(selected, {

@@ -237,6 +237,10 @@ export interface GraphRefreshMessage {
     readonly type: 'graph/refresh';
 }
 
+export interface GraphShowOutputMessage {
+    readonly type: 'graph/showOutput';
+}
+
 export interface GraphContextTargetMessage {
     readonly type: 'graph/contextTarget';
     readonly target: GraphContextTarget;
@@ -270,6 +274,7 @@ export type GraphExtensionToWebviewMessage =
 export type GraphWebviewToExtensionMessage =
     | GraphReadyMessage
     | GraphRefreshMessage
+    | GraphShowOutputMessage
     | GraphDataRequest
     | LoadMoreGraphRequest
     | CommitDetailsRequest

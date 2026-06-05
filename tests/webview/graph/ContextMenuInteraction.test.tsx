@@ -110,6 +110,7 @@ describe('graph native context menu targets', () => {
                 onContextTarget={onContextTarget}
                 onLoadMore={() => undefined}
                 onBranchDoubleClick={() => undefined}
+                onMoveFocus={() => undefined}
             />,
         );
 

@@ -95,6 +95,37 @@ describe('GraphMessageRouter graph data', () => {
         expect(graphDataResponse(messages, 'graph-worktree-error').data.worktreeWips).toEqual([]);
     });
 
+    it('writes graph errors to the Look Git output channel and shows it on request', async () => {
+        const error = Object.assign(new Error('fetch failed'), { stderr: 'fatal: Authentication failed' });
+        const repo = makeRepositoryMock({
+            getGraphLog: vi.fn(async () => { throw error; }),
+        });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph-error-output',
+            repoId: 'repo',
+            filters: {},
+            page: { offset: 0, limit: 50 },
+        });
+        await router.handle({ type: 'graph/showOutput' });
+
+        expect(messages).toContainEqual(expect.objectContaining({
+            type: 'graph/error',
+            requestId: 'graph-error-output',
+            error: expect.objectContaining({
+                details: 'fatal: Authentication failed',
+            }),
+        }));
+        expect(window.outputChannels.at(-1)).toEqual(expect.objectContaining({
+            name: 'Look Git',
+            shown: true,
+        }));
+        expect(window.outputChannels.at(-1)?.lines.join('\n')).toContain('fatal: Authentication failed');
+    });
+
     it('returns graph data before hydrating submodule branch and worktree summaries', async () => {
         const repo = makeRepositoryMock({
             getGraphLog: vi.fn(async () => [graphCommit('abc1234567890abcdef')]),

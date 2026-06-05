@@ -20,6 +20,7 @@ interface GraphTableProps {
     readonly onContextTarget: (target: GraphContextTarget) => void;
     readonly onLoadMore: () => void;
     readonly onBranchDoubleClick: (branch: string, isRemote: boolean) => void;
+    readonly onMoveFocus: (currentHash: string, direction: 'previous' | 'next') => void;
 }
 
 export function GraphTable({
@@ -35,6 +36,7 @@ export function GraphTable({
     onContextTarget,
     onLoadMore,
     onBranchDoubleClick,
+    onMoveFocus,
 }: GraphTableProps) {
     const wrapperRef = useRef<HTMLDivElement>(null);
     const [scrollTop, setScrollTop] = useState(0);
@@ -147,6 +149,7 @@ export function GraphTable({
                                 onSelect={onSelectCommit}
                                 onOpenContextMenu={(commit) => handleOpenContextMenu(commit.hash)}
                                 onBranchDoubleClick={onBranchDoubleClick}
+                                onMoveFocus={onMoveFocus}
                             />
                         );
                     })}

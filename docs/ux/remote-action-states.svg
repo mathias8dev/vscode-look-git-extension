@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="520" viewBox="0 0 920 520" role="img" aria-labelledby="title desc">
+  <title id="title">Remote action states proposal</title>
+  <desc id="desc">Three distinct remote states: no remote configured, branch not published, and fetch failed.</desc>
+  <defs>
+    <style>
+      .bg { fill: #1f1f1f; }
+      .panel { fill: #252526; }
+      .surface { fill: #2d2d30; }
+      .border { stroke: #3c3c3c; stroke-width: 1; }
+      .text { fill: #cccccc; font-family: "Segoe UI", Arial, sans-serif; }
+      .muted { fill: #9d9d9d; font-family: "Segoe UI", Arial, sans-serif; }
+      .strong { fill: #ffffff; font-family: "Segoe UI Semibold", "Segoe UI", Arial, sans-serif; }
+      .info { fill: #16324f; stroke: #3794ff; stroke-width: 1; }
+      .warn { fill: #473500; stroke: #cca700; stroke-width: 1; }
+      .error { fill: #5a1d1d; stroke: #f48771; stroke-width: 1; }
+      .button { fill: #0e639c; }
+      .secondary { fill: #333333; stroke: #5a5a5a; stroke-width: 1; }
+      .row { fill: #2a2d2e; }
+      .chip { fill: #37373d; stroke: #55555b; stroke-width: 1; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="920" height="520" />
+  <rect class="surface border" x="0.5" y="0.5" width="919" height="38" />
+  <text class="strong" x="18" y="25" font-size="13">REMOTE STATES</text>
+  <text class="muted" x="142" y="25" font-size="12">Same command area, different diagnosis and action.</text>
+
+  <rect class="panel border" x="24" y="70" width="270" height="360" rx="4" />
+  <rect class="info" x="42" y="94" width="234" height="78" rx="4" />
+  <text class="strong" x="62" y="122" font-size="14">No remote configured</text>
+  <text class="text" x="62" y="146" font-size="12">This repository is local only.</text>
+  <rect class="button" x="62" y="190" width="92" height="28" rx="3" />
+  <text class="strong" x="82" y="209" font-size="12">Add Remote</text>
+  <rect class="secondary" x="164" y="190" width="80" height="28" rx="3" />
+  <text class="text" x="184" y="209" font-size="12">Publish</text>
+  <text class="strong" x="42" y="260" font-size="12">Branch panel</text>
+  <rect class="row" x="42" y="276" width="234" height="30" rx="3" />
+  <text class="text" x="62" y="296" font-size="13">main</text>
+  <rect class="chip" x="184" y="281" width="74" height="20" rx="10" />
+  <text class="text" x="198" y="295" font-size="11">local only</text>
+  <text class="muted" x="42" y="342" font-size="12">Do not show fetch failed here.</text>
+
+  <rect class="panel border" x="325" y="70" width="270" height="360" rx="4" />
+  <rect class="warn" x="343" y="94" width="234" height="78" rx="4" />
+  <text class="strong" x="363" y="122" font-size="14">Branch not published</text>
+  <text class="text" x="363" y="146" font-size="12">Remote exists, upstream does not.</text>
+  <rect class="button" x="363" y="190" width="118" height="28" rx="3" />
+  <text class="strong" x="382" y="209" font-size="12">Publish Branch</text>
+  <text class="strong" x="343" y="260" font-size="12">Branch panel</text>
+  <rect class="row" x="343" y="276" width="234" height="30" rx="3" />
+  <text class="text" x="363" y="296" font-size="13">feature/login</text>
+  <rect class="chip" x="461" y="281" width="96" height="20" rx="10" />
+  <text class="text" x="475" y="295" font-size="11">not published</text>
+  <text class="muted" x="343" y="342" font-size="12">Push should become publish.</text>
+
+  <rect class="panel border" x="626" y="70" width="270" height="360" rx="4" />
+  <rect class="error" x="644" y="94" width="234" height="78" rx="4" />
+  <text class="strong" x="664" y="122" font-size="14">Fetch failed</text>
+  <text class="text" x="664" y="146" font-size="12">Remote exists but is unreachable.</text>
+  <rect class="button" x="664" y="190" width="62" height="28" rx="3" />
+  <text class="strong" x="682" y="209" font-size="12">Retry</text>
+  <rect class="secondary" x="736" y="190" width="96" height="28" rx="3" />
+  <text class="text" x="755" y="209" font-size="12">Show Output</text>
+  <text class="strong" x="644" y="260" font-size="12">Branch panel</text>
+  <rect class="row" x="644" y="276" width="234" height="30" rx="3" />
+  <text class="text" x="664" y="296" font-size="13">origin/main</text>
+  <rect class="chip" x="768" y="281" width="90" height="20" rx="10" />
+  <text class="text" x="782" y="295" font-size="11">fetch failed</text>
+  <text class="muted" x="644" y="342" font-size="12">Keep last known refs visible.</text>
+</svg>

@@ -823,3 +823,7 @@
 .empty-state-subtitle {
     font-size: inherit;
 }
+
+.empty-state-action {
+    margin-top: 4px;
+}

@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="520" viewBox="0 0 920 520" role="img" aria-labelledby="title desc">
+  <title id="title">Git special states in Look Graph</title>
+  <desc id="desc">Compact badges and branch panel states for detached HEAD, unborn branch, unpublished branch, missing remote, fetch failure, and uninitialized submodule.</desc>
+  <defs>
+    <style>
+      .bg { fill: #1f1f1f; }
+      .panel { fill: #252526; }
+      .surface { fill: #2d2d30; }
+      .border { stroke: #3c3c3c; stroke-width: 1; }
+      .text { fill: #cccccc; font-family: "Segoe UI", Arial, sans-serif; }
+      .muted { fill: #9d9d9d; font-family: "Segoe UI", Arial, sans-serif; }
+      .strong { fill: #ffffff; font-family: "Segoe UI Semibold", "Segoe UI", Arial, sans-serif; }
+      .blue { fill: #0e639c; }
+      .green { fill: #314f2d; }
+      .yellow { fill: #473500; stroke: #cca700; stroke-width: 1; }
+      .red { fill: #5a1d1d; stroke: #f48771; stroke-width: 1; }
+      .purple { fill: #4b3f72; }
+      .row { fill: #2a2d2e; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="920" height="520" />
+  <rect class="panel border" x="24" y="24" width="360" height="472" />
+  <rect class="panel border" x="408" y="24" width="488" height="472" />
+  <rect class="surface border" x="24" y="24" width="360" height="34" />
+  <text class="strong" x="42" y="46" font-size="12">GRAPH</text>
+  <rect class="surface border" x="408" y="24" width="488" height="34" />
+  <text class="strong" x="426" y="46" font-size="12">COMMIT ROW BADGES</text>
+
+  <text class="strong" x="42" y="84" font-size="12">LOCAL</text>
+  <rect class="row" x="38" y="96" width="330" height="30" rx="3" />
+  <circle cx="56" cy="111" r="5" fill="#3794ff" />
+  <text class="text" x="72" y="116" font-size="13">main</text>
+  <rect class="green" x="300" y="101" width="52" height="20" rx="10" />
+  <text class="text" x="313" y="115" font-size="11">ahead 3</text>
+
+  <rect class="row" x="38" y="132" width="330" height="30" rx="3" />
+  <circle cx="56" cy="147" r="5" fill="#cca700" />
+  <text class="text" x="72" y="152" font-size="13">topic/payment</text>
+  <rect class="yellow" x="242" y="137" width="110" height="20" rx="10" />
+  <text class="text" x="258" y="151" font-size="11">not published</text>
+
+  <rect class="row" x="38" y="168" width="330" height="30" rx="3" />
+  <circle cx="56" cy="183" r="5" fill="#c586c0" />
+  <text class="text" x="72" y="188" font-size="13">detached @ 8ab2623</text>
+  <rect class="purple" x="282" y="173" width="70" height="20" rx="10" />
+  <text class="text" x="296" y="187" font-size="11">detached</text>
+
+  <rect class="row" x="38" y="204" width="330" height="30" rx="3" />
+  <circle cx="56" cy="219" r="5" fill="#6a9955" />
+  <text class="text" x="72" y="224" font-size="13">new-repo</text>
+  <rect class="green" x="292" y="209" width="60" height="20" rx="10" />
+  <text class="text" x="308" y="223" font-size="11">unborn</text>
+
+  <text class="strong" x="42" y="274" font-size="12">REMOTE</text>
+  <rect class="row" x="38" y="286" width="330" height="30" rx="3" />
+  <circle cx="56" cy="301" r="5" fill="#f48771" />
+  <text class="text" x="72" y="306" font-size="13">origin/main</text>
+  <rect class="red" x="258" y="291" width="94" height="20" rx="10" />
+  <text class="text" x="276" y="305" font-size="11">fetch failed</text>
+
+  <rect class="row" x="38" y="322" width="330" height="30" rx="3" />
+  <circle cx="56" cy="337" r="5" fill="#cca700" />
+  <text class="text" x="72" y="342" font-size="13">No remotes configured</text>
+  <rect class="yellow" x="246" y="327" width="106" height="20" rx="10" />
+  <text class="text" x="262" y="341" font-size="11">add remote</text>
+
+  <text class="strong" x="42" y="392" font-size="12">SUBMODULES</text>
+  <rect class="row" x="38" y="404" width="330" height="30" rx="3" />
+  <rect x="52" y="413" width="12" height="12" fill="none" stroke="#9d9d9d" />
+  <text class="text" x="72" y="424" font-size="13">modules/auth-kit</text>
+  <rect class="yellow" x="232" y="409" width="120" height="20" rx="10" />
+  <text class="text" x="246" y="423" font-size="11">not initialized</text>
+
+  <g transform="translate(432 82)">
+    <rect class="row" x="0" y="0" width="438" height="42" rx="3" />
+    <circle cx="18" cy="21" r="5" fill="#569cd6" />
+    <text class="text" x="40" y="18" font-size="13">feat(graph): support empty repositories</text>
+    <text class="muted" x="40" y="35" font-size="12">Mathias8dev</text>
+    <rect class="green" x="332" y="10" width="86" height="20" rx="10" />
+    <text class="text" x="348" y="24" font-size="11">origin/main</text>
+
+    <rect class="row" x="0" y="58" width="438" height="42" rx="3" />
+    <circle cx="18" cy="79" r="5" fill="#c586c0" />
+    <text class="text" x="40" y="76" font-size="13">fix(remote): publish branch without upstream</text>
+    <text class="muted" x="40" y="93" font-size="12">Mathias8dev</text>
+    <rect class="yellow" x="292" y="68" width="126" height="20" rx="10" />
+    <text class="text" x="306" y="82" font-size="11">not published</text>
+
+    <rect class="row" x="0" y="116" width="438" height="42" rx="3" />
+    <circle cx="18" cy="137" r="5" fill="#dcdcaa" />
+    <text class="text" x="40" y="134" font-size="13">docs(core): inspect detached revision</text>
+    <text class="muted" x="40" y="151" font-size="12">Ada</text>
+    <rect class="purple" x="310" y="126" width="108" height="20" rx="10" />
+    <text class="text" x="324" y="140" font-size="11">detached HEAD</text>
+
+    <rect class="yellow" x="0" y="188" width="438" height="62" rx="4" />
+    <text class="strong" x="20" y="212" font-size="13">Branch not published</text>
+    <text class="text" x="20" y="232" font-size="12">This branch has not been published yet. Publishing is the expected action.</text>
+    <rect fill="#0e639c" x="296" y="204" width="98" height="26" rx="3" />
+    <text class="strong" x="314" y="222" font-size="12">Publish</text>
+
+    <rect class="red" x="0" y="266" width="438" height="74" rx="4" />
+    <text class="strong" x="20" y="290" font-size="13">Could not fetch origin</text>
+    <text class="text" x="20" y="310" font-size="12">The remote exists, but Git could not reach it or authenticate.</text>
+    <text class="muted" x="20" y="328" font-size="12">Keep last fetched data visible and offer diagnostics.</text>
+    <rect fill="#0e639c" x="276" y="295" width="58" height="26" rx="3" />
+    <text class="strong" x="293" y="313" font-size="12">Retry</text>
+    <rect fill="#333333" stroke="#5a5a5a" stroke-width="1" x="342" y="295" width="76" height="26" rx="3" />
+    <text class="text" x="356" y="313" font-size="12">Output</text>
+  </g>
+</svg>

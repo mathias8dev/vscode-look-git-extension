@@ -55,6 +55,11 @@ export function CommitHistoryApp({
                     <div className="history-empty">
                         <i className="codicon codicon-git-commit history-empty-icon" aria-hidden="true" />
                         <span>{historyEmptyLabel(state.commits, query)}</span>
+                        {query.trim() ? (
+                            <button type="button" className="history-empty-action" onClick={() => onQueryChange('')}>
+                                Clear filters
+                            </button>
+                        ) : null}
                     </div>
                 ) : null}
 
