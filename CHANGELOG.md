@@ -2,6 +2,13 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [0.9.1] - 2026-06-05
+
+### Fixed
+
+#### Changes Panel
+- Open conflicted files, including submodule conflicts, directly in VS Code's modern 3-way merge editor using Git conflict stages
+
 ## [0.9.0] - 2026-06-05
 
 ### Added
