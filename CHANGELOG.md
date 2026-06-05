@@ -2,6 +2,27 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [0.9.0] - 2026-06-05
+
+### Added
+
+#### Look Graph
+- Add explicit empty states for repositories with no commits and filtered graphs with no matching commits
+- Add actionable graph errors with retry and output details, plus keyboard navigation between commits with Arrow Up and Arrow Down
+- Add branch badges for local branches that have remotes available but are not published yet
+
+#### Tooling
+- Add `lookGit` fixture scenarios for empty repositories, remote-only repositories, unpublished branches, and unavailable remotes
+- Add UX reference SVGs for graph empty states, actionable errors, keyboard navigation, operation feedback, and special Git states
+
+### Changed
+
+#### Changes Panel
+- Show a clear-filters action when filtering hides every change row
+
+#### Commit History
+- Show a clear-filters action when commit search has no matches
+
 ## [0.8.0] - 2026-06-05
 
 ### Added
