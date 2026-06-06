@@ -88,7 +88,7 @@ describe('graphState', () => {
             message: {
                 type: 'graph/dataResponse',
                 requestId: graphRequestId(0, 'more', 1),
-                data: graphData([commit('b', ['a']), commit('a')], 2, false),
+                data: graphData([commit('a')], 2, false),
             },
         });
 
@@ -96,6 +96,29 @@ describe('graphState', () => {
         expect(next.loadedCount).toBe(2);
         expect(next.rows).toHaveLength(2);
         expect(next.hasMore).toBe(false);
+    });
+
+    it('deduplicates overlapping load-more commits while appending new page data', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: graphData([commit('c', ['b']), commit('b', ['a'])], 2, true),
+            },
+        });
+        const loadingMore = reduceGraphState(loaded, { type: 'startLoadMore' });
+        const next = reduceGraphState(loadingMore, {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'more', 2),
+                data: graphData([commit('b', ['a']), commit('a')], 4, false),
+            },
+        });
+
+        expect(next.rows.map((row) => row.commit.hash)).toEqual(['c', 'b', 'a']);
+        expect(next.loadedCount).toBe(4);
     });
 
     it('keeps the current loaded window when an external graph refresh is requested', () => {
@@ -465,7 +488,7 @@ describe('graphState', () => {
                 type: 'graph/dataResponse',
                 requestId: graphRequestId(0, 'more', 1),
                 data: {
-                    ...graphData([commit('b', ['a']), commit('a')], 2, false),
+                    ...graphData([commit('a')], 2, false),
                     submodules: [{
                         path: 'modules/auth-kit',
                         name: 'auth-kit',

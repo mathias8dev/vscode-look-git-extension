@@ -13,7 +13,7 @@ describe('GetGraphDataUseCase', () => {
             commit('c3', 'test(graph): third'),
         ];
         const branches = [branch('main', true)];
-        const getGraphLog = vi.fn(async () => commits);
+        const getGraphLog = vi.fn(async () => commits.slice(1));
         const repo = makeRepositoryMock({
             getGraphLog,
             getAllBranches: vi.fn(async () => branches),
@@ -25,23 +25,57 @@ describe('GetGraphDataUseCase', () => {
 
         const result = await new GetGraphDataUseCase().execute(
             repo,
-            { search: 'fix', authors: ['Ada'], dateFrom: '2026-01-01', dateTo: '2026-01-02', path: 'src', branches: ['main'] },
+            { authors: ['Ada'], dateFrom: '2026-01-01', dateTo: '2026-01-02', path: 'src', branches: ['main'] },
             { offset: 1, limit: 1 },
         );
 
-        expect(getGraphLog).toHaveBeenCalledWith(3, ['main'], 'src', {
-            search: 'fix',
+        expect(getGraphLog).toHaveBeenCalledWith(2, ['main'], 'src', {
+            search: undefined,
             authors: ['Ada'],
             dateFrom: '2026-01-01',
             dateTo: '2026-01-02',
+            skip: 1,
         }, undefined);
         expect(result.commits.map((item) => item.hash)).toEqual(['b2']);
         expect(result.currentBranch).toBe('main');
         expect(result.currentUser).toBe('Ada');
         expect(result.hasMore).toBe(true);
-        expect(result.loadedCount).toBe(1);
+        expect(result.loadedCount).toBe(2);
         expect(result.totalCount).toBe(3);
         expect(result.hasRemotes).toBe(true);
+    });
+
+    it('keeps prefix pagination for searched graph data so local search context stays stable', async () => {
+        const commits = [
+            commit('a1', 'feat(graph): first'),
+            commit('b2', 'fix(graph): second'),
+            commit('c3', 'test(graph): third'),
+        ];
+        const getGraphLog = vi.fn(async () => commits);
+        const repo = makeRepositoryMock({
+            getGraphLog,
+            getAllBranches: vi.fn(async () => [branch('main', true)]),
+            getAllTags: vi.fn(async () => []),
+            getUserName: vi.fn(async () => 'Ada'),
+            listWorktrees: vi.fn(async () => []),
+        });
+
+        const result = await new GetGraphDataUseCase().execute(
+            repo,
+            { search: 'fix' },
+            { offset: 1, limit: 1 },
+        );
+
+        expect(getGraphLog).toHaveBeenCalledWith(3, undefined, undefined, {
+            search: 'fix',
+            authors: undefined,
+            dateFrom: undefined,
+            dateTo: undefined,
+            skip: 0,
+        }, undefined);
+        expect(result.commits.map((item) => item.hash)).toEqual(['b2']);
+        expect(result.loadedCount).toBe(2);
+        expect(result.hasMore).toBe(true);
     });
 
     it('keeps optional graph data failures as warnings', async () => {

@@ -10,6 +10,7 @@ export interface GraphLogFilters {
     readonly authors?: readonly string[];
     readonly dateFrom?: string;
     readonly dateTo?: string;
+    readonly skip?: number;
 }
 
 const LOG_FORMAT = ['%H', '%h', '%s', '%an', '%ae', '%aI', '%P', '%D'].join(LOG_FIELD_SEP) + LOG_RECORD_SEP;
@@ -25,6 +26,8 @@ export async function queryGraphLog(
     const search = filters.search?.trim();
     const scanLimit = search ? Math.max(maxCount, Math.min(maxCount * 20, 5000)) : maxCount;
     const args = ['log', '--parents', `--format=${LOG_FORMAT}`, `--max-count=${scanLimit}`, '--topo-order'];
+    const skip = Math.max(0, Math.floor(filters.skip ?? 0));
+    if (skip > 0) { args.push(`--skip=${skip}`); }
 
     if (filters.dateFrom) { args.push(`--since=${filters.dateFrom}T00:00:00`); }
     if (filters.dateTo)   { args.push(`--until=${filters.dateTo}T23:59:59`); }

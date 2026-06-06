@@ -1,5 +1,5 @@
 import { GraphOperationStatus, type GraphExtensionToWebviewMessage, type GraphOperationStatusPush } from '../../../protocol/graph/messages';
-import type { BranchInfo, CommitFileChange, GraphData, GraphFilters, GraphRepositoryScope, GraphSubmoduleInfo, TagInfo, WorktreeInfo, WorktreeWip } from '../../../protocol/graph/types';
+import type { BranchInfo, CommitFileChange, GraphCommit, GraphData, GraphFilters, GraphRepositoryScope, GraphSubmoduleInfo, TagInfo, WorktreeInfo, WorktreeWip } from '../../../protocol/graph/types';
 import type { ProtocolError } from '../../../protocol/shared/base';
 import { assignLanes, type GraphRow, type LaneData, type LineDef } from './layout/assignGraphLanes';
 
@@ -376,12 +376,14 @@ function isExpectedGraphError(state: GraphState, requestId: string | undefined):
 
 function applyGraphData(state: GraphState, data: GraphData, repoId: string | undefined): GraphState {
     const currentBranch = data.currentBranch;
-    const rows = assignLanes(data.commits, {
+    const appending = state.loadingMore && sameRepositoryScope(data.repositoryScope, state.repositoryScope);
+    const commits = appending ? appendGraphCommits(state.rows, data.commits) : data.commits;
+    const rows = assignLanes(commits, {
         primaryBranch: currentBranch,
-        lockedLanes: state.loadingMore ? lockedLanesForRows(state.rows) : undefined,
+        lockedLanes: appending ? lockedLanesForRows(state.rows) : undefined,
     });
     const displayRows = buildDisplayRows(rows, data.worktreeWips ?? []);
-    const submodules = state.loadingMore && sameRepositoryScope(data.repositoryScope, state.repositoryScope)
+    const submodules = appending
         ? state.submodules
         : data.submodules;
     return {
@@ -397,7 +399,7 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
         currentUser: data.currentUser,
         hasRemotes: data.hasRemotes,
         hasMore: data.hasMore,
-        loadedCount: data.loadedCount,
+        loadedCount: Math.max(data.loadedCount, commits.length),
         loading: false,
         loadingMore: false,
         error: undefined,
@@ -451,4 +453,19 @@ function repositoryScopeKey(scope: GraphRepositoryScope | undefined): string {
 
 function lockedLanesForRows(rows: readonly GraphRow[]): ReadonlyMap<string, number> {
     return new Map(rows.map((row) => [row.commit.hash, row.laneData.lane]));
+}
+
+function appendGraphCommits(rows: readonly GraphRow[], commits: readonly GraphCommit[]): readonly GraphCommit[] {
+    const seen = new Set<string>();
+    const merged: GraphCommit[] = [];
+    for (const row of rows) {
+        seen.add(row.commit.hash);
+        merged.push(row.commit);
+    }
+    for (const commit of commits) {
+        if (seen.has(commit.hash)) { continue; }
+        seen.add(commit.hash);
+        merged.push(commit);
+    }
+    return merged;
 }

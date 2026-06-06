@@ -8,6 +8,7 @@ export interface GraphLogFilters {
     readonly authors?: readonly string[];
     readonly dateFrom?: string;
     readonly dateTo?: string;
+    readonly skip?: number;
 }
 
 export interface GitRepository {

@@ -46,6 +46,15 @@ describe('queryGraphLog', () => {
         expect(args).not.toContain('--all');
     });
 
+    it('passes graph pagination skip to git log', async () => {
+        const calls: string[][] = [];
+        await queryGraphLog(recordingExec(calls), 50, undefined, undefined, { skip: 150 });
+
+        const args = expectItem(calls, 0);
+        expect(args).toContain('--max-count=50');
+        expect(args).toContain('--skip=150');
+    });
+
     it('retries the default graph without HEAD when HEAD does not exist yet', async () => {
         const calls: string[][] = [];
         let callCount = 0;

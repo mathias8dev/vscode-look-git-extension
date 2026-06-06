@@ -76,13 +76,16 @@ export class GetGraphDataUseCase {
         signal?: AbortSignal,
         options: GraphDataOptions = {},
     ): Promise<GraphDataResult> {
-        const maxCount = page.offset + page.limit + 1;
+        const search = filters.search?.trim();
+        const usesPrefixPagination = Boolean(search);
+        const maxCount = usesPrefixPagination ? page.offset + page.limit + 1 : page.limit + 1;
         const [rawCommits, branches, tags, currentUser, remotesResult, worktreesResult, submodulesResult] = await Promise.all([
             repo.getGraphLog(maxCount, filters.branches, filters.path, {
-                search: filters.search,
+                search,
                 authors: filters.authors,
                 dateFrom: filters.dateFrom,
                 dateTo: filters.dateTo,
+                skip: usesPrefixPagination ? 0 : page.offset,
             }, signal),
             repo.getAllBranches(signal),
             repo.getAllTags(signal),
@@ -102,9 +105,13 @@ export class GetGraphDataUseCase {
             : await this.getSubmoduleRepositories(repo, submoduleStatuses, signal);
         warnings.push(...submoduleRepositories.warnings);
 
-        const commits = rawCommits.slice(page.offset, page.offset + page.limit);
+        const commits = usesPrefixPagination
+            ? rawCommits.slice(page.offset, page.offset + page.limit)
+            : rawCommits.slice(0, page.limit);
         const currentBranch = branches.find((branch) => branch.isCurrent)?.name ?? 'HEAD';
         const currentBranchCommitHashes = await this.getCurrentBranchCommitHashes(repo, commits, warnings, signal);
+        const hasMore = rawCommits.length > (usesPrefixPagination ? page.offset + page.limit : page.limit);
+        const loadedCount = page.offset + commits.length;
 
         return {
             branches,
@@ -113,9 +120,9 @@ export class GetGraphDataUseCase {
             currentBranchCommitHashes,
             currentBranch,
             currentUser,
-            hasMore: rawCommits.length > page.offset + page.limit,
-            loadedCount: commits.length,
-            totalCount: rawCommits.length,
+            hasMore,
+            loadedCount,
+            totalCount: hasMore ? loadedCount + 1 : loadedCount,
             hasRemotes: remotes.length > 0,
             worktrees,
             worktreeWips,

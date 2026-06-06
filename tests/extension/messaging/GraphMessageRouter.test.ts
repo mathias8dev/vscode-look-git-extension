@@ -135,6 +135,36 @@ describe('GraphMessageRouter graph data', () => {
         expect(repo.exec).toHaveBeenCalledWith(['merge-base', '--is-ancestor', topicHash, 'HEAD'], expect.any(AbortSignal));
     });
 
+    it('requests only the next graph page when loading more commits', async () => {
+        const getGraphLog = vi.fn(async () => [graphCommit('next-page-commit')]);
+        const repo = makeRepositoryMock({
+            getGraphLog,
+            getAllBranches: vi.fn(async () => []),
+            getAllTags: vi.fn(async () => []),
+            getUserName: vi.fn(async () => 'Ada'),
+            listWorktrees: vi.fn(async () => []),
+        });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+
+        await router.handle({
+            type: 'graph/loadMore',
+            requestId: 'graph-load-more',
+            repoId: 'repo',
+            filters: {},
+            page: { offset: 300, limit: 100 },
+        });
+
+        expect(getGraphLog).toHaveBeenCalledWith(101, undefined, undefined, {
+            search: undefined,
+            authors: undefined,
+            dateFrom: undefined,
+            dateTo: undefined,
+            skip: 300,
+        }, expect.any(AbortSignal));
+        expect(graphDataResponse(messages, 'graph-load-more').data.loadedCount).toBe(301);
+    });
+
     it('writes graph errors to the Look Git output channel and shows it on request', async () => {
         const error = Object.assign(new Error('fetch failed'), { stderr: 'fatal: Authentication failed' });
         const repo = makeRepositoryMock({

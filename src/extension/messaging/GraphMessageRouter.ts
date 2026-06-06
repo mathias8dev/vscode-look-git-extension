@@ -155,7 +155,7 @@ export class GraphMessageRouter {
                 const ctrl = new AbortController();
                 this.pending.set(key, ctrl);
                 try {
-                    const data = await this.buildGraphData(msg.filters, 0, msg.page.offset + msg.page.limit, ctrl.signal, msg.repositoryScope, false);
+                    const data = await this.buildGraphData(msg.filters, msg.page.offset, msg.page.limit, ctrl.signal, msg.repositoryScope, false);
                     const response: GraphDataResponse = { type: 'graph/dataResponse', requestId: msg.requestId, data };
                     this.postMessage(response);
                 } finally {
