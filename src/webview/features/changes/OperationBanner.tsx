@@ -11,8 +11,9 @@ interface OperationBannerProps {
 
 export function OperationBanner({ conflictState, conflictCount, conflictsOnly, onToggleConflictsOnly, onAction }: OperationBannerProps) {
     const hasConflicts = conflictCount > 0;
+    const readyToContinue = !hasConflicts;
     return (
-        <section className="changes-banner" aria-label="Operation in progress">
+        <section className={`changes-banner${readyToContinue ? ' changes-banner-ready' : ''}`} aria-label="Operation in progress" aria-live="polite">
             <div>
                 <strong>{operationLabel(conflictState)} in progress</strong>
                 <span>{operationHelpText(conflictCount)}</span>
@@ -44,6 +45,7 @@ export function OperationBanner({ conflictState, conflictCount, conflictsOnly, o
                 <button
                     type="button"
                     disabled={hasConflicts}
+                    className={readyToContinue ? 'operation-primary-action' : undefined}
                     title={hasConflicts ? 'Resolve all conflicts before continuing' : 'Continue the current operation'}
                     onClick={() => onAction(OperationAction.Continue)}
                 >
@@ -65,7 +67,7 @@ export function OperationBanner({ conflictState, conflictCount, conflictsOnly, o
 function operationHelpText(count: number): string {
     if (count === 0) { return 'All conflicts are resolved. Continue to finish the operation.'; }
     const label = count === 1 ? '1 unresolved conflict' : `${count} unresolved conflicts`;
-    return `${label}. Open a conflict, resolve it, then continue.`;
+    return `${label}. Continue is disabled until every conflict is resolved.`;
 }
 
 function operationLabel(state: ActiveConflictState): string {

@@ -148,6 +148,10 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     private async runCommitContextCommand(command: CommitCommand): Promise<void> {
         const target = this.contextTarget;
         if (target?.kind !== 'commit') { return; }
+        if (command === 'cherryPick' && target.canCherryPick === false) {
+            await vscode.window.showWarningMessage('Cherry-pick is unavailable because the selected commit already exists in the current branch history.');
+            return;
+        }
         if (command === 'squashInto' && (target.canSquash === false || target.hashes.length < 2)) { return; }
         await this.router?.handle({ type: 'graph/commitCommand', command, hash: target.hash, hashes: target.hashes, repositoryScope: target.repositoryScope });
     }
@@ -155,9 +159,20 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     private async runBranchContextCommand(command: BranchCommand, options: BranchContextCommandOptions = {}): Promise<void> {
         const target = this.contextTarget;
         if (target?.kind !== 'branch') { return; }
-        if (command === 'delete' && (target.canDelete === false || target.isCurrent)) { return; }
-        if (command === 'push' && options.allowUnpublishedBranchPush && target.canPublish !== true) { return; }
-        if (command === 'push' && !options.allowUnpublishedBranchPush && target.canPush !== true) { return; }
+        if (command === 'delete' && (target.canDelete === false || target.isCurrent)) {
+            await vscode.window.showWarningMessage('Delete is unavailable because the current branch cannot be deleted.');
+            return;
+        }
+        if (command === 'push' && options.allowUnpublishedBranchPush && target.canPublish !== true) {
+            await vscode.window.showWarningMessage('Publish is unavailable for this branch.');
+            return;
+        }
+        if (command === 'push' && !options.allowUnpublishedBranchPush && target.canPush !== true) {
+            await vscode.window.showWarningMessage(target.isRemote
+                ? 'Push is unavailable because remote branches cannot be pushed directly.'
+                : 'Push is unavailable because this branch has no upstream. Use Publish Branch.');
+            return;
+        }
         await this.router?.handle({ type: 'graph/branchCommand', command, branch: target.branch, isRemote: target.isRemote, repositoryScope: target.repositoryScope });
     }
 

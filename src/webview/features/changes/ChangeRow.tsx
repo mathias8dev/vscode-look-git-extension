@@ -30,6 +30,7 @@ export function ChangeRow({ item, depth, selected, context, onSelect, onOpenCont
             title={entry.filePath}
             aria-selected={selected}
             tabIndex={0}
+            data-change-item-id={item.id}
             onContextMenu={() => onOpenContextMenu(item)}
             onClick={(event) => {
                 if (event.shiftKey) {
@@ -45,11 +46,19 @@ export function ChangeRow({ item, depth, selected, context, onSelect, onOpenCont
                 if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                     event.preventDefault();
                     const rows = Array.from(
-                        document.querySelectorAll<HTMLElement>('.change-row[tabindex="0"]'),
+                        document.querySelectorAll<HTMLElement>('article.change-row[tabindex="0"]'),
                     );
                     const idx = rows.indexOf(event.currentTarget);
                     const next = event.key === 'ArrowDown' ? rows[idx + 1] : rows[idx - 1];
                     next?.focus();
+                    if (event.shiftKey && next) {
+                        next.dispatchEvent(new KeyboardEvent('keydown', {
+                            key: ' ',
+                            shiftKey: true,
+                            bubbles: true,
+                            cancelable: true,
+                        }));
+                    }
                     return;
                 }
                 if (event.key === 'Enter') {
@@ -61,6 +70,12 @@ export function ChangeRow({ item, depth, selected, context, onSelect, onOpenCont
                 if (event.key === ' ') {
                     event.preventDefault();
                     onSelect(item, event.shiftKey ? ChangeSelectionMode.Range : event.ctrlKey || event.metaKey ? ChangeSelectionMode.Toggle : ChangeSelectionMode.Replace);
+                    return;
+                }
+                if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
+                    event.preventDefault();
+                    if (!selected) { onSelect(item, ChangeSelectionMode.Replace); }
+                    openKeyboardContextMenu(event.currentTarget);
                 }
             }}
         >
@@ -126,4 +141,14 @@ function statusLetterKind(entry: StatusEntry): string {
     if (letter === 'C') { return 'conflict'; }
     if (letter === 'R') { return 'renamed'; }
     return 'modified';
+}
+
+function openKeyboardContextMenu(element: HTMLElement): void {
+    const rect = element.getBoundingClientRect();
+    element.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.left + 12,
+        clientY: rect.top + 12,
+    }));
 }

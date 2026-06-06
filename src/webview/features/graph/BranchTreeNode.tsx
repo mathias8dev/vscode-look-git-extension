@@ -61,13 +61,14 @@ export function BranchTreeNode({ node, depth, selectedBranch, hasRemotes, expans
     const isActive = selectedBranch === node.fullName;
     const isCurrent = branch?.isCurrent ?? false;
     const isNotPublished = hasRemotes && branch !== undefined && !branch.isRemote && !branch.upstream;
+    const disabledReason = branch ? branchDisabledReason(branch) : undefined;
 
     return (
         <button
             type="button"
             className={`branch-node branch-leaf${isActive ? ' branch-node-active' : ''}`}
             style={{ paddingLeft: `${10 + depth * 14}px` }}
-            title={node.fullName}
+            title={disabledReason ? `${node.fullName}\n${disabledReason}` : node.fullName}
             data-vscode-context={branch ? JSON.stringify(contextForBranch(branch)) : undefined}
             onClick={() => onSelect(node.fullName)}
             onContextMenu={() => {
@@ -121,4 +122,11 @@ function notPushedTitle(count: number): string {
 
 function toPullTitle(count: number): string {
     return `${count} commit${count === 1 ? '' : 's'} to pull`;
+}
+
+function branchDisabledReason(branch: BranchInfo): string | undefined {
+    if (branch.isCurrent) { return 'Delete unavailable: the current branch cannot be deleted.'; }
+    if (branch.isRemote) { return 'Push unavailable: remote branches cannot be pushed directly.'; }
+    if (!branch.upstream) { return 'Push unavailable: this branch has no upstream. Use Publish Branch.'; }
+    return undefined;
 }

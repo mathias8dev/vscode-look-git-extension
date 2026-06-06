@@ -125,6 +125,7 @@ export function BranchPanel({
         const canPush = !branch.isRemote && hasUpstream;
         const canPublish = !branch.isRemote && !hasUpstream;
         const canDelete = !branch.isCurrent;
+        const disabledReasons = branchDisabledReasons(branch, { canPush, canPublish, canDelete });
         return {
             webviewSection: 'graphBranch',
             graphBranchIsRemote: branch.isRemote,
@@ -136,6 +137,7 @@ export function BranchPanel({
             graphBranchHasWorktree: branchWorktree !== undefined,
             graphBranchWorktreeIsMain: branchWorktree?.isMain === true,
             graphBranchWorktreeIsLocked: branchWorktree?.isLocked === true,
+            graphBranchDisabledReason: disabledReasons.join('\n'),
             preventDefaultContextMenuItems: true,
         };
     };
@@ -420,4 +422,27 @@ function submoduleMatchesSearch(submodule: GraphSubmoduleInfo, normalizedSearch:
             worktree.path.toLowerCase().includes(normalizedSearch)
             || (worktree.branch?.toLowerCase().includes(normalizedSearch) ?? false)
         ));
+}
+
+function branchDisabledReasons(
+    branch: BranchInfo,
+    capabilities: {
+        readonly canPush: boolean;
+        readonly canPublish: boolean;
+        readonly canDelete: boolean;
+    },
+): readonly string[] {
+    const reasons: string[] = [];
+    if (!capabilities.canPush) {
+        reasons.push(branch.isRemote
+            ? 'Push unavailable: remote branches cannot be pushed directly.'
+            : 'Push unavailable: this branch has no upstream. Use Publish Branch.');
+    }
+    if (!capabilities.canPublish) {
+        reasons.push(branch.isRemote
+            ? 'Publish unavailable: remote branches are already published.'
+            : 'Publish unavailable: this branch already has an upstream.');
+    }
+    if (!capabilities.canDelete) { reasons.push('Delete unavailable: the current branch cannot be deleted.'); }
+    return reasons;
 }

@@ -127,7 +127,7 @@ describe('graph native context menu targets', () => {
             />,
         );
 
-        const row = screen.getByTitle('commit base1234567890abcdef');
+        const row = screen.getByTitle(/commit base1234567890abcdef/);
         const context = row.getAttribute('data-vscode-context') ?? '';
 
         expect(context).toContain('"webviewSection":"graphCommit"');
@@ -136,6 +136,7 @@ describe('graph native context menu targets', () => {
         expect(context).toContain('"graphCommitCanCherryPick":true');
         expect(context).toContain('"graphCommitCanSquash":true');
         expect(context).toContain('"graphCommitHasMultipleSelectedCommits":true');
+        expect(context).toContain('"graphCommitDisabledReason"');
 
         fireEvent.contextMenu(row);
 
@@ -179,9 +180,10 @@ describe('graph native context menu targets', () => {
             />,
         );
 
-        const row = screen.getByTitle('commit base1234567890abcdef');
+        const row = screen.getByTitle(/commit base1234567890abcdef/);
 
         expect(row.getAttribute('data-vscode-context')).toContain('"graphCommitCanCherryPick":false');
+        expect(row).toHaveAttribute('title', expect.stringContaining('Cherry-pick unavailable'));
 
         fireEvent.contextMenu(row);
 
@@ -189,6 +191,41 @@ describe('graph native context menu targets', () => {
             hash: 'base1234567890abcdef',
             canCherryPick: false,
             canSquash: true,
+        }));
+    });
+
+    it('opens the commit context target from the keyboard context menu key', () => {
+        const onContextTarget = vi.fn<(target: GraphContextTarget) => void>();
+        const onSelectCommit = vi.fn<(hash: string, mode: 'replace' | 'toggle' | 'range') => void>();
+        const commits = [commit('head1234567890abcdef', [])];
+        const rows = assignLanes(commits);
+        const displayRows: readonly DisplayRow[] = rows.map((row) => ({ kind: 'commit', row }));
+
+        render(
+            <GraphTable
+                rows={rows}
+                displayRows={displayRows}
+                branches={[]}
+                selectedHashes={[]}
+                selectedWorktreePath={undefined}
+                hasMore={false}
+                loadingMore={false}
+                onSelectCommit={onSelectCommit}
+                onSelectWorktree={() => undefined}
+                onContextTarget={onContextTarget}
+                onLoadMore={() => undefined}
+                onBranchDoubleClick={() => undefined}
+                onMoveFocus={() => undefined}
+            />,
+        );
+
+        const row = screen.getByTitle(/commit head1234567890abcdef/);
+        fireEvent.keyDown(row, { key: 'ContextMenu' });
+
+        expect(onSelectCommit).toHaveBeenCalledWith('head1234567890abcdef', 'replace');
+        expect(onContextTarget).toHaveBeenCalledWith(expect.objectContaining({
+            kind: 'commit',
+            hash: 'head1234567890abcdef',
         }));
     });
 });

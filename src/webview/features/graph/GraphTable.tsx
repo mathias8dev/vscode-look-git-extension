@@ -20,7 +20,7 @@ interface GraphTableProps {
     readonly onContextTarget: (target: GraphContextTarget) => void;
     readonly onLoadMore: () => void;
     readonly onBranchDoubleClick: (branch: string, isRemote: boolean) => void;
-    readonly onMoveFocus: (currentHash: string, direction: 'previous' | 'next') => void;
+    readonly onMoveFocus: (currentHash: string, direction: 'previous' | 'next', mode?: CommitSelectMode) => void;
 }
 
 export function GraphTable({

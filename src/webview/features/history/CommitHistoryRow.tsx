@@ -18,6 +18,7 @@ interface CommitHistoryRowProps {
 }
 
 export function CommitHistoryRow({ commit, expanded, selected, showSelectionCheckbox, childHash, parentHash, canUndoCommit, canCherryPick, hasMultipleSelectedCommits, onSelect, onContextMenu }: CommitHistoryRowProps) {
+    const disabledReasons = historyCommitDisabledReasons({ canCherryPick, canUndoCommit, hasMultipleSelectedCommits, childHash, parentHash });
     return (
         <div
             role="option"
@@ -25,7 +26,8 @@ export function CommitHistoryRow({ commit, expanded, selected, showSelectionChec
             aria-selected={selected}
             aria-expanded={expanded}
             className={`history-row${showSelectionCheckbox ? ' history-row-selection-active' : ''}`}
-            title={`${commit.message}\n${commit.hash}`}
+            title={[commit.message, commit.hash, ...disabledReasons].join('\n')}
+            data-history-commit-hash={commit.hash}
             data-vscode-context={JSON.stringify({
                 webviewSection: 'historyCommit',
                 historyCanGoToChild: childHash !== undefined,
@@ -33,6 +35,7 @@ export function CommitHistoryRow({ commit, expanded, selected, showSelectionChec
                 historyCanUndoCommit: canUndoCommit,
                 historyCanCherryPick: canCherryPick,
                 historyHasMultipleSelectedCommits: hasMultipleSelectedCommits,
+                historyCommitDisabledReason: disabledReasons.join('\n'),
                 preventDefaultContextMenuItems: true,
             })}
             onClick={(event) => onSelect(commit.hash, selectionModeForEvent(event))}
@@ -44,11 +47,20 @@ export function CommitHistoryRow({ commit, expanded, selected, showSelectionChec
                     const idx = rows.indexOf(event.currentTarget);
                     const next = event.key === 'ArrowDown' ? rows[idx + 1] : rows[idx - 1];
                     next?.focus();
+                    if (event.shiftKey && next?.dataset.historyCommitHash) {
+                        onSelect(next.dataset.historyCommitHash, HistoryCommitSelectionMode.Range);
+                    }
                     return;
                 }
                 if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
                     onSelect(commit.hash, selectionModeForEvent(event));
+                    return;
+                }
+                if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
+                    event.preventDefault();
+                    if (!selected) { onSelect(commit.hash, HistoryCommitSelectionMode.Replace); }
+                    openKeyboardContextMenu(event.currentTarget);
                 }
             }}
         >
@@ -113,4 +125,30 @@ function refIcon(refInfo: HistoryCommitRef): string {
     if (refInfo.kind === 'remote') { return 'cloud'; }
     if (refInfo.kind === 'tag') { return 'tag'; }
     return 'git-branch';
+}
+
+function historyCommitDisabledReasons(input: {
+    readonly canCherryPick: boolean;
+    readonly canUndoCommit: boolean;
+    readonly hasMultipleSelectedCommits: boolean;
+    readonly childHash: string | undefined;
+    readonly parentHash: string | undefined;
+}): readonly string[] {
+    const reasons: string[] = [];
+    if (!input.canCherryPick) { reasons.push('Cherry-pick unavailable: selected commit already exists in the current branch history.'); }
+    if (!input.hasMultipleSelectedCommits) { reasons.push('Squash Commits unavailable: select at least two commits.'); }
+    if (!input.canUndoCommit) { reasons.push('Undo Commit unavailable: only the current HEAD commit can be undone.'); }
+    if (!input.childHash) { reasons.push('Go to Child Commit unavailable: no visible child commit.'); }
+    if (!input.parentHash) { reasons.push('Go to Parent Commit unavailable: no visible parent commit.'); }
+    return reasons;
+}
+
+function openKeyboardContextMenu(element: HTMLElement): void {
+    const rect = element.getBoundingClientRect();
+    element.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.left + 12,
+        clientY: rect.top + 12,
+    }));
 }

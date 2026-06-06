@@ -196,7 +196,7 @@ describe('GraphApp', () => {
             },
         }));
 
-        expect(await screen.findByTitle('feature/oauth')).toBeInTheDocument();
+        expect(await findBranchLeaf('oauth')).toBeInTheDocument();
         const requestsBeforePush = graphDataRequests(api.messages).length;
         await act(async () => sendToWebview({
             type: 'graph/dataPush',
@@ -218,7 +218,7 @@ describe('GraphApp', () => {
             },
         }));
 
-        expect(screen.getByTitle('feature/oauth')).toBeInTheDocument();
+        expect(findBranchLeafSync('oauth')).toBeInTheDocument();
         await waitFor(() => expect(graphDataRequests(api.messages).length).toBeGreaterThan(requestsBeforePush));
         expect(isSubmoduleScope(latestGraphDataRequest(api.messages).repositoryScope, 'modules/auth-kit')).toBe(true);
     });
@@ -341,8 +341,8 @@ describe('GraphApp', () => {
             ]),
         }));
 
-        const secondCommit = await screen.findByTitle('feat(graph): second commit');
-        const firstCommit = screen.getByTitle('feat(graph): first commit');
+        const secondCommit = await screen.findByTitle(/feat\(graph\): second commit/);
+        const firstCommit = screen.getByTitle(/feat\(graph\): first commit/);
         secondCommit.focus();
 
         fireEvent.keyDown(secondCommit, { key: 'ArrowDown' });
@@ -350,6 +350,9 @@ describe('GraphApp', () => {
 
         fireEvent.keyDown(firstCommit, { key: 'ArrowUp' });
         expect(secondCommit).toHaveFocus();
+
+        fireEvent.keyDown(secondCommit, { key: 'ArrowDown', shiftKey: true });
+        await waitFor(() => expect(firstCommit).toHaveAttribute('aria-selected', 'true'));
     });
 
     it('offers retry and output actions for graph errors with details', async () => {
@@ -424,6 +427,20 @@ function isSubmoduleScope(value: unknown, path: string): boolean {
         && value.kind === 'submodule'
         && 'path' in value
         && value.path === path;
+}
+
+async function findBranchLeaf(label: string): Promise<HTMLElement> {
+    const element = await screen.findByText(label);
+    const leaf = element.closest('.branch-leaf');
+    if (!(leaf instanceof HTMLElement)) { throw new Error(`Expected branch leaf for ${label}.`); }
+    return leaf;
+}
+
+function findBranchLeafSync(label: string): HTMLElement {
+    const element = screen.getByText(label);
+    const leaf = element.closest('.branch-leaf');
+    if (!(leaf instanceof HTMLElement)) { throw new Error(`Expected branch leaf for ${label}.`); }
+    return leaf;
 }
 
 function mainGraphDataWithAuthKitSubmodule() {

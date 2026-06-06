@@ -215,13 +215,13 @@ describe('BranchPanel', () => {
             />,
         );
 
-        expect(screen.getByTitle('feature/topic')).toBeInTheDocument();
+        expect(screen.getByTitle(/feature\/topic/)).toBeInTheDocument();
 
         fireEvent.click(screen.getByLabelText('Collapse Branches'));
-        expect(screen.queryByTitle('feature/topic')).not.toBeInTheDocument();
+        expect(screen.queryByTitle(/feature\/topic/)).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByLabelText('Expand Branches'));
-        expect(screen.getByTitle('feature/topic')).toBeInTheDocument();
+        expect(screen.getByTitle(/feature\/topic/)).toBeInTheDocument();
     });
 
     it('keeps branch rendering as a tree only', () => {

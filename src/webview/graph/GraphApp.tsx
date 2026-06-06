@@ -164,13 +164,14 @@ export function GraphApp() {
         vscodeApi.postMessage(messageForGraphContextTarget(contextTargetForScope(target, state.repositoryScope)));
     }, [state.repositoryScope]);
 
-    const handleMoveGraphFocus = useCallback((currentHash: string, direction: 'previous' | 'next') => {
+    const handleMoveGraphFocus = useCallback((currentHash: string, direction: 'previous' | 'next', mode?: 'replace' | 'toggle' | 'range') => {
         const hashes = state.rows.map((row) => row.commit.hash);
         const currentIndex = hashes.indexOf(currentHash);
         const nextHash = direction === 'next' ? hashes[currentIndex + 1] : hashes[currentIndex - 1];
         if (!nextHash) { return; }
         document.querySelector<HTMLElement>(`[data-graph-commit-hash="${nextHash}"]`)?.focus();
-    }, [state.rows]);
+        if (mode) { handleSelectCommit(nextHash, mode); }
+    }, [handleSelectCommit, state.rows]);
 
     return (
         <div className="graph-shell">

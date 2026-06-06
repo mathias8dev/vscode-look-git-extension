@@ -21,12 +21,13 @@ interface GraphRowProps {
     readonly onSelect: (hash: string, mode: CommitSelectMode) => void;
     readonly onOpenContextMenu: (commit: GraphCommit) => void;
     readonly onBranchDoubleClick: (branch: string, isRemote: boolean) => void;
-    readonly onMoveFocus: (currentHash: string, direction: 'previous' | 'next') => void;
+    readonly onMoveFocus: (currentHash: string, direction: 'previous' | 'next', mode?: CommitSelectMode) => void;
 }
 
 export function GraphCommitRow({ row, branches, selected, childHash, parentHash, canUndoCommit, canCherryPick, hasMultipleSelectedCommits, rowHeight, style, onSelect, onOpenContextMenu, onBranchDoubleClick, onMoveFocus }: GraphRowProps) {
     const { commit, laneData } = row;
     const refs = parseRefs(commit.refs, branches);
+    const disabledReasons = graphCommitDisabledReasons({ canCherryPick, canUndoCommit, hasMultipleSelectedCommits, childHash, parentHash });
     const messageOffset = (getLaneDataMaxLane(laneData) + 1) * LANE_WIDTH + 4;
     const rowStyle: CSSProperties & { readonly '--graph-row-message-offset': string } = {
         ...style,
@@ -39,7 +40,7 @@ export function GraphCommitRow({ row, branches, selected, childHash, parentHash,
             style={rowStyle}
             aria-selected={selected}
             tabIndex={0}
-            title={commit.message}
+            title={[commit.message, ...disabledReasons].join('\n')}
             data-graph-commit-hash={commit.hash}
             data-vscode-context={JSON.stringify({
                 webviewSection: 'graphCommit',
@@ -49,6 +50,7 @@ export function GraphCommitRow({ row, branches, selected, childHash, parentHash,
                 graphCommitCanCherryPick: canCherryPick,
                 graphCommitCanSquash: hasMultipleSelectedCommits,
                 graphCommitHasMultipleSelectedCommits: hasMultipleSelectedCommits,
+                graphCommitDisabledReason: disabledReasons.join('\n'),
                 preventDefaultContextMenuItems: true,
             })}
             onClick={(event) => {
@@ -59,12 +61,18 @@ export function GraphCommitRow({ row, branches, selected, childHash, parentHash,
             onKeyDown={(e) => {
                 if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                     e.preventDefault();
-                    onMoveFocus(commit.hash, e.key === 'ArrowDown' ? 'next' : 'previous');
+                    onMoveFocus(commit.hash, e.key === 'ArrowDown' ? 'next' : 'previous', e.shiftKey ? 'range' : undefined);
                     return;
                 }
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     onSelect(commit.hash, e.shiftKey ? 'range' : 'replace');
+                    return;
+                }
+                if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
+                    e.preventDefault();
+                    if (!selected) { onSelect(commit.hash, 'replace'); }
+                    openKeyboardContextMenu(e.currentTarget);
                 }
             }}
         >
@@ -107,4 +115,30 @@ function formatGraphCommitDate(iso: string): string {
 
 function twoDigits(value: number): string {
     return String(value).padStart(2, '0');
+}
+
+function graphCommitDisabledReasons(input: {
+    readonly canCherryPick: boolean;
+    readonly canUndoCommit: boolean;
+    readonly hasMultipleSelectedCommits: boolean;
+    readonly childHash: string | undefined;
+    readonly parentHash: string | undefined;
+}): readonly string[] {
+    const reasons: string[] = [];
+    if (!input.canCherryPick) { reasons.push('Cherry-pick unavailable: selected commit already exists in the current branch history.'); }
+    if (!input.hasMultipleSelectedCommits) { reasons.push('Squash Commits unavailable: select at least two commits.'); }
+    if (!input.canUndoCommit) { reasons.push('Undo Commit unavailable: only the current HEAD commit can be undone.'); }
+    if (!input.childHash) { reasons.push('Go to Child Commit unavailable: no visible child commit.'); }
+    if (!input.parentHash) { reasons.push('Go to Parent Commit unavailable: no visible parent commit.'); }
+    return reasons;
+}
+
+function openKeyboardContextMenu(element: HTMLElement): void {
+    const rect = element.getBoundingClientRect();
+    element.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.left + 12,
+        clientY: rect.top + 12,
+    }));
 }

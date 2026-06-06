@@ -72,6 +72,11 @@
     background: var(--vscode-inputValidation-warningBackground, transparent);
 }
 
+.changes-banner-ready {
+    border-color: var(--vscode-testing-iconPassed, var(--vscode-charts-green, #89d185));
+    background: color-mix(in srgb, var(--vscode-testing-iconPassed, #89d185) 12%, transparent);
+}
+
 .changes-banner div:first-child {
     min-width: 0;
     display: grid;
@@ -108,6 +113,12 @@
 
 .operation-actions button:hover {
     background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.1)));
+}
+
+.operation-actions .operation-primary-action {
+    color: var(--vscode-button-foreground, #ffffff);
+    background: var(--vscode-button-background, #0e639c);
+    border-color: var(--vscode-button-background, #0e639c);
 }
 
 .commit-composer {

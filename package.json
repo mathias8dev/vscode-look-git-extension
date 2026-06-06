@@ -136,7 +136,8 @@
       {
         "command": "lookGit.history.undoCommit",
         "title": "Undo Commit...",
-        "category": "Look Git"
+        "category": "Look Git",
+        "enablement": "historyCanUndoCommit"
       },
       {
         "command": "lookGit.history.editCommitMessage",
@@ -182,12 +183,14 @@
       {
         "command": "lookGit.history.goToChildCommit",
         "title": "Go to Child Commit",
-        "category": "Look Git"
+        "category": "Look Git",
+        "enablement": "historyCanGoToChild"
       },
       {
         "command": "lookGit.history.goToParentCommit",
         "title": "Go to Parent Commit",
-        "category": "Look Git"
+        "category": "Look Git",
+        "enablement": "historyCanGoToParent"
       },
       {
         "command": "lookGit.history.openFileDiff",
@@ -928,7 +931,8 @@
       {
         "command": "lookGit.graph.commit.undoCommit",
         "title": "Undo Commit...",
-        "category": "Look Git"
+        "category": "Look Git",
+        "enablement": "graphCommitCanUndoCommit"
       },
       {
         "command": "lookGit.graph.commit.editCommitMessage",
@@ -974,12 +978,14 @@
       {
         "command": "lookGit.graph.commit.goToChildCommit",
         "title": "Go to Child Commit",
-        "category": "Look Git"
+        "category": "Look Git",
+        "enablement": "graphCommitCanGoToChild"
       },
       {
         "command": "lookGit.graph.commit.goToParentCommit",
         "title": "Go to Parent Commit",
-        "category": "Look Git"
+        "category": "Look Git",
+        "enablement": "graphCommitCanGoToParent"
       },
       {
         "command": "lookGit.graph.branch.checkout",
@@ -2030,7 +2036,7 @@
         },
         {
           "command": "lookGit.history.undoCommit",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && historyCanUndoCommit",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
           "group": "3_history_mutate@3"
         },
         {
@@ -2075,12 +2081,12 @@
         },
         {
           "command": "lookGit.history.goToChildCommit",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && historyCanGoToChild",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
           "group": "6_history_navigation@1"
         },
         {
           "command": "lookGit.history.goToParentCommit",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && historyCanGoToParent",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
           "group": "6_history_navigation@2"
         },
         {
@@ -2145,7 +2151,7 @@
         },
         {
           "command": "lookGit.graph.commit.undoCommit",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && graphCommitCanUndoCommit",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
           "group": "3_graph_commit_mutate@3"
         },
         {
@@ -2190,12 +2196,12 @@
         },
         {
           "command": "lookGit.graph.commit.goToChildCommit",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && graphCommitCanGoToChild",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
           "group": "6_graph_commit_navigation@1"
         },
         {
           "command": "lookGit.graph.commit.goToParentCommit",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && graphCommitCanGoToParent",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
           "group": "6_graph_commit_navigation@2"
         },
         {

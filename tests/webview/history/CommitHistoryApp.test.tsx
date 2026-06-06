@@ -164,6 +164,7 @@ describe('CommitHistoryApp', () => {
         expect(row.getAttribute('data-vscode-context')).toContain('"webviewSection":"historyCommit"');
         expect(row.getAttribute('data-vscode-context')).toContain('"historyCanCherryPick":true');
         expect(row.getAttribute('data-vscode-context')).toContain('"historyHasMultipleSelectedCommits":true');
+        expect(row.getAttribute('data-vscode-context')).toContain('"historyCommitDisabledReason"');
         expect(onContextTarget).toHaveBeenCalledWith({
             kind: 'commit',
             hash: 'parent123456789',
@@ -195,12 +196,49 @@ describe('CommitHistoryApp', () => {
         const row = screen.getByRole('option', { name: /feat: parent/ });
 
         expect(row.getAttribute('data-vscode-context')).toContain('"historyCanCherryPick":false');
+        expect(row).toHaveAttribute('title', expect.stringContaining('Cherry-pick unavailable'));
 
         fireEvent.contextMenu(row);
 
         expect(onContextTarget).toHaveBeenCalledWith(expect.objectContaining({
             hash: 'parent123456789',
             canCherryPick: false,
+        }));
+    });
+
+    it('supports shift arrow range selection and the keyboard context menu key', () => {
+        const onSelectCommit = vi.fn<(hash: string, mode: HistoryCommitSelectionMode, visibleHashes: readonly string[]) => void>();
+        const onContextTarget = vi.fn<(target: HistoryContextTarget) => void>();
+        renderApp({
+            state: {
+                ...createInitialHistoryState(),
+                commits: [
+                    commit('a11111111111', 'feat: first'),
+                    commit('b22222222222', 'feat: second'),
+                ],
+                selectedHashes: ['a11111111111'],
+                selectionAnchorHash: 'a11111111111',
+                loadedCount: 2,
+                loading: false,
+            },
+            onSelectCommit,
+            onContextTarget,
+        });
+
+        const first = screen.getByRole('option', { name: /feat: first/ });
+        const second = screen.getByRole('option', { name: /feat: second/ });
+        first.focus();
+
+        fireEvent.keyDown(first, { key: 'ArrowDown', shiftKey: true });
+
+        expect(second).toHaveFocus();
+        expect(onSelectCommit).toHaveBeenCalledWith('b22222222222', HistoryCommitSelectionMode.Range, ['a11111111111', 'b22222222222']);
+
+        fireEvent.keyDown(second, { key: 'ContextMenu' });
+
+        expect(onContextTarget).toHaveBeenCalledWith(expect.objectContaining({
+            kind: 'commit',
+            hash: 'b22222222222',
         }));
     });
 

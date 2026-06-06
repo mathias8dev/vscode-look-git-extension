@@ -31,6 +31,15 @@ describe('Commit History native context menu manifest', () => {
         expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.history.cherryPick')).toMatchObject({
             enablement: 'historyCanCherryPick',
         });
+        expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.history.undoCommit')).toMatchObject({
+            enablement: 'historyCanUndoCommit',
+        });
+        expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.history.goToChildCommit')).toMatchObject({
+            enablement: 'historyCanGoToChild',
+        });
+        expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.history.goToParentCommit')).toMatchObject({
+            enablement: 'historyCanGoToParent',
+        });
         expect(webviewContextMenu).toEqual(expect.arrayContaining([
             expect.objectContaining({
                 command: 'lookGit.history.copyRevisionNumber',
@@ -46,6 +55,18 @@ describe('Commit History native context menu manifest', () => {
             }),
             expect.objectContaining({
                 command: 'lookGit.history.squashInto',
+                when: "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.history.undoCommit',
+                when: "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.history.goToChildCommit',
+                when: "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.history.goToParentCommit',
                 when: "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
             }),
             expect.objectContaining({

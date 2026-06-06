@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ChangeRow } from '../../../src/webview/features/changes/ChangeRow';
 import { ChangeRowAction, primaryRowActionFor } from '../../../src/webview/features/changes/changeCommands';
 import { ChangeSectionId, type ChangeListItem } from '../../../src/webview/features/changes/changeTree';
+import { ChangeSelectionMode } from '../../../src/webview/features/changes/changesState';
 
 describe('ChangeRow', () => {
     it('opens the merge editor when clicking a conflict file', () => {
@@ -57,6 +58,67 @@ describe('ChangeRow', () => {
             ...changeItem(ChangeSectionId.Unstaged, 'modules/lib', ' ', 'M'),
             entry: { indexStatus: ' ', workTreeStatus: 'M', filePath: 'modules/lib', isSubmodule: true },
         })).toBe(ChangeRowAction.Diff);
+    });
+
+    it('uses the keyboard context menu key to select and target a change row', () => {
+        const item = changeItem(ChangeSectionId.Unstaged, 'src/app.ts', ' ', 'M');
+        const onSelect = vi.fn<(item: ChangeListItem, mode: ChangeSelectionMode) => void>();
+        const onOpenContextMenu = vi.fn<(item: ChangeListItem) => void>();
+
+        render(
+            <ChangeRow
+                item={item}
+                depth={0}
+                selected={false}
+                context={JSON.stringify({ webviewSection: 'changesSelection', preventDefaultContextMenuItems: true })}
+                onSelect={onSelect}
+                onOpenContextMenu={onOpenContextMenu}
+                onAction={vi.fn()}
+            />,
+        );
+
+        fireEvent.keyDown(screen.getByTitle('src/app.ts'), { key: 'ContextMenu' });
+
+        expect(onSelect).toHaveBeenCalledWith(item, ChangeSelectionMode.Replace);
+        expect(onOpenContextMenu).toHaveBeenCalledWith(item);
+    });
+
+    it('extends selection with shift arrow keys', () => {
+        const first = changeItem(ChangeSectionId.Unstaged, 'src/first.ts', ' ', 'M');
+        const second = changeItem(ChangeSectionId.Unstaged, 'src/second.ts', ' ', 'M');
+        const onSelect = vi.fn<(item: ChangeListItem, mode: ChangeSelectionMode) => void>();
+
+        render(
+            <div>
+                <ChangeRow
+                    item={first}
+                    depth={0}
+                    selected={true}
+                    context={JSON.stringify({ webviewSection: 'changesSelection', preventDefaultContextMenuItems: true })}
+                    onSelect={onSelect}
+                    onOpenContextMenu={vi.fn()}
+                    onAction={vi.fn()}
+                />
+                <ChangeRow
+                    item={second}
+                    depth={0}
+                    selected={false}
+                    context={JSON.stringify({ webviewSection: 'changesSelection', preventDefaultContextMenuItems: true })}
+                    onSelect={onSelect}
+                    onOpenContextMenu={vi.fn()}
+                    onAction={vi.fn()}
+                />
+            </div>,
+        );
+
+        const firstRow = screen.getByTitle('src/first.ts');
+        const secondRow = screen.getByTitle('src/second.ts');
+        firstRow.focus();
+
+        fireEvent.keyDown(firstRow, { key: 'ArrowDown', shiftKey: true });
+
+        expect(secondRow).toHaveFocus();
+        expect(onSelect).toHaveBeenCalledWith(second, ChangeSelectionMode.Range);
     });
 });
 

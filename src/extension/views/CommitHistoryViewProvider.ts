@@ -373,6 +373,14 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             this.postHistoryError(new Error('Select at least two commits to squash.'), 'history/squashInto', 'validationFailed');
             return;
         }
+        if (command === 'cherryPick' && target.canCherryPick === false) {
+            this.postHistoryError(
+                new Error('Cherry-pick is unavailable because the selected commit already exists in the current branch history.'),
+                'history/cherryPick',
+                'validationFailed',
+            );
+            return;
+        }
 
         try {
             const repo = this.requireHistoryRepository();

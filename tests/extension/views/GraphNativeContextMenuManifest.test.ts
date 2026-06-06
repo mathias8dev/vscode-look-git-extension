@@ -42,6 +42,15 @@ describe('Graph native context menu manifest', () => {
         expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.graph.commit.cherryPick')).toMatchObject({
             enablement: 'graphCommitCanCherryPick',
         });
+        expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.graph.commit.undoCommit')).toMatchObject({
+            enablement: 'graphCommitCanUndoCommit',
+        });
+        expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.graph.commit.goToChildCommit')).toMatchObject({
+            enablement: 'graphCommitCanGoToChild',
+        });
+        expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.graph.commit.goToParentCommit')).toMatchObject({
+            enablement: 'graphCommitCanGoToParent',
+        });
         expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.graph.branch.push')).toMatchObject({
             enablement: 'graphBranchCanPush',
         });
@@ -70,7 +79,15 @@ describe('Graph native context menu manifest', () => {
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.commit.undoCommit',
-                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && graphCommitCanUndoCommit",
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.graph.commit.goToChildCommit',
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.graph.commit.goToParentCommit',
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.branch.openBranchWorktree',
