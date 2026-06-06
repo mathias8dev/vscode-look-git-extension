@@ -5,6 +5,7 @@ import type { GitSubmodule, GitWorktree } from '../../../core/git/domain/GitWork
 import { summarizePorcelainStatus } from '../../../core/parsing/parseStatus';
 import { queryAllBranches, queryCurrentBranch } from '../../../core/queries/queryGraph';
 import { queryWorktrees } from '../../../core/queries/queryWorktrees';
+import { getReachableCommitHashes } from '../commits/get-reachable-commit-hashes';
 
 export interface GraphDataFilters {
     readonly search?: string;
@@ -170,17 +171,14 @@ export class GetGraphDataUseCase {
         warnings: GraphDataWarning[],
         signal?: AbortSignal,
     ): Promise<readonly string[]> {
-        const hashes = await mapLimited(commits, 8, async (commit) => {
-            try {
-                await repo.exec(['merge-base', '--is-ancestor', commit.hash, 'HEAD'], signal);
-                return commit.hash;
-            } catch (error) {
-                signal?.throwIfAborted();
-                if (gitExitCode(error) !== 1) { warnings.push({ operation: 'graph/currentBranchHistory', error }); }
-                return undefined;
-            }
-        });
-        return hashes.filter((hash): hash is string => hash !== undefined);
+        try {
+            const reachable = await getReachableCommitHashes(repo, commits.map((commit) => commit.hash), signal);
+            return commits.map((commit) => commit.hash).filter((hash) => reachable.has(hash));
+        } catch (error) {
+            signal?.throwIfAborted();
+            warnings.push({ operation: 'graph/currentBranchHistory', error });
+            return [];
+        }
     }
 
     private async loadSubmoduleRepositories(
@@ -250,9 +248,4 @@ function optionalValue<T>(
     if (result.status === 'fulfilled') { return result.value; }
     warnings.push({ operation: result.operation, error: result.reason });
     return [];
-}
-
-function gitExitCode(error: unknown): number | undefined {
-    if (typeof error !== 'object' || error === null || !('code' in error)) { return undefined; }
-    return typeof error.code === 'number' ? error.code : undefined;
 }

@@ -108,13 +108,7 @@ describe('GraphMessageRouter graph data', () => {
                 ahead: 0,
                 behind: 0,
             }]),
-            exec: vi.fn(async (args) => {
-                if (args[0] === 'merge-base' && args[1] === '--is-ancestor' && args[2] === currentHash) { return ''; }
-                if (args[0] === 'merge-base' && args[1] === '--is-ancestor' && args[2] === topicHash) {
-                    throw Object.assign(new Error('not ancestor'), { code: 1 });
-                }
-                return '';
-            }),
+            execRaw: vi.fn(async () => `${topicHash}\n`),
         });
         const messages: GraphExtensionToWebviewMessage[] = [];
         const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
@@ -131,8 +125,7 @@ describe('GraphMessageRouter graph data', () => {
             expect.objectContaining({ hash: currentHash, canCherryPick: false }),
             expect.objectContaining({ hash: topicHash, canCherryPick: true }),
         ]);
-        expect(repo.exec).toHaveBeenCalledWith(['merge-base', '--is-ancestor', currentHash, 'HEAD'], expect.any(AbortSignal));
-        expect(repo.exec).toHaveBeenCalledWith(['merge-base', '--is-ancestor', topicHash, 'HEAD'], expect.any(AbortSignal));
+        expect(repo.execRaw).toHaveBeenCalledWith(['rev-list', '--no-walk', currentHash, topicHash, '--not', 'HEAD'], expect.any(AbortSignal));
     });
 
     it('requests only the next graph page when loading more commits', async () => {
@@ -668,8 +661,8 @@ describe('GraphMessageRouter commit commands', () => {
 
     it('cherry-picks selected commits from oldest to newest', async () => {
         const repo = makeRepositoryMock({
+            execRaw: vi.fn(async (args) => args[0] === 'rev-list' ? 'a\nb\nc' : ''),
             exec: vi.fn(async (args) => {
-                if (args[0] === 'merge-base' && args[1] === '--is-ancestor') { throw new Error('not ancestor'); }
                 if (args[0] === 'rev-list') { return 'c\nb\na'; }
                 return '';
             }),
@@ -678,6 +671,7 @@ describe('GraphMessageRouter commit commands', () => {
 
         await router.handle({ type: 'graph/commitCommand', command: 'cherryPick', hash: 'c', hashes: ['a', 'b', 'c'] });
 
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['rev-list', '--no-walk', 'a', 'b', 'c', '--not', 'HEAD'], undefined);
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['rev-list', '--topo-order', 'a', 'b', 'c']);
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['cherry-pick', 'a', 'b', 'c']);
     });
@@ -685,8 +679,8 @@ describe('GraphMessageRouter commit commands', () => {
     it('rejects cherry-picking commits that are already in the current branch history', async () => {
         const messages: GraphExtensionToWebviewMessage[] = [];
         const repo = makeRepositoryMock({
+            execRaw: vi.fn(async () => ''),
             exec: vi.fn(async (args) => {
-                if (args[0] === 'merge-base' && args[1] === '--is-ancestor') { return ''; }
                 if (args[0] === 'rev-list') { return 'a'; }
                 return '';
             }),
@@ -695,6 +689,7 @@ describe('GraphMessageRouter commit commands', () => {
 
         await router.handle({ type: 'graph/commitCommand', command: 'cherryPick', hash: 'a', hashes: ['a'] });
 
+        expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['rev-list', '--no-walk', 'a', '--not', 'HEAD'], undefined);
         expect(vi.mocked(repo.exec)).not.toHaveBeenCalledWith(['cherry-pick', 'a']);
         expect(messages).toContainEqual(expect.objectContaining({
             type: 'graph/error',

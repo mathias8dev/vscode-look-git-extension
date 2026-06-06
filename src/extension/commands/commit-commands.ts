@@ -12,6 +12,7 @@ import { defaultCreateCommitPatch } from '../adapters/vscode/default-create-comm
 import { type ExplainCommitDiffUseCase } from '../../application/usecases/commits/explain-commit-diff';
 import { defaultExplainCommitDiff } from '../adapters/vscode/default-explain-commit-diff';
 import { orderSelectedCommits } from '../../application/usecases/commits/order-selected-commits';
+import { getReachableCommitHashes } from '../../application/usecases/commits/get-reachable-commit-hashes';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
 import { showModalWarningMessage } from '../utils/confirmation';
 import { openDiffExplanationDocument, showDiffExplanationError } from '../utils/diff-explanation-document';
@@ -131,23 +132,12 @@ async function explainCommitDiff(
 }
 
 async function assertCherryPickableCommits(repo: GitRepository, hashes: readonly string[]): Promise<void> {
-    const alreadyInCurrentHistory: string[] = [];
-    for (const hash of hashes) {
-        if (await isAncestorOfHead(repo, hash)) {
-            alreadyInCurrentHistory.push(hash.substring(0, 7));
-        }
-    }
+    const reachable = await getReachableCommitHashes(repo, hashes).catch(() => new Set<string>());
+    const alreadyInCurrentHistory = hashes
+        .filter((hash) => reachable.has(hash))
+        .map((hash) => hash.substring(0, 7));
     if (alreadyInCurrentHistory.length > 0) {
         throw new Error(`Cherry-pick is only available for commits outside the current branch history: ${alreadyInCurrentHistory.join(', ')}.`);
-    }
-}
-
-async function isAncestorOfHead(repo: GitRepository, hash: string): Promise<boolean> {
-    try {
-        await repo.exec(['merge-base', '--is-ancestor', hash, 'HEAD']);
-        return true;
-    } catch {
-        return false;
     }
 }
 

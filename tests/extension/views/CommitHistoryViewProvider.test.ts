@@ -279,12 +279,7 @@ describe('CommitHistoryViewProvider error propagation', () => {
                 behind: 0,
             }]),
             getLogForRef: vi.fn(async () => [commit('feature123456789', 'feat: branch history')]),
-            exec: vi.fn(async (args) => {
-                if (args[0] === 'merge-base' && args[1] === '--is-ancestor' && args[2] === 'feature123456789') {
-                    throw Object.assign(new Error('not ancestor'), { code: 1 });
-                }
-                return '';
-            }),
+            execRaw: vi.fn(async () => 'feature123456789\n'),
         });
         const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
         const view = makeWebviewView();
@@ -301,7 +296,7 @@ describe('CommitHistoryViewProvider error propagation', () => {
                 })],
             }),
         })));
-        expect(repo.exec).toHaveBeenCalledWith(['merge-base', '--is-ancestor', 'feature123456789', 'HEAD']);
+        expect(repo.execRaw).toHaveBeenCalledWith(['rev-list', '--no-walk', 'feature123456789', '--not', 'HEAD'], undefined);
     });
 
     it('keeps the current history untouched when branch selection is cancelled', async () => {

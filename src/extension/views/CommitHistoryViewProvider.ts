@@ -20,6 +20,7 @@ import { webviewFontSizeMessage } from './webview-font';
 import { operationActionsForStatus } from '../utils/operation-feedback';
 import { ScopedGitRepository } from '../git/scoped-git-repository';
 import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
+import { getReachableCommitHashes } from '../../application/usecases/commits/get-reachable-commit-hashes';
 
 const DEFAULT_PAGE: Pagination = { offset: 0, limit: 50 };
 const MAX_PAGE_LIMIT = 300;
@@ -656,27 +657,11 @@ async function hasNewConflicts(repo: GitRepository, existingConflicts: ReadonlyS
 }
 
 async function currentBranchCommitHashSet(repo: GitRepository, commits: readonly GitCommit[]): Promise<ReadonlySet<string>> {
-    const hashes = await mapLimited(commits, 8, async (commit) => {
-        try {
-            await repo.exec(['merge-base', '--is-ancestor', commit.hash, 'HEAD']);
-            return commit.hash;
-        } catch {
-            return undefined;
-        }
-    });
-    return new Set(hashes.filter((hash): hash is string => hash !== undefined));
-}
-
-async function mapLimited<T, R>(
-    items: readonly T[],
-    limit: number,
-    mapper: (item: T) => Promise<R>,
-): Promise<readonly R[]> {
-    const results: R[] = [];
-    for (let index = 0; index < items.length; index += limit) {
-        results.push(...await Promise.all(items.slice(index, index + limit).map(mapper)));
+    try {
+        return await getReachableCommitHashes(repo, commits.map((commit) => commit.hash));
+    } catch {
+        return new Set();
     }
-    return results;
 }
 
 async function createDiffUris(cwd: string, message: HistoryOpenDiffRequest): Promise<{ readonly left: vscode.Uri; readonly right: vscode.Uri }> {
