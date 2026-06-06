@@ -27,6 +27,7 @@ describe('Graph native context menu manifest', () => {
             'lookGit.graph.commit.explainDiff',
             'lookGit.graph.commit.goToParentCommit',
             'lookGit.graph.branch.checkout',
+            'lookGit.graph.branch.publish',
             'lookGit.graph.branch.removeBranchWorktree',
             'lookGit.graph.worktree.open',
             'lookGit.graph.worktree.showDetails',
@@ -36,7 +37,19 @@ describe('Graph native context menu manifest', () => {
         }
         expect(graphSquashCommand).toMatchObject({
             title: 'Squash Commits...',
-            enablement: 'graphCommitHasMultipleSelectedCommits',
+            enablement: 'graphCommitCanSquash',
+        });
+        expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.graph.commit.cherryPick')).toMatchObject({
+            enablement: 'graphCommitCanCherryPick',
+        });
+        expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.graph.branch.push')).toMatchObject({
+            enablement: 'graphBranchCanPush',
+        });
+        expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.graph.branch.publish')).toMatchObject({
+            enablement: 'graphBranchCanPublish',
+        });
+        expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.graph.branch.delete')).toMatchObject({
+            enablement: 'graphBranchCanDelete',
         });
         expect(webviewContextMenu).toEqual(expect.arrayContaining([
             expect.objectContaining({
@@ -45,6 +58,14 @@ describe('Graph native context menu manifest', () => {
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.commit.explainDiff',
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.graph.commit.cherryPick',
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.graph.commit.squashInto',
                 when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
             }),
             expect.objectContaining({
@@ -58,6 +79,18 @@ describe('Graph native context menu manifest', () => {
             expect.objectContaining({
                 command: 'lookGit.graph.branch.rename',
                 when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsRemote",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.graph.branch.push',
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.graph.branch.publish',
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.graph.branch.delete',
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.worktree.showDiffWithMainWorktree',

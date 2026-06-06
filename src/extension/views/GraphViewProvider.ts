@@ -47,6 +47,7 @@ const GRAPH_BRANCH_COMMANDS: readonly { readonly id: string; readonly command: B
     { id: 'lookGit.graph.branch.rebaseOnto', command: 'rebaseOnto' },
     { id: 'lookGit.graph.branch.mergeInto', command: 'mergeInto' },
     { id: 'lookGit.graph.branch.push', command: 'push' },
+    { id: 'lookGit.graph.branch.publish', command: 'push' },
     { id: 'lookGit.graph.branch.pullBranchWorktree', command: 'pullBranchWorktree' },
     { id: 'lookGit.graph.branch.pushBranchWorktree', command: 'pushBranchWorktree' },
     { id: 'lookGit.graph.branch.lockBranchWorktree', command: 'lockBranchWorktree' },
@@ -123,7 +124,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     registerNativeContextCommands(): readonly vscode.Disposable[] {
         return [
             ...GRAPH_COMMIT_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runCommitContextCommand(command))),
-            ...GRAPH_BRANCH_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runBranchContextCommand(command))),
+            ...GRAPH_BRANCH_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runBranchContextCommand(command, { allowUnpublishedBranchPush: id === 'lookGit.graph.branch.publish' }))),
             ...GRAPH_WORKTREE_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runWorktreeContextCommand(command))),
             vscode.commands.registerCommand('lookGit.graph.commit.goToChildCommit', () => this.selectContextCommit('child')),
             vscode.commands.registerCommand('lookGit.graph.commit.goToParentCommit', () => this.selectContextCommit('parent')),
@@ -147,13 +148,16 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     private async runCommitContextCommand(command: CommitCommand): Promise<void> {
         const target = this.contextTarget;
         if (target?.kind !== 'commit') { return; }
-        if (command === 'squashInto' && target.hashes.length < 2) { return; }
+        if (command === 'squashInto' && (target.canSquash === false || target.hashes.length < 2)) { return; }
         await this.router?.handle({ type: 'graph/commitCommand', command, hash: target.hash, hashes: target.hashes, repositoryScope: target.repositoryScope });
     }
 
-    private async runBranchContextCommand(command: BranchCommand): Promise<void> {
+    private async runBranchContextCommand(command: BranchCommand, options: BranchContextCommandOptions = {}): Promise<void> {
         const target = this.contextTarget;
         if (target?.kind !== 'branch') { return; }
+        if (command === 'delete' && (target.canDelete === false || target.isCurrent)) { return; }
+        if (command === 'push' && options.allowUnpublishedBranchPush && target.canPublish !== true) { return; }
+        if (command === 'push' && !options.allowUnpublishedBranchPush && target.canPush !== true) { return; }
         await this.router?.handle({ type: 'graph/branchCommand', command, branch: target.branch, isRemote: target.isRemote, repositoryScope: target.repositoryScope });
     }
 
@@ -180,4 +184,8 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     private renderWebviewHtml(webviewView: vscode.WebviewView): void {
         webviewView.webview.html = getWebviewHtml(webviewView.webview, this.extensionUri, 'graph');
     }
+}
+
+interface BranchContextCommandOptions {
+    readonly allowUnpublishedBranchPush?: boolean;
 }

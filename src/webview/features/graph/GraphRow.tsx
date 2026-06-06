@@ -14,6 +14,7 @@ interface GraphRowProps {
     readonly childHash: string | undefined;
     readonly parentHash: string | undefined;
     readonly canUndoCommit: boolean;
+    readonly canCherryPick: boolean;
     readonly hasMultipleSelectedCommits: boolean;
     readonly rowHeight?: number;
     readonly style: CSSProperties;
@@ -23,7 +24,7 @@ interface GraphRowProps {
     readonly onMoveFocus: (currentHash: string, direction: 'previous' | 'next') => void;
 }
 
-export function GraphCommitRow({ row, branches, selected, childHash, parentHash, canUndoCommit, hasMultipleSelectedCommits, rowHeight, style, onSelect, onOpenContextMenu, onBranchDoubleClick, onMoveFocus }: GraphRowProps) {
+export function GraphCommitRow({ row, branches, selected, childHash, parentHash, canUndoCommit, canCherryPick, hasMultipleSelectedCommits, rowHeight, style, onSelect, onOpenContextMenu, onBranchDoubleClick, onMoveFocus }: GraphRowProps) {
     const { commit, laneData } = row;
     const refs = parseRefs(commit.refs, branches);
     const messageOffset = (getLaneDataMaxLane(laneData) + 1) * LANE_WIDTH + 4;
@@ -45,6 +46,8 @@ export function GraphCommitRow({ row, branches, selected, childHash, parentHash,
                 graphCommitCanGoToChild: childHash !== undefined,
                 graphCommitCanGoToParent: parentHash !== undefined,
                 graphCommitCanUndoCommit: canUndoCommit,
+                graphCommitCanCherryPick: canCherryPick,
+                graphCommitCanSquash: hasMultipleSelectedCommits,
                 graphCommitHasMultipleSelectedCommits: hasMultipleSelectedCommits,
                 preventDefaultContextMenuItems: true,
             })}

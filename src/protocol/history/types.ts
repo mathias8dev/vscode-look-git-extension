@@ -8,6 +8,7 @@ export interface HistoryCommit {
     readonly authorDate: string;
     readonly parentHashes: readonly string[];
     readonly refs: readonly HistoryCommitRef[];
+    readonly canCherryPick?: boolean;
 }
 
 export type HistoryCommitRefKind = 'local' | 'remote' | 'tag';
@@ -47,6 +48,7 @@ export interface HistoryCommitContextTarget {
     readonly childHash?: string;
     readonly parentHash?: string;
     readonly canUndoCommit: boolean;
+    readonly canCherryPick?: boolean;
 }
 
 export interface HistoryFileContextTarget {

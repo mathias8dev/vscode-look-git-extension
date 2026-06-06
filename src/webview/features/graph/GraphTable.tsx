@@ -89,9 +89,11 @@ export function GraphTable({
 
     const visibleDisplayRows = displayRows.slice(firstVisible, lastVisible + 1);
     const selectedHashSet = useMemo(() => new Set(selectedHashes), [selectedHashes]);
+    const commitByHash = useMemo(() => new Map(rows.map((row) => [row.commit.hash, row.commit])), [rows]);
 
     const handleOpenContextMenu = useCallback((hash: string) => {
         const hashes = selectedHashSet.has(hash) ? selectedHashes : [hash];
+        const canCherryPick = hashes.every((selectedHash) => commitByHash.get(selectedHash)?.canCherryPick ?? true);
         if (!selectedHashSet.has(hash)) { onSelectCommit(hash, 'replace'); }
         onContextTarget({
             kind: 'commit',
@@ -100,8 +102,10 @@ export function GraphTable({
             childHash: childHash(rows, hash),
             parentHash: parentHash(rows, hash),
             canUndoCommit: rows[0]?.commit.hash === hash,
+            canCherryPick,
+            canSquash: hashes.length > 1,
         });
-    }, [onContextTarget, onSelectCommit, rows, selectedHashSet, selectedHashes]);
+    }, [commitByHash, onContextTarget, onSelectCommit, rows, selectedHashSet, selectedHashes]);
 
     return (
         <div className="graph-table-wrapper">
@@ -135,16 +139,19 @@ export function GraphTable({
                             );
                         }
                         const { row } = displayRow;
+                        const rowSelected = selectedHashSet.has(row.commit.hash);
+                        const selectedCanCherryPick = selectedHashes.every((hash) => commitByHash.get(hash)?.canCherryPick ?? true);
                         return (
                             <GraphCommitRow
                                 key={row.commit.hash}
                                 row={row}
                                 branches={branches}
-                                selected={selectedHashSet.has(row.commit.hash)}
+                                selected={rowSelected}
                                 childHash={childHash(rows, row.commit.hash)}
                                 parentHash={parentHash(rows, row.commit.hash)}
                                 canUndoCommit={rows[0]?.commit.hash === row.commit.hash}
-                                hasMultipleSelectedCommits={selectedHashSet.has(row.commit.hash) && selectedHashes.length > 1}
+                                canCherryPick={rowSelected ? selectedCanCherryPick : row.commit.canCherryPick ?? true}
+                                hasMultipleSelectedCommits={rowSelected && selectedHashes.length > 1}
                                 style={rowStyle}
                                 rowHeight={rowHeight}
                                 onSelect={onSelectCommit}

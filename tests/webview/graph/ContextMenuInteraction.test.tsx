@@ -45,10 +45,23 @@ describe('graph native context menu targets', () => {
 
         expect(context).toContain('"webviewSection":"graphBranch"');
         expect(context).toContain('"graphBranchHasWorktree":true');
+        expect(context).toContain('"graphBranchHasUpstream":true');
+        expect(context).toContain('"graphBranchCanPush":true');
+        expect(context).toContain('"graphBranchCanPublish":false');
+        expect(context).toContain('"graphBranchCanDelete":true');
 
         fireEvent.contextMenu(row);
 
-        expect(onContextTarget).toHaveBeenCalledWith({ kind: 'branch', branch: 'feature/a', isRemote: false });
+        expect(onContextTarget).toHaveBeenCalledWith({
+            kind: 'branch',
+            branch: 'feature/a',
+            isRemote: false,
+            isCurrent: false,
+            hasUpstream: true,
+            canPush: true,
+            canPublish: false,
+            canDelete: true,
+        });
     });
 
     it('marks worktree rows as VS Code native context targets', () => {
@@ -120,6 +133,8 @@ describe('graph native context menu targets', () => {
         expect(context).toContain('"webviewSection":"graphCommit"');
         expect(context).toContain('"graphCommitCanGoToChild":true');
         expect(context).toContain('"graphCommitCanGoToParent":false');
+        expect(context).toContain('"graphCommitCanCherryPick":true');
+        expect(context).toContain('"graphCommitCanSquash":true');
         expect(context).toContain('"graphCommitHasMultipleSelectedCommits":true');
 
         fireEvent.contextMenu(row);
@@ -132,7 +147,49 @@ describe('graph native context menu targets', () => {
             childHash: 'head1234567890abcdef',
             parentHash: undefined,
             canUndoCommit: false,
+            canCherryPick: true,
+            canSquash: true,
         });
+    });
+
+    it('disables cherry-pick for mixed commit selections when one selected commit is already in current history', () => {
+        const onContextTarget = vi.fn<(target: GraphContextTarget) => void>();
+        const commits = [
+            commit('head1234567890abcdef', ['base1234567890abcdef'], false),
+            commit('base1234567890abcdef', [], true),
+        ];
+        const rows = assignLanes(commits);
+        const displayRows: readonly DisplayRow[] = rows.map((row) => ({ kind: 'commit', row }));
+
+        render(
+            <GraphTable
+                rows={rows}
+                displayRows={displayRows}
+                branches={[]}
+                selectedHashes={['base1234567890abcdef', 'head1234567890abcdef']}
+                selectedWorktreePath={undefined}
+                hasMore={false}
+                loadingMore={false}
+                onSelectCommit={() => undefined}
+                onSelectWorktree={() => undefined}
+                onContextTarget={onContextTarget}
+                onLoadMore={() => undefined}
+                onBranchDoubleClick={() => undefined}
+                onMoveFocus={() => undefined}
+            />,
+        );
+
+        const row = screen.getByTitle('commit base1234567890abcdef');
+
+        expect(row.getAttribute('data-vscode-context')).toContain('"graphCommitCanCherryPick":false');
+
+        fireEvent.contextMenu(row);
+
+        expect(onContextTarget).toHaveBeenCalledWith(expect.objectContaining({
+            hash: 'base1234567890abcdef',
+            canCherryPick: false,
+            canSquash: true,
+        }));
     });
 });
 
@@ -142,6 +199,7 @@ function branch(name: string): BranchInfo {
         isRemote: false,
         isCurrent: false,
         hash: 'abc1234',
+        upstream: 'origin/feature/a',
         ahead: 0,
         behind: 0,
     };
@@ -158,7 +216,7 @@ function worktree(worktreePath: string, branchName: string): WorktreeInfo {
     };
 }
 
-function commit(hash: string, parentHashes: readonly string[]): GraphCommit {
+function commit(hash: string, parentHashes: readonly string[], canCherryPick = true): GraphCommit {
     return {
         hash,
         shortHash: hash.substring(0, 7),
@@ -168,5 +226,6 @@ function commit(hash: string, parentHashes: readonly string[]): GraphCommit {
         authorDate: '2024-01-01T00:00:00Z',
         parentHashes,
         refs: [],
+        canCherryPick,
     };
 }

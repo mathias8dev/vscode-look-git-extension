@@ -28,6 +28,9 @@ describe('Commit History native context menu manifest', () => {
             title: 'Squash Commits...',
             enablement: 'historyHasMultipleSelectedCommits',
         });
+        expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.history.cherryPick')).toMatchObject({
+            enablement: 'historyCanCherryPick',
+        });
         expect(webviewContextMenu).toEqual(expect.arrayContaining([
             expect.objectContaining({
                 command: 'lookGit.history.copyRevisionNumber',
@@ -36,6 +39,14 @@ describe('Commit History native context menu manifest', () => {
             expect.objectContaining({
                 command: 'lookGit.history.explainDiff',
                 when: expect.stringContaining("webviewSection == 'historyCommit'"),
+            }),
+            expect.objectContaining({
+                command: 'lookGit.history.cherryPick',
+                when: "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.history.squashInto',
+                when: "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
             }),
             expect.objectContaining({
                 command: 'lookGit.history.openFileDiff',

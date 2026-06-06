@@ -42,6 +42,7 @@ export function CommitHistoryApp({
     const commits = filterHistoryCommits(state.commits, query);
     const visibleHashes = commits.map((commit) => commit.hash);
     const selectedHashSet = new Set(state.selectedHashes);
+    const commitByHash = new Map(state.commits.map((commit) => [commit.hash, commit]));
     const showSelectionCheckboxes = state.selectedHashes.length > 0;
 
     const selectCommit = (hash: string, mode: HistoryCommitSelectionMode) => {
@@ -53,6 +54,7 @@ export function CommitHistoryApp({
 
     const commitContextTarget = (commit: HistoryCommit): HistoryContextTarget => {
         const hashes = selectedHashSet.has(commit.hash) ? state.selectedHashes : [commit.hash];
+        const canCherryPick = hashes.every((hash) => commitByHash.get(hash)?.canCherryPick ?? true);
         return {
             kind: 'commit',
             hash: commit.hash,
@@ -60,6 +62,7 @@ export function CommitHistoryApp({
             childHash: childHash(state.commits, commit.hash),
             parentHash: commit.parentHashes[0],
             canUndoCommit: state.commits[0]?.hash === commit.hash,
+            canCherryPick,
         };
     };
 
@@ -109,17 +112,20 @@ export function CommitHistoryApp({
                 {commits.map((commit) => {
                     const expanded = state.expandedHashes.includes(commit.hash);
                     const details = state.detailsByHash[commit.hash];
+                    const selected = selectedHashSet.has(commit.hash);
+                    const selectedCanCherryPick = state.selectedHashes.every((hash) => commitByHash.get(hash)?.canCherryPick ?? true);
                     return (
                         <div key={commit.hash} className="history-item">
                             <CommitHistoryRow
                                 commit={commit}
                                 expanded={expanded}
-                                selected={selectedHashSet.has(commit.hash)}
+                                selected={selected}
                                 showSelectionCheckbox={showSelectionCheckboxes}
                                 childHash={childHash(state.commits, commit.hash)}
                                 parentHash={commit.parentHashes[0]}
                                 canUndoCommit={state.commits[0]?.hash === commit.hash}
-                                hasMultipleSelectedCommits={selectedHashSet.has(commit.hash) && state.selectedHashes.length > 1}
+                                canCherryPick={selected ? selectedCanCherryPick : commit.canCherryPick ?? true}
+                                hasMultipleSelectedCommits={selected && state.selectedHashes.length > 1}
                                 onSelect={selectCommit}
                                 onContextMenu={() => {
                                     if (!selectedHashSet.has(commit.hash)) {

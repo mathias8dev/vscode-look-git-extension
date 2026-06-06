@@ -13,6 +13,7 @@ describe('GraphCommitRow', () => {
                 childHash={undefined}
                 parentHash={undefined}
                 canUndoCommit={false}
+                canCherryPick={true}
                 hasMultipleSelectedCommits={false}
                 style={{}}
                 onSelect={() => undefined}
@@ -29,6 +30,7 @@ describe('GraphCommitRow', () => {
                 childHash={undefined}
                 parentHash={undefined}
                 canUndoCommit={false}
+                canCherryPick={true}
                 hasMultipleSelectedCommits={false}
                 style={{}}
                 onSelect={() => undefined}
@@ -51,6 +53,7 @@ describe('GraphCommitRow', () => {
                 childHash={undefined}
                 parentHash={undefined}
                 canUndoCommit={false}
+                canCherryPick={true}
                 hasMultipleSelectedCommits={false}
                 style={{}}
                 onSelect={() => undefined}
@@ -73,6 +76,7 @@ describe('GraphCommitRow', () => {
                 childHash={undefined}
                 parentHash={undefined}
                 canUndoCommit={false}
+                canCherryPick={true}
                 hasMultipleSelectedCommits={false}
                 rowHeight={35}
                 style={{ height: 35 }}
@@ -95,6 +99,7 @@ describe('GraphCommitRow', () => {
                 childHash={undefined}
                 parentHash={undefined}
                 canUndoCommit={false}
+                canCherryPick={true}
                 hasMultipleSelectedCommits={false}
                 style={{}}
                 onSelect={() => undefined}

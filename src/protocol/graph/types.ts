@@ -28,6 +28,7 @@ export interface GraphCommit {
     readonly parentHashes: readonly string[];
     readonly refs: readonly string[];
     readonly matchesFilter?: boolean;
+    readonly canCherryPick?: boolean;
 }
 
 export interface BranchInfo {
@@ -88,7 +89,6 @@ export interface GraphData {
     readonly worktrees: readonly WorktreeInfo[];
     readonly worktreeWips: readonly WorktreeWip[];
     readonly submodules: readonly GraphSubmoduleInfo[];
-    readonly currentBranchCommitHashes?: readonly string[];
 }
 
 export interface CommitFileChange {
@@ -106,12 +106,19 @@ export interface GraphCommitContextTarget {
     readonly childHash?: string;
     readonly parentHash?: string;
     readonly canUndoCommit: boolean;
+    readonly canCherryPick?: boolean;
+    readonly canSquash?: boolean;
 }
 
 export interface GraphBranchContextTarget {
     readonly kind: 'branch';
     readonly branch: string;
     readonly isRemote: boolean;
+    readonly isCurrent?: boolean;
+    readonly hasUpstream?: boolean;
+    readonly canPush?: boolean;
+    readonly canPublish?: boolean;
+    readonly canDelete?: boolean;
     readonly repositoryScope?: GraphRepositoryScope;
 }
 

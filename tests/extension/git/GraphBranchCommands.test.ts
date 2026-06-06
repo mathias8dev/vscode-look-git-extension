@@ -106,6 +106,22 @@ describe('Graph branch commands against real git repos', () => {
         expect(fixture.gitTrim(['branch', '--list', 'renamed/from-source'])).toBe('');
     });
 
+    it('refuses to delete the current branch', async () => {
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        fixture.commitFile('base.txt', 'base\n', 'feat: base');
+        const router = routerFor(fixture.cwd, messages);
+
+        setWarningChoice('Delete');
+        await router.handle({ type: 'graph/branchCommand', command: 'delete', branch: 'main', isRemote: false });
+
+        expect(fixture.gitTrim(['branch', '--show-current'])).toBe('main');
+        expect(fixture.gitTrim(['branch', '--list', 'main'])).toContain('main');
+        expect(messages).toContainEqual(expect.objectContaining({
+            type: 'graph/error',
+            message: 'The current branch cannot be deleted.',
+        }));
+    });
+
     it('opens branch compare and working tree diff in the changes editor', async () => {
         fixture.commitFile('base.txt', 'base\n', 'feat: base');
         fixture.git(['checkout', '-q', '-b', 'feature/diff']);

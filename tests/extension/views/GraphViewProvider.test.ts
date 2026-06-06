@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { CliRemoteCommandKind, type RemoteCommandBackend } from '../../../src/application/ports/remote-command-backend';
 import { GraphViewProvider } from '../../../src/extension/views/GraphViewProvider';
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
@@ -235,6 +236,78 @@ describe('GraphViewProvider', () => {
         });
         await vscode.commands.executeCommand('lookGit.graph.worktree.showDetails');
         expect(view.messages).toContainEqual({ type: 'graph/selectWorktree', path: '/repo/.worktrees/native' });
+
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('keeps unpublished branch push and publish context commands semantically distinct', async () => {
+        const repo = makeRepositoryMock({
+            getRemotes: vi.fn(async () => ['origin']),
+        });
+        const remoteCommands: RemoteCommandBackend = {
+            runVscode: vi.fn(async () => {}),
+            runCli: vi.fn(async () => {}),
+        };
+        const provider = new GraphViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo), async () => {}, remoteCommands);
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({
+            type: 'graph/contextTarget',
+            target: {
+                kind: 'branch',
+                branch: 'feature/unpublished',
+                isRemote: false,
+                hasUpstream: false,
+                canPush: false,
+                canPublish: true,
+                canDelete: true,
+            },
+        });
+
+        await vscode.commands.executeCommand('lookGit.graph.branch.push');
+        expect(remoteCommands.runCli).not.toHaveBeenCalled();
+
+        await vscode.commands.executeCommand('lookGit.graph.branch.publish');
+        expect(remoteCommands.runCli).toHaveBeenCalledWith(repo, {
+            kind: CliRemoteCommandKind.Args,
+            args: ['push', '-u', 'origin', 'feature/unpublished'],
+            title: 'Look Git Remote: feature/unpublished',
+        });
+
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('blocks branch context publish when the selected branch already has an upstream', async () => {
+        const repo = makeRepositoryMock({
+            getRemotes: vi.fn(async () => ['origin']),
+        });
+        const remoteCommands: RemoteCommandBackend = {
+            runVscode: vi.fn(async () => {}),
+            runCli: vi.fn(async () => {}),
+        };
+        const provider = new GraphViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo), async () => {}, remoteCommands);
+        const view = makeWebviewView();
+        const disposables = provider.registerNativeContextCommands();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({
+            type: 'graph/contextTarget',
+            target: {
+                kind: 'branch',
+                branch: 'feature/published',
+                isRemote: false,
+                hasUpstream: true,
+                canPush: true,
+                canPublish: false,
+                canDelete: true,
+            },
+        });
+
+        await vscode.commands.executeCommand('lookGit.graph.branch.publish');
+
+        expect(remoteCommands.runCli).not.toHaveBeenCalled();
 
         disposables.forEach((disposable) => disposable.dispose());
     });

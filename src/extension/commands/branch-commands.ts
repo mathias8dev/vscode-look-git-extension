@@ -63,6 +63,7 @@ export async function runBranchCommand(
             await showDiffWithBranchWorktree(repo, branch, isRemote);
             return false;
         case 'delete': {
+            if (!isRemote && branch === currentBranch) { throw new Error('The current branch cannot be deleted.'); }
             const label = `Delete${isRemote ? ' Remote' : ''}`;
             const choice = await showModalWarningMessage(`Delete branch "${branch}"?`, label);
             if (choice !== label) { return false; }

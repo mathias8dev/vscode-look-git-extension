@@ -162,6 +162,7 @@ describe('CommitHistoryApp', () => {
         fireEvent.contextMenu(row);
 
         expect(row.getAttribute('data-vscode-context')).toContain('"webviewSection":"historyCommit"');
+        expect(row.getAttribute('data-vscode-context')).toContain('"historyCanCherryPick":true');
         expect(row.getAttribute('data-vscode-context')).toContain('"historyHasMultipleSelectedCommits":true');
         expect(onContextTarget).toHaveBeenCalledWith({
             kind: 'commit',
@@ -170,7 +171,37 @@ describe('CommitHistoryApp', () => {
             childHash: 'child123456789',
             parentHash: undefined,
             canUndoCommit: false,
+            canCherryPick: true,
         });
+    });
+
+    it('disables cherry-pick for mixed commit selections when one selected commit is already in current history', () => {
+        const onContextTarget = vi.fn<(target: HistoryContextTarget) => void>();
+        renderApp({
+            state: {
+                ...createInitialHistoryState(),
+                commits: [
+                    { ...commit('child123456789', 'feat: child', false), parentHashes: ['parent123456789'] },
+                    commit('parent123456789', 'feat: parent', true),
+                ],
+                selectedHashes: ['parent123456789', 'child123456789'],
+                selectionAnchorHash: 'child123456789',
+                loadedCount: 2,
+                loading: false,
+            },
+            onContextTarget,
+        });
+
+        const row = screen.getByRole('option', { name: /feat: parent/ });
+
+        expect(row.getAttribute('data-vscode-context')).toContain('"historyCanCherryPick":false');
+
+        fireEvent.contextMenu(row);
+
+        expect(onContextTarget).toHaveBeenCalledWith(expect.objectContaining({
+            hash: 'parent123456789',
+            canCherryPick: false,
+        }));
     });
 
     it('expands the selected commit and renders changed files', () => {
@@ -404,7 +435,7 @@ function renderApp(props: {
     );
 }
 
-function commit(hash: string, message: string): HistoryCommit {
+function commit(hash: string, message: string, canCherryPick = true): HistoryCommit {
     return {
         hash,
         shortHash: hash.substring(0, 7),
@@ -413,5 +444,6 @@ function commit(hash: string, message: string): HistoryCommit {
         authorDate: '2024-01-01T00:00:00Z',
         parentHashes: [],
         refs: [],
+        canCherryPick,
     };
 }

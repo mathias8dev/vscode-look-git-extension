@@ -95,6 +95,46 @@ describe('GraphMessageRouter graph data', () => {
         expect(graphDataResponse(messages, 'graph-worktree-error').data.worktreeWips).toEqual([]);
     });
 
+    it('marks only commits outside the current branch history as cherry-pickable', async () => {
+        const currentHash = '1111111111111111';
+        const topicHash = '2222222222222222';
+        const repo = makeRepositoryMock({
+            getGraphLog: vi.fn(async () => [graphCommit(currentHash), graphCommit(topicHash)]),
+            getAllBranches: vi.fn(async () => [{
+                name: 'main',
+                isRemote: false,
+                isCurrent: true,
+                hash: currentHash,
+                ahead: 0,
+                behind: 0,
+            }]),
+            exec: vi.fn(async (args) => {
+                if (args[0] === 'merge-base' && args[1] === '--is-ancestor' && args[2] === currentHash) { return ''; }
+                if (args[0] === 'merge-base' && args[1] === '--is-ancestor' && args[2] === topicHash) {
+                    throw Object.assign(new Error('not ancestor'), { code: 1 });
+                }
+                return '';
+            }),
+        });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph-cherry-pickable',
+            repoId: 'repo',
+            filters: {},
+            page: { offset: 0, limit: 50 },
+        });
+
+        expect(graphDataResponse(messages, 'graph-cherry-pickable').data.commits).toEqual([
+            expect.objectContaining({ hash: currentHash, canCherryPick: false }),
+            expect.objectContaining({ hash: topicHash, canCherryPick: true }),
+        ]);
+        expect(repo.exec).toHaveBeenCalledWith(['merge-base', '--is-ancestor', currentHash, 'HEAD'], expect.any(AbortSignal));
+        expect(repo.exec).toHaveBeenCalledWith(['merge-base', '--is-ancestor', topicHash, 'HEAD'], expect.any(AbortSignal));
+    });
+
     it('writes graph errors to the Look Git output channel and shows it on request', async () => {
         const error = Object.assign(new Error('fetch failed'), { stderr: 'fatal: Authentication failed' });
         const repo = makeRepositoryMock({
@@ -598,7 +638,11 @@ describe('GraphMessageRouter commit commands', () => {
 
     it('cherry-picks selected commits from oldest to newest', async () => {
         const repo = makeRepositoryMock({
-            exec: vi.fn(async (args) => args[0] === 'rev-list' ? 'c\nb\na' : ''),
+            exec: vi.fn(async (args) => {
+                if (args[0] === 'merge-base' && args[1] === '--is-ancestor') { throw new Error('not ancestor'); }
+                if (args[0] === 'rev-list') { return 'c\nb\na'; }
+                return '';
+            }),
         });
         const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
 
@@ -606,6 +650,26 @@ describe('GraphMessageRouter commit commands', () => {
 
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['rev-list', '--topo-order', 'a', 'b', 'c']);
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['cherry-pick', 'a', 'b', 'c']);
+    });
+
+    it('rejects cherry-picking commits that are already in the current branch history', async () => {
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const repo = makeRepositoryMock({
+            exec: vi.fn(async (args) => {
+                if (args[0] === 'merge-base' && args[1] === '--is-ancestor') { return ''; }
+                if (args[0] === 'rev-list') { return 'a'; }
+                return '';
+            }),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => messages.push(message));
+
+        await router.handle({ type: 'graph/commitCommand', command: 'cherryPick', hash: 'a', hashes: ['a'] });
+
+        expect(vi.mocked(repo.exec)).not.toHaveBeenCalledWith(['cherry-pick', 'a']);
+        expect(messages).toContainEqual(expect.objectContaining({
+            type: 'graph/error',
+            message: 'Cherry-pick is only available for commits outside the current branch history: a.',
+        }));
     });
 
     it('creates branches and tags at the selected revision', async () => {
@@ -916,6 +980,7 @@ function graphResultForRepo(cwd: string): GraphDataResult {
         branches: [{ name: branchName, isRemote: false, isCurrent: true, hash, ahead: 0, behind: 0 }],
         tags: [],
         commits: [graphCommit(hash)],
+        currentBranchCommitHashes: [hash],
         currentBranch: branchName,
         currentUser: isSubmodule ? 'Submodule User' : 'Main User',
         hasMore: false,

@@ -52,6 +52,7 @@ describe('CommitHistoryViewProvider error propagation', () => {
                     authorDate: '2024-01-01T00:00:00Z',
                     parentHashes: [],
                     refs: [],
+                    canCherryPick: false,
                 }, {
                     hash: 'def123456789',
                     shortHash: 'def1234',
@@ -60,6 +61,7 @@ describe('CommitHistoryViewProvider error propagation', () => {
                     authorDate: '2024-01-01T00:00:00Z',
                     parentHashes: [],
                     refs: [],
+                    canCherryPick: false,
                 }],
                 page: { offset: 0, limit: 50 },
                 hasMore: false,
@@ -171,6 +173,7 @@ describe('CommitHistoryViewProvider error propagation', () => {
                     authorDate: '2024-01-01T00:00:00Z',
                     parentHashes: [],
                     refs: [],
+                    canCherryPick: false,
                 }, {
                     hash: 'def123456789',
                     shortHash: 'def1234',
@@ -179,6 +182,7 @@ describe('CommitHistoryViewProvider error propagation', () => {
                     authorDate: '2024-01-01T00:00:00Z',
                     parentHashes: [],
                     refs: [],
+                    canCherryPick: false,
                 }],
                 page: { offset: 2, limit: 2 },
                 hasMore: true,
@@ -261,6 +265,43 @@ describe('CommitHistoryViewProvider error propagation', () => {
                 commits: [expect.objectContaining({ message: 'feat: branch history' })],
             }),
         }));
+    });
+
+    it('marks selected branch commits as cherry-pickable when they are outside current history', async () => {
+        setQuickPickValue('feature/history');
+        const repo = makeRepositoryMock({
+            getAllBranches: vi.fn(async () => [{
+                name: 'feature/history',
+                isRemote: false,
+                isCurrent: false,
+                hash: 'feature123456789',
+                ahead: 0,
+                behind: 0,
+            }]),
+            getLogForRef: vi.fn(async () => [commit('feature123456789', 'feat: branch history')]),
+            exec: vi.fn(async (args) => {
+                if (args[0] === 'merge-base' && args[1] === '--is-ancestor' && args[2] === 'feature123456789') {
+                    throw Object.assign(new Error('not ancestor'), { code: 1 });
+                }
+                return '';
+            }),
+        });
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'selectBranch' });
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'history/data',
+            data: expect.objectContaining({
+                commits: [expect.objectContaining({
+                    hash: 'feature123456789',
+                    canCherryPick: true,
+                })],
+            }),
+        })));
+        expect(repo.exec).toHaveBeenCalledWith(['merge-base', '--is-ancestor', 'feature123456789', 'HEAD']);
     });
 
     it('keeps the current history untouched when branch selection is cancelled', async () => {

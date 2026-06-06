@@ -49,6 +49,7 @@ export async function runCommitCommand(
             return false;
         case 'cherryPick':
             await assertNoUnmergedFiles(repo, 'cherry-picking commits');
+            await assertCherryPickableCommits(repo, selected);
             await repo.exec(['cherry-pick', ...(await orderSelectedCommits(repo, selected, 'oldestFirst'))]);
             return true;
         case 'checkoutRevision':
@@ -126,6 +127,27 @@ async function explainCommitDiff(
     } catch (error) {
         if (isAbortError(error)) { return; }
         await showDiffExplanationError(error);
+    }
+}
+
+async function assertCherryPickableCommits(repo: GitRepository, hashes: readonly string[]): Promise<void> {
+    const alreadyInCurrentHistory: string[] = [];
+    for (const hash of hashes) {
+        if (await isAncestorOfHead(repo, hash)) {
+            alreadyInCurrentHistory.push(hash.substring(0, 7));
+        }
+    }
+    if (alreadyInCurrentHistory.length > 0) {
+        throw new Error(`Cherry-pick is only available for commits outside the current branch history: ${alreadyInCurrentHistory.join(', ')}.`);
+    }
+}
+
+async function isAncestorOfHead(repo: GitRepository, hash: string): Promise<boolean> {
+    try {
+        await repo.exec(['merge-base', '--is-ancestor', hash, 'HEAD']);
+        return true;
+    } catch {
+        return false;
     }
 }
 

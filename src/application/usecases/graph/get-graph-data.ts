@@ -51,6 +51,7 @@ export interface GraphDataResult {
     readonly branches: readonly GitBranch[];
     readonly tags: readonly GitTag[];
     readonly commits: readonly GitGraphCommit[];
+    readonly currentBranchCommitHashes: readonly string[];
     readonly currentBranch: string;
     readonly currentUser: string;
     readonly hasMore: boolean;
@@ -103,11 +104,13 @@ export class GetGraphDataUseCase {
 
         const commits = rawCommits.slice(page.offset, page.offset + page.limit);
         const currentBranch = branches.find((branch) => branch.isCurrent)?.name ?? 'HEAD';
+        const currentBranchCommitHashes = await this.getCurrentBranchCommitHashes(repo, commits, warnings, signal);
 
         return {
             branches,
             tags,
             commits,
+            currentBranchCommitHashes,
             currentBranch,
             currentUser,
             hasMore: rawCommits.length > page.offset + page.limit,
@@ -152,6 +155,25 @@ export class GetGraphDataUseCase {
             }
         }));
         return wips.filter((wip): wip is GraphWorktreeWip => wip !== undefined);
+    }
+
+    private async getCurrentBranchCommitHashes(
+        repo: GitRepository,
+        commits: readonly GitGraphCommit[],
+        warnings: GraphDataWarning[],
+        signal?: AbortSignal,
+    ): Promise<readonly string[]> {
+        const hashes = await mapLimited(commits, 8, async (commit) => {
+            try {
+                await repo.exec(['merge-base', '--is-ancestor', commit.hash, 'HEAD'], signal);
+                return commit.hash;
+            } catch (error) {
+                signal?.throwIfAborted();
+                if (gitExitCode(error) !== 1) { warnings.push({ operation: 'graph/currentBranchHistory', error }); }
+                return undefined;
+            }
+        });
+        return hashes.filter((hash): hash is string => hash !== undefined);
     }
 
     private async loadSubmoduleRepositories(
@@ -221,4 +243,9 @@ function optionalValue<T>(
     if (result.status === 'fulfilled') { return result.value; }
     warnings.push({ operation: result.operation, error: result.reason });
     return [];
+}
+
+function gitExitCode(error: unknown): number | undefined {
+    if (typeof error !== 'object' || error === null || !('code' in error)) { return undefined; }
+    return typeof error.code === 'number' ? error.code : undefined;
 }

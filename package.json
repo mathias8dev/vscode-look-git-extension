@@ -92,7 +92,8 @@
         "command": "lookGit.history.cherryPick",
         "title": "Cherry-Pick",
         "category": "Look Git",
-        "icon": "$(git-pull-request)"
+        "icon": "$(git-pull-request)",
+        "enablement": "historyCanCherryPick"
       },
       {
         "command": "lookGit.history.checkoutRevision",
@@ -883,7 +884,8 @@
         "command": "lookGit.graph.commit.cherryPick",
         "title": "Cherry-Pick",
         "category": "Look Git",
-        "icon": "$(git-pull-request)"
+        "icon": "$(git-pull-request)",
+        "enablement": "graphCommitCanCherryPick"
       },
       {
         "command": "lookGit.graph.commit.checkoutRevision",
@@ -942,7 +944,7 @@
         "command": "lookGit.graph.commit.squashInto",
         "title": "Squash Commits...",
         "category": "Look Git",
-        "enablement": "graphCommitHasMultipleSelectedCommits"
+        "enablement": "graphCommitCanSquash"
       },
       {
         "command": "lookGit.graph.commit.dropCommit",
@@ -1052,7 +1054,15 @@
         "command": "lookGit.graph.branch.push",
         "title": "Push...",
         "category": "Look Git",
-        "icon": "$(cloud-upload)"
+        "icon": "$(cloud-upload)",
+        "enablement": "graphBranchCanPush"
+      },
+      {
+        "command": "lookGit.graph.branch.publish",
+        "title": "Publish Branch...",
+        "category": "Look Git",
+        "icon": "$(cloud-upload)",
+        "enablement": "graphBranchCanPublish"
       },
       {
         "command": "lookGit.graph.branch.pullBranchWorktree",
@@ -1093,7 +1103,8 @@
         "command": "lookGit.graph.branch.delete",
         "title": "Delete",
         "category": "Look Git",
-        "icon": "$(trash)"
+        "icon": "$(trash)",
+        "enablement": "graphBranchCanDelete"
       },
       {
         "command": "lookGit.graph.worktree.open",
@@ -2249,7 +2260,12 @@
         },
         {
           "command": "lookGit.graph.branch.push",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsRemote",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+          "group": "4_graph_branch_publish@1"
+        },
+        {
+          "command": "lookGit.graph.branch.publish",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
           "group": "4_graph_branch_publish@1"
         },
         {

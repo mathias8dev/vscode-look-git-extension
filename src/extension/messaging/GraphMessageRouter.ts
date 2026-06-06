@@ -424,11 +424,15 @@ export class GraphMessageRouter {
 type GraphOperationDescriptor = Omit<GraphOperationStatusPush, 'type' | 'operationId' | 'status'>;
 
 function toProtocolGraphData(result: GraphDataResult, repositoryScope: GraphRepositoryScope): GraphData {
+    const currentBranchCommits = new Set(result.currentBranchCommitHashes);
     return {
         repositoryScope,
         branches: result.branches.map(toProtocolBranch),
         tags: result.tags.map((tag) => ({ name: tag.name, hash: tag.hash })),
-        commits: result.commits.map(toProtocolGraphCommit),
+        commits: result.commits.map((commit) => ({
+            ...toProtocolGraphCommit(commit),
+            canCherryPick: !currentBranchCommits.has(commit.hash),
+        })),
         currentBranch: result.currentBranch,
         currentUser: result.currentUser,
         hasMore: result.hasMore,

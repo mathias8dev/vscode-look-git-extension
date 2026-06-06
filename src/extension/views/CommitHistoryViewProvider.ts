@@ -184,14 +184,23 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             };
         }
 
+        const pageLimit = normalizedPage.limit + 1;
         const [commits, refs] = await Promise.all([
             this.selectedHistoryRef
-                ? repo.getLogForRef(this.selectedHistoryRef, normalizedPage.limit + 1, normalizedPage.offset)
-                : repo.getLog(normalizedPage.limit + 1, normalizedPage.offset),
+                ? repo.getLogForRef(this.selectedHistoryRef, pageLimit, normalizedPage.offset)
+                : repo.getLog(pageLimit, normalizedPage.offset),
             this.loadRefs(repo),
         ]);
+        const visibleCommits = commits.slice(0, normalizedPage.limit);
+        const currentBranchCommits = this.selectedHistoryRef
+            ? await currentBranchCommitHashSet(repo, visibleCommits)
+            : new Set(visibleCommits.map((commit) => commit.hash));
         return {
-            commits: commits.slice(0, normalizedPage.limit).map((commit) => toHistoryCommit(commit, refsForCommit(commit, refs.branches, refs.tags))),
+            commits: visibleCommits.map((commit) => toHistoryCommit(
+                commit,
+                refsForCommit(commit, refs.branches, refs.tags),
+                !currentBranchCommits.has(commit.hash),
+            )),
             page: normalizedPage,
             hasMore: commits.length > normalizedPage.limit,
         };
@@ -556,7 +565,7 @@ function normalizePage(page: Pagination): Pagination {
     return { offset, limit };
 }
 
-function toHistoryCommit(commit: GitCommit, refs: readonly HistoryCommitRef[]) {
+function toHistoryCommit(commit: GitCommit, refs: readonly HistoryCommitRef[], canCherryPick: boolean) {
     return {
         hash: commit.hash,
         shortHash: commit.shortHash,
@@ -565,6 +574,7 @@ function toHistoryCommit(commit: GitCommit, refs: readonly HistoryCommitRef[]) {
         authorDate: commit.authorDate,
         parentHashes: commit.parentHashes,
         refs,
+        canCherryPick,
     };
 }
 
@@ -643,6 +653,30 @@ async function hasAnyConflicts(repo: GitRepository): Promise<boolean> {
 async function hasNewConflicts(repo: GitRepository, existingConflicts: ReadonlySet<string>): Promise<boolean> {
     const status = await repo.getStatus();
     return status.conflicts.some((entry) => !existingConflicts.has(entry.filePath));
+}
+
+async function currentBranchCommitHashSet(repo: GitRepository, commits: readonly GitCommit[]): Promise<ReadonlySet<string>> {
+    const hashes = await mapLimited(commits, 8, async (commit) => {
+        try {
+            await repo.exec(['merge-base', '--is-ancestor', commit.hash, 'HEAD']);
+            return commit.hash;
+        } catch {
+            return undefined;
+        }
+    });
+    return new Set(hashes.filter((hash): hash is string => hash !== undefined));
+}
+
+async function mapLimited<T, R>(
+    items: readonly T[],
+    limit: number,
+    mapper: (item: T) => Promise<R>,
+): Promise<readonly R[]> {
+    const results: R[] = [];
+    for (let index = 0; index < items.length; index += limit) {
+        results.push(...await Promise.all(items.slice(index, index + limit).map(mapper)));
+    }
+    return results;
 }
 
 async function createDiffUris(cwd: string, message: HistoryOpenDiffRequest): Promise<{ readonly left: vscode.Uri; readonly right: vscode.Uri }> {

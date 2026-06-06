@@ -121,10 +121,18 @@ export function BranchPanel({
 
     const branchContextFor = (branch: BranchInfo): Record<string, unknown> => {
         const branchWorktree = branchWorktreeFor(branch);
+        const hasUpstream = Boolean(branch.upstream);
+        const canPush = !branch.isRemote && hasUpstream;
+        const canPublish = !branch.isRemote && !hasUpstream;
+        const canDelete = !branch.isCurrent;
         return {
             webviewSection: 'graphBranch',
             graphBranchIsRemote: branch.isRemote,
             graphBranchIsCurrent: branch.isCurrent,
+            graphBranchHasUpstream: hasUpstream,
+            graphBranchCanPush: canPush,
+            graphBranchCanPublish: canPublish,
+            graphBranchCanDelete: canDelete,
             graphBranchHasWorktree: branchWorktree !== undefined,
             graphBranchWorktreeIsMain: branchWorktree?.isMain === true,
             graphBranchWorktreeIsLocked: branchWorktree?.isLocked === true,
@@ -133,10 +141,16 @@ export function BranchPanel({
     };
 
     const handleOpenContextMenu = (branch: BranchInfo) => {
+        const hasUpstream = Boolean(branch.upstream);
         onContextTarget({
             kind: 'branch',
             branch: branch.name,
             isRemote: branch.isRemote,
+            isCurrent: branch.isCurrent,
+            hasUpstream,
+            canPush: !branch.isRemote && hasUpstream,
+            canPublish: !branch.isRemote && !hasUpstream,
+            canDelete: !branch.isCurrent,
         });
     };
 
