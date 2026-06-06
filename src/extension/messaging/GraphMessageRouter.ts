@@ -28,6 +28,7 @@ import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../applicatio
 import { runCommitCommand } from '../commands/commit-commands';
 import { runBranchCommand } from '../commands/branch-commands';
 import { runWorktreeCommand } from '../commands/worktree-commands';
+import { operationActionsForStatus } from '../utils/operation-feedback';
 import { createErrorPayload, isAbortError } from './errorSerialization';
 
 type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
@@ -60,8 +61,10 @@ export class GraphMessageRouter {
         if (operation && operationId) {
             this.postGraphOperation({ ...operation, operationId, status: GraphOperationStatus.Running });
         }
+        let existingConflicts: ReadonlySet<string> | undefined;
 
         try {
+            existingConflicts = await this.conflictFilesBeforeOperation(msg);
             await this.dispatch(msg);
             if (operation && operationId) {
                 this.postGraphOperation({ ...operation, operationId, status: GraphOperationStatus.Success });
@@ -69,6 +72,11 @@ export class GraphMessageRouter {
         } catch (error) {
             if (isAbortError(error)) { return; }
             if (operation && operationId) {
+                if (await this.detectOperationConflicts(msg, existingConflicts, error)) {
+                    this.postGraphOperation({ ...operation, operationId, status: GraphOperationStatus.Conflict });
+                    await this.refreshAfterError();
+                    return;
+                }
                 this.postGraphOperation({ ...operation, operationId, status: GraphOperationStatus.Failed });
             }
             this.postGraphError(error, {
@@ -80,6 +88,34 @@ export class GraphMessageRouter {
             if (shouldRefreshAfterFailedRepositoryMutation(msg)) {
                 await this.refreshAfterError();
             }
+        }
+    }
+
+    private async conflictFilesBeforeOperation(msg: GraphWebviewToExtensionMessage): Promise<ReadonlySet<string> | undefined> {
+        if (!shouldRefreshAfterFailedRepositoryMutation(msg)) { return undefined; }
+        const repo = await this.repositoryForScope(repositoryScopeOf(msg));
+        return conflictFileSet(await repo.getStatus());
+    }
+
+    private async detectOperationConflicts(
+        msg: GraphWebviewToExtensionMessage,
+        existingConflicts: ReadonlySet<string> | undefined,
+        error: unknown,
+    ): Promise<boolean> {
+        if (!existingConflicts) { return false; }
+        try {
+            const repo = await this.repositoryForScope(repositoryScopeOf(msg));
+            const status = await repo.getStatus();
+            if (!hasNewConflicts(conflictFileSet(status), existingConflicts)) { return false; }
+            const payload = createErrorPayload(error, {
+                code: errorCodeFor(msg),
+                operation: msg.type,
+                recoverable: true,
+            });
+            this.appendGraphErrorToOutput(payload.error);
+            return true;
+        } catch {
+            return false;
         }
     }
 
@@ -340,7 +376,11 @@ export class GraphMessageRouter {
     }
 
     private postGraphOperation(operation: Omit<GraphOperationStatusPush, 'type'>): void {
-        this.postMessage({ type: 'graph/operationStatus', ...operation });
+        this.postMessage({
+            type: 'graph/operationStatus',
+            ...operation,
+            actions: operation.actions ?? operationActionsForStatus(operation.status),
+        });
     }
 
     private appendGraphErrorToOutput(error: ProtocolError): void {
@@ -431,6 +471,10 @@ function requestIdOf(msg: GraphWebviewToExtensionMessage): RequestId | undefined
     return 'requestId' in msg ? msg.requestId : undefined;
 }
 
+function repositoryScopeOf(msg: GraphWebviewToExtensionMessage): GraphRepositoryScope | undefined {
+    return 'repositoryScope' in msg ? msg.repositoryScope : undefined;
+}
+
 function errorCodeFor(msg: GraphWebviewToExtensionMessage): ErrorCode {
     if (msg.type === 'graph/openDiff' || msg.type === 'graph/openWorktreeDiff') { return 'vscodeCommandFailed'; }
     return 'gitOperationFailed';
@@ -469,6 +513,17 @@ function shouldRefreshAfterFailedRepositoryMutation(msg: GraphWebviewToExtension
         default:
             return false;
     }
+}
+
+function conflictFileSet(status: Awaited<ReturnType<GitRepository['getStatus']>>): ReadonlySet<string> {
+    return new Set(status.conflicts.map((entry) => entry.filePath));
+}
+
+function hasNewConflicts(current: ReadonlySet<string>, previous: ReadonlySet<string>): boolean {
+    for (const filePath of current) {
+        if (!previous.has(filePath)) { return true; }
+    }
+    return false;
 }
 
 function graphOperationForMessage(msg: GraphWebviewToExtensionMessage): GraphOperationDescriptor | undefined {

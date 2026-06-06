@@ -1,65 +1,277 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="920" height="520" viewBox="0 0 920 520" role="img" aria-labelledby="title desc">
-  <title id="title">Unified operation feedback proposal</title>
-  <desc id="desc">Changes and history panels showing a shared compact operation feedback pattern for running and completed Git operations.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="760" viewBox="0 0 1180 760" role="img" aria-labelledby="title desc">
+  <title id="title">Look Git unified operation feedback UI</title>
+  <desc id="desc">A VS Code styled UI proposal showing shared operation feedback bars for Changes, Commit History, and Look Graph with running, success, conflict, and failed states.</desc>
   <defs>
     <style>
-      .bg { fill: #1f1f1f; }
+      .bg { fill: #1e1e1e; }
+      .activity { fill: #181818; }
+      .sidebar { fill: #252526; }
       .panel { fill: #252526; }
-      .surface { fill: #2d2d30; }
+      .panel-alt { fill: #2d2d30; }
+      .toolbar { fill: #252526; }
+      .surface { fill: #2a2d2e; }
+      .surface-hover { fill: #34373a; }
+      .input { fill: #1f1f1f; stroke: #3c3c3c; stroke-width: 1; }
       .border { stroke: #3c3c3c; stroke-width: 1; }
+      .divider { stroke: #3c3c3c; stroke-width: 1; }
       .text { fill: #cccccc; font-family: "Segoe UI", Arial, sans-serif; }
       .muted { fill: #9d9d9d; font-family: "Segoe UI", Arial, sans-serif; }
-      .strong { fill: #ffffff; font-family: "Segoe UI Semibold", "Segoe UI", Arial, sans-serif; }
-      .info { fill: #16324f; stroke: #3794ff; stroke-width: 1; }
-      .success { fill: #193819; stroke: #89d185; stroke-width: 1; }
-      .warn { fill: #473500; stroke: #cca700; stroke-width: 1; }
+      .subtle { fill: #7a7a7a; font-family: "Segoe UI", Arial, sans-serif; }
+      .strong { fill: #f2f2f2; font-family: "Segoe UI Semibold", "Segoe UI", Arial, sans-serif; }
+      .accent { fill: #3794ff; }
+      .blue { fill: #0e639c; }
+      .running-bg { fill: #112b43; stroke: #3794ff; stroke-width: 1; }
+      .success-bg { fill: #163116; stroke: #89d185; stroke-width: 1; }
+      .conflict-bg { fill: #3a2d10; stroke: #cca700; stroke-width: 1; }
+      .failed-bg { fill: #3b1d1d; stroke: #f48771; stroke-width: 1; }
       .button { fill: #333333; stroke: #5a5a5a; stroke-width: 1; }
-      .primary { fill: #0e639c; }
-      .row { fill: #2a2d2e; }
+      .button-primary { fill: #0e639c; }
+      .button-warn { fill: #3c3420; stroke: #7c6500; stroke-width: 1; }
+      .tag { fill: #3c3c3c; }
+      .tag-blue { fill: #2f6fbd; }
+      .tag-purple { fill: #6c4b7e; }
+      .tag-green { fill: #3c733c; }
+      .lane-pink { stroke: #ff7b93; }
+      .lane-blue { stroke: #75beff; }
+      .lane-green { stroke: #89d185; }
+      .lane-yellow { stroke: #cca700; }
+      .lane-purple { stroke: #c586c0; }
     </style>
   </defs>
 
-  <rect class="bg" width="920" height="520" />
-  <rect class="panel border" x="24" y="24" width="410" height="472" />
-  <rect class="panel border" x="486" y="24" width="410" height="472" />
+  <rect class="bg" width="1180" height="760" />
+  <rect class="activity" x="0" y="0" width="48" height="760" />
+  <rect class="sidebar border" x="48" y="0" width="248" height="760" />
+  <rect class="panel border" x="296" y="0" width="884" height="760" />
 
-  <rect class="surface border" x="24" y="24" width="410" height="34" />
-  <text class="strong" x="42" y="46" font-size="12">CHANGES</text>
-  <text class="muted" x="344" y="46" font-size="13">refresh graph ...</text>
-  <rect class="info" x="38" y="72" width="382" height="44" rx="4" />
-  <circle cx="60" cy="94" r="8" fill="none" stroke="#3794ff" stroke-width="2" />
-  <path d="M60 86 A8 8 0 0 1 68 94" fill="none" stroke="#3794ff" stroke-width="2" />
-  <text class="strong" x="78" y="91" font-size="13">Stashing selected changes...</text>
-  <text class="muted" x="78" y="109" font-size="12">3 files selected</text>
-  <rect class="row" x="38" y="136" width="382" height="28" />
-  <text class="text" x="58" y="155" font-size="13">src/webview/graph/GraphTable.tsx</text>
-  <text class="muted" x="390" y="155" font-size="12">M</text>
-  <rect class="row" x="38" y="166" width="382" height="28" />
-  <text class="text" x="58" y="185" font-size="13">src/core/queries/queryGraph.ts</text>
-  <text class="muted" x="390" y="185" font-size="12">M</text>
-  <rect class="success" x="38" y="410" width="382" height="44" rx="4" />
-  <circle cx="60" cy="432" r="8" fill="none" stroke="#89d185" stroke-width="2" />
-  <path d="M55 432 L59 436 L66 427" fill="none" stroke="#89d185" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-  <text class="strong" x="78" y="430" font-size="13">Stashed selected changes.</text>
-  <text class="muted" x="78" y="448" font-size="12">Auto-dismisses after a short delay</text>
+  <g transform="translate(0 0)">
+    <rect class="activity" x="0" y="0" width="48" height="760" />
+    <circle cx="24" cy="54" r="9" fill="none" stroke="#cccccc" stroke-width="1.6" />
+    <path d="M18 54h12M24 48v12" stroke="#cccccc" stroke-width="1.5" stroke-linecap="round" />
+    <circle cx="24" cy="96" r="9" fill="none" stroke="#858585" stroke-width="1.6" />
+    <path d="M20 93l4 4 5-8" stroke="#858585" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="24" cy="138" r="9" fill="none" stroke="#858585" stroke-width="1.6" />
+    <path d="M19 140l5-7 5 7" stroke="#858585" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
 
-  <rect class="surface border" x="486" y="24" width="410" height="34" />
-  <text class="strong" x="504" y="46" font-size="12">COMMIT HISTORY</text>
-  <text class="muted" x="818" y="46" font-size="13">fetch pull push</text>
-  <rect class="warn" x="500" y="72" width="382" height="58" rx="4" />
-  <circle cx="522" cy="101" r="8" fill="none" stroke="#cca700" stroke-width="2" />
-  <line x1="522" y1="95" x2="522" y2="102" stroke="#cca700" stroke-width="2" />
-  <circle cx="522" cy="107" r="1.5" fill="#cca700" />
-  <text class="strong" x="540" y="93" font-size="13">Branch is not published.</text>
-  <text class="muted" x="540" y="112" font-size="12">Create the upstream branch on a remote.</text>
-  <rect class="primary" x="700" y="88" width="94" height="26" rx="3" />
-  <text class="strong" x="718" y="106" font-size="12">Publish Branch</text>
-  <rect class="button" x="802" y="88" width="58" height="26" rx="3" />
-  <text class="text" x="819" y="106" font-size="12">Close</text>
-  <rect class="row" x="500" y="150" width="382" height="42" />
-  <text class="text" x="520" y="170" font-size="13">feat(graph): add operation notices</text>
-  <text class="muted" x="520" y="187" font-size="12">Mathias8dev</text>
-  <rect class="row" x="500" y="194" width="382" height="42" />
-  <text class="text" x="520" y="214" font-size="13">fix(changes): refresh after patch apply</text>
-  <text class="muted" x="520" y="231" font-size="12">Mathias8dev</text>
+  <g transform="translate(64 18)">
+    <text class="strong" x="0" y="14" font-size="13">LOOK GIT</text>
+    <rect class="input" x="0" y="34" width="216" height="28" rx="3" />
+    <circle cx="13" cy="48" r="5" fill="none" stroke="#858585" stroke-width="1.4" />
+    <line x1="17" y1="52" x2="22" y2="57" stroke="#858585" stroke-width="1.4" stroke-linecap="round" />
+    <text class="muted" x="32" y="53" font-size="12">Search commits</text>
+
+    <g transform="translate(0 82)">
+      <text class="strong" x="0" y="13" font-size="12">OPERATION ACTIVITY</text>
+      <rect class="surface" x="0" y="26" width="216" height="50" rx="3" />
+      <circle cx="16" cy="51" r="6" fill="none" stroke="#3794ff" stroke-width="1.6" />
+      <path d="M16 45a6 6 0 0 1 6 6" fill="none" stroke="#9cdcfe" stroke-width="1.6" stroke-linecap="round" />
+      <text class="text" x="32" y="48" font-size="12">Pulling experimental</text>
+      <text class="muted" x="32" y="65" font-size="11">Changes - running</text>
+
+      <rect class="surface" x="0" y="82" width="216" height="50" rx="3" />
+      <circle cx="16" cy="107" r="6" fill="none" stroke="#cca700" stroke-width="1.6" />
+      <line x1="16" y1="102" x2="16" y2="108" stroke="#cca700" stroke-width="1.5" stroke-linecap="round" />
+      <circle cx="16" cy="112" r="1.2" fill="#cca700" />
+      <text class="text" x="32" y="104" font-size="12">Cherry-pick stopped</text>
+      <text class="muted" x="32" y="121" font-size="11">Graph - 3 conflicts</text>
+
+      <rect class="surface" x="0" y="138" width="216" height="50" rx="3" />
+      <circle cx="16" cy="163" r="6" fill="none" stroke="#f48771" stroke-width="1.6" />
+      <path d="M13 160l6 6M19 160l-6 6" stroke="#f48771" stroke-width="1.5" stroke-linecap="round" />
+      <text class="text" x="32" y="160" font-size="12">Push failed</text>
+      <text class="muted" x="32" y="177" font-size="11">History - auth required</text>
+
+      <rect class="surface" x="0" y="194" width="216" height="50" rx="3" />
+      <circle cx="16" cy="219" r="6" fill="none" stroke="#89d185" stroke-width="1.6" />
+      <path d="M12 219l3 3 6-7" stroke="#89d185" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+      <text class="text" x="32" y="216" font-size="12">Patch applied</text>
+      <text class="muted" x="32" y="233" font-size="11">Changes - dismissed soon</text>
+    </g>
+
+    <g transform="translate(0 390)">
+      <text class="strong" x="0" y="13" font-size="12">UX RULES</text>
+      <text class="muted" x="0" y="42" font-size="12">Running stays visible</text>
+      <text class="muted" x="0" y="66" font-size="12">Success auto-dismisses</text>
+      <text class="muted" x="0" y="90" font-size="12">Conflict remains actionable</text>
+      <text class="muted" x="0" y="114" font-size="12">Failed keeps Show Output</text>
+      <text class="muted" x="0" y="138" font-size="12">Same wording everywhere</text>
+    </g>
+  </g>
+
+  <g transform="translate(320 18)">
+    <text class="strong" x="0" y="15" font-size="15">Unified Operation Feedback</text>
+    <text class="muted" x="0" y="36" font-size="12">One shared visual model under each Look Git toolbar: Running -> Success / Conflict / Failed + action buttons.</text>
+  </g>
+
+  <g transform="translate(320 72)">
+    <rect class="panel-alt border" x="0" y="0" width="400" height="304" rx="2" />
+    <rect class="toolbar border" x="0" y="0" width="400" height="34" rx="2" />
+    <path d="M15 13l5 5 5-5" fill="none" stroke="#cccccc" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+    <text class="strong" x="34" y="22" font-size="12">CHANGES</text>
+    <g transform="translate(264 9)" stroke="#cccccc" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 2a7 7 0 1 1-5 2" />
+      <path d="M8 2v5h5" />
+      <path d="M34 3v13M28 9h12" />
+      <path d="M60 2v16M54 12l6 6 6-6" />
+      <circle cx="90" cy="9" r="1.3" fill="#cccccc" stroke="none" />
+      <circle cx="96" cy="9" r="1.3" fill="#cccccc" stroke="none" />
+      <circle cx="102" cy="9" r="1.3" fill="#cccccc" stroke="none" />
+    </g>
+
+    <rect class="running-bg" x="10" y="46" width="380" height="54" rx="4" />
+    <circle cx="30" cy="73" r="8" fill="none" stroke="#3794ff" stroke-width="2" />
+    <path d="M30 65a8 8 0 0 1 8 8" fill="none" stroke="#cce6ff" stroke-width="2" stroke-linecap="round" />
+    <text class="strong" x="48" y="70" font-size="13">Pulling experimental...</text>
+    <text class="muted" x="48" y="88" font-size="12">Fetching origin, then fast-forwarding the current branch.</text>
+    <rect class="button" x="298" y="60" width="74" height="26" rx="3" />
+    <text class="text" x="313" y="78" font-size="12">Show Output</text>
+
+    <rect class="success-bg" x="10" y="112" width="380" height="44" rx="4" />
+    <circle cx="30" cy="134" r="8" fill="none" stroke="#89d185" stroke-width="2" />
+    <path d="M25 134l4 4 7-9" stroke="#89d185" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    <text class="strong" x="48" y="132" font-size="13">Pulled successfully.</text>
+    <text class="muted" x="48" y="149" font-size="12">Auto-dismisses after 4 seconds unless another operation starts.</text>
+
+    <rect class="input" x="10" y="174" width="380" height="30" rx="3" />
+    <text class="muted" x="24" y="194" font-size="12">Message (Ctrl+Enter to commit on "experimental")</text>
+    <path d="M362 184l4 4 4-4" fill="none" stroke="#858585" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+
+    <rect class="surface" x="10" y="218" width="380" height="30" />
+    <rect class="tag-blue" x="20" y="226" width="18" height="14" rx="2" />
+    <text class="strong" x="24" y="237" font-size="9">TS</text>
+    <text class="text" x="48" y="238" font-size="12">src/webview/features/changes/ChangesApp.tsx</text>
+    <text class="muted" x="366" y="238" font-size="12">M</text>
+    <rect class="surface-hover" x="10" y="250" width="380" height="30" />
+    <rect class="tag-blue" x="20" y="258" width="18" height="14" rx="2" />
+    <text class="strong" x="24" y="269" font-size="9">TS</text>
+    <text class="text" x="48" y="270" font-size="12">src/extension/commands/commit-commands.ts</text>
+    <text class="muted" x="366" y="270" font-size="12">M</text>
+  </g>
+
+  <g transform="translate(742 72)">
+    <rect class="panel-alt border" x="0" y="0" width="400" height="304" rx="2" />
+    <rect class="toolbar border" x="0" y="0" width="400" height="34" rx="2" />
+    <path d="M15 13l5 5 5-5" fill="none" stroke="#cccccc" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+    <text class="strong" x="34" y="22" font-size="12">LOOK GRAPH</text>
+    <g transform="translate(236 9)" stroke="#cccccc" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 0v18M2 6h12M2 12h12" />
+      <circle cx="34" cy="9" r="7" />
+      <path d="M56 3v12M50 9h12" />
+      <path d="M80 2v16M74 12l6 6 6-6" />
+      <path d="M108 16V2M102 8l6-6 6 6" />
+      <circle cx="136" cy="9" r="1.3" fill="#cccccc" stroke="none" />
+      <circle cx="142" cy="9" r="1.3" fill="#cccccc" stroke="none" />
+      <circle cx="148" cy="9" r="1.3" fill="#cccccc" stroke="none" />
+    </g>
+
+    <rect class="conflict-bg" x="10" y="46" width="380" height="76" rx="4" />
+    <circle cx="30" cy="75" r="8" fill="none" stroke="#cca700" stroke-width="2" />
+    <line x1="30" y1="69" x2="30" y2="77" stroke="#cca700" stroke-width="2" stroke-linecap="round" />
+    <circle cx="30" cy="82" r="1.5" fill="#cca700" />
+    <text class="strong" x="48" y="67" font-size="13">Cherry-pick stopped with conflicts.</text>
+    <text class="muted" x="48" y="85" font-size="12">3 files need resolution before continuing.</text>
+    <rect class="button-primary" x="48" y="94" width="104" height="22" rx="3" />
+    <text class="strong" x="61" y="110" font-size="11">Open First Conflict</text>
+    <rect class="button-warn" x="158" y="94" width="86" height="22" rx="3" />
+    <text class="text" x="171" y="110" font-size="11">Show Conflicts</text>
+    <rect class="button" x="250" y="94" width="48" height="22" rx="3" />
+    <text class="text" x="263" y="110" font-size="11">Abort</text>
+    <rect class="button" x="304" y="94" width="68" height="22" rx="3" />
+    <text class="text" x="315" y="110" font-size="11">Show Output</text>
+
+    <g transform="translate(14 144)" stroke-width="2" fill="none" stroke-linecap="round">
+      <path class="lane-pink" d="M10 0v122" />
+      <path class="lane-blue" d="M34 0v44c0 18 58 18 58 36v42" />
+      <path class="lane-green" d="M58 0v32c0 18-24 18-24 36v54" />
+      <path class="lane-purple" d="M82 0v26c0 22 84 22 84 46v50" />
+      <circle cx="10" cy="12" r="4" fill="#ff7b93" />
+      <circle cx="10" cy="42" r="4" fill="#ff7b93" />
+      <circle cx="34" cy="66" r="4" fill="#75beff" />
+      <circle cx="58" cy="92" r="4" fill="#89d185" />
+      <circle cx="82" cy="20" r="4" fill="#c586c0" />
+    </g>
+    <rect class="tag-green" x="132" y="152" width="44" height="18" rx="3" />
+    <text class="strong" x="143" y="165" font-size="10">main</text>
+    <text class="text" x="184" y="166" font-size="12">fix(changes): normalize patch apply</text>
+    <text class="text" x="184" y="196" font-size="12">feat(graph): add operation feedback</text>
+    <text class="muted" x="184" y="226" font-size="12">chore(release): update changelog</text>
+    <text class="text" x="184" y="256" font-size="12">docs(ux): unify Git feedback</text>
+  </g>
+
+  <g transform="translate(320 406)">
+    <rect class="panel-alt border" x="0" y="0" width="822" height="286" rx="2" />
+    <rect class="toolbar border" x="0" y="0" width="822" height="34" rx="2" />
+    <path d="M15 13l5 5 5-5" fill="none" stroke="#cccccc" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+    <text class="strong" x="34" y="22" font-size="12">COMMIT HISTORY</text>
+    <g transform="translate(644 9)" stroke="#cccccc" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 0v18M2 6h12M2 12h12" />
+      <circle cx="34" cy="9" r="7" />
+      <path d="M56 3v12M50 9h12" />
+      <path d="M80 2v16M74 12l6 6 6-6" />
+      <path d="M108 16V2M102 8l6-6 6 6" />
+      <path d="M134 2a7 7 0 1 1-5 2" />
+      <path d="M134 2v5h5" />
+      <circle cx="164" cy="9" r="1.3" fill="#cccccc" stroke="none" />
+      <circle cx="170" cy="9" r="1.3" fill="#cccccc" stroke="none" />
+      <circle cx="176" cy="9" r="1.3" fill="#cccccc" stroke="none" />
+    </g>
+
+    <rect class="failed-bg" x="10" y="46" width="390" height="68" rx="4" />
+    <circle cx="30" cy="75" r="8" fill="none" stroke="#f48771" stroke-width="2" />
+    <path d="M26 71l8 8M34 71l-8 8" stroke="#f48771" stroke-width="2" stroke-linecap="round" />
+    <text class="strong" x="48" y="67" font-size="13">Could not push experimental.</text>
+    <text class="muted" x="48" y="85" font-size="12">Authentication is required by the remote.</text>
+    <rect class="button-primary" x="48" y="92" width="82" height="20" rx="3" />
+    <text class="strong" x="65" y="107" font-size="11">Show Output</text>
+    <rect class="button" x="136" y="92" width="50" height="20" rx="3" />
+    <text class="text" x="151" y="107" font-size="11">Retry</text>
+    <rect class="button" x="192" y="92" width="58" height="20" rx="3" />
+    <text class="text" x="207" y="107" font-size="11">Dismiss</text>
+
+    <rect class="success-bg" x="414" y="46" width="398" height="68" rx="4" />
+    <circle cx="434" cy="75" r="8" fill="none" stroke="#89d185" stroke-width="2" />
+    <path d="M429 75l4 4 7-9" stroke="#89d185" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    <text class="strong" x="452" y="67" font-size="13">Patch saved to feature-cleanup.patch.</text>
+    <text class="muted" x="452" y="85" font-size="12">Secondary confirmation uses VS Code toast, panel state stays consistent.</text>
+    <rect class="button" x="452" y="92" width="80" height="20" rx="3" />
+    <text class="text" x="467" y="107" font-size="11">Open File</text>
+    <rect class="button" x="538" y="92" width="58" height="20" rx="3" />
+    <text class="text" x="553" y="107" font-size="11">Dismiss</text>
+
+    <rect class="input" x="10" y="132" width="802" height="28" rx="3" />
+    <circle cx="24" cy="146" r="5" fill="none" stroke="#858585" stroke-width="1.4" />
+    <line x1="28" y1="150" x2="33" y2="155" stroke="#858585" stroke-width="1.4" stroke-linecap="round" />
+    <text class="muted" x="42" y="151" font-size="12">Search commits</text>
+
+    <g transform="translate(10 178)">
+      <rect class="surface-hover" x="0" y="0" width="802" height="34" />
+      <rect x="12" y="9" width="15" height="15" rx="2" fill="#2d2d30" stroke="#3794ff" stroke-width="1.4" />
+      <path d="M15 16l3 3 6-7" stroke="#3794ff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+      <text class="text" x="40" y="21" font-size="13">feat(history): add commit multi-select checkboxes</text>
+      <rect class="tag-blue" x="384" y="8" width="84" height="18" rx="3" />
+      <text class="strong" x="396" y="21" font-size="10">experimental</text>
+      <rect class="tag-purple" x="474" y="8" width="78" height="18" rx="3" />
+      <text class="strong" x="486" y="21" font-size="10">origin/main</text>
+      <text class="muted" x="690" y="21" font-size="12">mathias8dev</text>
+      <text class="muted" x="766" y="21" font-size="12">18:34:12</text>
+
+      <rect class="surface" x="0" y="36" width="802" height="34" />
+      <rect x="12" y="45" width="15" height="15" rx="2" fill="#2d2d30" stroke="#858585" stroke-width="1.2" />
+      <text class="text" x="40" y="57" font-size="13">fix(extension): route remote push through VS Code Git</text>
+      <text class="muted" x="690" y="57" font-size="12">mathias8dev</text>
+      <text class="muted" x="766" y="57" font-size="12">17:58:05</text>
+
+      <rect class="surface" x="0" y="72" width="802" height="34" />
+      <rect x="12" y="81" width="15" height="15" rx="2" fill="#2d2d30" stroke="#858585" stroke-width="1.2" />
+      <text class="text" x="40" y="93" font-size="13">docs(ux): propose unified operation feedback</text>
+      <text class="muted" x="690" y="93" font-size="12">mathias8dev</text>
+      <text class="muted" x="766" y="93" font-size="12">16:42:51</text>
+    </g>
+  </g>
+
+  <g transform="translate(320 710)">
+    <text class="muted" x="0" y="0" font-size="12">Shared component placement: immediately below each toolbar, above content. Status survives refresh until resolved, dismissed, or superseded.</text>
+    <text class="muted" x="0" y="22" font-size="12">Extension runner emits one semantic operation payload; each webview renders the same feedback bar with local labels and actions.</text>
+  </g>
 </svg>

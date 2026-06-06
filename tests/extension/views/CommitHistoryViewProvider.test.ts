@@ -461,6 +461,16 @@ describe('CommitHistoryViewProvider error propagation', () => {
         }));
     });
 
+    it('opens the VS Code output panel from history operation notices', async () => {
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(makeRepositoryMock()));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/showOutput' });
+
+        expect(getCommandCalls()).toContainEqual({ command: 'workbench.action.output.toggleOutput', args: [] });
+    });
+
     it('publishes from the history toolbar when the current branch has no upstream', async () => {
         const repo = makeRepositoryMock({
             getCurrentBranch: vi.fn(async () => 'topic'),

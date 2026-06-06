@@ -1,5 +1,5 @@
 import type { RequestId, ErrorMessage, ProtocolError } from '../shared/base';
-import type { OperationStatus } from '../shared/operation';
+import type { OperationNoticeActionKind, OperationStatus } from '../shared/operation';
 import type { SerializedRepoContext } from '../shared/repo';
 import type { WebviewFontSizeChangedPush } from '../shared/ui';
 import type { StatusData, CommitMode, StashFileEntry, ConflictState, SubmoduleStatusData, ChangesContextTarget, ChangesSelectionContextTarget } from './types';
@@ -79,6 +79,7 @@ export interface ChangesOperationStatusPush {
     readonly status: OperationStatus;
     readonly command: ChangesToolbarCommand;
     readonly target?: string;
+    readonly actions?: readonly OperationNoticeActionKind[];
 }
 
 export type ChangesViewPreference = 'list' | 'tree';

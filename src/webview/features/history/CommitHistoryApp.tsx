@@ -7,6 +7,7 @@ import { CommitHistoryRow } from './CommitHistoryRow';
 import { filterHistoryCommits, formatHistoryDate, historyEmptyLabel, parseCommitMessage, formatRelativeDate } from './historyModel';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import { OperationNotice } from '../../shared/OperationNotice';
+import { operationNoticeActions } from '../../shared/operationNoticeActions';
 import { SearchInput } from '../../shared/SearchInput';
 
 interface CommitHistoryAppProps {
@@ -20,6 +21,8 @@ interface CommitHistoryAppProps {
     readonly onContextTarget: (target: HistoryContextTarget) => void;
     readonly onLoadMore: () => void;
     readonly onCopyHash: (hash: string) => void;
+    readonly onShowOperationOutput?: () => void;
+    readonly onDismissOperation?: () => void;
 }
 
 export function CommitHistoryApp({
@@ -33,6 +36,8 @@ export function CommitHistoryApp({
     onContextTarget,
     onLoadMore,
     onCopyHash,
+    onShowOperationOutput,
+    onDismissOperation,
 }: CommitHistoryAppProps) {
     const commits = filterHistoryCommits(state.commits, query);
     const visibleHashes = commits.map((commit) => commit.hash);
@@ -73,6 +78,11 @@ export function CommitHistoryApp({
                 <OperationNotice
                     status={state.operationStatus.status}
                     message={historyOperationMessage(state.operationStatus.command, state.operationStatus.status)}
+                    actions={operationNoticeActions(
+                        state.operationStatus.actions,
+                        { onShowOutput: onShowOperationOutput, onDismiss: onDismissOperation },
+                        { dismissible: isPersistentOperationNotice(state.operationStatus.status) },
+                    )}
                 />
             ) : null}
 
@@ -186,6 +196,10 @@ function historyOperationMessage(command: HistoryToolbarCommand, status: Operati
         case OperationStatus.Conflict:
             return `${sentenceCase(label)} stopped with conflicts.`;
     }
+}
+
+function isPersistentOperationNotice(status: OperationStatus): boolean {
+    return status === OperationStatus.Failed || status === OperationStatus.Conflict;
 }
 
 function historyOperationLabel(command: HistoryToolbarCommand): string {

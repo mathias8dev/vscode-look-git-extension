@@ -4,3 +4,8 @@ export enum OperationStatus {
     Failed = 'failed',
     Conflict = 'conflict',
 }
+
+export enum OperationNoticeActionKind {
+    ShowOutput = 'showOutput',
+    Retry = 'retry',
+}

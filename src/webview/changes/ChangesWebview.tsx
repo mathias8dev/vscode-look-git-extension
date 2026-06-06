@@ -4,6 +4,7 @@ import type { CommitMode, StashFileEntry } from '../../protocol/changes/types';
 import { OperationStatus } from '../../protocol/shared/operation';
 import {
     messageForBulkAction,
+    messageForChangesToolbarCommand,
     messageForExplainRepositoryChanges,
     messageForExplainSelection,
     messageForRowAction,
@@ -79,7 +80,7 @@ export function ChangesWebview() {
     }, [state.commitFeedback]);
 
     useEffect(() => {
-        if (!state.operationStatus || state.operationStatus.status === OperationStatus.Running) { return undefined; }
+        if (!state.operationStatus || state.operationStatus.status !== OperationStatus.Success) { return undefined; }
         const operationId = state.operationStatus.operationId;
         const timeout = window.setTimeout(() => dispatch({ type: 'clearOperationStatus', operationId }), OPERATION_NOTICE_TIMEOUT_MS);
         return () => window.clearTimeout(timeout);
@@ -195,6 +196,12 @@ export function ChangesWebview() {
                 dispatch({ type: 'setShowConflictsOnly', showConflictsOnly })}
             onOperationAction={(conflictState: ActiveConflictState, action: OperationAction) => {
                 postToExtension(messageForOperationAction(conflictState, action));
+            }}
+            onShowOperationOutput={() => postToExtension(messageForChangesToolbarCommand('showGitOutput'))}
+            onDismissOperation={() => {
+                if (state.operationStatus) {
+                    dispatch({ type: 'clearOperationStatus', operationId: state.operationStatus.operationId });
+                }
             }}
             onCreateStash={(kind: CreateStashKind, message: string) => postToExtension(messageForCreateStash(kind, message))}
             onToggleStash={toggleStash}

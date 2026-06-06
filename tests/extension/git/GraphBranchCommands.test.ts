@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
 import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessageRouter';
 import type { GraphExtensionToWebviewMessage } from '../../../src/protocol/graph/messages';
+import { OperationNoticeActionKind, OperationStatus } from '../../../src/protocol/shared/operation';
 import { makeRepositoryAccessor } from '../../helpers/repositoryMock';
 import { createBareGitRepo, createTempGitRepo, type TempGitRepo } from '../../helpers/gitRepo';
 import { executingRemoteCommandBackend } from '../../helpers/executing-remote-command-backend';
@@ -254,10 +255,16 @@ describe('Graph branch commands against real git repos', () => {
         const status = fixture.git(['status', '--porcelain', '-uall']);
         expect(status).toContain('UU conflict.txt');
         expect(fs.existsSync(path.join(fixture.cwd, '.git', 'MERGE_HEAD'))).toBe(true);
-        expect(messages).toContainEqual(expect.objectContaining({ type: 'graph/error' }));
+        expect(messages).toContainEqual(expect.objectContaining({
+            type: 'graph/operationStatus',
+            status: OperationStatus.Conflict,
+            command: 'mergeInto',
+            actions: [OperationNoticeActionKind.ShowOutput],
+        }));
+        expect(messages).not.toContainEqual(expect.objectContaining({ type: 'graph/error' }));
         expect(messages).toContainEqual({ type: 'graph/refreshRequested' });
         expect(onRepositoryUpdated).toHaveBeenCalledOnce();
-        expect(window.errorMessages.at(-1)).toBeTruthy();
+        expect(window.errorMessages.at(-1)).toBeUndefined();
     });
 
     it('notifies after rebase conflicts so the changes panel can show rebase controls', async () => {
@@ -278,10 +285,16 @@ describe('Graph branch commands against real git repos', () => {
             fs.existsSync(path.join(fixture.cwd, '.git', 'rebase-merge'))
             || fs.existsSync(path.join(fixture.cwd, '.git', 'rebase-apply')),
         ).toBe(true);
-        expect(messages).toContainEqual(expect.objectContaining({ type: 'graph/error' }));
+        expect(messages).toContainEqual(expect.objectContaining({
+            type: 'graph/operationStatus',
+            status: OperationStatus.Conflict,
+            command: 'rebaseOnto',
+            actions: [OperationNoticeActionKind.ShowOutput],
+        }));
+        expect(messages).not.toContainEqual(expect.objectContaining({ type: 'graph/error' }));
         expect(messages).toContainEqual({ type: 'graph/refreshRequested' });
         expect(onRepositoryUpdated).toHaveBeenCalledOnce();
-        expect(window.errorMessages.at(-1)).toBeTruthy();
+        expect(window.errorMessages.at(-1)).toBeUndefined();
     });
 
     it('checks out remote branches by creating or reusing local tracking branches', async () => {

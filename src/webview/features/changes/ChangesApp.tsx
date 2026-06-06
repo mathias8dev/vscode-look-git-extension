@@ -5,6 +5,7 @@ import type { ChangesSelectionContextTarget, CommitMode, StashFileEntry } from '
 import { OperationStatus } from '../../../protocol/shared/operation';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import { OperationNotice } from '../../shared/OperationNotice';
+import { operationNoticeActions } from '../../shared/operationNoticeActions';
 import type { ChangeBulkAction, ChangeRowAction } from './changeCommands';
 import { ChangeSectionView } from './ChangeSectionView';
 import { changesSelectionTarget, isChangeListItem } from './changeSelectionModel';
@@ -39,6 +40,8 @@ interface ChangesAppProps {
     readonly onClearPathFilter: () => void;
     readonly onToggleShowConflictsOnly: (showConflictsOnly: boolean) => void;
     readonly onOperationAction: (conflictState: ActiveConflictState, action: OperationAction) => void;
+    readonly onShowOperationOutput?: () => void;
+    readonly onDismissOperation?: () => void;
     readonly onCreateStash: (kind: CreateStashKind, message: string) => void;
     readonly onToggleStash: (index: number) => void;
     readonly onStashAction: (index: number, action: StashEntryAction) => void;
@@ -75,6 +78,8 @@ export function ChangesApp({
     onClearPathFilter,
     onToggleShowConflictsOnly,
     onOperationAction,
+    onShowOperationOutput,
+    onDismissOperation,
     onCreateStash,
     onToggleStash,
     onStashAction,
@@ -146,6 +151,11 @@ export function ChangesApp({
                     status={state.operationStatus.status}
                     message={changesOperationMessage(state.operationStatus.command, state.operationStatus.status)}
                     detail={state.operationStatus.target}
+                    actions={operationNoticeActions(
+                        state.operationStatus.actions,
+                        { onShowOutput: onShowOperationOutput, onDismiss: onDismissOperation },
+                        { dismissible: isPersistentOperationNotice(state.operationStatus.status) },
+                    )}
                 />
             ) : null}
 
@@ -256,6 +266,10 @@ function hasPatchableSelection(target: ReturnType<typeof changesSelectionTarget>
     return target.patchStagedFilePaths.length > 0
         || target.patchUnstagedFilePaths.length > 0
         || target.patchUntrackedFilePaths.length > 0;
+}
+
+function isPersistentOperationNotice(status: OperationStatus): boolean {
+    return status === OperationStatus.Failed || status === OperationStatus.Conflict;
 }
 
 function reviewHandlerFor(

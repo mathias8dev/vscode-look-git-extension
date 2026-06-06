@@ -4,7 +4,7 @@ import type { HistoryCommitFile, HistoryContextTarget } from '../../protocol/his
 import { OperationStatus } from '../../protocol/shared/operation';
 import { CommitHistoryApp } from '../features/history/CommitHistoryApp';
 import { createInitialHistoryState, reduceHistoryState } from '../features/history/historyState';
-import { messageForHistoryCommitDetails, messageForHistoryContextTarget, messageForHistoryDataRequest, messageForHistoryOpenDiff, messageForHistoryReady } from '../features/history/historyCommands';
+import { messageForHistoryCommitDetails, messageForHistoryContextTarget, messageForHistoryDataRequest, messageForHistoryOpenDiff, messageForHistoryReady, messageForHistoryShowOutput } from '../features/history/historyCommands';
 import { applyWebviewFontSize, isWebviewFontSizeMessage } from '../platform/font-size';
 import { vscodeApi } from '../platform/vscodeHost';
 
@@ -41,7 +41,7 @@ export function HistoryWebview() {
     }, [state.error]);
 
     useEffect(() => {
-        if (!state.operationStatus || state.operationStatus.status === OperationStatus.Running) { return undefined; }
+        if (!state.operationStatus || state.operationStatus.status !== OperationStatus.Success) { return undefined; }
         const operationId = state.operationStatus.operationId;
         const timeout = window.setTimeout(() => dispatch({ type: 'clearOperationStatus', operationId }), OPERATION_NOTICE_TIMEOUT_MS);
         return () => window.clearTimeout(timeout);
@@ -86,6 +86,12 @@ export function HistoryWebview() {
             onContextTarget={handleContextTarget}
             onLoadMore={handleLoadMore}
             onCopyHash={(hash) => navigator.clipboard.writeText(hash).catch(() => {})}
+            onShowOperationOutput={() => vscodeApi.postMessage(messageForHistoryShowOutput())}
+            onDismissOperation={() => {
+                if (state.operationStatus) {
+                    dispatch({ type: 'clearOperationStatus', operationId: state.operationStatus.operationId });
+                }
+            }}
         />
     );
 }

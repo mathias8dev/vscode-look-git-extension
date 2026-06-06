@@ -3,6 +3,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HistoryCommit } from '../../../src/protocol/history/types';
+import { OperationNoticeActionKind, OperationStatus } from '../../../src/protocol/shared/operation';
 import { createMockVsCodeApi, sendToWebview } from '../../helpers/webviewRuntime';
 
 describe('HistoryWebview', () => {
@@ -42,6 +43,28 @@ describe('HistoryWebview', () => {
         expect(document.documentElement.style.fontSize).toBe('22px');
         expect(document.body.style.fontSize).toBe('22px');
         expect(document.getElementById('root')?.style.fontSize).toBe('22px');
+    });
+
+    it('shows output and dismiss actions for failed operations', async () => {
+        const api = createMockVsCodeApi();
+        const { HistoryWebview } = await import('../../../src/webview/history/HistoryWebview');
+
+        render(<HistoryWebview />);
+        sendToWebview({
+            type: 'history/operationStatus',
+            operationId: 'push-1',
+            status: OperationStatus.Failed,
+            command: 'push',
+            actions: [OperationNoticeActionKind.ShowOutput],
+        });
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Could not push.');
+        fireEvent.click(screen.getByRole('button', { name: 'Show Output' }));
+
+        expect(api.messages).toContainEqual({ type: 'history/showOutput' });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+        await waitFor(() => expect(screen.queryByText('Could not push.')).not.toBeInTheDocument());
     });
 
     it('requests the next page when loading more commits', async () => {

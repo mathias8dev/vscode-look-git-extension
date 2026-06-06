@@ -3,6 +3,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GraphOperationCategory, GraphOperationStatus } from '../../../src/protocol/graph/messages';
+import { OperationNoticeActionKind } from '../../../src/protocol/shared/operation';
 import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 import { createMockVsCodeApi, sendToWebview } from '../../helpers/webviewRuntime';
 
@@ -252,6 +253,30 @@ describe('GraphApp', () => {
         expect(screen.getByRole('status')).toHaveTextContent('Fetched all remotes.');
         expect(fetchButton).not.toHaveAttribute('aria-busy');
         expect(fetchButton).not.toBeDisabled();
+    });
+
+    it('shows output and dismiss actions for failed graph operations', async () => {
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+
+        render(<GraphApp />);
+        await act(async () => sendToWebview({
+            type: 'graph/operationStatus',
+            operationId: 'push-1',
+            status: GraphOperationStatus.Failed,
+            category: GraphOperationCategory.Branch,
+            command: 'push',
+            target: 'experimental',
+            actions: [OperationNoticeActionKind.ShowOutput],
+        }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Could not push experimental.');
+        fireEvent.click(screen.getByRole('button', { name: 'Show Output' }));
+
+        expect(api.messages).toContainEqual({ type: 'graph/showOutput' });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+        await waitFor(() => expect(screen.queryByText('Could not push experimental.')).not.toBeInTheDocument());
     });
 
     it('shows an actionable empty state for an initialized repository without commits', async () => {

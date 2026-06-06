@@ -3,6 +3,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConflictState, RepositoryState } from '../../../src/protocol/changes/types';
+import { OperationNoticeActionKind, OperationStatus } from '../../../src/protocol/shared/operation';
 import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 import { createMockVsCodeApi, sendToWebview } from '../../helpers/webviewRuntime';
 
@@ -42,6 +43,28 @@ describe('ChangesWebview', () => {
         expect(document.documentElement.style.fontSize).toBe('21px');
         expect(document.body.style.fontSize).toBe('21px');
         expect(document.getElementById('root')?.style.fontSize).toBe('21px');
+    });
+
+    it('shows output and dismiss actions for failed operations', async () => {
+        const api = createMockVsCodeApi();
+        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+        render(<ChangesWebview />);
+        act(() => sendToWebview({
+            type: 'changes/operationStatus',
+            operationId: 'push-1',
+            status: OperationStatus.Failed,
+            command: 'push',
+            actions: [OperationNoticeActionKind.ShowOutput],
+        }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Could not push.');
+        fireEvent.click(screen.getByRole('button', { name: 'Show Output' }));
+
+        expect(api.messages).toContainEqual({ type: 'changes/toolbarCommand', command: 'showGitOutput' });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+        await waitFor(() => expect(screen.queryByText('Could not push.')).not.toBeInTheDocument());
     });
 
     it('starts as list and applies native view-title mode and commit-focus messages', async () => {

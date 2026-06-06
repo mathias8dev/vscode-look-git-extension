@@ -25,6 +25,7 @@ import { defaultCreateChangesPatch } from '../adapters/vscode/default-create-cha
 import { toSerializedRepoContext } from '../mapping/toProtocol';
 import { openDiffExplanationDocument, showDiffExplanationError } from '../utils/diff-explanation-document';
 import { notifyConflictsDetected } from '../utils/merge-editor';
+import { operationActionsForStatus } from '../utils/operation-feedback';
 import { withCancellationSignal } from '../utils/vscode-cancellation';
 import { webviewFontSizeMessage } from './webview-font';
 
@@ -716,7 +717,11 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     }
 
     private postChangesOperation(operation: Omit<ChangesOperationStatusPush, 'type'>): void {
-        this.postMessage({ type: 'changes/operationStatus', ...operation });
+        this.postMessage({
+            type: 'changes/operationStatus',
+            ...operation,
+            actions: operation.actions ?? operationActionsForStatus(operation.status),
+        });
     }
 
     private postMessage(message: ChangesExtensionToWebviewMessage): void {

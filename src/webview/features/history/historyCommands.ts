@@ -56,3 +56,7 @@ export function messageForHistoryToolbarCommand(command: HistoryToolbarCommand):
         command,
     };
 }
+
+export function messageForHistoryShowOutput(): HistoryWebviewToExtensionMessage {
+    return { type: 'history/showOutput' };
+}

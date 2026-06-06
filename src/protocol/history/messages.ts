@@ -1,5 +1,5 @@
 import type { ErrorMessage, Pagination, ProtocolError, RequestId } from '../shared/base';
-import type { OperationStatus } from '../shared/operation';
+import type { OperationNoticeActionKind, OperationStatus } from '../shared/operation';
 import type { SerializedRepoContext } from '../shared/repo';
 import type { WebviewFontSizeChangedPush } from '../shared/ui';
 import type { HistoryCommitDetails, HistoryContextTarget, HistoryData } from './types';
@@ -48,6 +48,7 @@ export interface HistoryOperationStatusPush {
     readonly operationId: string;
     readonly status: OperationStatus;
     readonly command: HistoryToolbarCommand;
+    readonly actions?: readonly OperationNoticeActionKind[];
 }
 
 export type HistoryExtensionToWebviewMessage =
@@ -109,6 +110,10 @@ export interface HistoryToolbarCommandMessage {
     readonly command: HistoryToolbarCommand;
 }
 
+export interface HistoryShowOutputMessage {
+    readonly type: 'history/showOutput';
+}
+
 export type HistoryWebviewToExtensionMessage =
     | HistoryReadyMessage
     | HistoryDataRequest
@@ -116,4 +121,5 @@ export type HistoryWebviewToExtensionMessage =
     | HistoryCommitDetailsRequest
     | HistoryOpenDiffRequest
     | HistoryContextTargetMessage
-    | HistoryToolbarCommandMessage;
+    | HistoryToolbarCommandMessage
+    | HistoryShowOutputMessage;

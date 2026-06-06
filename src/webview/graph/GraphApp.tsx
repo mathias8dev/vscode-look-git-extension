@@ -111,7 +111,7 @@ export function GraphApp() {
     }, [state.error]);
 
     useEffect(() => {
-        if (!state.operationStatus || state.operationStatus.status === GraphOperationStatus.Running) { return; }
+        if (!state.operationStatus || state.operationStatus.status !== GraphOperationStatus.Success) { return; }
         const operationId = state.operationStatus.operationId;
         const timeout = window.setTimeout(() => dispatch({ type: 'clearOperationStatus', operationId }), OPERATION_NOTICE_TIMEOUT_MS);
         return () => window.clearTimeout(timeout);
@@ -222,7 +222,15 @@ export function GraphApp() {
                         onRefresh={() => dispatch({ type: 'refreshRequested' })}
                     />
 
-                    <GraphOperationNotice operation={state.operationStatus} />
+                    <GraphOperationNotice
+                        operation={state.operationStatus}
+                        onShowOutput={() => vscodeApi.postMessage({ type: 'graph/showOutput' })}
+                        onDismiss={() => {
+                            if (state.operationStatus) {
+                                dispatch({ type: 'clearOperationStatus', operationId: state.operationStatus.operationId });
+                            }
+                        }}
+                    />
 
                     <ErrorNotice
                         error={state.error}

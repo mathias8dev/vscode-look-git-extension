@@ -1,45 +1,47 @@
 import {
     GraphOperationCategory,
-    GraphOperationStatus,
     type GraphOperationStatusPush,
 } from '../../../protocol/graph/messages';
 import { OperationStatus } from '../../../protocol/shared/operation';
 import { OperationNotice } from '../../shared/OperationNotice';
+import { operationNoticeActions } from '../../shared/operationNoticeActions';
 
 interface GraphOperationNoticeProps {
     readonly operation: GraphOperationStatusPush | undefined;
+    readonly onShowOutput: () => void;
+    readonly onDismiss: () => void;
 }
 
-export function GraphOperationNotice({ operation }: GraphOperationNoticeProps) {
+export function GraphOperationNotice({ operation, onShowOutput, onDismiss }: GraphOperationNoticeProps) {
     if (!operation) { return null; }
     return (
         <OperationNotice
-            status={operationStatus(operation.status)}
+            status={operation.status}
             message={operationText(operation)}
+            actions={operationNoticeActions(
+                operation.actions,
+                { onShowOutput, onDismiss },
+                { dismissible: isPersistentOperationNotice(operation.status) },
+            )}
         />
     );
 }
 
-function operationStatus(status: GraphOperationStatus): OperationStatus {
-    switch (status) {
-        case GraphOperationStatus.Running:
-            return OperationStatus.Running;
-        case GraphOperationStatus.Success:
-            return OperationStatus.Success;
-        case GraphOperationStatus.Failed:
-            return OperationStatus.Failed;
-    }
+function isPersistentOperationNotice(status: OperationStatus): boolean {
+    return status === OperationStatus.Failed || status === OperationStatus.Conflict;
 }
 
 function operationText(operation: GraphOperationStatusPush): string {
     const label = operationLabel(operation);
     switch (operation.status) {
-        case GraphOperationStatus.Running:
+        case OperationStatus.Running:
             return operation.background ? `Starting ${label}...` : `${sentenceCase(label)}...`;
-        case GraphOperationStatus.Success:
+        case OperationStatus.Success:
             return operation.background ? `${sentenceCase(label)} started.` : `${pastTense(label)}.`;
-        case GraphOperationStatus.Failed:
+        case OperationStatus.Failed:
             return `Could not ${label}.`;
+        case OperationStatus.Conflict:
+            return `${sentenceCase(label)} stopped with conflicts.`;
     }
 }
 

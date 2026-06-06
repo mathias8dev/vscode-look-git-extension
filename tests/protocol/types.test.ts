@@ -96,6 +96,7 @@ describe('protocol discriminated unions', () => {
                 case 'history/openDiff': return msg.filePath satisfies string;
                 case 'history/contextTarget': return msg.target.kind satisfies string;
                 case 'history/toolbarCommand': return msg.command satisfies string;
+                case 'history/showOutput': return;
             }
         };
         void handle;

@@ -17,6 +17,7 @@ import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../applicatio
 import { getWebviewHtml } from './webviewHtml';
 import { toSerializedRepoContext } from '../mapping/toProtocol';
 import { webviewFontSizeMessage } from './webview-font';
+import { operationActionsForStatus } from '../utils/operation-feedback';
 import { ScopedGitRepository } from '../git/scoped-git-repository';
 import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
 
@@ -143,6 +144,9 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 return;
             case 'history/toolbarCommand':
                 await this.handleToolbarCommand(message.command);
+                return;
+            case 'history/showOutput':
+                await vscode.commands.executeCommand('workbench.action.output.toggleOutput');
                 return;
         }
     }
@@ -428,7 +432,11 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     }
 
     private postHistoryOperation(operation: Omit<HistoryOperationStatusPush, 'type'>): void {
-        this.postMessage({ type: 'history/operationStatus', ...operation });
+        this.postMessage({
+            type: 'history/operationStatus',
+            ...operation,
+            actions: operation.actions ?? operationActionsForStatus(operation.status),
+        });
     }
 
     private nextOperationId(): string {

@@ -23,6 +23,7 @@ import { VscodeLanguageModelCommitMessageGenerator } from '../adapters/vscode/vs
 import { ScopedGitRepository } from '../git/scoped-git-repository';
 import { createErrorPayload, isAbortError } from './errorSerialization';
 import { notifyConflictsDetected, openAllThreeWayMergeEditors, openThreeWayMergeEditor } from '../utils/merge-editor';
+import { operationActionsForStatus } from '../utils/operation-feedback';
 
 type PostMessage = (msg: ChangesExtensionToWebviewMessage) => void;
 type RefreshCallback = () => Promise<void>;
@@ -958,37 +959,46 @@ export class ChangesMessageRouter {
                 return;
             }
             case 'stash':
-                await repo.stash();
-                await this.refresh();
+                await this.runTrackedToolbarOperation(command, async () => {
+                    await repo.stash();
+                    await this.refreshAfterRepositoryUpdate();
+                    return undefined;
+                });
                 return;
             case 'stashIncludeUntracked':
-                await repo.exec(['stash', 'push', '-u']);
-                await this.refresh();
+                await this.runTrackedToolbarOperation(command, async () => {
+                    await repo.exec(['stash', 'push', '-u']);
+                    await this.refreshAfterRepositoryUpdate();
+                    return undefined;
+                });
                 return;
             case 'stashStaged':
-                await repo.stashStaged();
-                await this.refresh();
+                await this.runTrackedToolbarOperation(command, async () => {
+                    await repo.stashStaged();
+                    await this.refreshAfterRepositoryUpdate();
+                    return undefined;
+                });
                 return;
             case 'applyLatestStash':
-                await repo.stashApply(0);
-                await this.refresh();
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runRepositoryMutationWithConflictNotice(repo, () => repo.stashApply(0), 'Apply stash stopped with conflicts.'));
                 return;
             case 'applyStash': {
                 const index = await pickStash(repo, 'Apply stash');
                 if (index === undefined) { return; }
-                await repo.stashApply(index);
-                await this.refresh();
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runRepositoryMutationWithConflictNotice(repo, () => repo.stashApply(index), 'Apply stash stopped with conflicts.'));
                 return;
             }
             case 'popLatestStash':
-                await repo.stashPop(0);
-                await this.refresh();
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runRepositoryMutationWithConflictNotice(repo, () => repo.stashPop(0), 'Pop stash stopped with conflicts.'));
                 return;
             case 'popStash': {
                 const index = await pickStash(repo, 'Pop stash');
                 if (index === undefined) { return; }
-                await repo.stashPop(index);
-                await this.refresh();
+                await this.runTrackedToolbarOperation(command, () =>
+                    this.runRepositoryMutationWithConflictNotice(repo, () => repo.stashPop(index), 'Pop stash stopped with conflicts.'));
                 return;
             }
             case 'dropStash': {
@@ -1202,7 +1212,11 @@ export class ChangesMessageRouter {
     }
 
     private postChangesOperation(operation: Omit<ChangesOperationStatusPush, 'type'>): void {
-        this.postMessage({ type: 'changes/operationStatus', ...operation });
+        this.postMessage({
+            type: 'changes/operationStatus',
+            ...operation,
+            actions: operation.actions ?? operationActionsForStatus(operation.status),
+        });
     }
 
     private nextOperationId(): string {

@@ -1,4 +1,6 @@
 import type { RequestId, ErrorMessage, ProtocolError } from '../shared/base';
+import type { OperationNoticeActionKind, OperationStatus } from '../shared/operation';
+export { OperationStatus as GraphOperationStatus } from '../shared/operation';
 import type { SerializedRepoContext } from '../shared/repo';
 import type { WebviewFontSizeChangedPush } from '../shared/ui';
 import type { GraphContextTarget, GraphData, GraphFilters, GraphPage, CommitFileChange, GraphRepositoryScope, GraphSubmoduleInfo } from './types';
@@ -51,21 +53,16 @@ export enum GraphOperationCategory {
     Commit = 'commit',
 }
 
-export enum GraphOperationStatus {
-    Running = 'running',
-    Success = 'success',
-    Failed = 'failed',
-}
-
 export interface GraphOperationStatusPush {
     readonly type: 'graph/operationStatus';
     readonly operationId: string;
-    readonly status: GraphOperationStatus;
+    readonly status: OperationStatus;
     readonly category: GraphOperationCategory;
     readonly command: GraphRepositoryCommand | BranchCommand | WorktreeCommand | CommitCommand;
     readonly target?: string;
     readonly background?: boolean;
     readonly repositoryScope?: GraphRepositoryScope;
+    readonly actions?: readonly OperationNoticeActionKind[];
 }
 
 // ── Extension → Webview (responses — echo requestId) ───────────────────────
