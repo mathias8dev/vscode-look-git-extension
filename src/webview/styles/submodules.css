@@ -69,7 +69,8 @@
     padding: 0 8px;
 }
 
-.submodule-item:hover .icon-button {
+.submodule-item-header:hover .icon-button,
+.submodule-item-header:focus-within .icon-button {
     opacity: 1;
 }
 
