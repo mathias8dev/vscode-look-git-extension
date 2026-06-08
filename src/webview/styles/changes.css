@@ -421,7 +421,8 @@
     pointer-events: none;
 }
 
-.stash-item:hover .icon-button {
+.stash-item-header:hover .icon-button,
+.stash-item-header:focus-within .icon-button {
     opacity: 1;
 }
 
