@@ -96,9 +96,12 @@ export function findLaneContinuityIssues(rows: readonly GraphRow[]): readonly La
 
         const nextActive = new Map<number, string>();
         for (const line of row.laneData.lines) {
-            if (line.endY !== 'bottom' || !line.targetHash || !visibleHashes.has(line.targetHash)) { continue; }
+            if (line.endY !== 'bottom') { continue; }
+            const targetHash = line.targetHash && visibleHashes.has(line.targetHash)
+                ? line.targetHash
+                : hiddenLaneTarget(line.toLane);
             const existing = nextActive.get(line.toLane);
-            if (existing && existing !== line.targetHash) {
+            if (existing && existing !== targetHash) {
                 issues.push({
                     rowIndex,
                     hash: row.commit.hash,
@@ -107,12 +110,16 @@ export function findLaneContinuityIssues(rows: readonly GraphRow[]): readonly La
                     targetHash: line.targetHash,
                 });
             }
-            nextActive.set(line.toLane, line.targetHash);
+            nextActive.set(line.toLane, targetHash);
         }
         active = nextActive;
     });
 
     return issues;
+}
+
+function hiddenLaneTarget(lane: number): string {
+    return `hidden:${lane}`;
 }
 
 export function findNonVisibleLineTargetIssues(rows: readonly GraphRow[]): readonly NonVisibleLineTargetIssue[] {

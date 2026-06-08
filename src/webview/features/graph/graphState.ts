@@ -1,7 +1,8 @@
 import { GraphOperationStatus, type GraphExtensionToWebviewMessage, type GraphOperationStatusPush } from '../../../protocol/graph/messages';
 import type { BranchInfo, CommitFileChange, GraphCommit, GraphData, GraphFilters, GraphRepositoryScope, GraphSubmoduleInfo, TagInfo, WorktreeInfo, WorktreeWip } from '../../../protocol/graph/types';
 import type { ProtocolError } from '../../../protocol/shared/base';
-import { assignLanes, type GraphRow, type LaneData, type LineDef } from './layout/assignGraphLanes';
+import type { GraphRow, LaneData, LineDef } from './layout/assignGraphLanes';
+import { layoutGraphRowsV2, type GraphLayoutStateV2 } from './layout/layoutGraphRowsV2';
 
 export type DisplayRow =
     | { readonly kind: 'commit'; readonly row: GraphRow }
@@ -78,6 +79,7 @@ export interface CommitDetails {
 export interface GraphState {
     readonly repositoryScope: GraphRepositoryScope;
     readonly rows: readonly GraphRow[];
+    readonly layoutState: GraphLayoutStateV2 | undefined;
     readonly displayRows: readonly DisplayRow[];
     readonly branches: readonly BranchInfo[];
     readonly tags: readonly TagInfo[];
@@ -126,6 +128,7 @@ export function createInitialGraphState(): GraphState {
     return {
         repositoryScope: mainRepositoryScope(),
         rows: [],
+        layoutState: undefined,
         displayRows: [],
         branches: [],
         tags: [],
@@ -377,11 +380,22 @@ function isExpectedGraphError(state: GraphState, requestId: string | undefined):
 function applyGraphData(state: GraphState, data: GraphData, repoId: string | undefined): GraphState {
     const currentBranch = data.currentBranch;
     const appending = state.loadingMore && sameRepositoryScope(data.repositoryScope, state.repositoryScope);
-    const commits = appending ? appendGraphCommits(state.rows, data.commits) : data.commits;
-    const rows = assignLanes(commits, {
+    const firstLoadedHash = state.rows[0]?.commit.hash;
+    const expandedPrefixLoadMore = appending
+        && firstLoadedHash !== undefined
+        && data.commits.some((commit) => commit.hash === firstLoadedHash);
+    const commits = expandedPrefixLoadMore
+        ? uniqueGraphCommits(data.commits)
+        : appending
+            ? newGraphCommits(state.rows, data.commits)
+            : data.commits;
+    const layoutState = layoutGraphRowsV2(commits, {
         primaryBranch: currentBranch,
-        lockedLanes: appending ? lockedLanesForRows(state.rows) : undefined,
+        primaryBranchHash: currentBranchHash(data.branches),
+        showHiddenParentBoundaryEdges: data.hasMore || hasSparseGraphFilters(state.filters),
+        previous: appending && !expandedPrefixLoadMore ? state.layoutState : undefined,
     });
+    const rows = layoutState.rows;
     const displayRows = buildDisplayRows(rows, data.worktreeWips ?? []);
     const submodules = appending
         ? state.submodules
@@ -389,6 +403,7 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
     return {
         ...state,
         rows,
+        layoutState,
         displayRows,
         branches: data.branches,
         tags: data.tags,
@@ -426,6 +441,7 @@ function clearGraphContent(state: GraphState): GraphState {
     return {
         ...state,
         rows: [],
+        layoutState: undefined,
         displayRows: [],
         branches: [],
         tags: [],
@@ -451,21 +467,32 @@ function repositoryScopeKey(scope: GraphRepositoryScope | undefined): string {
     return `submodule:${scope.path ?? ''}`;
 }
 
-function lockedLanesForRows(rows: readonly GraphRow[]): ReadonlyMap<string, number> {
-    return new Map(rows.map((row) => [row.commit.hash, row.laneData.lane]));
+function currentBranchHash(branches: readonly BranchInfo[]): string | undefined {
+    return branches.find((branch) => branch.isCurrent && !branch.isRemote)?.hash;
 }
 
-function appendGraphCommits(rows: readonly GraphRow[], commits: readonly GraphCommit[]): readonly GraphCommit[] {
+function hasSparseGraphFilters(filters: GraphFilters): boolean {
+    return Boolean(
+        filters.search?.trim()
+        || filters.path?.trim()
+        || filters.authors?.length
+        || filters.dateFrom
+        || filters.dateTo,
+    );
+}
+
+function uniqueGraphCommits(commits: readonly GraphCommit[]): readonly GraphCommit[] {
     const seen = new Set<string>();
-    const merged: GraphCommit[] = [];
-    for (const row of rows) {
-        seen.add(row.commit.hash);
-        merged.push(row.commit);
-    }
+    const unique: GraphCommit[] = [];
     for (const commit of commits) {
         if (seen.has(commit.hash)) { continue; }
         seen.add(commit.hash);
-        merged.push(commit);
+        unique.push(commit);
     }
-    return merged;
+    return unique;
+}
+
+function newGraphCommits(rows: readonly GraphRow[], commits: readonly GraphCommit[]): readonly GraphCommit[] {
+    const seen = new Set(rows.map((row) => row.commit.hash));
+    return commits.filter((commit) => !seen.has(commit.hash));
 }

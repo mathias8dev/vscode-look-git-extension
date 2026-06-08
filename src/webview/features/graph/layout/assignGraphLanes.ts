@@ -9,6 +9,8 @@ export interface AssignLaneOptions {
     readonly primaryBranch?: string;
     readonly primaryBranchHash?: string;
     readonly lockedLanes?: ReadonlyMap<string, number>;
+    readonly showHiddenParentBoundaryEdges?: boolean;
+    readonly stabilizePassThroughDetours?: boolean;
 }
 
 export interface GraphRow {
@@ -37,6 +39,8 @@ export interface LineDef {
 interface ActiveLane {
     readonly hash: string;
     readonly color: string;
+    readonly homeLane?: number;
+    readonly detourLane?: number;
 }
 
 interface LanePlacement extends ActiveLane {
@@ -90,6 +94,16 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
             lanes.pop();
         }
         return lanes;
+    }
+
+    function activeLaneForPlacement(placement: LanePlacement, assignedLane: number): ActiveLane {
+        const homeLane = placement.homeLane ?? assignedLane;
+        return {
+            hash: placement.hash,
+            color: placement.color,
+            homeLane,
+            detourLane: assignedLane === homeLane ? placement.detourLane : assignedLane,
+        };
     }
 
     for (let index = 0; index < commits.length; index++) {
@@ -148,6 +162,30 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
         function firstFreePreferredLane(ownerHash: string, sourceLane?: number): number {
             for (let i = 0; ; i++) {
                 if (preferredLaneAvailable(i, ownerHash, sourceLane)) { return i; }
+            }
+        }
+
+        function preferredPassThroughLane(slot: ActiveLane, sourceLane: number): number {
+            if (preferredLaneAvailable(sourceLane, slot.hash, sourceLane)) { return sourceLane; }
+            if (options.stabilizePassThroughDetours) {
+                return firstStablePassThroughLane(slot, sourceLane);
+            }
+            return firstFreePreferredLane(slot.hash, sourceLane);
+        }
+
+        function firstStablePassThroughLane(slot: ActiveLane, sourceLane: number): number {
+            if (slot.detourLane !== undefined
+                && slot.detourLane !== sourceLane
+                && preferredLaneAvailable(slot.detourLane, slot.hash, sourceLane)) {
+                return slot.detourLane;
+            }
+
+            const pivotLane = slot.detourLane ?? sourceLane;
+            for (let distance = 1; ; distance++) {
+                const rightLane = pivotLane + distance;
+                if (preferredLaneAvailable(rightLane, slot.hash, sourceLane)) { return rightLane; }
+                const leftLane = pivotLane - distance;
+                if (leftLane >= 0 && preferredLaneAvailable(leftLane, slot.hash, sourceLane)) { return leftLane; }
             }
         }
 
@@ -220,7 +258,7 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
                 placements.push(spinePlacement);
                 continue;
             }
-            const preferredLane = preferredLaneAvailable(i, slot.hash, i) ? i : firstFreePreferredLane(slot.hash, i);
+            const preferredLane = preferredPassThroughLane(slot, i);
             placements.push({ ...slot, preferredLane, sourceLane: i });
         }
 
@@ -233,6 +271,16 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
                     role: 'first-parent',
                     color,
                     wasAllocated,
+                });
+            } else if (options.showHiddenParentBoundaryEdges) {
+                lines.push({
+                    fromLane: lane,
+                    toLane: lane,
+                    color,
+                    type: 'straight',
+                    role: 'first-parent',
+                    startY: 'center',
+                    endY: 'bottom',
                 });
             }
 
@@ -261,6 +309,16 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
         }
 
         function firstAssignableLane(placement: LanePlacement): number {
+            if (options.stabilizePassThroughDetours && placement.sourceLane !== undefined) {
+                const pivotLane = placement.detourLane ?? placement.preferredLane;
+                if (assignmentLaneAvailable(pivotLane, placement)) { return pivotLane; }
+                for (let distance = 1; ; distance++) {
+                    const rightLane = pivotLane + distance;
+                    if (assignmentLaneAvailable(rightLane, placement)) { return rightLane; }
+                    const leftLane = pivotLane - distance;
+                    if (leftLane >= 0 && assignmentLaneAvailable(leftLane, placement)) { return leftLane; }
+                }
+            }
             for (let i = 0; ; i++) {
                 if (assignmentLaneAvailable(i, placement)) { return i; }
             }
@@ -269,7 +327,7 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
         if (spinePlacement) {
             occupiedLanes.add(lane);
             assignedLaneByPlacement.set(spinePlacement, lane);
-            nextActive[lane] = { hash: spinePlacement.hash, color: spinePlacement.color };
+            nextActive[lane] = activeLaneForPlacement(spinePlacement, lane);
         }
 
         for (const placement of placements.slice().sort((left, right) => left.preferredLane - right.preferredLane)) {
@@ -283,7 +341,7 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
                     : firstAssignableLane(placement);
             occupiedLanes.add(assignedLane);
             assignedLaneByPlacement.set(placement, assignedLane);
-            nextActive[assignedLane] = { hash: placement.hash, color: placement.color };
+            nextActive[assignedLane] = activeLaneForPlacement(placement, assignedLane);
         }
         active = trimTrailingEmptyLanes(nextActive);
 

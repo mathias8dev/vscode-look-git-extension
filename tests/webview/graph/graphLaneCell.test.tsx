@@ -28,7 +28,7 @@ describe('GraphLaneCell', () => {
         expect(markup).toContain('y2="28"');
     });
 
-    it('renders curved parent edges to the next row boundary', () => {
+    it('renders merge parent edges as straight diagonals to the next row boundary', () => {
         const laneData: LaneData = {
             lane: 0,
             color: '#fff',
@@ -47,8 +47,61 @@ describe('GraphLaneCell', () => {
         const markup = renderToStaticMarkup(<GraphLaneCell laneData={laneData} />);
 
         expect(markup).toContain('width="32"');
-        expect(markup).toContain('M 8 14');
-        expect(markup).toContain('24 28');
+        expect(markup).toContain('x1="8"');
+        expect(markup).toContain('y1="14"');
+        expect(markup).toContain('x2="24"');
+        expect(markup).toContain('y2="28"');
+        expect(markup).not.toContain('<path');
+    });
+
+    it('renders pass-through lane changes as straight diagonals', () => {
+        const laneData: LaneData = {
+            lane: 0,
+            color: '#fff',
+            isPrimary: false,
+            lines: [{
+                fromLane: 0,
+                toLane: 1,
+                color: '#fff',
+                type: 'merge-right',
+                role: 'pass-through',
+                startY: 'top',
+                endY: 'bottom',
+            }],
+        };
+
+        const markup = renderToStaticMarkup(<GraphLaneCell laneData={laneData} />);
+
+        expect(markup).toContain('x1="8"');
+        expect(markup).toContain('y1="0"');
+        expect(markup).toContain('x2="24"');
+        expect(markup).toContain('y2="28"');
+        expect(markup).not.toContain('<path');
+    });
+
+    it('renders commit parent lane changes as straight diagonals', () => {
+        const laneData: LaneData = {
+            lane: 0,
+            color: '#fff',
+            isPrimary: false,
+            lines: [{
+                fromLane: 0,
+                toLane: 1,
+                color: '#fff',
+                type: 'fork-right',
+                role: 'first-parent',
+                startY: 'center',
+                endY: 'bottom',
+            }],
+        };
+
+        const markup = renderToStaticMarkup(<GraphLaneCell laneData={laneData} />);
+
+        expect(markup).toContain('x1="8"');
+        expect(markup).toContain('y1="14"');
+        expect(markup).toContain('x2="24"');
+        expect(markup).toContain('y2="28"');
+        expect(markup).not.toContain('<path');
     });
 
     it('scales vertical geometry with the measured graph row height', () => {

@@ -171,6 +171,24 @@ describe('assignGraphLanes', () => {
         expect(findAdjacentDisconnectedSameLaneIssues(rows)).toEqual([]);
     });
 
+    it('can draw an untargeted boundary edge for hidden first parents when more history exists', () => {
+        const rows = assignLanes([
+            commit('visible-child', ['hidden-parent']),
+        ], { showHiddenParentBoundaryEdges: true });
+
+        const boundaryLine = expectItem(rows, 0).laneData.lines.find((line) => line.role === 'first-parent');
+
+        expect(boundaryLine).toEqual(expect.objectContaining({
+            fromLane: 0,
+            toLane: 0,
+            role: 'first-parent',
+            startY: 'center',
+            endY: 'bottom',
+        }));
+        expect(boundaryLine).not.toHaveProperty('targetHash');
+        expect(findNonVisibleLineTargetIssues(rows)).toEqual([]);
+    });
+
     it('does not stack unrelated visible dots on the same lane with a visual gap', () => {
         const rows = assignLanes([
             commit('visible-a', ['hidden-a']),
@@ -489,6 +507,34 @@ describe('assignGraphLanes', () => {
                 lockedLanes = new Map(rows.map((row) => [row.commit.hash, row.laneData.lane]));
             }
         }
+    });
+
+    it('stabilizes pagination pass-through detours instead of bouncing them left and right', () => {
+        const rows = assignLanes([
+            commit('tip', ['base']),
+            commit('locked-a', ['a-parent']),
+            commit('locked-b', ['b-parent']),
+            commit('locked-c', ['c-parent']),
+            commit('locked-d', ['d-parent']),
+            commit('base'),
+        ], {
+            lockedLanes: new Map([
+                ['locked-a', 1],
+                ['locked-b', 0],
+                ['locked-c', 1],
+                ['locked-d', 0],
+            ]),
+            stabilizePassThroughDetours: true,
+        });
+        const baseCorridorLanes = rows
+            .slice(1, 5)
+            .flatMap((row) => row.laneData.lines
+                .filter((line) => line.role === 'pass-through' && line.targetHash === 'base' && line.endY === 'bottom')
+                .map((line) => line.toLane));
+
+        expect(baseCorridorLanes).toEqual([0, 1, 2, 2]);
+        expect(findFloatingNodeIssues(rows)).toEqual([]);
+        expect(findLaneContinuityIssues(rows)).toEqual([]);
     });
 });
 

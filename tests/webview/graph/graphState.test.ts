@@ -4,6 +4,7 @@ import type { BranchInfo, GraphCommit, GraphData, WorktreeWip } from '../../../s
 import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 import { buildDisplayRows, createInitialGraphState, graphRequestId, reduceGraphState } from '../../../src/webview/features/graph/graphState';
 import type { GraphRow, LaneData } from '../../../src/webview/features/graph/layout/assignGraphLanes';
+import { findAdjacentDisconnectedSameLaneIssues, findFloatingNodeIssues, findLaneContinuityIssues } from '../../helpers/graphLayoutAssertions';
 
 function commit(hash: string, parents: readonly string[] = []): GraphCommit {
     return {
@@ -121,6 +122,128 @@ describe('graphState', () => {
         expect(next.loadedCount).toBe(4);
     });
 
+    it('uses expanded prefix load-more responses as the ordered graph source', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: graphData([commit('c', ['b']), commit('b', ['a'])], 2, true),
+            },
+        });
+        const loadingMore = reduceGraphState(loaded, { type: 'startLoadMore' });
+        const refreshedCommit = {
+            ...commit('c', ['b']),
+            message: 'refreshed c',
+        } satisfies GraphCommit;
+
+        const next = reduceGraphState(loadingMore, {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'more', 2),
+                data: graphData([refreshedCommit, commit('b', ['a']), commit('a')], 3, false),
+            },
+        });
+
+        expect(next.rows.map((row) => row.commit.hash)).toEqual(['c', 'b', 'a']);
+        expect(next.rows[0]?.commit.message).toBe('refreshed c');
+        expect(next.loadedCount).toBe(3);
+    });
+
+    it('keeps expanded prefix order when new commits appear above the loaded window', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: graphData([commit('b', ['a']), commit('a')], 2, true),
+            },
+        });
+        const loadingMore = reduceGraphState(loaded, { type: 'startLoadMore' });
+
+        const next = reduceGraphState(loadingMore, {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'more', 2),
+                data: graphData([commit('c', ['b']), commit('b', ['a']), commit('a'), commit('root')], 4, false),
+            },
+        });
+
+        expect(next.rows.map((row) => row.commit.hash)).toEqual(['c', 'b', 'a', 'root']);
+        expect(next.loadedCount).toBe(4);
+    });
+
+    it('keeps already-loaded lanes stable when load more reveals an older parent', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: graphData([
+                    commit('topic-tip', ['base']),
+                    commit('main-tip', ['base']),
+                ], 2, true),
+            },
+        });
+        const lanesBefore = new Map(loaded.rows.map((graphRow) => [graphRow.commit.hash, graphRow.laneData.lane]));
+        const loadingMore = reduceGraphState(loaded, { type: 'startLoadMore' });
+
+        const next = reduceGraphState(loadingMore, {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'more', 2),
+                data: graphData([
+                    commit('topic-tip', ['base']),
+                    commit('main-tip', ['base']),
+                    commit('base'),
+                ], 3, false),
+            },
+        });
+
+        for (const [hash, lane] of lanesBefore) {
+            expect(next.rows.find((graphRow) => graphRow.commit.hash === hash)?.laneData.lane).toBe(lane);
+        }
+        expect(findFloatingNodeIssues(next.rows)).toEqual([]);
+        expect(findLaneContinuityIssues(next.rows)).toEqual([]);
+    });
+
+    it('keeps page-boundary merge rows connected when load more reveals hidden parents', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: graphData([
+                    commit('merge', ['main', 'feature']),
+                    commit('main', ['base']),
+                ], 2, true),
+            },
+        });
+        const loadingMore = reduceGraphState(loaded, { type: 'startLoadMore' });
+
+        const next = reduceGraphState(loadingMore, {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'more', 2),
+                data: graphData([
+                    commit('merge', ['main', 'feature']),
+                    commit('main', ['base']),
+                    commit('feature', ['base']),
+                    commit('base'),
+                ], 4, false),
+            },
+        });
+
+        expect(next.rows.map((graphRow) => graphRow.commit.hash)).toEqual(['merge', 'main', 'feature', 'base']);
+        expect(findFloatingNodeIssues(next.rows)).toEqual([]);
+        expect(findLaneContinuityIssues(next.rows)).toEqual([]);
+        expect(findAdjacentDisconnectedSameLaneIssues(next.rows)).toEqual([]);
+    });
+
     it('keeps the current loaded window when an external graph refresh is requested', () => {
         const loaded = reduceGraphState(createInitialGraphState(), {
             type: 'message',
@@ -140,6 +263,61 @@ describe('graphState', () => {
         expect(refreshed.loadingMore).toBe(false);
         expect(refreshed.loadedCount).toBe(600);
         expect(refreshed.filters).toEqual({ search: 'needle' });
+    });
+
+    it('uses the current branch hash to mark the primary spine when refs are missing', () => {
+        const head = commit('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', ['base']);
+        const state = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: {
+                    ...graphData([commit('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', ['base']), head, commit('base')], 3, false),
+                    branches: [{ name: 'main', isRemote: false, isCurrent: true, hash: head.hash }],
+                },
+            },
+        });
+
+        expect(state.rows.find((graphRow) => graphRow.commit.hash === head.hash)?.laneData.isPrimary).toBe(true);
+    });
+
+    it('renders hidden first-parent boundary lines while more graph history is available', () => {
+        const state = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: graphData([commit('visible-child', ['hidden-parent'])], 1, true),
+            },
+        });
+
+        const boundaryLine = state.rows[0]?.laneData.lines.find((line) => line.role === 'first-parent');
+
+        expect(boundaryLine).toEqual(expect.objectContaining({
+            role: 'first-parent',
+            startY: 'center',
+            endY: 'bottom',
+        }));
+        expect(boundaryLine).not.toHaveProperty('targetHash');
+    });
+
+    it('keeps sparse search-filtered commits from reusing disconnected lanes', () => {
+        const filtered = reduceGraphState(createInitialGraphState(), { type: 'setFilters', filters: { search: 'needle' } });
+        const state = reduceGraphState(filtered, {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(1, 'replace'),
+                data: graphData([
+                    commit('needle-newer', ['hidden-parent']),
+                    commit('needle-older', ['older-hidden-parent']),
+                ], 2, false),
+            },
+        });
+
+        expect(findAdjacentDisconnectedSameLaneIssues(state.rows)).toEqual([]);
+        expect(findLaneContinuityIssues(state.rows)).toEqual([]);
     });
 
     it('clears graph filters and reloads data', () => {

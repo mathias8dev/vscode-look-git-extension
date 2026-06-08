@@ -87,17 +87,12 @@ function LaneLine({ line, rowHeight }: { readonly line: LineDef; readonly rowHei
         );
     }
 
-    const cpX1 = x1;
-    const cpY1 = y1 + (y2 - y1) * 0.5;
-    const cpX2 = x2;
-    const cpY2 = y1 + (y2 - y1) * 0.5;
-
     return (
-        <path
-            d={`M ${x1} ${y1} C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${x2} ${y2}`}
+        <line
+            x1={x1} y1={y1}
+            x2={x2} y2={y2}
             stroke={color}
             strokeWidth={LINE_WIDTH}
-            fill="none"
         />
     );
 }

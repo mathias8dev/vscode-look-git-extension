@@ -355,6 +355,34 @@ describe('GraphApp', () => {
         await waitFor(() => expect(firstCommit).toHaveAttribute('aria-selected', 'true'));
     });
 
+    it('requests the next page when loading more graph rows', async () => {
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+
+        render(<GraphApp />);
+        await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
+        const initialRequest = latestGraphDataRequest(api.messages);
+        await act(async () => sendToWebview({
+            type: 'graph/dataResponse',
+            requestId: initialRequest.requestId,
+            data: {
+                ...graphData([
+                    graphCommit('bbbbbbb2222222', 'feat(graph): second commit', ['aaaaaaa1111111']),
+                    graphCommit('aaaaaaa1111111', 'feat(graph): first commit'),
+                ]),
+                hasMore: true,
+                loadedCount: 2,
+                totalCount: 3,
+            },
+        }));
+
+        await waitFor(() => expect(api.messages.some(isGraphLoadMoreRequest)).toBe(true));
+        const loadMoreRequest = latestGraphLoadMoreRequest(api.messages);
+
+        expect(loadMoreRequest.requestId).toBe('graph:more:0:2');
+        expect(loadMoreRequest.page).toEqual({ offset: 0, limit: 302 });
+    });
+
     it('offers retry and output actions for graph errors with details', async () => {
         const api = createMockVsCodeApi();
         const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
@@ -418,6 +446,30 @@ interface GraphDataRequestLike {
 
 function graphDataRequests(messages: readonly unknown[]): readonly GraphDataRequestLike[] {
     return messages.filter(isGraphDataRequest);
+}
+
+function latestGraphLoadMoreRequest(messages: readonly unknown[]): GraphLoadMoreRequestLike {
+    const request = messages.filter(isGraphLoadMoreRequest).at(-1);
+    if (!request) { throw new Error('Expected a graph load-more request.'); }
+    return request;
+}
+
+function isGraphLoadMoreRequest(value: unknown): value is GraphLoadMoreRequestLike {
+    return typeof value === 'object'
+        && value !== null
+        && 'type' in value
+        && value.type === 'graph/loadMore'
+        && 'requestId' in value
+        && typeof value.requestId === 'string';
+}
+
+interface GraphLoadMoreRequestLike {
+    readonly type: 'graph/loadMore';
+    readonly requestId: string;
+    readonly page: {
+        readonly offset: number;
+        readonly limit: number;
+    };
 }
 
 function isSubmoduleScope(value: unknown, path: string): boolean {
