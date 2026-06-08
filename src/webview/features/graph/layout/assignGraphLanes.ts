@@ -92,7 +92,9 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
         return lanes;
     }
 
-    for (const commit of commits) {
+    for (let index = 0; index < commits.length; index++) {
+        const commit = commits[index]!;
+        const nextHash = commits[index + 1]?.hash;
         const lines: LineDef[] = [];
         const isPrimaryStartCommit = primaryHash === commit.hash;
         const incomingLanes = findActiveLanes(commit.hash);
@@ -178,9 +180,46 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
             });
         }
 
+        // Pin this commit's lane to the parent that occupies the immediately
+        // following row, so the two stacked dots connect with a straight
+        // segment instead of detouring out to a free lane and back. Otherwise
+        // an active corridor or the conventional first-parent heuristic can win
+        // the lane and shove the next-row parent aside — it then weaves back,
+        // producing a visible same-lane disconnect (most often under pagination
+        // locks, where lane contention is higher). Only pin when the parent's
+        // locked lane agrees with this lane, so we never fight an explicit lock.
+        const spineLockedLane = nextHash === undefined ? undefined : options.lockedLanes?.get(nextHash);
+        const spineParentHash = nextHash !== undefined
+            && parents.includes(nextHash)
+            && visibleHashes.has(nextHash)
+            && (spineLockedLane === undefined || spineLockedLane === lane)
+            ? nextHash
+            : undefined;
+        let spinePlacement: LanePlacement | undefined;
+        if (spineParentHash !== undefined && !active.some((slot) => slot?.hash === spineParentHash)) {
+            // Reserve the lane before the corridors are placed so they route
+            // around it; the matching parent edge reuses this placement below.
+            spinePlacement = {
+                hash: spineParentHash,
+                preferredLane: lane,
+                color: spineParentHash === firstParent ? color : laneColor(lane),
+            };
+            placements.push(spinePlacement);
+        }
+
         for (let i = 0; i < active.length; i++) {
             const slot = active[i];
             if (!slot || consumedIncoming.has(i)) { continue; }
+            if (spineParentHash !== undefined && slot.hash === spineParentHash && i !== lane && spineLockedLane === lane) {
+                // The next row's parent is locked to this lane but its corridor
+                // has drifted away under lane contention; pull it back so the
+                // stacked dots connect straight. We only do this for a parent
+                // locked to this exact lane — an unlocked corridor's position is
+                // legitimate and must merge into its lane, not be dragged here.
+                spinePlacement = { ...slot, preferredLane: lane, sourceLane: i };
+                placements.push(spinePlacement);
+                continue;
+            }
             const preferredLane = preferredLaneAvailable(i, slot.hash, i) ? i : firstFreePreferredLane(slot.hash, i);
             placements.push({ ...slot, preferredLane, sourceLane: i });
         }
@@ -227,7 +266,14 @@ export function assignLanes(commits: readonly GraphCommit[], options: AssignLane
             }
         }
 
+        if (spinePlacement) {
+            occupiedLanes.add(lane);
+            assignedLaneByPlacement.set(spinePlacement, lane);
+            nextActive[lane] = { hash: spinePlacement.hash, color: spinePlacement.color };
+        }
+
         for (const placement of placements.slice().sort((left, right) => left.preferredLane - right.preferredLane)) {
+            if (placement === spinePlacement) { continue; }
             const lockedLane = options.lockedLanes?.get(placement.hash);
             const keepPreferredLane = placement.sourceLane === undefined || lockedLane !== undefined;
             const assignedLane = lockedLane !== undefined && assignmentLaneAvailable(lockedLane, placement)

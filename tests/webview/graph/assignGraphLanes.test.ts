@@ -469,6 +469,27 @@ describe('assignGraphLanes', () => {
         expectSemanticLayout(firstPageRows);
         expectSemanticLayout(expandedRows);
     });
+
+    it('keeps stacked dots connected across incremental pagination locks', () => {
+        // Regression: each "load more" re-locks every visible row's lane (see
+        // graphState.applyGraphData) and appends the next page. When a new page
+        // reveals the parent that occupies the row immediately below a commit,
+        // lane contention used to push that parent out to a free lane and weave
+        // it back — leaving two dots stacked on the same lane with no straight
+        // connector between them. Replay that exact loop and assert the layout
+        // stays clean at every page. These seeds each produced a same-lane
+        // disconnect before the fix.
+        for (const seed of [108, 187, 199, 338, 360, 373, 388]) {
+            const commits = paginationDag(seed, 250);
+            const pageSize = 25;
+            let lockedLanes: ReadonlyMap<string, number> | undefined;
+            for (let end = pageSize; end <= commits.length; end += pageSize) {
+                const rows = assignLanes(commits.slice(0, end), { primaryBranch: 'main', lockedLanes });
+                expectSemanticLayout(rows);
+                lockedLanes = new Map(rows.map((row) => [row.commit.hash, row.laneData.lane]));
+            }
+        }
+    });
 });
 
 function expectSemanticLayout(rows: readonly GraphRow[]): void {
@@ -477,6 +498,23 @@ function expectSemanticLayout(rows: readonly GraphRow[]): void {
     expect(findAdjacentDisconnectedSameLaneIssues(rows)).toEqual([]);
     expect(findFloatingNodeIssues(rows)).toEqual([]);
     expect(findLaneContinuityIssues(rows)).toEqual([]);
+}
+
+function paginationDag(seed: number, count: number): readonly GraphCommit[] {
+    const random = seededRandom(seed);
+    const oldestFirst: GraphCommit[] = [];
+    for (let i = 0; i < count; i++) {
+        const parents: string[] = [];
+        if (i > 0) {
+            const span = Math.min(i, 18);
+            parents.push(`s${seed}-c${i - 1 - Math.floor(random() * span)}`);
+            if (i > 4 && random() < 0.3) { parents.push(`s${seed}-c${Math.floor(random() * i)}`); }
+            if (i > 16 && random() < 0.05) { parents.push(`s${seed}-c${Math.floor(random() * i)}`); }
+            if (i > 24 && random() < 0.025) { parents.push(`s${seed}-c${Math.floor(random() * i)}`); }
+        }
+        oldestFirst.push(commit(`s${seed}-c${i}`, Array.from(new Set(parents))));
+    }
+    return oldestFirst.reverse();
 }
 
 function generatedDagCommits(seed: number, count: number): readonly GraphCommit[] {
