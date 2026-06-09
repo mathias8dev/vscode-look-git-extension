@@ -2,7 +2,7 @@ import { GraphOperationStatus, type GraphExtensionToWebviewMessage, type GraphOp
 import type { BranchInfo, CommitFileChange, GraphCommit, GraphData, GraphFilters, GraphRepositoryScope, GraphSubmoduleInfo, TagInfo, WorktreeInfo, WorktreeWip } from '../../../protocol/graph/types';
 import type { ProtocolError } from '../../../protocol/shared/base';
 import type { GraphRow, LaneData, LineDef } from './layout/graph-lane-model';
-import { layoutGraphRowsV3, type GraphLayoutStateV3 } from './layout/layout-graph-rows-v3';
+import { layoutGraphRowsV4, type GraphLayoutStateV4 } from './layout/layout-graph-rows-v4';
 
 export type DisplayRow =
     | { readonly kind: 'commit'; readonly row: GraphRow }
@@ -79,7 +79,7 @@ export interface CommitDetails {
 export interface GraphState {
     readonly repositoryScope: GraphRepositoryScope;
     readonly rows: readonly GraphRow[];
-    readonly layoutState: GraphLayoutStateV3 | undefined;
+    readonly layoutState: GraphLayoutStateV4 | undefined;
     readonly displayRows: readonly DisplayRow[];
     readonly branches: readonly BranchInfo[];
     readonly tags: readonly TagInfo[];
@@ -389,7 +389,7 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
         : appending
             ? [...state.rows.map((row) => row.commit), ...newGraphCommits(state.rows, data.commits)]
             : data.commits;
-    const layoutState = layoutGraphRowsV3(commits, {
+    const layoutState = layoutGraphRowsV4(commits, {
         primaryBranch: currentBranch,
         primaryBranchHash: currentBranchHash(data.branches),
         showHiddenParentBoundaryEdges: data.hasMore || hasSparseGraphFilters(state.filters),
