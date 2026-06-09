@@ -4,10 +4,38 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [0.10.0] - 2026-06-09
+
 ### Added
 
 #### Commit History
 - Show selection checkboxes beside every commit after the first commit is selected, with the selected commit checked by default, so multi-commit actions are easier to discover and adjust
+
+#### Look Graph
+- Add newer graph layout renderers for large histories, including a logical v4 renderer and Bezier edge rendering across graph layouts
+
+#### Tooling
+- Add a `lookGit` stash-pop fixture for repositories where local unstaged changes block applying a stash
+
+### Changed
+
+#### Look Graph
+- Improve graph pagination so load-more requests preserve lane continuity and avoid unnecessary layout jumps
+- Refine graph search pagination for branch, path, author, date, message, and hash-filtered histories
+- Optimize graph pagination and reachability checks for larger repositories
+
+#### Webview
+- Unify operation feedback patterns and improve conflict guidance and keyboard menu behavior
+
+### Fixed
+
+#### Changes Panel
+- Keep stash-pop failures visible when local changes would be overwritten, with `Show Output` and `Dismiss` actions
+- Keep stash and submodule hover actions scoped to their own header rows
+
+#### Look Graph
+- Stabilize graph load-more layout and connect stacked dots correctly across pagination lane locks
+- Disable invalid graph context actions
 
 ## [0.9.1] - 2026-06-05
 
