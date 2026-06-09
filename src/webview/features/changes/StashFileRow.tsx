@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { StashFileEntry } from '../../../protocol/changes/types';
 import { IconButton } from '../../shared/IconButton';
 import { changesItemContext } from './context-menu-model';
@@ -12,6 +13,7 @@ interface StashFileRowProps {
 
 export function StashFileRow({ index, file, onDiff }: StashFileRowProps) {
     const openDiff = () => onDiff(index, file);
+    const [active, setActive] = useState(false);
     return (
         <div
             className="stash-file-row"
@@ -19,6 +21,14 @@ export function StashFileRow({ index, file, onDiff }: StashFileRowProps) {
             title={file.filePath}
             tabIndex={0}
             onClick={openDiff}
+            onMouseEnter={() => setActive(true)}
+            onMouseLeave={() => setActive(false)}
+            onFocus={() => setActive(true)}
+            onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    setActive(false);
+                }
+            }}
             onKeyDown={(event) => {
                 if (event.key !== 'Enter' && event.key !== ' ') { return; }
                 event.preventDefault();
@@ -30,16 +40,18 @@ export function StashFileRow({ index, file, onDiff }: StashFileRowProps) {
                 <span className="file-name">{fileName(file.filePath)}</span>
                 <span className="file-path">{parentPath(file)}</span>
             </div>
-            <div className="row-actions">
-                <IconButton
-                    icon="diff"
-                    title="Open stash diff"
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        openDiff();
-                    }}
-                />
-            </div>
+            {active ? (
+                <div className="row-actions">
+                    <IconButton
+                        icon="diff"
+                        title="Open stash diff"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            openDiff();
+                        }}
+                    />
+                </div>
+            ) : null}
             <span className={`status-letter status-letter-${statusLetterKind(file.status)}`} aria-hidden="true">
                 {statusLetter(file.status)}
             </span>

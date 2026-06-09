@@ -699,7 +699,6 @@
 
 .change-row {
     --depth: 0;
-    position: relative;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -713,10 +712,6 @@
 }
 
 .change-row:hover {
-    background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.08));
-}
-
-.change-row:focus-within {
     background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.08));
 }
 
@@ -767,43 +762,23 @@
 }
 
 .row-actions {
-    position: absolute;
-    inset-block: 0;
-    right: 8px;
+    flex: none;
     display: flex;
     align-items: center;
     gap: 2px;
-    padding-left: 24px;
-    pointer-events: none;
 }
 
-/* The actions overlay the right edge only while the row is active, so the file
-   path uses the full row width at rest and nothing reflows on hover. A gradient
-   masks the path end behind the buttons, and the status letter yields its spot.
-   pointer-events stay off at rest so the hidden buttons are not click targets. */
-.change-row:hover .row-actions,
-.change-row:focus-within .row-actions,
-.change-row[aria-selected="true"] .row-actions,
-.stash-file-row:hover .row-actions,
-.stash-file-row:focus-within .row-actions {
-    pointer-events: auto;
-    background: linear-gradient(to right, transparent, var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.08)) 24px);
+/* Action buttons are mounted in the DOM only while the row is hovered, focused,
+   or selected (see ChangeRow / StashFileRow) — so nothing reserves space at
+   rest. Force them visible when present, and give them the status letter's slot
+   so the file path keeps the full width until they appear. */
+.row-actions .icon-button {
+    opacity: 1;
 }
 
-.change-row[aria-selected="true"] .row-actions {
-    background: linear-gradient(to right, transparent, var(--vscode-list-activeSelectionBackground, rgba(14, 99, 156, 0.44)) 24px);
-}
-
-.stash-file-row .row-actions {
-    right: 0;
-}
-
-.change-row:hover .status-letter,
-.change-row:focus-within .status-letter,
-.change-row[aria-selected="true"] .status-letter,
-.stash-file-row:hover .status-letter,
-.stash-file-row:focus-within .status-letter {
-    visibility: hidden;
+.change-row:has(.row-actions) .status-letter,
+.stash-file-row:has(.row-actions) .status-letter {
+    display: none;
 }
 
 .status-letter {

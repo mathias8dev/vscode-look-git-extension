@@ -33,6 +33,10 @@ describe('StashFileRow', () => {
         const file = stashFile();
 
         const { container } = render(<StashFileRow index={1} file={file} onDiff={onDiff} />);
+
+        // The diff button is mounted only while the row is hovered/focused.
+        expect(screen.queryByRole('button', { name: 'Open stash diff' })).toBeNull();
+        fireEvent.mouseEnter(screen.getByTitle('src/stashed.ts'));
         fireEvent.click(screen.getByRole('button', { name: 'Open stash diff' }));
 
         expect(onDiff).toHaveBeenCalledOnce();

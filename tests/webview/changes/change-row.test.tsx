@@ -33,9 +33,15 @@ describe('ChangeRow', () => {
         const item = changeItem(ChangeSectionId.Unstaged, 'src/app.ts', ' ', 'M');
 
         const { container } = renderRow(item, onAction);
-        fireEvent.click(screen.getByTitle('src/app.ts'));
+        const row = screen.getByTitle('src/app.ts');
+        fireEvent.click(row);
 
         expect(onAction).toHaveBeenCalledWith(item, ChangeRowAction.Diff);
+
+        // Row actions are mounted only while the row is hovered/focused/selected.
+        expect(screen.queryByRole('button', { name: 'Discard changes' })).toBeNull();
+        fireEvent.mouseEnter(row);
+
         expect(container.querySelector('.codicon-git-compare')).toBeNull();
         expect(container.querySelector('.codicon-diff')).not.toBeNull();
         expect(screen.getByRole('button', { name: 'Discard changes' })).toBeInTheDocument();

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { StatusEntry } from '../../../protocol/changes/types';
 import { IconButton } from '../../shared/IconButton';
 import { ChangeRowAction, primaryRowActionFor, rowActionsFor, type ChangeActionDescriptor } from './changeCommands';
@@ -22,6 +23,8 @@ export function ChangeRow({ item, depth, selected, context, onSelect, onOpenCont
     const entry = item.entry;
     const actions = actionOverride ?? rowActionsFor(item);
     const primaryAction = primaryRowActionFor(item);
+    const [active, setActive] = useState(false);
+    const showActions = (active || selected) && actions.length > 0;
     return (
         <article
             className="change-row"
@@ -31,6 +34,14 @@ export function ChangeRow({ item, depth, selected, context, onSelect, onOpenCont
             aria-selected={selected}
             tabIndex={0}
             data-change-item-id={item.id}
+            onMouseEnter={() => setActive(true)}
+            onMouseLeave={() => setActive(false)}
+            onFocus={() => setActive(true)}
+            onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    setActive(false);
+                }
+            }}
             onContextMenu={() => onOpenContextMenu(item)}
             onClick={(event) => {
                 if (event.shiftKey) {
@@ -84,19 +95,21 @@ export function ChangeRow({ item, depth, selected, context, onSelect, onOpenCont
                 <span className="file-name">{fileName(entry.filePath)}</span>
                 <span className="file-path">{parentPath(entry)}</span>
             </div>
-            <div className="row-actions" aria-label={`Actions for ${entry.filePath}`}>
-                {actions.map((descriptor) => (
-                    <IconButton
-                        key={descriptor.action}
-                        icon={descriptor.icon}
-                        title={descriptor.title}
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            onAction(item, descriptor.action);
-                        }}
-                    />
-                ))}
-            </div>
+            {showActions ? (
+                <div className="row-actions" aria-label={`Actions for ${entry.filePath}`}>
+                    {actions.map((descriptor) => (
+                        <IconButton
+                            key={descriptor.action}
+                            icon={descriptor.icon}
+                            title={descriptor.title}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onAction(item, descriptor.action);
+                            }}
+                        />
+                    ))}
+                </div>
+            ) : null}
             <span
                 className={`status-letter status-letter-${statusLetterKind(entry)}`}
                 aria-hidden="true"
