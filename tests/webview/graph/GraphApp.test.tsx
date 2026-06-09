@@ -380,7 +380,7 @@ describe('GraphApp', () => {
         const loadMoreRequest = latestGraphLoadMoreRequest(api.messages);
 
         expect(loadMoreRequest.requestId).toBe('graph:more:0:2');
-        expect(loadMoreRequest.page).toEqual({ offset: 0, limit: 302 });
+        expect(loadMoreRequest.page).toEqual({ offset: 2, limit: 300 });
     });
 
     it('offers retry and output actions for graph errors with details', async () => {

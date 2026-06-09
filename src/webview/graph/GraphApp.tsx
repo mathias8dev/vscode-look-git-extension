@@ -98,7 +98,7 @@ export function GraphApp() {
         vscodeApi.postMessage(messageForLoadMore(
             repoId,
             state.filters,
-            { offset: 0, limit: state.loadedCount + PAGE_LIMIT },
+            { offset: state.loadedCount, limit: PAGE_LIMIT },
             state.repositoryScope,
             state.activeGraphRequestId,
         ));
