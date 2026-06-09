@@ -4,6 +4,16 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.0.2] - 2026-06-09
+
+### Fixed
+
+#### Diffs
+- Open submodule (gitlink) diffs consistently across the Changes panel, Look Graph, and Commit History
+
+#### Commit History
+- Use the badge foreground color for the file-count badge so it stays legible against the badge background across themes
+
 ## [1.0.1] - 2026-06-09
 
 ### Changed
