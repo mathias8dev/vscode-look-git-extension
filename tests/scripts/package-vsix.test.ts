@@ -38,7 +38,7 @@ describe('package-vsix', () => {
             const capturedArgs = fs.readFileSync(capturedArgsPath, 'utf8');
             expect(capturedManifest.displayName).toBe('Look Git');
             expect(capturedArgs).toContain('--out');
-            expect(capturedArgs).toContain('look-git-1.0.0.vsix');
+            expect(capturedArgs).toContain('look-git-1.0.1.vsix');
             expect(capturedArgs).not.toContain('experimental');
             expect(fs.readFileSync(packageJsonPath, 'utf8')).toBe(originalPackageJson);
         } finally {

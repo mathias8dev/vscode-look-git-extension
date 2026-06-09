@@ -1,7 +1,5 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs/promises';
-import * as os from 'os';
 import {
     GraphOperationCategory,
     GraphOperationStatus,
@@ -10,7 +8,6 @@ import {
     type GraphDataResponse,
     type CommitDetailsResponse,
     type WorktreeDetailsResponse,
-    type OpenDiffRequest,
     type OpenWorktreeDiffRequest,
     type GraphOperationStatusPush,
 } from '../../protocol/graph/messages';
@@ -30,6 +27,7 @@ import { runBranchCommand } from '../commands/branch-commands';
 import { runWorktreeCommand } from '../commands/worktree-commands';
 import { operationActionsForStatus } from '../utils/operation-feedback';
 import { openCommitGitlinkDiff, openWorktreeGitlinkDiff } from '../utils/gitlink-diff';
+import { commitFileDiffUris, emptyDiffUri, tempDiffUri } from '../utils/diff-uris';
 import { createErrorPayload, isAbortError } from './errorSerialization';
 
 type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
@@ -221,7 +219,7 @@ export class GraphMessageRouter {
                     await openCommitGitlinkDiff(repo, msg);
                     break;
                 }
-                const { left, right } = await createDiffUris(repo.cwd, msg);
+                const { left, right } = await commitFileDiffUris(repo.cwd, msg);
                 await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(msg.filePath)} (${msg.commitHash.substring(0, 7)})`);
                 break;
             }
@@ -661,32 +659,6 @@ function diffExplanationScopeFor(scope: GraphRepositoryScope | undefined): { rea
     return { label: 'Submodule', value: scope.path };
 }
 
-async function createDiffUris(cwd: string, msg: OpenDiffRequest): Promise<{ readonly left: vscode.Uri; readonly right: vscode.Uri }> {
-    const fileUri = vscode.Uri.file(path.join(cwd, msg.filePath));
-    const origUri = msg.origPath ? vscode.Uri.file(path.join(cwd, msg.origPath)) : fileUri;
-    const parentRef = msg.parentHash ?? `${msg.commitHash}~1`;
-    const status = msg.status.charAt(0);
-
-    if (status === 'A') {
-        return {
-            left: await emptyDiffUri(msg.commitHash, msg.filePath, 'parent'),
-            right: toGitUri(fileUri, msg.commitHash),
-        };
-    }
-
-    if (status === 'D') {
-        return {
-            left: toGitUri(origUri, parentRef),
-            right: await emptyDiffUri(msg.commitHash, msg.filePath, 'commit'),
-        };
-    }
-
-    return {
-        left: toGitUri(origUri, parentRef),
-        right: toGitUri(fileUri, msg.commitHash),
-    };
-}
-
 async function createWorktreeDiffUris(repo: GitRepository, msg: OpenWorktreeDiffRequest): Promise<{ readonly left: vscode.Uri; readonly right: vscode.Uri }> {
     const fileUri = vscode.Uri.file(path.join(msg.worktreePath, msg.filePath));
     const origPath = msg.origPath ?? msg.filePath;
@@ -712,27 +684,9 @@ async function createWorktreeDiffUris(repo: GitRepository, msg: OpenWorktreeDiff
     };
 }
 
-async function emptyDiffUri(commitHash: string, filePath: string, side: string): Promise<vscode.Uri> {
-    return tempDiffUri(commitHash, filePath, side, '');
-}
-
 async function worktreeHeadBlobUri(repo: GitRepository, worktreePath: string, filePath: string): Promise<vscode.Uri> {
     const content = await repo.execRaw(['-C', worktreePath, 'show', `HEAD:${filePath}`]);
     return tempDiffUri('worktree-head', filePath, 'head', content);
-}
-
-async function tempDiffUri(namespace: string, filePath: string, side: string, content: string): Promise<vscode.Uri> {
-    const dir = path.join(os.tmpdir(), 'look-git-empty-diffs');
-    const safeNamespace = Buffer.from(namespace).toString('base64url').substring(0, 16);
-    const fileName = `${safeNamespace}-${side}-${Buffer.from(filePath).toString('base64url')}`;
-    const emptyPath = path.join(dir, fileName);
-    await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(emptyPath, content);
-    return vscode.Uri.file(emptyPath);
-}
-
-function toGitUri(uri: vscode.Uri, ref: string): vscode.Uri {
-    return uri.with({ scheme: 'git', query: JSON.stringify({ path: uri.path, ref }) });
 }
 
 function emptyGraphData(): GraphData {

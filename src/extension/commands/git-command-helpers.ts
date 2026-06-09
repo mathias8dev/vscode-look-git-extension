@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import * as os from 'os';
 import type { GitRepository } from '../../application/ports/git-repository';
 import type { GitWorktree } from '../../core/git/domain/GitWorktree';
 import type { DiffNameStatusEntry } from '../../core/parsing/parse-diff-name-status';
 import { parseDiffNameStatus } from '../../core/parsing/parse-diff-name-status';
 import { openReadonlyDiffDocument } from '../utils/readonly-diff-documents';
+import { emptyDiffUri, refBlobUri } from '../utils/diff-uris';
 
 type ChangesResource = readonly [vscode.Uri, vscode.Uri, vscode.Uri];
 
@@ -114,25 +114,6 @@ async function workingTreeChangeResource(repo: GitRepository, worktreePath: stri
     return [fileUri, await refBlobUri(repo, worktreePath, baseRef, origPath, 'original'), fileUri];
 }
 
-async function refBlobUri(repo: GitRepository, cwd: string, ref: string, filePath: string, side: string): Promise<vscode.Uri> {
-    const content = await repo.execRaw(['-C', cwd, 'show', `${ref}:${filePath}`]);
-    return tempDiffUri(ref, filePath, side, content);
-}
-
 async function openDiffDocument(title: string, content: string): Promise<void> {
     await openReadonlyDiffDocument(title, content);
-}
-
-async function emptyDiffUri(commitHash: string, filePath: string, side: string): Promise<vscode.Uri> {
-    return tempDiffUri(commitHash, filePath, side, '');
-}
-
-async function tempDiffUri(namespace: string, filePath: string, side: string, content: string): Promise<vscode.Uri> {
-    const dir = path.join(os.tmpdir(), 'look-git-empty-diffs');
-    const safeNamespace = Buffer.from(namespace).toString('base64url').substring(0, 16);
-    const fileName = `${safeNamespace}-${side}-${Buffer.from(filePath).toString('base64url')}`;
-    const emptyPath = path.join(dir, fileName);
-    await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(emptyPath, content);
-    return vscode.Uri.file(emptyPath);
 }

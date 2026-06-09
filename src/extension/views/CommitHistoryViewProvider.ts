@@ -1,7 +1,5 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs/promises';
-import * as os from 'os';
 import type { GitBranch, GitCommit, GitFileChange, GitRepository, GitTag } from '../../application/ports/git-repository';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import type { ErrorCode, Pagination } from '../../protocol/shared/base';
@@ -22,6 +20,7 @@ import { ScopedGitRepository } from '../git/scoped-git-repository';
 import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
 import { getReachableCommitHashes } from '../../application/usecases/commits/get-reachable-commit-hashes';
 import { openCommitGitlinkDiff } from '../utils/gitlink-diff';
+import { commitFileDiffUris } from '../utils/diff-uris';
 
 const DEFAULT_PAGE: Pagination = { offset: 0, limit: 50 };
 const MAX_PAGE_LIMIT = 300;
@@ -354,7 +353,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 await openCommitGitlinkDiff(repo, message);
                 return;
             }
-            const { left, right } = await createDiffUris(repo.cwd, message);
+            const { left, right } = await commitFileDiffUris(repo.cwd, message);
             await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(message.filePath)} (${message.commitHash.substring(0, 7)})`);
         } catch (error) {
             this.postMessage({
@@ -671,43 +670,4 @@ async function currentBranchCommitHashSet(repo: GitRepository, commits: readonly
     } catch {
         return new Set();
     }
-}
-
-async function createDiffUris(cwd: string, message: HistoryOpenDiffRequest): Promise<{ readonly left: vscode.Uri; readonly right: vscode.Uri }> {
-    const fileUri = vscode.Uri.file(path.join(cwd, message.filePath));
-    const origUri = message.origPath ? vscode.Uri.file(path.join(cwd, message.origPath)) : fileUri;
-    const parentRef = message.parentHash ?? `${message.commitHash}~1`;
-    const status = message.status.charAt(0);
-
-    if (status === 'A') {
-        return {
-            left: await emptyDiffUri(message.commitHash, message.filePath, 'parent'),
-            right: toGitUri(fileUri, message.commitHash),
-        };
-    }
-
-    if (status === 'D') {
-        return {
-            left: toGitUri(origUri, parentRef),
-            right: await emptyDiffUri(message.commitHash, message.filePath, 'commit'),
-        };
-    }
-
-    return {
-        left: toGitUri(origUri, parentRef),
-        right: toGitUri(fileUri, message.commitHash),
-    };
-}
-
-async function emptyDiffUri(commitHash: string, filePath: string, side: string): Promise<vscode.Uri> {
-    const dir = path.join(os.tmpdir(), 'look-git-empty-diffs');
-    const fileName = `${commitHash.substring(0, 12)}-${side}-${Buffer.from(filePath).toString('base64url')}`;
-    const emptyPath = path.join(dir, fileName);
-    await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(emptyPath, '');
-    return vscode.Uri.file(emptyPath);
-}
-
-function toGitUri(uri: vscode.Uri, ref: string): vscode.Uri {
-    return uri.with({ scheme: 'git', query: JSON.stringify({ path: uri.path, ref }) });
 }
