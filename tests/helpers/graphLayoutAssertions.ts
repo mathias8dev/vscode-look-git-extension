@@ -1,4 +1,4 @@
-import type { GraphRow, LineDef } from '../../src/webview/features/graph/layout/assignGraphLanes';
+import type { GraphRow, LineDef } from '../../src/webview/features/graph/layout/graph-lane-model';
 
 export interface FloatingNodeIssue {
     readonly hash: string;
@@ -99,7 +99,7 @@ export function findLaneContinuityIssues(rows: readonly GraphRow[]): readonly La
             if (line.endY !== 'bottom') { continue; }
             const targetHash = line.targetHash && visibleHashes.has(line.targetHash)
                 ? line.targetHash
-                : hiddenLaneTarget(line.toLane);
+                : line.hiddenTargetHash ?? hiddenLaneTarget(line.toLane);
             const existing = nextActive.get(line.toLane);
             if (existing && existing !== targetHash) {
                 issues.push({

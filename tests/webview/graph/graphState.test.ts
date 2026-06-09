@@ -3,7 +3,7 @@ import { GraphOperationCategory, GraphOperationStatus } from '../../../src/proto
 import type { BranchInfo, GraphCommit, GraphData, WorktreeWip } from '../../../src/protocol/graph/types';
 import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
 import { buildDisplayRows, createInitialGraphState, graphRequestId, reduceGraphState } from '../../../src/webview/features/graph/graphState';
-import type { GraphRow, LaneData } from '../../../src/webview/features/graph/layout/assignGraphLanes';
+import type { GraphRow, LaneData } from '../../../src/webview/features/graph/layout/graph-lane-model';
 import { findAdjacentDisconnectedSameLaneIssues, findFloatingNodeIssues, findLaneContinuityIssues } from '../../helpers/graphLayoutAssertions';
 
 function commit(hash: string, parents: readonly string[] = []): GraphCommit {

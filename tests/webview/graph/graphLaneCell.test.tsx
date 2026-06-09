@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { GraphLaneCell } from '../../../src/webview/features/graph/GraphLaneCell';
 import { rowHeightForFontSize } from '../../../src/webview/features/graph/graphRowSizing';
-import type { LaneData } from '../../../src/webview/features/graph/layout/assignGraphLanes';
+import type { LaneData } from '../../../src/webview/features/graph/layout/graph-lane-model';
 
 describe('GraphLaneCell', () => {
     it('renders straight lines with their requested vertical endpoints', () => {

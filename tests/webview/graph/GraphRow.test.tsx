@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { GraphCommitRow } from '../../../src/webview/features/graph/GraphRow';
-import type { GraphRow } from '../../../src/webview/features/graph/layout/assignGraphLanes';
+import type { GraphRow } from '../../../src/webview/features/graph/layout/graph-lane-model';
 
 describe('GraphCommitRow', () => {
     it('offsets the commit message from the lanes used by that row', () => {

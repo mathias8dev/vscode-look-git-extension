@@ -1,8 +1,8 @@
 import { GraphOperationStatus, type GraphExtensionToWebviewMessage, type GraphOperationStatusPush } from '../../../protocol/graph/messages';
 import type { BranchInfo, CommitFileChange, GraphCommit, GraphData, GraphFilters, GraphRepositoryScope, GraphSubmoduleInfo, TagInfo, WorktreeInfo, WorktreeWip } from '../../../protocol/graph/types';
 import type { ProtocolError } from '../../../protocol/shared/base';
-import type { GraphRow, LaneData, LineDef } from './layout/assignGraphLanes';
-import { layoutGraphRowsV2, type GraphLayoutStateV2 } from './layout/layoutGraphRowsV2';
+import type { GraphRow, LaneData, LineDef } from './layout/graph-lane-model';
+import { layoutGraphRowsV3, type GraphLayoutStateV3 } from './layout/layout-graph-rows-v3';
 
 export type DisplayRow =
     | { readonly kind: 'commit'; readonly row: GraphRow }
@@ -79,7 +79,7 @@ export interface CommitDetails {
 export interface GraphState {
     readonly repositoryScope: GraphRepositoryScope;
     readonly rows: readonly GraphRow[];
-    readonly layoutState: GraphLayoutStateV2 | undefined;
+    readonly layoutState: GraphLayoutStateV3 | undefined;
     readonly displayRows: readonly DisplayRow[];
     readonly branches: readonly BranchInfo[];
     readonly tags: readonly TagInfo[];
@@ -387,13 +387,13 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
     const commits = expandedPrefixLoadMore
         ? uniqueGraphCommits(data.commits)
         : appending
-            ? newGraphCommits(state.rows, data.commits)
+            ? [...state.rows.map((row) => row.commit), ...newGraphCommits(state.rows, data.commits)]
             : data.commits;
-    const layoutState = layoutGraphRowsV2(commits, {
+    const layoutState = layoutGraphRowsV3(commits, {
         primaryBranch: currentBranch,
         primaryBranchHash: currentBranchHash(data.branches),
         showHiddenParentBoundaryEdges: data.hasMore || hasSparseGraphFilters(state.filters),
-        previous: appending && !expandedPrefixLoadMore ? state.layoutState : undefined,
+        previous: appending ? state.layoutState : undefined,
     });
     const rows = layoutState.rows;
     const displayRows = buildDisplayRows(rows, data.worktreeWips ?? []);

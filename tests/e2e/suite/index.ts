@@ -18,7 +18,7 @@ import type { ChangesExtensionToWebviewMessage } from '../../../src/protocol/cha
 import { ConflictState } from '../../../src/protocol/changes/types';
 import type { GraphDataResponse, GraphExtensionToWebviewMessage, GraphSubmodulesPush, WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
 import type { HistoryExtensionToWebviewMessage, HistoryWebviewToExtensionMessage } from '../../../src/protocol/history/messages';
-import type { GraphRow } from '../../../src/webview/features/graph/layout/assignGraphLanes';
+import type { GraphRow } from '../../../src/webview/features/graph/layout/graph-lane-model';
 import { createInitialGraphState, reduceGraphState, type GraphState } from '../../../src/webview/features/graph/graphState';
 import { addLinkedWorktree, createBareGitRepo, createSubmoduleFixture, createTempGitRepo, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
 import { getFixtureRepoPath, gitFixtureOutput } from '../../helpers/fixtureRepo';

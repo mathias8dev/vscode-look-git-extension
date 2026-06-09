@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BranchInfo, GraphCommit, GraphContextTarget, WorktreeInfo } from '../../../src/protocol/graph/types';
 import { BranchPanel } from '../../../src/webview/features/graph/BranchPanel';
 import { GraphTable } from '../../../src/webview/features/graph/GraphTable';
-import { assignLanes } from '../../../src/webview/features/graph/layout/assignGraphLanes';
+import { layoutGraphRowsV3 } from '../../../src/webview/features/graph/layout/layout-graph-rows-v3';
 import type { DisplayRow } from '../../../src/webview/features/graph/graphState';
 
 class TestResizeObserver {
@@ -106,7 +106,7 @@ describe('graph native context menu targets', () => {
             commit('head1234567890abcdef', ['base1234567890abcdef']),
             commit('base1234567890abcdef', []),
         ];
-        const rows = assignLanes(commits);
+        const rows = layoutGraphRowsV3(commits).rows;
         const displayRows: readonly DisplayRow[] = rows.map((row) => ({ kind: 'commit', row }));
 
         render(
@@ -159,7 +159,7 @@ describe('graph native context menu targets', () => {
             commit('head1234567890abcdef', ['base1234567890abcdef'], false),
             commit('base1234567890abcdef', [], true),
         ];
-        const rows = assignLanes(commits);
+        const rows = layoutGraphRowsV3(commits).rows;
         const displayRows: readonly DisplayRow[] = rows.map((row) => ({ kind: 'commit', row }));
 
         render(
@@ -198,7 +198,7 @@ describe('graph native context menu targets', () => {
         const onContextTarget = vi.fn<(target: GraphContextTarget) => void>();
         const onSelectCommit = vi.fn<(hash: string, mode: 'replace' | 'toggle' | 'range') => void>();
         const commits = [commit('head1234567890abcdef', [])];
-        const rows = assignLanes(commits);
+        const rows = layoutGraphRowsV3(commits).rows;
         const displayRows: readonly DisplayRow[] = rows.map((row) => ({ kind: 'commit', row }));
 
         render(

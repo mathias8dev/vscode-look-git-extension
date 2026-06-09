@@ -1,4 +1,4 @@
-import { getLaneDataMaxLane, type LaneData, type LineDef } from './layout/assignGraphLanes';
+import { getLaneDataMaxLane, type LaneData, type LineDef } from './layout/graph-lane-model';
 import { ROW_HEIGHT } from './graphRowSizing';
 
 export const LANE_WIDTH = 16;

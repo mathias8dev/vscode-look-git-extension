@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { BranchInfo, GraphCommit } from '../../../protocol/graph/types';
-import { getLaneDataMaxLane, type GraphRow } from './layout/assignGraphLanes';
+import { getLaneDataMaxLane, type GraphRow } from './layout/graph-lane-model';
 import { GraphLaneCell, LANE_WIDTH } from './GraphLaneCell';
 import { RefBadge } from './RefBadge';
 import { parseRefs } from './refModel';

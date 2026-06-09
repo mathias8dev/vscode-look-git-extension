@@ -1,5 +1,5 @@
 import type { GraphCommit } from '../../../../protocol/graph/types';
-import type { GraphRow, LaneData, LineDef } from './assignGraphLanes';
+import type { GraphRow, LaneData, LineDef } from './graph-lane-model';
 
 const LANE_COLORS = [
     '#f97583', '#79b8ff', '#85e89d', '#ffab70', '#b392f0',

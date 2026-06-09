@@ -1,4 +1,7 @@
 import type { GraphCommit } from '../../../../protocol/graph/types';
+import type { GraphRow, LaneData, LineDef } from './graph-lane-model';
+export { getMaxLane, getLaneDataMaxLane } from './graph-lane-model';
+export type { GraphRow, LaneData, LineDef } from './graph-lane-model';
 
 const LANE_COLORS = [
     '#f97583', '#79b8ff', '#85e89d', '#ffab70', '#b392f0',
@@ -11,29 +14,6 @@ export interface AssignLaneOptions {
     readonly lockedLanes?: ReadonlyMap<string, number>;
     readonly showHiddenParentBoundaryEdges?: boolean;
     readonly stabilizePassThroughDetours?: boolean;
-}
-
-export interface GraphRow {
-    readonly commit: GraphCommit;
-    readonly laneData: LaneData;
-}
-
-export interface LaneData {
-    readonly lane: number;
-    readonly color: string;
-    readonly lines: readonly LineDef[];
-    readonly isPrimary: boolean;
-}
-
-export interface LineDef {
-    readonly fromLane: number;
-    readonly toLane: number;
-    readonly color: string;
-    readonly type: 'straight' | 'merge-left' | 'merge-right' | 'fork-left' | 'fork-right';
-    readonly targetHash?: string;
-    readonly role: 'pass-through' | 'first-parent' | 'merge-parent';
-    readonly startY: 'top' | 'center';
-    readonly endY: 'center' | 'bottom';
 }
 
 interface ActiveLane {
@@ -401,24 +381,6 @@ function hasOwnLaneBottomConnection(laneData: LaneData): boolean {
         && line.endY === 'bottom'
         && line.fromLane === laneData.lane
         && line.toLane === laneData.lane);
-}
-
-export function getMaxLane(rows: readonly GraphRow[]): number {
-    let max = 0;
-    for (const row of rows) {
-        const rowMax = getLaneDataMaxLane(row.laneData);
-        if (rowMax > max) { max = rowMax; }
-    }
-    return max;
-}
-
-export function getLaneDataMaxLane(laneData: LaneData): number {
-    let max = laneData.lane;
-    for (const line of laneData.lines) {
-        if (line.fromLane > max) { max = line.fromLane; }
-        if (line.toLane > max) { max = line.toLane; }
-    }
-    return max;
 }
 
 function lineType(fromLane: number, toLane: number, moving: 'merge' | 'fork'): LineDef['type'] {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { BranchInfo, GraphContextTarget } from '../../../protocol/graph/types';
-import type { GraphRow } from './layout/assignGraphLanes';
+import type { GraphRow } from './layout/graph-lane-model';
 import { GraphCommitRow, type CommitSelectMode } from './GraphRow';
 import { GraphWIPRow } from './GraphWIPRow';
 import { ROW_HEIGHT, rowHeightForFontSize } from './graphRowSizing';

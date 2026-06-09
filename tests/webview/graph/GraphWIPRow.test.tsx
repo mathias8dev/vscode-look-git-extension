@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { WorktreeWip } from '../../../src/protocol/graph/types';
 import { GraphWIPRow } from '../../../src/webview/features/graph/GraphWIPRow';
-import type { LaneData } from '../../../src/webview/features/graph/layout/assignGraphLanes';
+import type { LaneData } from '../../../src/webview/features/graph/layout/graph-lane-model';
 
 describe('GraphWIPRow', () => {
     it('renders compact ASCII status counters and handles Windows paths', () => {
