@@ -5,29 +5,21 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('package-vsix', () => {
-    it.skipIf(process.platform === 'win32')('adds Experimental to the packaged displayName on the experimental branch', () => {
+    it.skipIf(process.platform === 'win32')('packages the stable displayName and filename on every branch', () => {
         const repoRoot = process.cwd();
         const packageJsonPath = path.join(repoRoot, 'package.json');
         const originalPackageJson = fs.readFileSync(packageJsonPath, 'utf8');
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-package-vsix-'));
         const bin = path.join(root, 'bin');
         const capturedManifestPath = path.join(root, 'captured-package.json');
+        const capturedArgsPath = path.join(root, 'captured-vsce-args.txt');
         fs.mkdirSync(bin);
 
         try {
-            writeExecutable(path.join(bin, 'git'), [
-                '#!/bin/sh',
-                'if [ "$1" = "branch" ] && [ "$2" = "--show-current" ]; then',
-                '  printf "experimental\\n"',
-                '  exit 0',
-                'fi',
-                'printf "unexpected git invocation: %s\\n" "$*" >&2',
-                'exit 1',
-                '',
-            ].join('\n'));
             writeExecutable(path.join(bin, 'vsce'), [
                 '#!/bin/sh',
                 'cp package.json "$LOOK_GIT_CAPTURE_MANIFEST"',
+                'printf "%s\\n" "$*" > "$LOOK_GIT_CAPTURE_ARGS"',
                 '',
             ].join('\n'));
 
@@ -35,6 +27,7 @@ describe('package-vsix', () => {
                 cwd: repoRoot,
                 env: {
                     ...process.env,
+                    LOOK_GIT_CAPTURE_ARGS: capturedArgsPath,
                     LOOK_GIT_CAPTURE_MANIFEST: capturedManifestPath,
                     PATH: `${bin}${path.delimiter}${process.env.PATH ?? ''}`,
                 },
@@ -42,7 +35,11 @@ describe('package-vsix', () => {
             });
 
             const capturedManifest = readJsonObject(capturedManifestPath);
-            expect(capturedManifest.displayName).toBe('Look Git Experimental');
+            const capturedArgs = fs.readFileSync(capturedArgsPath, 'utf8');
+            expect(capturedManifest.displayName).toBe('Look Git');
+            expect(capturedArgs).toContain('--out');
+            expect(capturedArgs).toContain('look-git-1.0.0.vsix');
+            expect(capturedArgs).not.toContain('experimental');
             expect(fs.readFileSync(packageJsonPath, 'utf8')).toBe(originalPackageJson);
         } finally {
             fs.writeFileSync(packageJsonPath, originalPackageJson);

@@ -4,7 +4,7 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
-## [0.10.0] - 2026-06-09
+## [1.0.0] - 2026-06-09
 
 ### Added
 
@@ -26,6 +26,9 @@ All notable changes to Look Git are documented in this file.
 
 #### Webview
 - Unify operation feedback patterns and improve conflict guidance and keyboard menu behavior
+
+#### Tooling
+- Package release VSIX files with the stable Look Git display name and filename on every branch
 
 ### Fixed
 

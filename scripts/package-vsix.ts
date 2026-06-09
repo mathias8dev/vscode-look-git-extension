@@ -11,37 +11,13 @@ interface PackageManifest {
 
 const repoRoot = path.resolve(__dirname, '..');
 const packageJsonPath = path.join(repoRoot, 'package.json');
-const experimentalBranch = 'experimental';
-const experimentalDisplayNameSuffix = ' Experimental';
 
 main();
 
 function main(): void {
     const manifest = readManifest();
-    const branch = currentBranch();
-    const isExperimental = branch === experimentalBranch;
-    const suffix = isExperimental ? '-experimental' : '';
-    const out = path.join(repoRoot, `${manifest.name}-${manifest.version}${suffix}.vsix`);
-
-    if (isExperimental) {
-        packageWithDisplayName(experimentalDisplayName(manifest.displayName), out);
-        return;
-    }
-
+    const out = path.join(repoRoot, `${manifest.name}-${manifest.version}.vsix`);
     packageVsix(out);
-}
-
-function packageWithDisplayName(displayName: string, out: string): void {
-    const originalPackageJson = fs.readFileSync(packageJsonPath, 'utf8');
-    const manifest = parseManifestRecord(originalPackageJson);
-
-    try {
-        manifest.displayName = displayName;
-        fs.writeFileSync(packageJsonPath, `${JSON.stringify(manifest, null, 2)}\n`);
-        packageVsix(out);
-    } finally {
-        fs.writeFileSync(packageJsonPath, originalPackageJson);
-    }
 }
 
 function packageVsix(out: string): void {
@@ -69,20 +45,6 @@ function parseManifestRecord(raw: string): Record<string, unknown> {
         throw new Error('package.json must contain a JSON object.');
     }
     return value;
-}
-
-function experimentalDisplayName(displayName: string): string {
-    if (/\bexperimental\b/i.test(displayName)) {
-        return displayName;
-    }
-    return `${displayName}${experimentalDisplayNameSuffix}`;
-}
-
-function currentBranch(): string {
-    return childProcess.execFileSync('git', ['branch', '--show-current'], {
-        cwd: repoRoot,
-        encoding: 'utf8',
-    }).trim();
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

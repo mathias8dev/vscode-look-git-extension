@@ -2,7 +2,7 @@
   "name": "look-git",
   "displayName": "Look Git",
   "description": "A modern Git extension with visual commit graph, changes panel, stash management, and commit history.",
-  "version": "0.10.0",
+  "version": "1.0.0",
   "publisher": "mathias8dev",
   "engines": {
     "vscode": "^1.85.0"
