@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GitExec } from '../../../src/core/git/git-exec';
 import { queryCommitLog, queryGraphLog } from '../../../src/core/queries/queryGraph';
+import { LOG_FIELD_SEP, LOG_RECORD_SEP } from '../../../src/core/parsing/parseLog';
 import { expectItem } from '../../helpers/assertions';
 
 function recordingExec(calls: string[][]): GitExec {
@@ -18,6 +19,25 @@ function failingExec(error: Error): GitExec {
 
 function gitError(message: string, stderr = message): Error {
     return Object.assign(new Error(message), { stderr });
+}
+
+function graphRecord(
+    hash: string,
+    message: string,
+    authorName = 'Ada Lovelace',
+    authorEmail = 'ada@example.com',
+    parentHashes: readonly string[] = [],
+): string {
+    return [
+        hash,
+        hash.slice(0, 7),
+        message,
+        authorName,
+        authorEmail,
+        '2026-01-01T00:00:00Z',
+        parentHashes.join(' '),
+        '',
+    ].join(LOG_FIELD_SEP) + LOG_RECORD_SEP;
 }
 
 describe('queryGraphLog', () => {
@@ -86,6 +106,174 @@ describe('queryGraphLog', () => {
         await expect(queryGraphLog(failingExec(gitError(
             "Command failed: git log HEAD\nfatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree.",
         )), 50)).rejects.toThrow('HEAD');
+    });
+
+    it('uses native message candidates without scanning unrelated commits', async () => {
+        const calls: string[][] = [];
+        const exec: GitExec = async (args) => {
+            calls.push([...args]);
+            if (args.includes('--grep=ada')) {
+                return graphRecord('3333333', 'Match ada in message', 'Grace Hopper', 'grace@example.com');
+            }
+            return graphRecord('1111111', 'Plain commit', 'Ada Lovelace', 'lovelace@example.com');
+        };
+
+        const commits = await queryGraphLog(exec, 20, undefined, undefined, { search: 'ada' });
+
+        expect(calls).toHaveLength(1);
+        expect(calls.some((args) => args.includes('--regexp-ignore-case') && args.includes('--grep=ada'))).toBe(true);
+        expect(calls.some((args) => args.some((arg) => arg.startsWith('--author=')))).toBe(false);
+        expect(expectItem(calls, 0)).toContain('--max-count=40');
+        expect(commits.map((commit) => commit.hash)).toEqual(['3333333']);
+        expect(commits.every((commit) => commit.matchesFilter)).toBe(true);
+    });
+
+    it('returns native message candidates beyond the bounded context for unfiltered searches', async () => {
+        const exec: GitExec = async (args) => {
+            if (args.includes('--grep=needle')) {
+                return graphRecord('7777777', 'Deep needle match', 'Grace Hopper', 'grace@example.com');
+            }
+            return '';
+        };
+
+        const commits = await queryGraphLog(exec, 20, undefined, undefined, { search: 'needle' });
+
+        expect(commits.map((commit) => commit.hash)).toEqual(['7777777']);
+        expect(expectItem(commits, 0).matchesFilter).toBe(true);
+    });
+
+    it('keeps native message pagination inside explicit branch filters', async () => {
+        const calls: string[][] = [];
+        const exec: GitExec = async (args) => {
+            calls.push([...args]);
+            if (args.includes('--grep=needle')) {
+                return graphRecord('7777777', 'Deep needle match', 'Grace Hopper', 'grace@example.com');
+            }
+            return '';
+        };
+
+        const commits = await queryGraphLog(exec, 20, ['main'], undefined, { search: 'needle' });
+
+        const grepCall = calls.find((args) => args.includes('--grep=needle'));
+        expect(grepCall).toBeDefined();
+        expect(grepCall).toContain('main');
+        expect(commits.map((commit) => commit.hash)).toEqual(['7777777']);
+    });
+
+    it('looks up hash-like searches directly', async () => {
+        const calls: string[][] = [];
+        const exec: GitExec = async (args) => {
+            calls.push([...args]);
+            if (args.includes('abc1234^{commit}')) {
+                return graphRecord('abc123499999', 'Direct hash hit', 'Grace Hopper', 'grace@example.com');
+            }
+            return '';
+        };
+
+        const commits = await queryGraphLog(exec, 20, undefined, undefined, { search: 'abc1234' });
+
+        expect(calls.some((args) => args.includes('abc1234^{commit}'))).toBe(true);
+        expect(commits.map((commit) => commit.hash)).toEqual(['abc123499999']);
+        expect(expectItem(commits, 0).matchesFilter).toBe(true);
+    });
+
+    it('keeps direct hash matches before message matches', async () => {
+        const exec: GitExec = async (args) => {
+            if (args.includes('abc1234^{commit}')) {
+                return graphRecord('abc123499999', 'Direct hash hit', 'Grace Hopper', 'grace@example.com');
+            }
+            if (args.includes('--grep=abc1234')) {
+                return graphRecord('1111111', 'Message abc1234 hit', 'Grace Hopper', 'grace@example.com');
+            }
+            return '';
+        };
+
+        const commits = await queryGraphLog(exec, 1, undefined, undefined, { search: 'abc1234' });
+
+        expect(commits.map((commit) => commit.hash)).toEqual(['abc123499999']);
+    });
+
+    it('validates direct hash matches against branch filters', async () => {
+        const calls: string[][] = [];
+        const exec: GitExec = async (args) => {
+            calls.push([...args]);
+            if (args.includes('abc1234^{commit}')) {
+                return graphRecord('abc123499999', 'Direct hash hit', 'Grace Hopper', 'grace@example.com');
+            }
+            if (args[0] === 'merge-base' && args.includes('main')) {
+                return '';
+            }
+            return '';
+        };
+
+        const commits = await queryGraphLog(exec, 20, ['main'], undefined, { search: 'abc1234' });
+
+        expect(calls).toContainEqual(['merge-base', '--is-ancestor', 'abc123499999', 'main']);
+        expect(commits.map((commit) => commit.hash)).toEqual(['abc123499999']);
+    });
+
+    it('drops direct hash matches outside branch filters', async () => {
+        const exec: GitExec = async (args) => {
+            if (args.includes('abc1234^{commit}')) {
+                return graphRecord('abc123499999', 'Direct hash hit', 'Grace Hopper', 'grace@example.com');
+            }
+            if (args[0] === 'merge-base') {
+                throw gitError('not ancestor', '');
+            }
+            return '';
+        };
+
+        const commits = await queryGraphLog(exec, 20, ['main'], undefined, { search: 'abc1234' });
+
+        expect(commits).toEqual([]);
+    });
+
+    it('validates direct hash matches against author date and path filters', async () => {
+        const calls: string[][] = [];
+        const exec: GitExec = async (args) => {
+            calls.push([...args]);
+            if (args.includes('abc1234^{commit}')) {
+                return graphRecord('abc123499999', 'Direct hash hit', 'Ada Lovelace', 'ada@example.com');
+            }
+            if (args.includes('abc123499999') && args.includes('--author=Ada')) {
+                return 'abc123499999';
+            }
+            return '';
+        };
+
+        const commits = await queryGraphLog(exec, 20, undefined, 'src/app.ts', {
+            search: 'abc1234',
+            authors: ['Ada'],
+            dateFrom: '2026-01-01',
+            dateTo: '2026-01-31',
+        });
+
+        const validationCall = calls.find((args) => args.includes('abc123499999') && args.includes('--author=Ada'));
+        expect(validationCall).toBeDefined();
+        expect(validationCall).toContain('--since=2026-01-01T00:00:00');
+        expect(validationCall).toContain('--until=2026-01-31T23:59:59');
+        expect(validationCall?.slice(-2)).toEqual(['--', 'src/app.ts']);
+        expect(commits.map((commit) => commit.hash)).toEqual(['abc123499999']);
+    });
+
+    it('continues native message search until enough visible subjects match', async () => {
+        const calls: string[][] = [];
+        const exec: GitExec = async (args) => {
+            calls.push([...args]);
+            if (!args.includes('--grep=needle')) { return ''; }
+            if (args.includes('--skip=4')) {
+                return graphRecord('5555555', 'Second visible needle match', 'Grace Hopper', 'grace@example.com');
+            }
+            return graphRecord('1111111', 'Body-only candidate one', 'Grace Hopper', 'grace@example.com')
+                + graphRecord('2222222', 'Body-only candidate two', 'Grace Hopper', 'grace@example.com')
+                + graphRecord('3333333', 'First visible needle match', 'Grace Hopper', 'grace@example.com')
+                + graphRecord('4444444', 'Body-only candidate three', 'Grace Hopper', 'grace@example.com');
+        };
+
+        const commits = await queryGraphLog(exec, 2, undefined, undefined, { search: 'needle' });
+
+        expect(calls.some((args) => args.includes('--grep=needle') && args.includes('--skip=4'))).toBe(true);
+        expect(commits.map((commit) => commit.hash)).toEqual(['3333333', '5555555']);
     });
 });
 

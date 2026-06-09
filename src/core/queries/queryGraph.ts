@@ -24,37 +24,15 @@ export async function queryGraphLog(
     signal?: AbortSignal,
 ): Promise<GitGraphCommit[]> {
     const search = filters.search?.trim();
-    const scanLimit = search ? Math.max(maxCount, Math.min(maxCount * 20, 5000)) : maxCount;
-    const args = ['log', '--parents', `--format=${LOG_FORMAT}`, `--max-count=${scanLimit}`, '--topo-order'];
-    const skip = Math.max(0, Math.floor(filters.skip ?? 0));
-    if (skip > 0) { args.push(`--skip=${skip}`); }
-
-    if (filters.dateFrom) { args.push(`--since=${filters.dateFrom}T00:00:00`); }
-    if (filters.dateTo)   { args.push(`--until=${filters.dateTo}T23:59:59`); }
-    for (const author of filters.authors ?? []) { args.push(`--author=${author}`); }
-    const usesDefaultRefs = !branches?.length;
-    if (branches?.length) { args.push(...branches); }
-    else { args.push('HEAD', '--branches', '--tags', '--remotes'); }
-    if (pathFilter) { args.push('--', pathFilter); }
-
-    let output: string;
-    try {
-        output = await execRawReadonly(args, signal);
-    } catch (error) {
-        if (!usesDefaultRefs || !isUnbornHeadHistoryError(error)) { throw error; }
-        output = await execRawReadonly(removeFirstHeadRevision(args), signal);
-    }
-    let commits = parseGraphLog(output);
-
     if (search) {
-        const normalizedSearch = search.toLowerCase();
-        for (const commit of commits) {
-            (commit as { matchesFilter?: boolean }).matchesFilter = commitMatchesSearch(commit, normalizedSearch);
-        }
-        commits = includeSearchContext(commits, maxCount);
+        return querySearchedGraphLog(execRawReadonly, maxCount, branches, pathFilter, filters, search, signal);
     }
 
-    return commits.slice(0, maxCount);
+    const { args, usesDefaultRefs } = buildGraphLogArgs(maxCount, branches, pathFilter, filters, {
+        skip: filters.skip,
+    });
+    const output = await execGraphLog(execRawReadonly, args, usesDefaultRefs, signal);
+    return parseGraphLog(output).slice(0, maxCount);
 }
 
 export async function queryCommitLog(
@@ -202,6 +180,229 @@ function removeFirstHeadRevision(args: readonly string[]): string[] {
     return [...args.slice(0, headIndex), ...args.slice(headIndex + 1)];
 }
 
+interface BuildGraphLogArgsOptions {
+    readonly extraArgs?: readonly string[];
+    readonly skip?: number;
+}
+
+function buildGraphLogArgs(
+    maxCount: number,
+    branches: readonly string[] | undefined,
+    pathFilter: string | undefined,
+    filters: GraphLogFilters,
+    options: BuildGraphLogArgsOptions = {},
+): { readonly args: readonly string[]; readonly usesDefaultRefs: boolean } {
+    const args = [
+        'log',
+        '--parents',
+        `--format=${LOG_FORMAT}`,
+        `--max-count=${maxCount}`,
+        '--topo-order',
+        ...(options.extraArgs ?? []),
+    ];
+    const skip = Math.max(0, Math.floor(options.skip ?? 0));
+    if (skip > 0) { args.push(`--skip=${skip}`); }
+
+    if (filters.dateFrom) { args.push(`--since=${filters.dateFrom}T00:00:00`); }
+    if (filters.dateTo)   { args.push(`--until=${filters.dateTo}T23:59:59`); }
+    for (const author of filters.authors ?? []) { args.push(`--author=${author}`); }
+    const usesDefaultRefs = !branches?.length;
+    if (branches?.length) { args.push(...branches); }
+    else { args.push('HEAD', '--branches', '--tags', '--remotes'); }
+    if (pathFilter) { args.push('--', pathFilter); }
+    return { args, usesDefaultRefs };
+}
+
+async function execGraphLog(
+    execRawReadonly: GitExec,
+    args: readonly string[],
+    usesDefaultRefs: boolean,
+    signal?: AbortSignal,
+): Promise<string> {
+    try {
+        return await execRawReadonly(args, signal);
+    } catch (error) {
+        if (!usesDefaultRefs || !isUnbornHeadHistoryError(error)) { throw error; }
+        return execRawReadonly(removeFirstHeadRevision(args), signal);
+    }
+}
+
+async function querySearchedGraphLog(
+    execRawReadonly: GitExec,
+    maxCount: number,
+    branches: readonly string[] | undefined,
+    pathFilter: string | undefined,
+    filters: GraphLogFilters,
+    search: string,
+    signal?: AbortSignal,
+): Promise<GitGraphCommit[]> {
+    const normalizedSearch = search.toLowerCase();
+    const [messageMatches, hashCandidates] = await Promise.all([
+        queryMessageSearchMatches(execRawReadonly, maxCount, branches, pathFilter, filters, search, normalizedSearch, signal),
+        queryHashSearchCandidate(execRawReadonly, search, branches, pathFilter, filters, signal),
+    ]);
+    const directHashMatches = hashCandidates.filter((commit) => commitMatchesSearch(commit, normalizedSearch))
+        .map((commit) => markSearchMatch(commit, true));
+    const commits = uniqueGraphCommits([
+        ...directHashMatches,
+        ...messageMatches,
+    ]);
+    return commits.slice(0, maxCount);
+}
+
+async function queryMessageSearchMatches(
+    execRawReadonly: GitExec,
+    maxCount: number,
+    branches: readonly string[] | undefined,
+    pathFilter: string | undefined,
+    filters: GraphLogFilters,
+    search: string,
+    normalizedSearch: string,
+    signal?: AbortSignal,
+): Promise<GitGraphCommit[]> {
+    const matches: GitGraphCommit[] = [];
+    const seen = new Set<string>();
+    const batchSize = Math.max(maxCount, Math.min(maxCount * 2, 1000));
+    const escapedSearch = escapeGitRegex(search);
+    let skippedCandidates = Math.max(0, Math.floor(filters.skip ?? 0));
+
+    while (matches.length < maxCount) {
+        signal?.throwIfAborted();
+        const candidates = await queryGraphLogVariant(execRawReadonly, batchSize, branches, pathFilter, filters, [
+            '--basic-regexp',
+            '--regexp-ignore-case',
+            `--grep=${escapedSearch}`,
+        ], signal, skippedCandidates);
+        for (const commit of candidates) {
+            if (seen.has(commit.hash) || !commitMatchesSearch(commit, normalizedSearch)) { continue; }
+            seen.add(commit.hash);
+            matches.push(markSearchMatch(commit, true));
+            if (matches.length >= maxCount) { break; }
+        }
+        skippedCandidates += candidates.length;
+        if (candidates.length < batchSize) { break; }
+    }
+
+    return matches;
+}
+
+async function queryGraphLogVariant(
+    execRawReadonly: GitExec,
+    maxCount: number,
+    branches: readonly string[] | undefined,
+    pathFilter: string | undefined,
+    filters: GraphLogFilters,
+    extraArgs: readonly string[],
+    signal?: AbortSignal,
+    skipOverride?: number,
+): Promise<GitGraphCommit[]> {
+    const { args, usesDefaultRefs } = buildGraphLogArgs(maxCount, branches, pathFilter, filters, {
+        extraArgs,
+        skip: skipOverride ?? filters.skip,
+    });
+    return parseGraphLog(await execGraphLog(execRawReadonly, args, usesDefaultRefs, signal));
+}
+
+async function queryHashSearchCandidate(
+    execRawReadonly: GitExec,
+    search: string,
+    branches: readonly string[] | undefined,
+    pathFilter: string | undefined,
+    filters: GraphLogFilters,
+    signal?: AbortSignal,
+): Promise<GitGraphCommit[]> {
+    if (!isHashLikeSearch(search)) { return []; }
+    const args = ['log', '--parents', `--format=${LOG_FORMAT}`, '--max-count=1', '--topo-order', `${search}^{commit}`];
+    try {
+        const commits = parseGraphLog(await execRawReadonly(args, signal));
+        const commit = commits[0];
+        if (!commit) { return []; }
+        return await hashCandidateMatchesContext(execRawReadonly, commit, branches, pathFilter, filters, signal)
+            ? [commit]
+            : [];
+    } catch (error) {
+        if (isMissingRevisionError(error)) { return []; }
+        throw error;
+    }
+}
+
+async function hashCandidateMatchesContext(
+    execRawReadonly: GitExec,
+    commit: GitGraphCommit,
+    branches: readonly string[] | undefined,
+    pathFilter: string | undefined,
+    filters: GraphLogFilters,
+    signal?: AbortSignal,
+): Promise<boolean> {
+    if (filters.skip && filters.skip > 0) { return false; }
+    if (branches?.length) {
+        const reachable = await commitReachableFromAnyRef(execRawReadonly, commit.hash, branches, signal);
+        if (!reachable) { return false; }
+    }
+
+    if (!pathFilter && !filters.authors?.length && !filters.dateFrom && !filters.dateTo) {
+        return true;
+    }
+
+    const args = ['log', '--format=%H', '--max-count=1'];
+    if (filters.dateFrom) { args.push(`--since=${filters.dateFrom}T00:00:00`); }
+    if (filters.dateTo)   { args.push(`--until=${filters.dateTo}T23:59:59`); }
+    for (const author of filters.authors ?? []) { args.push(`--author=${author}`); }
+    args.push(commit.hash);
+    if (pathFilter) { args.push('--', pathFilter); }
+    const output = await execRawReadonly(args, signal);
+    return output.trim().split(/\s+/)[0] === commit.hash;
+}
+
+async function commitReachableFromAnyRef(
+    execRawReadonly: GitExec,
+    commitHash: string,
+    refs: readonly string[],
+    signal?: AbortSignal,
+): Promise<boolean> {
+    for (const ref of refs) {
+        signal?.throwIfAborted();
+        try {
+            await execRawReadonly(['merge-base', '--is-ancestor', commitHash, ref], signal);
+            return true;
+        } catch (error) {
+            if (isMissingRevisionError(error)) { throw error; }
+        }
+    }
+    return false;
+}
+
+function uniqueGraphCommits(commits: readonly GitGraphCommit[]): GitGraphCommit[] {
+    const seen = new Set<string>();
+    const unique: GitGraphCommit[] = [];
+    for (const commit of commits) {
+        if (seen.has(commit.hash)) { continue; }
+        seen.add(commit.hash);
+        unique.push(commit);
+    }
+    return unique;
+}
+
+function markSearchMatch(commit: GitGraphCommit, matchesFilter: boolean): GitGraphCommit {
+    return commit.matchesFilter === matchesFilter ? commit : { ...commit, matchesFilter };
+}
+
+function escapeGitRegex(value: string): string {
+    return value.replace(/[.[\]\\*^$]/g, '\\$&');
+}
+
+function isHashLikeSearch(search: string): boolean {
+    return /^[0-9a-f]{4,40}$/i.test(search);
+}
+
+function isMissingRevisionError(error: unknown): boolean {
+    const text = gitErrorText(error).toLowerCase();
+    return text.includes('unknown revision')
+        || text.includes('bad revision')
+        || text.includes('needed a single revision')
+        || text.includes('ambiguous argument');
+}
+
 function isUnbornCommitHistoryError(error: unknown, ref: string | undefined): boolean {
     const text = gitErrorText(error).toLowerCase();
     if (text.includes('does not have any commits yet')) { return true; }
@@ -233,31 +434,5 @@ function stringErrorProperty(error: unknown, propertyName: 'stderr' | 'stdout'):
 function commitMatchesSearch(commit: GitGraphCommit, search: string): boolean {
     return commit.message.toLowerCase().includes(search)
         || commit.hash.toLowerCase().includes(search)
-        || commit.shortHash.toLowerCase().includes(search)
-        || commit.authorName.toLowerCase().includes(search)
-        || commit.authorEmail.toLowerCase().includes(search);
-}
-
-function includeSearchContext(commits: GitGraphCommit[], maxCount: number): GitGraphCommit[] {
-    const byHash = new Map(commits.map((c) => [c.hash, c]));
-    const included = new Set<string>();
-    const CONTEXT_DEPTH = 12;
-
-    for (const commit of commits) {
-        if (!commit.matchesFilter) { continue; }
-        included.add(commit.hash);
-        const pending = commit.parentHashes.map((h) => ({ hash: h, depth: 1 }));
-        while (pending.length > 0) {
-            const next = pending.shift()!;
-            if (next.depth > CONTEXT_DEPTH || included.has(next.hash)) { continue; }
-            const parent = byHash.get(next.hash);
-            if (!parent) { continue; }
-            included.add(parent.hash);
-            for (const ph of parent.parentHashes) { pending.push({ hash: ph, depth: next.depth + 1 }); }
-        }
-        if (included.size >= maxCount * 2) { break; }
-    }
-
-    const contextual = commits.filter((c) => included.has(c.hash));
-    return contextual.length > 0 ? contextual : commits.filter((c) => c.matchesFilter);
+        || commit.shortHash.toLowerCase().includes(search);
 }
