@@ -271,7 +271,7 @@
     min-width: 1.6em;
     border-radius: 3px;
     padding: 0 4px;
-    color: var(--vscode-descriptionForeground, #9d9d9d);
+    color: var(--vscode-badge-foreground, #ffffff);
     background: var(--vscode-badge-background, #4d4d4d);
     font-size: 0.88em;
     text-align: center;
