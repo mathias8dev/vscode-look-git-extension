@@ -130,6 +130,24 @@ describe('changesState', () => {
         expect(state.error).toEqual(expect.objectContaining({ code: 'refreshFailed' }));
     });
 
+    it('keeps protocol errors visible across status refreshes', () => {
+        const failed = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: {
+                type: 'changes/error',
+                message: 'Stash pop failed',
+                error: { code: 'gitOperationFailed', message: 'Stash pop failed', recoverable: true },
+            },
+        });
+        const refreshed = reduceChangesState(failed, {
+            type: 'message',
+            message: statusDataMessage(),
+        });
+
+        expect(refreshed.loading).toBe(false);
+        expect(refreshed.error?.message).toBe('Stash pop failed');
+    });
+
     it('stores commit feedback from commit result messages', () => {
         const state = reduceChangesState(createInitialChangesState(), {
             type: 'message',

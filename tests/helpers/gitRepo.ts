@@ -250,6 +250,15 @@ export function createConflictWorkflowFixture(): TempGitRepo {
     return repo;
 }
 
+export function createStashPopBlockedByLocalChangesFixture(): TempGitRepo {
+    const repo = createTempGitRepo();
+    repo.commitFile('src/app.ts', 'base\n', 'base', FIXTURE_AUTHORS[0], '2024-01-01T00:00:00Z');
+    repo.write('src/app.ts', 'stashed\n');
+    repo.git(['stash', 'push', '-m', 'stash change', '--', 'src/app.ts']);
+    repo.write('src/app.ts', 'local unstaged\n');
+    return repo;
+}
+
 export function addLinkedWorktree(sourceRepo: TempGitRepo, branch: string): { worktreePath: string; cleanup: () => void } {
     const worktreePath = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-wt-'));
     sourceRepo.git(['worktree', 'add', '-q', '-b', branch, worktreePath]);

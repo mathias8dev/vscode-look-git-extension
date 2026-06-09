@@ -992,13 +992,13 @@ export class ChangesMessageRouter {
             }
             case 'popLatestStash':
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, () => repo.stashPop(0), 'Pop stash stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(repo, () => popStashWithLocalChangesHint(repo, 0), 'Pop stash stopped with conflicts.'));
                 return;
             case 'popStash': {
                 const index = await pickStash(repo, 'Pop stash');
                 if (index === undefined) { return; }
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, () => repo.stashPop(index), 'Pop stash stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(repo, () => popStashWithLocalChangesHint(repo, index), 'Pop stash stopped with conflicts.'));
                 return;
             }
             case 'dropStash': {
@@ -1348,6 +1348,38 @@ async function pickStash(repo: GitRepository, placeHolder: string): Promise<numb
     if (!selected) { return undefined; }
     const match = selected.match(/^stash@\{(\d+)\}/);
     return match?.[1] ? parseInt(match[1], 10) : undefined;
+}
+
+async function popStashWithLocalChangesHint(repo: GitRepository, index: number): Promise<void> {
+    try {
+        await repo.stashPop(index);
+    } catch (error) {
+        if (!isLocalChangesWouldBeOverwrittenError(error)) { throw error; }
+        throw Object.assign(new Error('Stash pop could not be applied because local changes would be overwritten. Commit, stash, or discard your local changes, then try again.'), {
+            stderr: errorText(error),
+        });
+    }
+}
+
+function isLocalChangesWouldBeOverwrittenError(error: unknown): boolean {
+    const text = errorText(error).toLowerCase();
+    return text.includes('your local changes to the following files would be overwritten')
+        || text.includes('please commit your changes or stash them before you merge')
+        || text.includes('would be overwritten by merge');
+}
+
+function errorText(error: unknown): string {
+    return [
+        error instanceof Error ? error.message : String(error),
+        stringProperty(error, 'stdout'),
+        stringProperty(error, 'stderr'),
+    ].filter((part) => part.length > 0).join('\n');
+}
+
+function stringProperty(error: unknown, propertyName: 'stdout' | 'stderr'): string {
+    if (typeof error !== 'object' || error === null) { return ''; }
+    const value = (error as Record<string, unknown>)[propertyName];
+    return typeof value === 'string' ? value : '';
 }
 
 interface StatusDiffInput {

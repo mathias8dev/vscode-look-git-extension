@@ -67,6 +67,32 @@ describe('ChangesWebview', () => {
         await waitFor(() => expect(screen.queryByText('Could not push.')).not.toBeInTheDocument());
     });
 
+    it('shows output and dismiss actions for persistent protocol errors with details', async () => {
+        const api = createMockVsCodeApi();
+        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+
+        render(<ChangesWebview />);
+        act(() => sendToWebview({
+            type: 'changes/error',
+            message: 'Stash pop failed',
+            error: {
+                code: 'gitOperationFailed',
+                message: 'Stash pop could not be applied because local changes would be overwritten.',
+                operation: 'stash pop',
+                recoverable: true,
+                details: 'error: Your local changes to the following files would be overwritten by merge:\n\tsrc/app.ts',
+            },
+        }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Stash pop could not be applied');
+        fireEvent.click(screen.getByRole('button', { name: 'Show Output' }));
+
+        expect(api.messages).toContainEqual({ type: 'changes/toolbarCommand', command: 'showGitOutput' });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+        await waitFor(() => expect(screen.queryByText('Stash pop could not be applied')).not.toBeInTheDocument());
+    });
+
     it('starts as list and applies native view-title mode and commit-focus messages', async () => {
         const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
 

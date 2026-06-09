@@ -226,7 +226,6 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 ...state,
                 status: message.data,
                 loading: false,
-                error: undefined,
                 showConflictsOnly: message.data.conflicts.length > 0 ? state.showConflictsOnly : false,
                 generatedCommitMessage: undefined,
                 commitMessageGenerationError: undefined,

@@ -197,6 +197,8 @@ export function ChangesWebview() {
             onOperationAction={(conflictState: ActiveConflictState, action: OperationAction) => {
                 postToExtension(messageForOperationAction(conflictState, action));
             }}
+            onShowErrorOutput={() => postToExtension(messageForChangesToolbarCommand('showGitOutput'))}
+            onDismissError={() => dispatch({ type: 'clearError' })}
             onShowOperationOutput={() => postToExtension(messageForChangesToolbarCommand('showGitOutput'))}
             onDismissOperation={() => {
                 if (state.operationStatus) {

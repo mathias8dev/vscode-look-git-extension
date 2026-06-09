@@ -40,6 +40,8 @@ interface ChangesAppProps {
     readonly onClearPathFilter: () => void;
     readonly onToggleShowConflictsOnly: (showConflictsOnly: boolean) => void;
     readonly onOperationAction: (conflictState: ActiveConflictState, action: OperationAction) => void;
+    readonly onShowErrorOutput?: () => void;
+    readonly onDismissError?: () => void;
     readonly onShowOperationOutput?: () => void;
     readonly onDismissOperation?: () => void;
     readonly onCreateStash: (kind: CreateStashKind, message: string) => void;
@@ -78,6 +80,8 @@ export function ChangesApp({
     onClearPathFilter,
     onToggleShowConflictsOnly,
     onOperationAction,
+    onShowErrorOutput,
+    onDismissError,
     onShowOperationOutput,
     onDismissOperation,
     onCreateStash,
@@ -142,10 +146,20 @@ export function ChangesApp({
         }
         onSelectionContextTarget(selectionTargetFor(item));
     };
+    const showErrorOutputAction = state.error?.details && onShowErrorOutput
+        ? { label: 'Show Output', onClick: onShowErrorOutput }
+        : undefined;
+    const dismissErrorAction = onDismissError
+        ? { label: 'Dismiss', onClick: onDismissError }
+        : undefined;
 
     return (
         <main className="changes-shell">
-            <ErrorNotice error={state.error} />
+            <ErrorNotice
+                error={state.error}
+                primaryAction={showErrorOutputAction ?? dismissErrorAction}
+                secondaryAction={showErrorOutputAction ? dismissErrorAction : undefined}
+            />
             {state.operationStatus ? (
                 <OperationNotice
                     status={state.operationStatus.status}

@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
-import { createTempGitRepo, addLinkedWorktree, createRemoteWorkflowFixture, createSubmoduleFixture, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
+import { createTempGitRepo, addLinkedWorktree, createRemoteWorkflowFixture, createSubmoduleFixture, createStashPopBlockedByLocalChangesFixture, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
 import { expectItem } from '../../helpers/assertions';
 
 describe('GitProcessRepository', () => {
@@ -211,6 +211,16 @@ describe('GitProcessRepository', () => {
         const graph = await git.getGraphLog(20);
 
         expect(graph.map((commit) => commit.message)).toEqual(['feat(graph): base']);
+    });
+
+    it('stashPop fails when local changes would be overwritten', async () => {
+        const r = createStashPopBlockedByLocalChangesFixture();
+        repos.push(r);
+        const git = new GitProcessRepository(r.cwd);
+
+        await expect(git.stashPop(0)).rejects.toThrow(/local changes|overwritten|merge/i);
+        expect(r.gitTrim(['stash', 'list', '--format=%s'])).toContain('stash change');
+        expect(r.gitTrim(['status', '--porcelain'])).toContain('src/app.ts');
     });
 
     it('getGraphLog uses rewritten parents for path-filtered histories', async () => {

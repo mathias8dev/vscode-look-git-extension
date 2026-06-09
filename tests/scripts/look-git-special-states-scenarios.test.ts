@@ -95,4 +95,14 @@ describe('lookGit special state setup scenarios', () => {
         expect(gitSucceeds(repo, ['fetch', 'origin'])).toBe(false);
         expect(Number(git(repo, ['rev-list', '--count', 'origin/main..main']).trim())).toBeGreaterThanOrEqual(1);
     });
+
+    it('creates a stash-pop fixture blocked by local changes', () => {
+        const { repo, stdout } = setupScenario('stash-pop-blocked');
+
+        expect(stdout).toContain(`Created stash-pop-blocked: ${repo}`);
+        expect(git(repo, ['stash', 'list', '--format=%s'])).toContain('wip(changes): blocked stash pop fixture');
+        expect(git(repo, ['status', '--porcelain', '-uall'])).toContain(' M src/app.ts');
+        expect(gitSucceeds(repo, ['stash', 'pop', 'stash@{0}'])).toBe(false);
+        expect(git(repo, ['stash', 'list', '--format=%s'])).toContain('wip(changes): blocked stash pop fixture');
+    });
 });

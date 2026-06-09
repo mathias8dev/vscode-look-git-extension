@@ -51,6 +51,8 @@ const scenarios = new Map<string, ScenarioSetup>([
     ['remote-only', setupRemoteOnly],
     ['remote-unavailable', setupRemoteUnavailable],
     ['remotes', setupRemote],
+    ['stash-pop-blocked', setupStashPopBlocked],
+    ['stash-pop-local-changes', setupStashPopBlocked],
     ['submodules', setupSubmodules],
     ['unpublished', setupUnpublishedBranch],
     ['unpublished-branch', setupUnpublishedBranch],
@@ -134,6 +136,7 @@ function printHelp(): void {
         '  ./lookGit setup remote-only',
         '  ./lookGit setup unpublished-branch',
         '  ./lookGit setup remote-unavailable',
+        '  ./lookGit setup stash-pop-blocked',
         '  ./lookGit setup rebase-conflicts --output /tmp/look-git-fixtures',
         '  ./lookGit setup worktrees',
         '  ./lookGit setup all',
@@ -175,6 +178,7 @@ function uniqueScenarios(): readonly string[] {
         'remote',
         'remote-only',
         'remote-unavailable',
+        'stash-pop-blocked',
         'submodules',
         'unpublished-branch',
         'worktrees',
@@ -188,6 +192,7 @@ function canonicalScenarioName(name: string): string {
     if (name === 'heavy-graph') { return 'graph-heavy'; }
     if (name === 'remote-failure' || name === 'remote-offline') { return 'remote-unavailable'; }
     if (name === 'unpublished') { return 'unpublished-branch'; }
+    if (name === 'stash-pop-local-changes') { return 'stash-pop-blocked'; }
     return name === 'merge-conflics' ? 'merge-conflicts' : name;
 }
 
@@ -449,6 +454,17 @@ function setupRebaseConflicts(target: string): void {
     commit(target, 'feat(conflicts): add main side file', { author: nextAuthor() });
     git(target, ['checkout', '-q', 'feature/rebase-conflict']);
     expectGitFailure(target, ['rebase', 'main']);
+}
+
+function setupStashPopBlocked(target: string): void {
+    initRepo(target);
+    write(target, 'README.md', '# Stash pop blocked fixture\n\nUse Look Git to pop the stash and verify the local-change error stays visible.\n');
+    commit(target, 'docs(changes): add stash pop blocked fixture overview');
+    write(target, 'src/app.ts', 'base\n');
+    commit(target, 'feat(changes): add tracked app file', { author: nextAuthor() });
+    write(target, 'src/app.ts', 'stashed\n');
+    git(target, ['stash', 'push', '-m', 'wip(changes): blocked stash pop fixture', '--', 'src/app.ts']);
+    write(target, 'src/app.ts', 'local unstaged\n');
 }
 
 function setupRemote(target: string, outputRoot: string): void {
