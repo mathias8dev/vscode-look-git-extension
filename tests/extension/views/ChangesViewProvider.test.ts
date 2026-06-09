@@ -11,7 +11,7 @@ import type { ActiveRepositoryAccessor } from '../../../src/extension/repositori
 import { GenerateCommitMessageUseCase } from '../../../src/application/usecases/changes/generate-commit-message';
 import { ExplainSelectedChangesUseCase } from '../../../src/application/usecases/changes/explain-selected-changes';
 import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
-import { createConflictWorkflowFixture, createSubmoduleFixture } from '../../helpers/gitRepo';
+import { createConflictWorkflowFixture, createSubmoduleFixture, createTempGitRepo } from '../../helpers/gitRepo';
 import { env, getCommandCalls, getInputBoxOptions, getWarningMessages, setErrorChoice, setInputBoxValue, setQuickPickValue, setQuickPickValues, setWarningChoice, window as mockWindow, workspace as mockWorkspace } from '../../mocks/vscode';
 
 function makeRepo(overrides: Partial<GitRepository> = {}): GitRepository {
@@ -183,20 +183,22 @@ function mergeEditorOpenArgs(value: unknown): MergeEditorOpenArgs {
     return value;
 }
 
-function isGitUriLike(value: unknown): value is { readonly scheme: string; readonly query: string } {
+function isSchemeUriLike(value: unknown): value is { readonly scheme: string; readonly path: string } {
     return typeof value === 'object'
         && value !== null
         && 'scheme' in value
-        && 'query' in value
         && typeof value.scheme === 'string'
-        && typeof value.query === 'string';
+        && 'path' in value
+        && typeof value.path === 'string';
 }
 
-function gitUriQuery(value: unknown): { readonly path: string; readonly ref: string } {
-    expect(isGitUriLike(value)).toBe(true);
-    if (!isGitUriLike(value)) { throw new Error('Expected a git URI-like value.'); }
-    expect(value.scheme).toBe('git');
-    return JSON.parse(value.query) as { readonly path: string; readonly ref: string };
+function expectReadonlyUri(value: unknown, expectedPathPart?: string): void {
+    expect(isSchemeUriLike(value)).toBe(true);
+    if (!isSchemeUriLike(value)) { throw new Error('Expected a URI-like value.'); }
+    expect(value.scheme).toBe('lookgit-diff');
+    if (expectedPathPart) {
+        expect(value.path).toContain(expectedPathPart);
+    }
 }
 
 describe('ChangesViewProvider', () => {
@@ -2082,7 +2084,9 @@ describe('ChangesViewProvider', () => {
     });
 
     it('opens unstaged rename diffs against the original index path', async () => {
-        const repo = makeRepo();
+        const repo = makeRepo({
+            execRaw: vi.fn(async () => 'old content\n'),
+        });
         const provider = makeProvider(repo);
         const view = makeWebviewView();
         provider.resolveWebviewView(view);
@@ -2097,13 +2101,17 @@ describe('ChangesViewProvider', () => {
 
         await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === 'vscode.diff')).toBe(true));
         const call = getCommandCalls().find((entry) => entry.command === 'vscode.diff');
-        const left = gitUriQuery(call?.args[0]);
-        expect(left).toEqual({ path: '/workspace/src/old-name.ts', ref: '~' });
+        expectReadonlyUri(call?.args[0], 'new-name.ts');
         assertUriWithPath(call?.args[1], 'src/new-name.ts');
+        expect(repo.execRaw).toHaveBeenCalledWith(['--no-optional-locks', 'show', ':src/old-name.ts']);
     });
 
     it('opens stash rename diffs against the original stash parent path', async () => {
-        const repo = makeRepo();
+        const repo = makeRepo({
+            execRaw: vi.fn(async (args: readonly string[]) => args.at(-1) === 'stash@{2}^:src/old-name.ts'
+                ? 'old stashed content\n'
+                : 'new stashed content\n'),
+        });
         const provider = makeProvider(repo);
         const view = makeWebviewView();
         provider.resolveWebviewView(view);
@@ -2117,8 +2125,116 @@ describe('ChangesViewProvider', () => {
 
         await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === 'vscode.diff')).toBe(true));
         const call = getCommandCalls().find((entry) => entry.command === 'vscode.diff');
-        expect(gitUriQuery(call?.args[0])).toEqual({ path: '/workspace/src/old-name.ts', ref: 'stash@{2}^' });
-        expect(gitUriQuery(call?.args[1])).toEqual({ path: '/workspace/src/new-name.ts', ref: 'stash@{2}' });
+        expectReadonlyUri(call?.args[0], 'old-name.ts');
+        expectReadonlyUri(call?.args[1], 'new-name.ts');
+        expect(repo.execRaw).toHaveBeenNthCalledWith(1, ['--no-optional-locks', 'show', 'stash@{2}^:src/old-name.ts']);
+        expect(repo.execRaw).toHaveBeenNthCalledWith(2, ['--no-optional-locks', 'show', 'stash@{2}:src/new-name.ts']);
+    });
+
+    it('opens staged file diffs from virtual git content instead of VS Code git URIs', async () => {
+        const repo = makeRepo({
+            execRaw: vi.fn(async (args: readonly string[]) => args.at(-1) === 'HEAD:src/app.ts'
+                ? 'head content\n'
+                : 'index content\n'),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({
+            type: 'changes/openDiff',
+            filePath: 'src/app.ts',
+            isStaged: true,
+            indexStatus: 'M',
+            workTreeStatus: ' ',
+        });
+
+        await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === 'vscode.diff')).toBe(true));
+        const call = getCommandCalls().find((entry) => entry.command === 'vscode.diff');
+        expectReadonlyUri(call?.args[0], 'app.ts');
+        expectReadonlyUri(call?.args[1], 'app.ts');
+        expect(repo.execRaw).toHaveBeenNthCalledWith(1, ['--no-optional-locks', 'show', 'HEAD:src/app.ts']);
+        expect(repo.execRaw).toHaveBeenNthCalledWith(2, ['--no-optional-locks', 'show', ':src/app.ts']);
+    });
+
+    it('opens real staged file diffs from git without the VS Code git content provider', async () => {
+        const fixture = createTempGitRepo();
+        try {
+            fixture.commitFile('src/app.ts', 'head content\n', 'base');
+            fixture.write('src/app.ts', 'index content\n');
+            fixture.git(['add', 'src/app.ts']);
+            const repo = new GitProcessRepository(fixture.cwd);
+            const provider = makeProvider(repo);
+            const view = makeWebviewView();
+            provider.resolveWebviewView(view);
+            view.messageHandler?.({
+                type: 'changes/openDiff',
+                filePath: 'src/app.ts',
+                isStaged: true,
+                indexStatus: 'M',
+                workTreeStatus: ' ',
+            });
+
+            await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === 'vscode.diff')).toBe(true));
+            const call = getCommandCalls().find((entry) => entry.command === 'vscode.diff');
+            expectReadonlyUri(call?.args[0], 'app.ts');
+            expectReadonlyUri(call?.args[1], 'app.ts');
+        } finally {
+            fixture.cleanup();
+        }
+    });
+
+    it('opens added stash files from the untracked stash parent when needed', async () => {
+        const repo = makeRepo({
+            execRaw: vi.fn(async (args: readonly string[]) => {
+                if (args.at(-1) === 'stash@{0}:src/untracked.ts') {
+                    throw new Error('path does not exist in stash tree');
+                }
+                return 'untracked stash content\n';
+            }),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({
+            type: 'changes/openStashDiff',
+            index: 0,
+            filePath: 'src/untracked.ts',
+            status: 'A',
+        });
+
+        await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === 'vscode.diff')).toBe(true));
+        const call = getCommandCalls().find((entry) => entry.command === 'vscode.diff');
+        expectReadonlyUri(call?.args[0], 'untracked.ts');
+        expectReadonlyUri(call?.args[1], 'untracked.ts');
+        expect(repo.execRaw).toHaveBeenNthCalledWith(1, ['--no-optional-locks', 'show', 'stash@{0}:src/untracked.ts']);
+        expect(repo.execRaw).toHaveBeenNthCalledWith(2, ['--no-optional-locks', 'show', 'stash@{0}^3:src/untracked.ts']);
+    });
+
+    it('opens submodule stash diffs from virtual git content inside the submodule', async () => {
+        const repo = makeRepo({
+            getSubmodulePaths: vi.fn(async () => new Set(['modules/child'])),
+            execRaw: vi.fn(async (args: readonly string[]) => args.at(-1) === 'stash@{1}^:src/old.ts'
+                ? 'old submodule stash\n'
+                : 'new submodule stash\n'),
+        });
+        const provider = makeProvider(repo);
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({
+            type: 'changes/openSubmoduleStashDiff',
+            submodulePath: 'modules/child',
+            index: 1,
+            filePath: 'src/new.ts',
+            origPath: 'src/old.ts',
+            status: 'R',
+        });
+
+        await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === 'vscode.diff')).toBe(true));
+        const call = getCommandCalls().find((entry) => entry.command === 'vscode.diff');
+        expectReadonlyUri(call?.args[0], 'old.ts');
+        expectReadonlyUri(call?.args[1], 'new.ts');
+        expect(repo.execRaw).toHaveBeenNthCalledWith(1, ['-C', 'modules/child', '--no-optional-locks', 'show', 'stash@{1}^:src/old.ts'], undefined);
+        expect(repo.execRaw).toHaveBeenNthCalledWith(2, ['-C', 'modules/child', '--no-optional-locks', 'show', 'stash@{1}:src/new.ts'], undefined);
     });
 
     it('opens submodule folders with an explicit window choice', async () => {
@@ -2229,6 +2345,7 @@ describe('ChangesViewProvider', () => {
     it('opens submodule diffs from the submodule working tree', async () => {
         const repo = makeRepo({
             getSubmodulePaths: vi.fn(async () => new Set(['modules/child'])),
+            execRaw: vi.fn(async () => 'index content\n'),
         });
         const provider = makeProvider(repo);
         const view = makeWebviewView();
@@ -2244,8 +2361,9 @@ describe('ChangesViewProvider', () => {
 
         await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === 'vscode.diff')).toBe(true));
         const call = getCommandCalls().find((entry) => entry.command === 'vscode.diff');
-        expect(gitUriQuery(call?.args[0])).toEqual({ path: '/workspace/modules/child/src/inner.ts', ref: '~' });
+        expectReadonlyUri(call?.args[0], 'inner.ts');
         assertUriWithPath(call?.args[1], 'modules/child/src/inner.ts');
+        expect(repo.execRaw).toHaveBeenCalledWith(['-C', 'modules/child', '--no-optional-locks', 'show', ':src/inner.ts'], undefined);
     });
 
     it('badge updates to change count after refresh', async () => {

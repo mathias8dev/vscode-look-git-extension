@@ -66,7 +66,6 @@ export function HistoryWebview() {
     }, [state.hasMore, state.loading, state.loadingMore, state.loadedCount]);
 
     const handleOpenFileDiff = useCallback((hash: string, file: HistoryCommitFile) => {
-        if (file.isSubmodule) { return; }
         vscodeApi.postMessage(messageForHistoryOpenDiff(hash, file));
     }, []);
 

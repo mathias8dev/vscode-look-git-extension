@@ -129,6 +129,7 @@ export function GraphApp() {
                 file.filePath,
                 file.status,
                 file.origPath,
+                file.isSubmodule,
                 state.repositoryScope,
             ));
             return;
@@ -140,6 +141,7 @@ export function GraphApp() {
             file.status,
             file.origPath,
             file.parentHash,
+            file.isSubmodule,
             state.repositoryScope,
         ));
     }, [state.commitDetails, state.repositoryScope, state.selectedHash]);

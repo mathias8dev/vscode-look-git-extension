@@ -89,6 +89,7 @@ export function SubmoduleItem({
     const [selectedItemIds, setSelectedItemIds] = useState<readonly string[]>([]);
     const [selectionAnchorId, setSelectionAnchorId] = useState<string | undefined>(undefined);
     const [showConflictsOnly, setShowConflictsOnly] = useState(false);
+    const [actionsActive, setActionsActive] = useState(false);
     const needsAction = submodule.status !== SubmoduleStatus.Clean;
     const allSections = statusData ? buildSubmoduleSections(statusData) : [];
     const conflictsOnly = showConflictsOnly && (statusData?.conflicts.length ?? 0) > 0;
@@ -154,7 +155,18 @@ export function SubmoduleItem({
 
     return (
         <article className="submodule-item">
-            <header className="submodule-item-header" data-vscode-context={changesItemContext()}>
+            <header
+                className="submodule-item-header"
+                data-vscode-context={changesItemContext()}
+                onMouseEnter={() => setActionsActive(true)}
+                onMouseLeave={() => setActionsActive(false)}
+                onFocus={() => setActionsActive(true)}
+                onBlur={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                        setActionsActive(false);
+                    }
+                }}
+            >
                 <button
                     type="button"
                     className="stash-toggle"
@@ -175,52 +187,54 @@ export function SubmoduleItem({
                         {BADGE_LABELS[submodule.status]}
                     </span>
                 ) : null}
-                <div className="submodule-actions">
-                    <IconButton
-                        icon="refresh"
-                        title="Refresh submodule changes"
-                        busy={loadingStatus}
-                        onClick={() => onAction(SubmoduleAction.Refresh)}
-                    />
-                    <IconButton
-                        icon="repo-pull"
-                        title="Pull submodule"
-                        onClick={() => onAction(SubmoduleAction.Pull)}
-                    />
-                    <IconButton
-                        icon="repo-push"
-                        title="Push submodule"
-                        onClick={() => onAction(SubmoduleAction.Push)}
-                    />
-                    <IconButton
-                        icon="comment-discussion"
-                        title="Review submodule changes"
-                        onClick={onReviewChanges}
-                    />
-                    {needsAction ? (
+                {actionsActive ? (
+                    <div className="submodule-actions">
                         <IconButton
-                            icon="arrow-down"
-                            title={submodule.status === SubmoduleStatus.NotInitialized ? 'Initialize submodule' : 'Update submodule'}
-                            onClick={() => onAction(SubmoduleAction.Update)}
+                            icon="refresh"
+                            title="Refresh submodule changes"
+                            busy={loadingStatus}
+                            onClick={() => onAction(SubmoduleAction.Refresh)}
                         />
-                    ) : null}
-                    <IconButton
-                        icon="link-external"
-                        title="Open submodule"
-                        onClick={() => onAction(SubmoduleAction.Open)}
-                    />
-                    <button
-                        type="button"
-                        className="icon-button"
-                        title="More submodule actions"
-                        aria-label="More submodule actions"
-                        data-vscode-context={changesSubmoduleToolbarContext()}
-                        onContextMenu={onOpenContextMenu}
-                        onClick={(event) => openNativeContextMenu(event, onOpenContextMenu)}
-                    >
-                        <i className="codicon codicon-ellipsis" aria-hidden="true" />
-                    </button>
-                </div>
+                        <IconButton
+                            icon="repo-pull"
+                            title="Pull submodule"
+                            onClick={() => onAction(SubmoduleAction.Pull)}
+                        />
+                        <IconButton
+                            icon="repo-push"
+                            title="Push submodule"
+                            onClick={() => onAction(SubmoduleAction.Push)}
+                        />
+                        <IconButton
+                            icon="comment-discussion"
+                            title="Review submodule changes"
+                            onClick={onReviewChanges}
+                        />
+                        {needsAction ? (
+                            <IconButton
+                                icon="arrow-down"
+                                title={submodule.status === SubmoduleStatus.NotInitialized ? 'Initialize submodule' : 'Update submodule'}
+                                onClick={() => onAction(SubmoduleAction.Update)}
+                            />
+                        ) : null}
+                        <IconButton
+                            icon="link-external"
+                            title="Open submodule"
+                            onClick={() => onAction(SubmoduleAction.Open)}
+                        />
+                        <button
+                            type="button"
+                            className="icon-button"
+                            title="More submodule actions"
+                            aria-label="More submodule actions"
+                            data-vscode-context={changesSubmoduleToolbarContext()}
+                            onContextMenu={onOpenContextMenu}
+                            onClick={(event) => openNativeContextMenu(event, onOpenContextMenu)}
+                        >
+                            <i className="codicon codicon-ellipsis" aria-hidden="true" />
+                        </button>
+                    </div>
+                ) : null}
             </header>
             {expanded ? (
                 <div className="submodule-files">

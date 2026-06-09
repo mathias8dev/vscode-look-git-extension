@@ -1,11 +1,13 @@
 import type { GitRepository } from '../../ports/git-repository';
 import type { GitStatusEntry } from '../../../core/git/domain/GitStatus';
 import { parsePorcelainStatus } from '../../../core/parsing/parseStatus';
+import { parseSubmodulePaths } from '../../../core/parsing/parseSubmoduleStatus';
 
 export interface WorktreeDetailsFile {
     readonly status: string;
     readonly filePath: string;
     readonly origPath?: string;
+    readonly isSubmodule?: boolean;
 }
 
 export interface WorktreeDetailsResult {
@@ -20,19 +22,37 @@ export class GetWorktreeDetailsUseCase {
         const worktrees = signal ? await repo.listWorktrees(signal) : await repo.listWorktrees();
         const worktree = worktrees.find((candidate) => candidate.path === worktreePath);
         if (!worktree) { throw new Error(`Unknown worktree: ${worktreePath}`); }
-        const statusArgs = ['-C', worktree.path, 'status', '--porcelain=v1', '-z', '-u'];
-        const raw = signal ? await repo.execRaw(statusArgs, signal) : await repo.execRaw(statusArgs);
+        const [raw, submodulePaths] = await Promise.all([
+            execRaw(repo, ['-C', worktree.path, 'status', '--porcelain=v1', '-z', '-u'], signal),
+            worktreeSubmodulePaths(repo, worktree.path, signal),
+        ]);
         return {
             path: worktree.path,
             head: worktree.head,
             branch: worktree.branch,
-            files: porcelainStatusFiles(raw),
+            files: porcelainStatusFiles(raw, submodulePaths),
         };
     }
 }
 
-function porcelainStatusFiles(raw: string): readonly WorktreeDetailsFile[] {
-    const status = parsePorcelainStatus(raw);
+async function execRaw(repo: GitRepository, args: readonly string[], signal: AbortSignal | undefined): Promise<string> {
+    return signal ? repo.execRaw(args, signal) : repo.execRaw(args);
+}
+
+async function worktreeSubmodulePaths(
+    repo: GitRepository,
+    worktreePath: string,
+    signal: AbortSignal | undefined,
+): Promise<ReadonlySet<string>> {
+    try {
+        return parseSubmodulePaths(await execRaw(repo, ['-C', worktreePath, 'submodule', 'status'], signal));
+    } catch {
+        return new Set();
+    }
+}
+
+function porcelainStatusFiles(raw: string, submodulePaths: ReadonlySet<string>): readonly WorktreeDetailsFile[] {
+    const status = parsePorcelainStatus(raw, submodulePaths);
     const files = new Map<string, WorktreeDetailsFile>();
 
     for (const entry of status.conflicts) {
@@ -65,6 +85,7 @@ function statusEntryFile(entry: GitStatusEntry, status: string): WorktreeDetails
         status,
         filePath: entry.filePath,
         origPath: entry.origPath,
+        ...(entry.isSubmodule ? { isSubmodule: entry.isSubmodule } : {}),
     };
 }
 

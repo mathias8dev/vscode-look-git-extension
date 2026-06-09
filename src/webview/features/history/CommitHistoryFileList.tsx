@@ -133,28 +133,10 @@ function CommitHistoryFileRow({
         </>
     );
 
-    if (file.isSubmodule) {
-        return (
-            <div
-                className="history-file-tree-row history-file-leaf-row history-file-entry-submodule"
-                style={depthStyle(depth)}
-                title="Submodule diffs are not available from commit history"
-                data-vscode-context={JSON.stringify({
-                    webviewSection: 'historyFile',
-                    historyFileDiffable: false,
-                    preventDefaultContextMenuItems: true,
-                })}
-                onContextMenu={() => onFileContextMenu(file)}
-            >
-                {rowContent}
-            </div>
-        );
-    }
-
     return (
         <button
             type="button"
-            className="history-file-tree-row history-file-leaf-row history-file-entry-clickable"
+            className={`history-file-tree-row history-file-leaf-row history-file-entry-clickable${file.isSubmodule ? ' history-file-entry-submodule' : ''}`}
             style={depthStyle(depth)}
             title={`Open diff for ${file.filePath}`}
             data-vscode-context={JSON.stringify({

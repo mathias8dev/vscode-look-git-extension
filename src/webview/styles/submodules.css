@@ -69,8 +69,10 @@
     padding: 0 8px;
 }
 
-.submodule-item-header:hover .icon-button,
-.submodule-item-header:focus-within .icon-button {
+/* Submodule actions are mounted in the DOM only while the header is hovered or
+   focused (see SubmoduleItem) — so they reserve no space at rest. Force them
+   visible when present. */
+.submodule-actions .icon-button {
     opacity: 1;
 }
 

@@ -468,6 +468,10 @@ describe('ChangesWebview', () => {
         sendStatusDataWithSubmodule();
 
         await waitFor(() => expect(screen.getByText('lib')).toBeInTheDocument());
+        // Submodule header actions mount only while the header is hovered/focused.
+        const submoduleHeader = screen.getByText('lib').closest('.submodule-item-header');
+        if (!(submoduleHeader instanceof HTMLElement)) { throw new Error('Expected submodule header.'); }
+        fireEvent.mouseEnter(submoduleHeader);
         fireEvent.click(screen.getByRole('button', { name: 'Refresh submodule changes' }));
         fireEvent.click(screen.getByRole('button', { name: 'Pull submodule' }));
         fireEvent.click(screen.getByRole('button', { name: 'Push submodule' }));

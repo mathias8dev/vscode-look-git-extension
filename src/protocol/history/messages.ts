@@ -90,6 +90,7 @@ export interface HistoryOpenDiffRequest {
     readonly status: string;
     readonly origPath?: string;
     readonly parentHash?: string;
+    readonly isSubmodule?: boolean;
 }
 
 export interface HistoryContextTargetMessage {

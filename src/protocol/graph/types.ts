@@ -96,6 +96,7 @@ export interface CommitFileChange {
     readonly filePath: string;
     readonly origPath?: string;
     readonly parentHash?: string;
+    readonly isSubmodule?: boolean;
 }
 
 export interface GraphCommitContextTarget {

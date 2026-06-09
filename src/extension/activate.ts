@@ -101,7 +101,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const gitMetadataPatterns = [
         '**/.git/HEAD', '**/.git/index',
         '**/.git/MERGE_HEAD', '**/.git/REBASE_HEAD',
-        '**/.git/CHERRY_PICK_HEAD', '**/.git/FETCH_HEAD',
+        '**/.git/CHERRY_PICK_HEAD',
         '**/.git/packed-refs', '**/.git/refs/**',
         '**/.git/worktrees/*/HEAD', '**/.git/worktrees/*/gitdir',
     ];

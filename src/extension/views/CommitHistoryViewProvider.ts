@@ -21,6 +21,7 @@ import { operationActionsForStatus } from '../utils/operation-feedback';
 import { ScopedGitRepository } from '../git/scoped-git-repository';
 import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
 import { getReachableCommitHashes } from '../../application/usecases/commits/get-reachable-commit-hashes';
+import { openCommitGitlinkDiff } from '../utils/gitlink-diff';
 
 const DEFAULT_PAGE: Pagination = { offset: 0, limit: 50 };
 const MAX_PAGE_LIMIT = 300;
@@ -349,6 +350,10 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     private async handleOpenDiff(message: HistoryOpenDiffRequest): Promise<void> {
         try {
             const repo = this.requireHistoryRepository();
+            if (message.isSubmodule) {
+                await openCommitGitlinkDiff(repo, message);
+                return;
+            }
             const { left, right } = await createDiffUris(repo.cwd, message);
             await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(message.filePath)} (${message.commitHash.substring(0, 7)})`);
         } catch (error) {
@@ -423,11 +428,6 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             this.postHistoryError(new Error('No history file is selected for this command.'), 'history/openFileDiff', 'validationFailed');
             return;
         }
-        if (target.file.isSubmodule) {
-            this.postHistoryError(new Error('Submodule diffs are not available from commit history.'), 'history/openFileDiff', 'validationFailed');
-            return;
-        }
-
         await this.handleOpenDiff({
             type: 'history/openDiff',
             commitHash: target.commitHash,
@@ -435,6 +435,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             status: target.file.status,
             origPath: target.file.origPath,
             parentHash: target.file.parentHash,
+            isSubmodule: target.file.isSubmodule,
         });
     }
 

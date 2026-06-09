@@ -142,6 +142,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     }
 
     async refresh(): Promise<void> {
+        if (!this.view?.visible) { return; }
         this.router?.requestGraphRefresh();
     }
 

@@ -112,6 +112,7 @@ export function messageForOpenDiff(
     status: string,
     origPath?: string,
     parentHash?: string,
+    isSubmodule?: boolean,
     repositoryScope?: GraphRepositoryScope,
 ): GraphWebviewToExtensionMessage {
     return {
@@ -121,6 +122,7 @@ export function messageForOpenDiff(
         status,
         origPath,
         parentHash,
+        isSubmodule,
         ...scopeProperty(repositoryScope),
     };
 }
@@ -130,6 +132,7 @@ export function messageForOpenWorktreeDiff(
     filePath: string,
     status: string,
     origPath?: string,
+    isSubmodule?: boolean,
     repositoryScope?: GraphRepositoryScope,
 ): GraphWebviewToExtensionMessage {
     return {
@@ -138,6 +141,7 @@ export function messageForOpenWorktreeDiff(
         filePath,
         status,
         origPath,
+        isSubmodule,
         ...scopeProperty(repositoryScope),
     };
 }

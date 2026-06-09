@@ -479,6 +479,83 @@ describe('GraphMessageRouter graph data', () => {
         expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'show', 'HEAD:src/dirty.ts']);
     });
 
+    it('marks worktree detail files that are submodule gitlinks', async () => {
+        const head = '1234567890abcdef';
+        const repo = makeRepositoryMock({
+            listWorktrees: vi.fn(async () => [worktree('/repo/.worktrees/a', head, 'feature/a')]),
+            execRaw: vi.fn(async (args: readonly string[]) => {
+                if (args[2] === 'submodule') { return ` ${'1'.repeat(40)} modules/billing-core (heads/main)\n`; }
+                return ' M modules/billing-core\0';
+            }),
+        });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+
+        await router.handle({
+            type: 'graph/worktreeDetailsRequest',
+            requestId: 'worktree-submodule-details',
+            path: '/repo/.worktrees/a',
+        });
+
+        expect(worktreeDetailsResponse(messages, 'worktree-submodule-details').files).toEqual([{
+            status: 'M',
+            filePath: 'modules/billing-core',
+            origPath: undefined,
+            isSubmodule: true,
+        }]);
+    });
+
+    it('opens worktree submodule gitlink diffs as readonly diff output', async () => {
+        const disposable = registerReadonlyDiffDocumentProvider();
+        try {
+            const repo = makeRepositoryMock({
+                execRaw: vi.fn(async () => 'Submodule modules/billing-core 1111111..2222222:\n'),
+            });
+            const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+            await router.handle({
+                type: 'graph/openWorktreeDiff',
+                worktreePath: '/repo/.worktrees/a',
+                filePath: 'modules/billing-core',
+                status: 'M',
+                isSubmodule: true,
+            });
+
+            expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', '--submodule=short', 'HEAD', '--', 'modules/billing-core']);
+            expect(commands.calls.some((call) => call.command === 'vscode.diff')).toBe(false);
+            expect(workspace.documents.at(-1)?.uri.scheme).toBe('lookgit-diff');
+            expect(workspace.documents.at(-1)?.content).toContain('Submodule modules/billing-core');
+        } finally {
+            disposable.dispose();
+        }
+    });
+
+    it('opens commit submodule gitlink diffs as readonly diff output', async () => {
+        const disposable = registerReadonlyDiffDocumentProvider();
+        try {
+            const repo = makeRepositoryMock({
+                execRaw: vi.fn(async () => 'Submodule modules/auth-kit 1111111..2222222:\n'),
+            });
+            const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+
+            await router.handle({
+                type: 'graph/openDiff',
+                filePath: 'modules/auth-kit',
+                commitHash: 'abc123456789',
+                status: 'M',
+                parentHash: 'parent123456789',
+                isSubmodule: true,
+            });
+
+            expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['diff', '--submodule=short', 'parent123456789', 'abc123456789', '--', 'modules/auth-kit']);
+            expect(commands.calls.some((call) => call.command === 'vscode.diff')).toBe(false);
+            expect(workspace.documents.at(-1)?.uri.scheme).toBe('lookgit-diff');
+            expect(workspace.documents.at(-1)?.content).toContain('Submodule modules/auth-kit');
+        } finally {
+            disposable.dispose();
+        }
+    });
+
     it('runs worktree window and reveal commands', async () => {
         const repo = makeRepositoryMock();
         const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);

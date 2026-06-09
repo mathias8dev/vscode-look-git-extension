@@ -29,6 +29,7 @@ import { runCommitCommand } from '../commands/commit-commands';
 import { runBranchCommand } from '../commands/branch-commands';
 import { runWorktreeCommand } from '../commands/worktree-commands';
 import { operationActionsForStatus } from '../utils/operation-feedback';
+import { openCommitGitlinkDiff, openWorktreeGitlinkDiff } from '../utils/gitlink-diff';
 import { createErrorPayload, isAbortError } from './errorSerialization';
 
 type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
@@ -216,6 +217,10 @@ export class GraphMessageRouter {
 
             case 'graph/openDiff': {
                 const repo = await this.repositoryForScope(msg.repositoryScope);
+                if (msg.isSubmodule) {
+                    await openCommitGitlinkDiff(repo, msg);
+                    break;
+                }
                 const { left, right } = await createDiffUris(repo.cwd, msg);
                 await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(msg.filePath)} (${msg.commitHash.substring(0, 7)})`);
                 break;
@@ -223,6 +228,10 @@ export class GraphMessageRouter {
 
             case 'graph/openWorktreeDiff': {
                 const repo = await this.repositoryForScope(msg.repositoryScope);
+                if (msg.isSubmodule) {
+                    await openWorktreeGitlinkDiff(repo, msg);
+                    break;
+                }
                 const { left, right } = await createWorktreeDiffUris(repo, msg);
                 await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(msg.filePath)} (${path.basename(msg.worktreePath)})`);
                 break;

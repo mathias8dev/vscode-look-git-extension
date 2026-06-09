@@ -40,6 +40,7 @@ export function messageForHistoryOpenDiff(commitHash: string, file: HistoryCommi
         status: file.status,
         origPath: file.origPath,
         parentHash: file.parentHash,
+        isSubmodule: file.isSubmodule,
     };
 }
 

@@ -14,7 +14,8 @@ import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backen
 import { CliRemoteCommandKind, VscodeRemoteCommand, type RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { confirmTypedPhrase, showModalWarningMessage } from '../utils/confirmation';
 import { showBranchNameInput } from '../utils/branch-name-input';
-import { openReadonlyDiffDocument } from '../utils/readonly-diff-documents';
+import { createReadonlyDocumentUri } from '../utils/readonly-diff-documents';
+import { openStatusGitlinkDiff } from '../utils/gitlink-diff';
 import { toProtocolSubmoduleStatus } from '../mapping/toProtocol';
 import { detectConflictStateFromFiles, parsePorcelainStatus } from '../../core/parsing/parseStatus';
 import { parseNameStatusZ } from '../../core/parsing/parseNameStatus';
@@ -421,14 +422,14 @@ export class ChangesMessageRouter {
                 if (msg.isSubmodule) {
                     await openSubmoduleGitlinkDiff(repo, msg);
                 } else {
-                    await openStatusDiff(repo.cwd, msg);
+                    await openStatusDiff(repo, msg);
                 }
                 break;
             }
 
             case 'changes/openSubmoduleDiff': {
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                await openStatusDiff(path.join(repo.cwd, submodulePath), msg);
+                await openStatusDiff(new ScopedGitRepository(repo, submodulePath), msg);
                 break;
             }
 
@@ -593,7 +594,7 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/openStashDiff': {
-                await openStashDiff(repo.cwd, msg);
+                await openStashDiff(repo, msg);
                 break;
             }
 
@@ -653,7 +654,7 @@ export class ChangesMessageRouter {
                         break;
                     }
                     case 'changes/openSubmoduleStashDiff':
-                        await openStashDiff(submoduleCwd, msg);
+                        await openStashDiff(new ScopedGitRepository(repo, submodulePath), msg);
                         break;
                 }
                 break;
@@ -1390,43 +1391,41 @@ interface StatusDiffInput {
     readonly workTreeStatus: string;
 }
 
-async function openStatusDiff(cwd: string, msg: StatusDiffInput): Promise<void> {
-    const filePath = path.join(cwd, msg.filePath);
-    const origPath = msg.origPath ? path.join(cwd, msg.origPath) : filePath;
+async function openStatusDiff(repo: GitRepository, msg: StatusDiffInput): Promise<void> {
+    const filePath = path.join(repo.cwd, msg.filePath);
     const fileUri = vscode.Uri.file(filePath);
-    const origUri = vscode.Uri.file(origPath);
-    const emptyUri = vscode.Uri.parse(`lookgit-empty:${msg.filePath}`);
     const baseName = path.basename(msg.filePath);
     const status = msg.isStaged ? msg.indexStatus : msg.workTreeStatus;
-    const baseUri = isRenameLikeStatus(status) ? origUri : fileUri;
-    const baseRef = msg.isStaged ? 'HEAD' : '~';
-    const modifiedUri = msg.isStaged ? toGitUri(fileUri, '') : fileUri;
+    const basePath = isRenameLikeStatus(status) ? msg.origPath ?? msg.filePath : msg.filePath;
+    const baseRef = msg.isStaged ? 'HEAD' : ':';
+    const emptyUri = readonlyContentUri(`${baseName} empty`, msg.filePath, '');
 
     let left: vscode.Uri;
     let right: vscode.Uri;
     let title: string;
 
     if (isAddedStatus(status)) {
-        left = emptyUri; right = modifiedUri; title = `${baseName} (Added)`;
+        left = emptyUri;
+        right = msg.isStaged
+            ? await gitContentUri(repo, msg.filePath, ':', `${baseName} index`)
+            : fileUri;
+        title = `${baseName} (Added)`;
     } else if (isDeletedStatus(status)) {
-        left = toGitUri(baseUri, baseRef); right = emptyUri; title = `${baseName} (Deleted)`;
+        left = await gitContentUri(repo, basePath, baseRef, `${baseName} base`);
+        right = emptyUri;
+        title = `${baseName} (Deleted)`;
     } else {
-        left = toGitUri(baseUri, baseRef); right = modifiedUri; title = `${baseName} (${msg.isStaged ? 'Staged' : 'Working Tree'})`;
+        left = await gitContentUri(repo, basePath, baseRef, `${baseName} base`);
+        right = msg.isStaged
+            ? await gitContentUri(repo, msg.filePath, ':', `${baseName} index`)
+            : fileUri;
+        title = `${baseName} (${msg.isStaged ? 'Staged' : 'Working Tree'})`;
     }
     await vscode.commands.executeCommand('vscode.diff', left, right, title);
 }
 
 async function openSubmoduleGitlinkDiff(repo: GitRepository, msg: StatusDiffInput): Promise<void> {
-    const args = [
-        'diff',
-        '--submodule=short',
-        ...(msg.isStaged ? ['--cached'] : []),
-        '--',
-        msg.filePath,
-    ];
-    const diff = await repo.execRaw(args);
-    const content = diff.trimEnd() || `No submodule gitlink changes for ${msg.filePath}.\n`;
-    await openReadonlyDiffDocument(`${path.basename(msg.filePath)} submodule gitlink`, content);
+    await openStatusGitlinkDiff(repo, { filePath: msg.filePath, isStaged: msg.isStaged });
 }
 
 interface StashDiffInput {
@@ -1436,20 +1435,58 @@ interface StashDiffInput {
     readonly status: string;
 }
 
-async function openStashDiff(cwd: string, msg: StashDiffInput): Promise<void> {
-    const fileUri = vscode.Uri.file(path.join(cwd, msg.filePath));
-    const origUri = vscode.Uri.file(path.join(cwd, msg.origPath ?? msg.filePath));
-    const emptyUri = vscode.Uri.parse(`lookgit-empty:${msg.filePath}`);
+async function openStashDiff(repo: GitRepository, msg: StashDiffInput): Promise<void> {
+    const emptyUri = readonlyContentUri(`${path.basename(msg.filePath)} empty`, msg.filePath, '');
     const stashRef = `stash@{${msg.index}}`;
-    const baseUri = isRenameLikeStatus(msg.status) ? origUri : fileUri;
-    const left = isAddedStatus(msg.status) ? emptyUri : toGitUri(baseUri, `${stashRef}^`);
-    const right = isDeletedStatus(msg.status) ? emptyUri : toGitUri(fileUri, stashRef);
+    const basePath = isRenameLikeStatus(msg.status) ? msg.origPath ?? msg.filePath : msg.filePath;
+    const left = isAddedStatus(msg.status)
+        ? emptyUri
+        : await gitContentUri(repo, basePath, `${stashRef}^`, `${path.basename(basePath)} stash parent`);
+    const right = isDeletedStatus(msg.status)
+        ? emptyUri
+        : await gitContentUriFromRefs(
+            repo,
+            msg.filePath,
+            isAddedStatus(msg.status) ? [stashRef, `${stashRef}^3`] : [stashRef],
+            `${path.basename(msg.filePath)} stash`,
+        );
     await vscode.commands.executeCommand(
         'vscode.diff',
         left,
         right,
         `${path.basename(msg.filePath)} (Stash ${msg.index})`,
     );
+}
+
+async function gitContentUri(repo: GitRepository, filePath: string, ref: string, title: string): Promise<vscode.Uri> {
+    const content = await repo.execRaw(['--no-optional-locks', 'show', `${ref}${ref.endsWith(':') ? '' : ':'}${filePath}`]);
+    return readonlyContentUri(title, filePath, content);
+}
+
+async function gitContentUriFromRefs(
+    repo: GitRepository,
+    filePath: string,
+    refs: readonly string[],
+    title: string,
+): Promise<vscode.Uri> {
+    let lastError: unknown;
+    for (const ref of refs) {
+        try {
+            return await gitContentUri(repo, filePath, ref, title);
+        } catch (error) {
+            lastError = error;
+        }
+    }
+    throw lastError instanceof Error ? lastError : new Error(`Could not read ${filePath}.`);
+}
+
+function readonlyContentUri(title: string, filePath: string, content: string): vscode.Uri {
+    return createReadonlyDocumentUri(title, content, documentExtension(filePath));
+}
+
+function documentExtension(filePath: string): string {
+    const extension = path.extname(filePath).replace(/^\./, '');
+    return extension || 'txt';
 }
 
 async function discardSubmoduleFile(repo: GitRepository, submodulePath: string, filePath: string): Promise<void> {
@@ -1487,11 +1524,6 @@ async function readCurrentBranch(repo: GitRepository, cwd: string): Promise<stri
     } catch {
         return undefined;
     }
-}
-
-function toGitUri(uri: vscode.Uri, ref: string): vscode.Uri {
-    const query = JSON.stringify({ path: uri.path, ref });
-    return uri.with({ scheme: 'git', query });
 }
 
 function isAddedStatus(status: string): boolean {

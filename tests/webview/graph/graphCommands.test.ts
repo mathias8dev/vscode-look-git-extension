@@ -49,13 +49,14 @@ describe('graphCommands', () => {
             hash: 'abc123',
             repositoryScope: scope,
         }));
-        expect(messageForOpenDiff('src/file.ts', 'abc123', 'M', undefined, undefined, scope)).toEqual({
+        expect(messageForOpenDiff('src/file.ts', 'abc123', 'M', undefined, undefined, undefined, scope)).toEqual({
             type: 'graph/openDiff',
             filePath: 'src/file.ts',
             commitHash: 'abc123',
             status: 'M',
             origPath: undefined,
             parentHash: undefined,
+            isSubmodule: undefined,
             repositoryScope: scope,
         });
     });

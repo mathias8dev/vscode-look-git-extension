@@ -297,7 +297,7 @@ describe('CommitHistoryApp', () => {
     });
 
 
-    it('opens file diffs for normal files and blocks submodule file navigation', () => {
+    it('opens file diffs for normal files and submodule gitlinks', () => {
         const onOpenFileDiff = vi.fn<(hash: string, file: HistoryCommitFile) => void>();
         const onContextTarget = vi.fn<(target: HistoryContextTarget) => void>();
         renderApp({
@@ -323,19 +323,21 @@ describe('CommitHistoryApp', () => {
         });
 
         const fileRow = screen.getByTitle('Open diff for src/history.ts');
+        const submoduleRow = screen.getByTitle('Open diff for modules/auth-kit');
         fireEvent.click(fileRow);
+        fireEvent.click(submoduleRow);
         fireEvent.contextMenu(fileRow);
 
         expect(onOpenFileDiff).toHaveBeenCalledWith('abc123456789', { status: 'M', filePath: 'src/history.ts' });
+        expect(onOpenFileDiff).toHaveBeenCalledWith('abc123456789', { status: 'A', filePath: 'modules/auth-kit', isSubmodule: true });
         expect(fileRow.getAttribute('data-vscode-context')).toContain('"webviewSection":"historyFile"');
         expect(onContextTarget).toHaveBeenCalledWith({
             kind: 'file',
             commitHash: 'abc123456789',
             file: { status: 'M', filePath: 'src/history.ts' },
         });
-        expect(screen.queryByTitle('Open diff for modules/auth-kit')).not.toBeInTheDocument();
         expect(screen.getByRole('tree', { name: 'Changed files' })).toHaveTextContent('modules');
-        expect(screen.getByTitle('Submodule diffs are not available from commit history')).toHaveTextContent('auth-kit');
+        expect(submoduleRow.getAttribute('data-vscode-context')).toContain('"historyFileDiffable":true');
     });
 
     it('shows a file loading row while selected commit details are pending', () => {

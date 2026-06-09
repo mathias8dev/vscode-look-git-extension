@@ -214,6 +214,7 @@ export interface OpenDiffRequest {
     readonly status: string;
     readonly origPath?: string;
     readonly parentHash?: string;
+    readonly isSubmodule?: boolean;
     readonly repositoryScope?: GraphRepositoryScope;
 }
 
@@ -223,6 +224,7 @@ export interface OpenWorktreeDiffRequest {
     readonly filePath: string;
     readonly status: string;
     readonly origPath?: string;
+    readonly isSubmodule?: boolean;
     readonly repositoryScope?: GraphRepositoryScope;
 }
 

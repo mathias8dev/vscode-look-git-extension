@@ -7,12 +7,16 @@ import { ConflictState } from '../../../src/protocol/changes/types';
 import { RepoKind } from '../../../src/core/git/domain/RepoContext';
 import { LOG_FIELD_SEP, LOG_RECORD_SEP } from '../../../src/core/parsing/parseLog';
 import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHistoryViewProvider';
+import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
 import { commands, env, getCommandCalls, setQuickPickValue, workspace } from '../../mocks/vscode';
 
 describe('CommitHistoryViewProvider error propagation', () => {
-    beforeEach(resetVscodeMock);
+    beforeEach(() => {
+        resetVscodeMock();
+        registerReadonlyDiffDocumentProvider();
+    });
 
     it('posts configured font size updates without reloading the history webview', () => {
         workspace.values.set('lookGit.fontSize', 23);
@@ -680,6 +684,39 @@ describe('CommitHistoryViewProvider error propagation', () => {
             query: JSON.stringify({ path: '/workspace/src/new-name.ts', ref: 'abc123456789' }),
         });
         expect(call?.args[2]).toBe('new-name.ts (abc1234)');
+    });
+
+    it('opens commit history submodule gitlink diffs as readonly diff output', async () => {
+        const repo = makeRepositoryMock({
+            cwd: '/workspace',
+            execRaw: vi.fn(async () => [
+                'diff --git a/modules/auth-kit b/modules/auth-kit',
+                'index 8c253b5..52b893d 160000',
+                '--- a/modules/auth-kit',
+                '+++ b/modules/auth-kit',
+                '@@ -1 +1 @@',
+                '-Subproject commit 8c253b55f68bb7e39189a4c12a4043138b8f38fb',
+                '+Subproject commit 52b893d47db993db84236fed897f463a964632f8',
+                '',
+            ].join('\n')),
+        });
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({
+            type: 'history/openDiff',
+            commitHash: 'abc123456789',
+            filePath: 'modules/auth-kit',
+            status: 'M',
+            parentHash: 'parent123456789',
+            isSubmodule: true,
+        });
+
+        await vi.waitFor(() => expect(workspace.documents.at(-1)?.uri.scheme).toBe('lookgit-diff'));
+        expect(repo.execRaw).toHaveBeenCalledWith(['diff', '--submodule=short', 'parent123456789', 'abc123456789', '--', 'modules/auth-kit']);
+        expect(commands.calls.some((call) => call.command === 'vscode.diff')).toBe(false);
+        expect(workspace.documents.at(-1)?.content).toContain('Subproject commit');
     });
 
     it('runs native commit context commands against the latest webview target', async () => {

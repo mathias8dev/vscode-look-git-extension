@@ -181,6 +181,17 @@ describe('GraphViewProvider', () => {
         expect(repo.getGraphLog).not.toHaveBeenCalled();
     });
 
+    it('does not refresh the graph while the webview is hidden', async () => {
+        const provider = new GraphViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(makeRepositoryMock()));
+        const view = makeWebviewView();
+        view.visible = false;
+
+        provider.resolveWebviewView(view);
+        await provider.refresh();
+
+        expect(view.messages).not.toContainEqual({ type: 'graph/refreshRequested' });
+    });
+
     it('notifies dependent views after repository mutations from the graph webview', async () => {
         const repo = makeRepositoryMock();
         const onRepositoryUpdated = vi.fn(async () => {});

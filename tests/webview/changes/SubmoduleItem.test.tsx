@@ -146,6 +146,7 @@ describe('SubmoduleItem', () => {
             onReviewChanges,
         });
 
+        revealSubmoduleActions();
         fireEvent.click(screen.getByRole('button', { name: 'Refresh submodule changes' }));
         fireEvent.click(screen.getByRole('button', { name: 'Pull submodule' }));
         fireEvent.click(screen.getByRole('button', { name: 'Push submodule' }));
@@ -192,6 +193,7 @@ describe('SubmoduleItem', () => {
             onOpenContextMenu,
         });
 
+        revealSubmoduleActions();
         const more = screen.getByRole('button', { name: 'More submodule actions' });
         expect(more.getAttribute('data-vscode-context')).toContain('changesSubmoduleToolbar');
 
@@ -244,6 +246,7 @@ describe('SubmoduleItem', () => {
             loadingStatus: true,
         });
 
+        revealSubmoduleActions();
         const refresh = screen.getByRole('button', { name: 'Refresh submodule changes' });
         expect(refresh).toHaveAttribute('aria-busy', 'true');
         expect(refresh).toBeDisabled();
@@ -292,6 +295,13 @@ function renderSubmodule(input: {
             onStashFileDiff={vi.fn()}
         />,
     );
+}
+
+// Submodule header actions mount only while the header is hovered or focused.
+function revealSubmoduleActions(): void {
+    const header = document.querySelector('.submodule-item-header');
+    if (!(header instanceof HTMLElement)) { throw new Error('Expected submodule header.'); }
+    fireEvent.mouseEnter(header);
 }
 
 function statusData(overrides: Partial<SubmoduleStatusData> = {}): SubmoduleStatusData {
