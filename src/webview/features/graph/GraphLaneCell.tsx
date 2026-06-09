@@ -83,18 +83,36 @@ function LaneLine({ line, rowHeight }: { readonly line: LineDef; readonly rowHei
                 x2={x1} y2={y2}
                 stroke={color}
                 strokeWidth={LINE_WIDTH}
+                strokeLinecap="round"
             />
         );
     }
 
     return (
-        <line
-            x1={x1} y1={y1}
-            x2={x2} y2={y2}
+        <path
+            d={bezierPath(x1, y1, x2, y2, startY, endY)}
+            fill="none"
             stroke={color}
             strokeWidth={LINE_WIDTH}
+            strokeLinecap="round"
         />
     );
+}
+
+function bezierPath(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    startY: LineDef['startY'],
+    endY: LineDef['endY'],
+): string {
+    const verticalDistance = Math.max(1, Math.abs(y2 - y1));
+    const horizontalDistance = Math.abs(x2 - x1);
+    const bend = Math.min(Math.max(verticalDistance * 0.65, horizontalDistance * 0.35), verticalDistance);
+    const c1y = startY === 'top' ? y1 + bend : y1 + bend * 0.5;
+    const c2y = endY === 'bottom' ? y2 - bend : y2 - bend * 0.5;
+    return `M ${x1} ${y1} C ${x1} ${c1y}, ${x2} ${c2y}, ${x2} ${y2}`;
 }
 
 function yPosition(position: 'top' | 'center' | 'bottom', rowHeight: number): number {

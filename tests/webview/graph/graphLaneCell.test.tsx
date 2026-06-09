@@ -28,7 +28,7 @@ describe('GraphLaneCell', () => {
         expect(markup).toContain('y2="28"');
     });
 
-    it('renders merge parent edges as straight diagonals to the next row boundary', () => {
+    it('renders merge parent edges as bezier curves to the next row boundary', () => {
         const laneData: LaneData = {
             lane: 0,
             color: '#fff',
@@ -47,14 +47,11 @@ describe('GraphLaneCell', () => {
         const markup = renderToStaticMarkup(<GraphLaneCell laneData={laneData} />);
 
         expect(markup).toContain('width="32"');
-        expect(markup).toContain('x1="8"');
-        expect(markup).toContain('y1="14"');
-        expect(markup).toContain('x2="24"');
-        expect(markup).toContain('y2="28"');
-        expect(markup).not.toContain('<path');
+        expect(markup).toContain('<path');
+        expect(markup).toContain('d="M 8 14 C 8 18.55, 24 18.9, 24 28"');
     });
 
-    it('renders pass-through lane changes as straight diagonals', () => {
+    it('renders pass-through lane changes as bezier curves', () => {
         const laneData: LaneData = {
             lane: 0,
             color: '#fff',
@@ -72,14 +69,11 @@ describe('GraphLaneCell', () => {
 
         const markup = renderToStaticMarkup(<GraphLaneCell laneData={laneData} />);
 
-        expect(markup).toContain('x1="8"');
-        expect(markup).toContain('y1="0"');
-        expect(markup).toContain('x2="24"');
-        expect(markup).toContain('y2="28"');
-        expect(markup).not.toContain('<path');
+        expect(markup).toContain('<path');
+        expect(markup).toContain('d="M 8 0 C 8 18.2, 24 9.8, 24 28"');
     });
 
-    it('renders commit parent lane changes as straight diagonals', () => {
+    it('renders commit parent lane changes as bezier curves', () => {
         const laneData: LaneData = {
             lane: 0,
             color: '#fff',
@@ -97,11 +91,8 @@ describe('GraphLaneCell', () => {
 
         const markup = renderToStaticMarkup(<GraphLaneCell laneData={laneData} />);
 
-        expect(markup).toContain('x1="8"');
-        expect(markup).toContain('y1="14"');
-        expect(markup).toContain('x2="24"');
-        expect(markup).toContain('y2="28"');
-        expect(markup).not.toContain('<path');
+        expect(markup).toContain('<path');
+        expect(markup).toContain('d="M 8 14 C 8 18.55, 24 18.9, 24 28"');
     });
 
     it('scales vertical geometry with the measured graph row height', () => {
