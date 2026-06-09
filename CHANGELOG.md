@@ -27,6 +27,9 @@ All notable changes to Look Git are documented in this file.
 #### Webview
 - Unify operation feedback patterns and improve conflict guidance and keyboard menu behavior
 
+#### Licensing
+- Switch Look Git from MIT to PolyForm Noncommercial 1.0.0, with paid commercial licensing required for commercial use
+
 #### Tooling
 - Package release VSIX files with the stable Look Git display name and filename on every branch
 

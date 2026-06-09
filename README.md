@@ -51,4 +51,7 @@ A modern, React-based Git extension for Visual Studio Code — featuring a visua
 
 ## License
 
-[MIT](LICENSE)
+Look Git is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE) for noncommercial use.
+
+Commercial use requires a separate paid commercial license from mathias8dev.
+For commercial licensing, contact: mathias8dev@outlook.com.
