@@ -34,11 +34,13 @@ describe('package-vsix', () => {
                 stdio: ['ignore', 'pipe', 'pipe'],
             });
 
+            const manifest = readJsonObject(packageJsonPath);
+            const expectedVsixName = `${String(manifest.name)}-${String(manifest.version)}.vsix`;
             const capturedManifest = readJsonObject(capturedManifestPath);
             const capturedArgs = fs.readFileSync(capturedArgsPath, 'utf8');
             expect(capturedManifest.displayName).toBe('Look Git');
             expect(capturedArgs).toContain('--out');
-            expect(capturedArgs).toContain('look-git-1.0.1.vsix');
+            expect(capturedArgs).toContain(expectedVsixName);
             expect(capturedArgs).not.toContain('experimental');
             expect(fs.readFileSync(packageJsonPath, 'utf8')).toBe(originalPackageJson);
         } finally {
