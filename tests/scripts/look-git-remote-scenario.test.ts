@@ -89,5 +89,5 @@ describe('lookGit remote setup scenario', () => {
         expect(status).toContain('A  src/remote/staged-local.ts');
         expect(status).toContain(' M README.md');
         expect(status).toContain('?? notes/remote-local.md');
-    });
+    }, 120_000); // heavy: spawns look-git.ts which runs dozens of git subprocesses (slow on Windows runners)
 });

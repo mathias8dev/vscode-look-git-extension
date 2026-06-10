@@ -20,7 +20,7 @@ import type { GraphDataResponse, GraphExtensionToWebviewMessage, GraphSubmodules
 import type { HistoryExtensionToWebviewMessage, HistoryWebviewToExtensionMessage } from '../../../src/protocol/history/messages';
 import type { GraphRow } from '../../../src/webview/features/graph/layout/graph-lane-model';
 import { createInitialGraphState, reduceGraphState, type GraphState } from '../../../src/webview/features/graph/graphState';
-import { addLinkedWorktree, createBareGitRepo, createSubmoduleFixture, createTempGitRepo, samePath, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
+import { addLinkedWorktree, createBareGitRepo, createSubmoduleFixture, createTempGitRepo, removeDirSyncWithRetry, samePath, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
 import { getFixtureRepoPath, gitFixtureOutput } from '../../helpers/fixtureRepo';
 import { findAdjacentDisconnectedSameLaneIssues, findCommitLanePassThroughIssues, findFloatingNodeIssues, findLaneContinuityIssues, findNonVisibleLineTargetIssues } from '../../helpers/graphLayoutAssertions';
 import { runTestCases } from '../../helpers/testRunner';
@@ -207,7 +207,7 @@ export function run(): Promise<void> {
                 } finally {
                     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
                     if (openedWorktreePath) {
-                        fs.rmSync(path.dirname(openedWorktreePath), { recursive: true, force: true });
+                        removeDirSyncWithRetry(path.dirname(openedWorktreePath));
                     }
                     fixture.cleanup();
                 }
@@ -722,7 +722,7 @@ async function runFloatingGraphNodeLayoutE2E(): Promise<void> {
         }
         assertGraphLayout(pagedState.rows, 'lookGit graph-heavy paged fixture with locked lanes');
     } finally {
-        fs.rmSync(graphHeavyRoot, { recursive: true, force: true });
+        removeDirSyncWithRetry(graphHeavyRoot);
     }
 }
 
@@ -803,7 +803,7 @@ async function runWorktreeWipRowsE2E(): Promise<void> {
         await waitForTabLabel('model.ts');
     } finally {
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-        fs.rmSync(outputRoot, { recursive: true, force: true });
+        removeDirSyncWithRetry(outputRoot);
     }
 }
 
@@ -890,12 +890,12 @@ async function runWorktreeContextActionsE2E(): Promise<void> {
         await withPatchedVscode({ warningChoices: ['Force Remove', 'Discard Changes and Remove'] }, async () => {
             await router.handle({ type: 'graph/worktreeCommand', command: 'removeForce', path: forceWorktreePath });
         });
-        assert.equal(fs.existsSync(forceWorktreePath), false);
+        await waitForPathRemoved(forceWorktreePath);
 
         await withPatchedVscode({ warningChoices: ['Remove'] }, async () => {
             await router.handle({ type: 'graph/worktreeCommand', command: 'remove', path: worktreePath });
         });
-        assert.equal(fs.existsSync(worktreePath), false);
+        await waitForPathRemoved(worktreePath);
         assertNoGraphError(messages);
     } finally {
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
@@ -1003,7 +1003,7 @@ async function runWorktreeAwareCommitAndBranchMenusE2E(): Promise<void> {
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
         for (const worktreePath of worktreePaths) {
             try { fixture.git(['worktree', 'remove', '--force', worktreePath]); } catch {}
-            fs.rmSync(worktreePath, { recursive: true, force: true });
+            removeDirSyncWithRetry(worktreePath);
         }
         fixture.cleanup();
         remote.cleanup();
@@ -2049,7 +2049,8 @@ async function waitForGitFileContent(repoPath: string, filePath: string, ref: st
     for (let attempt = 0; attempt < 40; attempt++) {
         try {
             const content = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
-            if (content === expected) { return; }
+            // The built-in git: content provider may return CRLF on Windows; compare on content, not EOL.
+            if (content.replace(/\r\n/g, '\n') === expected) { return; }
             lastError = `read "${content}"`;
         } catch (error) {
             lastError = error instanceof Error ? error.message : String(error);
@@ -2058,6 +2059,16 @@ async function waitForGitFileContent(repoPath: string, filePath: string, ref: st
     }
 
     assert.fail(`Expected Git file content for ${filePath} at ${ref}: ${lastError}`);
+}
+
+// Windows defers directory deletion while handles are open, so a removed worktree dir can linger
+// briefly after git reports success. Poll instead of asserting immediately.
+async function waitForPathRemoved(target: string): Promise<void> {
+    for (let attempt = 0; attempt < 50; attempt++) {
+        if (!fs.existsSync(target)) { return; }
+        await sleep(100);
+    }
+    assert.equal(fs.existsSync(target), false);
 }
 
 function gitObjectUri(repoPath: string, filePath: string, ref: string): vscode.Uri {

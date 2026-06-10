@@ -14,8 +14,9 @@ export default defineConfig({
             ['tests/webview/**', 'jsdom'],
         ],
         exclude: ['node_modules/**', 'dist/**', 'out/**', 'tests/e2e/**', 'tests/integration/**'],
-        testTimeout: 30000,
-        hookTimeout: 30000,
+        // Headroom for real-git integration tests that spawn many git subprocesses (slow on Windows runners).
+        testTimeout: 60000,
+        hookTimeout: 60000,
         setupFiles: ['tests/setup.ts'],
     },
     resolve: {
