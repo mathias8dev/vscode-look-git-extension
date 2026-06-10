@@ -914,7 +914,9 @@ function commit(cwd: string, message: string, options: CommitOptions = {}): stri
 function git(cwd: string, args: readonly string[], options: CommitOptions = {}): string {
     const author = options.author ?? nextAuthor(false);
     const date = nextCommitDate();
-    return execFileSync('git', [...args], {
+    // Force LF on every command (including `clone`, which checks out before configureRepo runs) so
+    // fixture content is byte-identical across OSes; Windows git otherwise defaults to autocrlf=true.
+    return execFileSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', ...args], {
         cwd,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
