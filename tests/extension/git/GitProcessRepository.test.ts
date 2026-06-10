@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
-import { createTempGitRepo, addLinkedWorktree, createRemoteWorkflowFixture, createSubmoduleFixture, createStashPopBlockedByLocalChangesFixture, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
+import { createTempGitRepo, addLinkedWorktree, createRemoteWorkflowFixture, createSubmoduleFixture, createStashPopBlockedByLocalChangesFixture, samePath, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
 import { expectItem } from '../../helpers/assertions';
 
 describe('GitProcessRepository', () => {
@@ -263,7 +263,7 @@ describe('GitProcessRepository', () => {
         cleanups.push({ cleanup() { fs.rmSync(wtPath, { recursive: true, force: true }); } });
         await git.addWorktree(wtPath, 'wt-branch', true);
         const wts = await git.listWorktrees();
-        expect(wts.some((w) => w.path === wtPath)).toBe(true);
+        expect(wts.some((w) => samePath(w.path, wtPath))).toBe(true);
     });
 
     it('removeWorktree removes linked worktree from list', async () => {

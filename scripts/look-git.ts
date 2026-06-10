@@ -887,6 +887,9 @@ function initRepo(cwd: string): void {
 function configureRepo(cwd: string): void {
     git(cwd, ['config', 'user.name', 'Look Git Fixture']);
     git(cwd, ['config', 'user.email', 'fixture@example.com']);
+    // Keep fixture file content byte-identical across OSes (Windows git defaults to autocrlf=true).
+    git(cwd, ['config', 'core.autocrlf', 'false']);
+    git(cwd, ['config', 'core.eol', 'lf']);
     git(cwd, ['config', 'gc.auto', '0']);
     git(cwd, ['config', 'maintenance.auto', 'false']);
 }

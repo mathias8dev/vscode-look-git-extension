@@ -70,9 +70,25 @@ function fixtureAuthorAt(index: number): FixtureAuthor {
     return author;
 }
 
+/**
+ * Normalise a path for cross-platform comparison: resolve symlinks and Windows 8.3 short names,
+ * unify separators to '/', and lowercase the drive letter. Use when comparing a test-held path
+ * against one produced by git (forward slashes) or VS Code (backslashes, lowercase drive), which
+ * format the same location differently on Windows. A no-op on Linux.
+ */
+export function normalizePathForCompare(p: string): string {
+    let resolved = p;
+    try { resolved = fs.realpathSync.native(p); } catch { resolved = path.resolve(p); }
+    return resolved.replace(/[\\/]+/g, '/').replace(/^([a-zA-Z]):/, (_match, drive: string) => `${drive.toLowerCase()}:`);
+}
+
+export function samePath(a: string, b: string): boolean {
+    return normalizePathForCompare(a) === normalizePathForCompare(b);
+}
+
 export function createTempGitRepo(): TempGitRepo {
-    // realpath the temp dir so it matches what git reports (e.g. macOS resolves /var -> /private/var).
-    const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-test-')));
+    // Pinned below to git's own canonical path so fixture paths compare equal to git output on every OS.
+    let cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-test-'));
 
     const git = (args: string[], options?: { env?: Record<string, string> }) => execFileSync('git', args, {
         cwd,
@@ -104,8 +120,14 @@ export function createTempGitRepo(): TempGitRepo {
         git(['checkout', '-q', '-b', 'main']);
         git(['config', 'user.email', 'test@example.com']);
         git(['config', 'user.name', 'Test User']);
+        // Keep file content byte-identical across OSes (Windows git defaults to autocrlf=true).
+        git(['config', 'core.autocrlf', 'false']);
+        git(['config', 'core.eol', 'lf']);
         git(['config', 'gc.auto', '0']);
         git(['config', 'maintenance.auto', 'false']);
+        // Pin cwd to git's canonical path (forward slashes, long names, resolved symlinks) so fixture
+        // paths compare equal to git output cross-platform (macOS /private/var, Windows C:/.../long-name).
+        cwd = gitTrim(['rev-parse', '--show-toplevel']);
     } catch (error) {
         removeDirSyncWithRetry(cwd);
         throw error;
@@ -269,8 +291,10 @@ export function createStashPopBlockedByLocalChangesFixture(): TempGitRepo {
 }
 
 export function addLinkedWorktree(sourceRepo: TempGitRepo, branch: string): { worktreePath: string; cleanup: () => void } {
-    const worktreePath = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-wt-')));
-    sourceRepo.git(['worktree', 'add', '-q', '-b', branch, worktreePath]);
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-wt-'));
+    sourceRepo.git(['worktree', 'add', '-q', '-b', branch, tempDir]);
+    // Use git's canonical form so this path matches git's worktree-list output cross-platform.
+    const worktreePath = sourceRepo.gitTrim(['-C', tempDir, 'rev-parse', '--show-toplevel']);
     return {
         worktreePath,
         cleanup() {

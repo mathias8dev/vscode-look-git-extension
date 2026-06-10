@@ -104,7 +104,8 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
         expect(fixture.gitTrim(['-C', worktreePath, 'rev-parse', 'HEAD'])).toBe(base);
 
         writeFileSync(join(worktreePath, 'base.txt'), 'base local\n');
-        setQuickPickValue(worktreePath);
+        // The extension picks worktrees by git's canonical path, so select using that exact form.
+        setQuickPickValue(fixture.gitTrim(['-C', worktreePath, 'rev-parse', '--show-toplevel']));
         await vscode.commands.executeCommand('lookGit.history.compareCommitWithWorktree');
         expect(getCommandCalls().at(-1)?.command).toBe('vscode.changes');
     });

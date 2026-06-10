@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import * as path from 'path';
 import type { GitFileChange } from '../../../src/application/ports/git-repository';
 import type { RemoteCommandBackend } from '../../../src/application/ports/remote-command-backend';
 import { OperationStatus } from '../../../src/protocol/shared/operation';
@@ -601,7 +602,7 @@ describe('CommitHistoryViewProvider error propagation', () => {
         view.messageHandler?.({ type: 'history/toolbarCommand', command: 'fetchAll' });
 
         await vi.waitFor(() => expect(remoteCommands.runVscode).toHaveBeenCalledWith(
-            expect.objectContaining({ cwd: '/workspace/modules/auth-kit' }),
+            expect.objectContaining({ cwd: path.resolve(repo.cwd, 'modules/auth-kit') }),
             'fetchAll',
         ));
     });

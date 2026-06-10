@@ -42,6 +42,9 @@ function createDiffFixtureRepo(): string {
     git(repoPath, ['init']);
     git(repoPath, ['config', 'user.email', 'e2e@example.com']);
     git(repoPath, ['config', 'user.name', 'Look Git E2E']);
+    // Keep fixture file content byte-identical across OSes (Windows git defaults to autocrlf=true).
+    git(repoPath, ['config', 'core.autocrlf', 'false']);
+    git(repoPath, ['config', 'core.eol', 'lf']);
 
     fs.writeFileSync(path.join(repoPath, 'deleted.txt'), 'base content\n');
     fs.writeFileSync(path.join(repoPath, 'kept.txt'), 'kept content\n');

@@ -1075,7 +1075,7 @@ function captureGraphRequest(
 }
 
 function graphResultForRepo(cwd: string): GraphDataResult {
-    const isSubmodule = cwd.endsWith('/modules/auth-kit');
+    const isSubmodule = cwd.replace(/\\/g, '/').endsWith('/modules/auth-kit');
     const branchName = isSubmodule ? 'feature/oauth' : 'main';
     const hash = isSubmodule ? 'submodule-head' : 'main-head';
     return {

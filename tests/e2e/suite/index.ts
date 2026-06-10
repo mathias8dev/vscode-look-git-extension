@@ -20,10 +20,14 @@ import type { GraphDataResponse, GraphExtensionToWebviewMessage, GraphSubmodules
 import type { HistoryExtensionToWebviewMessage, HistoryWebviewToExtensionMessage } from '../../../src/protocol/history/messages';
 import type { GraphRow } from '../../../src/webview/features/graph/layout/graph-lane-model';
 import { createInitialGraphState, reduceGraphState, type GraphState } from '../../../src/webview/features/graph/graphState';
-import { addLinkedWorktree, createBareGitRepo, createSubmoduleFixture, createTempGitRepo, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
+import { addLinkedWorktree, createBareGitRepo, createSubmoduleFixture, createTempGitRepo, samePath, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
 import { getFixtureRepoPath, gitFixtureOutput } from '../../helpers/fixtureRepo';
 import { findAdjacentDisconnectedSameLaneIssues, findCommitLanePassThroughIssues, findFloatingNodeIssues, findLaneContinuityIssues, findNonVisibleLineTargetIssues } from '../../helpers/graphLayoutAssertions';
 import { runTestCases } from '../../helpers/testRunner';
+
+// Repo root resolved from this compiled file (out/tests/e2e/suite) — process.cwd() is unreliable in the
+// VS Code test host (on Windows it points at the VS Code install dir, not the extension repo).
+const repoRoot = path.resolve(__dirname, '../../../..');
 
 export function run(): Promise<void> {
     return runTestCases('Look Git E2E', [
@@ -671,12 +675,12 @@ async function runFloatingGraphNodeLayoutE2E(): Promise<void> {
     const graphHeavyRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-graph-heavy-e2e-'));
     try {
         execFileSync('node', [
-            path.join(process.cwd(), 'scripts', 'look-git.ts'),
+            path.join(repoRoot, 'scripts', 'look-git.ts'),
             'setup',
             'graph-heavy',
             '--output',
             graphHeavyRoot,
-        ], { cwd: process.cwd(), encoding: 'utf8' });
+        ], { cwd: repoRoot, encoding: 'utf8' });
         const repoPath = path.join(graphHeavyRoot, 'graph-heavy');
 
         const fullMessages: GraphExtensionToWebviewMessage[] = [];
@@ -726,12 +730,12 @@ async function runWorktreeWipRowsE2E(): Promise<void> {
     const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-worktrees-e2e-'));
     try {
         execFileSync('node', [
-            path.join(process.cwd(), 'scripts', 'look-git.ts'),
+            path.join(repoRoot, 'scripts', 'look-git.ts'),
             'setup',
             'worktrees',
             '--output',
             outputRoot,
-        ], { cwd: process.cwd(), encoding: 'utf8' });
+        ], { cwd: repoRoot, encoding: 'utf8' });
         const repoPath = path.join(outputRoot, 'worktrees');
         const messages: GraphExtensionToWebviewMessage[] = [];
         const router = routerFor(repoPath, messages);
@@ -934,8 +938,8 @@ async function runWorktreeAwareCommitAndBranchMenusE2E(): Promise<void> {
             return patched;
         });
         assert.deepEqual(capture.commandCalls.map((call) => call.command), ['vscode.openFolder', 'revealFileInOS']);
-        assert.equal(fsPathOf(capture.commandCalls[0]?.args[0]), branchWorktreePath);
-        assert.equal(fsPathOf(capture.commandCalls[1]?.args[0]), branchWorktreePath);
+        assert.ok(samePath(fsPathOf(capture.commandCalls[0]?.args[0]), branchWorktreePath));
+        assert.ok(samePath(fsPathOf(capture.commandCalls[1]?.args[0]), branchWorktreePath));
 
         const remoteCapture = await withPatchedVscode({ interceptTerminal: true }, async (patched) => {
             await router.handle({ type: 'graph/branchCommand', command: 'pullBranchWorktree', branch: 'feature/menu-source', isRemote: false });
@@ -958,7 +962,8 @@ async function runWorktreeAwareCommitAndBranchMenusE2E(): Promise<void> {
         await waitForTabLabel(`Diff feature/menu-source with ${path.basename(branchWorktreePath)}`);
 
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-        await withPatchedVscode({ quickPickValues: [branchWorktreePath] }, async () => {
+        // The extension picks worktrees by git's canonical path, so select using that exact form.
+        await withPatchedVscode({ quickPickValues: [git(branchWorktreePath, ['rev-parse', '--show-toplevel'])] }, async () => {
             await router.handle({ type: 'graph/branchCommand', command: 'compareBranchWithWorktree', branch: 'feature/menu-source', isRemote: false });
         });
         await waitForTabLabel(`Diff feature/menu-source with ${path.basename(branchWorktreePath)}`);
@@ -1724,7 +1729,7 @@ async function historyHarnessFor(
         requireRepository: () => repo,
     };
     const provider = new CommitHistoryViewProvider(
-        vscode.Uri.file(process.cwd()),
+        vscode.Uri.file(repoRoot),
         accessor,
         onRepositoryUpdated,
         remoteCommands,
