@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -311,7 +311,8 @@ function fsPathOf(value: unknown): string {
 }
 
 function missingTempPath(prefix: string): string {
-    const tempPath = mkdtempSync(join(tmpdir(), prefix));
+    // realpath the tmp base so the returned path matches git output (macOS resolves /var -> /private/var).
+    const tempPath = mkdtempSync(join(realpathSync(tmpdir()), prefix));
     removeDirSyncWithRetry(tempPath);
     expect(existsSync(tempPath)).toBe(false);
     return tempPath;

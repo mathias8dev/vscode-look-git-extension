@@ -864,7 +864,7 @@ describe('GraphMessageRouter commit commands', () => {
             execRaw: vi.fn(async (args) => `patch ${args.at(-1)}\n`),
         });
         const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
-        const patchPath = '/tmp/look-git-router.patch';
+        const patchPath = path.join(os.tmpdir(), 'look-git-router.patch');
         setQuickPickValue('Save Patch to File...');
         window.saveDialogValue = Uri.file(patchPath);
 
@@ -872,7 +872,7 @@ describe('GraphMessageRouter commit commands', () => {
 
         expect(vi.mocked(repo.execRaw)).toHaveBeenNthCalledWith(1, ['format-patch', '-1', '--stdout', 'a']);
         expect(vi.mocked(repo.execRaw)).toHaveBeenNthCalledWith(2, ['format-patch', '-1', '--stdout', 'b']);
-        expect(window.infoMessages).toContain('Patch saved to /tmp/look-git-router.patch.');
+        expect(window.infoMessages).toContain(`Patch saved to ${patchPath}.`);
     });
 
     it('copies a patch for the selected commits', async () => {

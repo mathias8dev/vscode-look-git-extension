@@ -2031,7 +2031,8 @@ function fsPathOf(value: unknown): string {
 }
 
 function missingTempPath(prefix: string): string {
-    const tempPath = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    // realpath the tmp base so the returned path matches git output (macOS resolves /var -> /private/var).
+    const tempPath = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), prefix));
     fs.rmSync(tempPath, { recursive: true, force: true });
     return tempPath;
 }

@@ -643,15 +643,15 @@ describe('ChangesViewProvider', () => {
         view.messageHandler?.({ type: 'changes/submoduleToolbarCommand', submodulePath: 'modules/lib', command: 'fetch' });
 
         await vi.waitFor(() => expect(remoteCommands.runVscode).toHaveBeenCalledWith(
-            expect.objectContaining({ cwd: path.resolve('/workspace/modules/lib') }),
+            expect.objectContaining({ cwd: path.resolve(repo.cwd, 'modules/lib') }),
             VscodeRemoteCommand.Pull,
         ));
         expect(remoteCommands.runVscode).toHaveBeenCalledWith(
-            expect.objectContaining({ cwd: path.resolve('/workspace/modules/lib') }),
+            expect.objectContaining({ cwd: path.resolve(repo.cwd, 'modules/lib') }),
             VscodeRemoteCommand.Push,
         );
         expect(remoteCommands.runVscode).toHaveBeenCalledWith(
-            expect.objectContaining({ cwd: path.resolve('/workspace/modules/lib') }),
+            expect.objectContaining({ cwd: path.resolve(repo.cwd, 'modules/lib') }),
             VscodeRemoteCommand.Fetch,
         );
     });
@@ -673,7 +673,7 @@ describe('ChangesViewProvider', () => {
         await vscode.commands.executeCommand('lookGit.changes.submodule.fetch');
 
         await vi.waitFor(() => expect(remoteCommands.runVscode).toHaveBeenCalledWith(
-            expect.objectContaining({ cwd: path.resolve('/workspace/modules/lib') }),
+            expect.objectContaining({ cwd: path.resolve(repo.cwd, 'modules/lib') }),
             VscodeRemoteCommand.Fetch,
         ));
         disposables.forEach((disposable) => disposable.dispose());
@@ -694,7 +694,7 @@ describe('ChangesViewProvider', () => {
         });
         await vscode.commands.executeCommand('lookGit.changes.submodule.stageAllChanges');
 
-        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith(['-C', path.resolve('/workspace/modules/lib'), 'add', '-A']));
+        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith(['-C', path.join(repo.cwd, 'modules/lib'), 'add', '-A']));
         disposables.forEach((disposable) => disposable.dispose());
     });
 
@@ -713,7 +713,7 @@ describe('ChangesViewProvider', () => {
         });
         await vscode.commands.executeCommand('lookGit.changes.submodule.commitAll');
 
-        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith(['-C', path.resolve('/workspace/modules/lib'), 'add', '-A']));
+        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith(['-C', path.join(repo.cwd, 'modules/lib'), 'add', '-A']));
         expect(view.messages).toContainEqual({
             type: 'changes/focusSubmoduleCommitComposer',
             path: 'modules/lib',
@@ -760,13 +760,13 @@ describe('ChangesViewProvider', () => {
 
         await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith([
             '-C',
-            path.resolve('/workspace/modules/lib'),
+            path.join(repo.cwd, 'modules/lib'),
             'commit',
             '-m',
             'feat(lib): commit from native menu',
         ]));
         expect(remoteCommands.runCli).toHaveBeenCalledWith(repo, expect.objectContaining({
-            cwd: path.resolve('/workspace/modules/lib'),
+            cwd: path.join(repo.cwd, 'modules/lib'),
             args: ['push'],
         }));
         disposables.forEach((disposable) => disposable.dispose());
@@ -1218,7 +1218,7 @@ describe('ChangesViewProvider', () => {
         await vscode.commands.executeCommand('lookGit.changes.selection.discard');
         await vscode.commands.executeCommand('lookGit.changes.selection.stash');
 
-        const submoduleCwd = path.resolve('/workspace/modules/lib');
+        const submoduleCwd = path.join(repo.cwd, 'modules/lib');
         await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith(['-C', submoduleCwd, 'add', '--', 'src/app.ts']));
         await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith(['-C', submoduleCwd, 'reset', 'HEAD', '--', 'src/staged.ts']));
         await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith(['-C', submoduleCwd, 'checkout', '--', 'src/app.ts']));
@@ -1705,7 +1705,7 @@ describe('ChangesViewProvider', () => {
         });
         await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith([
             '-C',
-            '/workspace/modules/lib',
+            path.join(repo.cwd, 'modules/lib'),
             '-c',
             'core.editor=true',
             'merge',
@@ -1719,7 +1719,7 @@ describe('ChangesViewProvider', () => {
         });
         await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith([
             '-C',
-            '/workspace/modules/lib',
+            path.join(repo.cwd, 'modules/lib'),
             'rebase',
             '--abort',
         ]));
@@ -1791,7 +1791,7 @@ describe('ChangesViewProvider', () => {
 
         await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith([
             '-C',
-            '/workspace/modules/lib',
+            path.join(repo.cwd, 'modules/lib'),
             'commit',
             '-m',
             'feat: inner',
@@ -1820,14 +1820,14 @@ describe('ChangesViewProvider', () => {
 
         await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith([
             '-C',
-            '/workspace/modules/lib',
+            path.join(repo.cwd, 'modules/lib'),
             'commit',
             '-m',
             'feat: inner push',
         ]));
         await vi.waitFor(() => expect(mockWindow.terminals).toContainEqual(expect.objectContaining({
             name: 'Look Git Remote: modules/lib',
-            cwd: '/workspace/modules/lib',
+            cwd: path.join(repo.cwd, 'modules/lib'),
             hideFromUser: true,
             isTransient: true,
             texts: ["git 'push'"],
@@ -2004,7 +2004,7 @@ describe('ChangesViewProvider', () => {
         view.messageHandler?.({ type: 'changes/getSubmoduleStatus', requestId: 'sub-1', path: 'modules/lib' });
 
         await vi.waitFor(() => expect(repo.execRaw).toHaveBeenCalledWith(
-            ['--no-optional-locks', '-C', '/workspace/modules/lib', 'status', '--porcelain', '-z', '--untracked-files=all'],
+            ['--no-optional-locks', '-C', path.join(repo.cwd, 'modules/lib'), 'status', '--porcelain', '-z', '--untracked-files=all'],
         ));
         await vi.waitFor(() => expect(view.messages).toContainEqual({
             type: 'changes/submoduleStatusData',
@@ -2021,7 +2021,7 @@ describe('ChangesViewProvider', () => {
                 stashes: [],
             },
         }));
-        expect(repo.exec).not.toHaveBeenCalledWith(['--no-optional-locks', '-C', '/workspace/modules/lib', 'status', '--porcelain', '-z', '--untracked-files=all']);
+        expect(repo.exec).not.toHaveBeenCalledWith(['--no-optional-locks', '-C', path.join(repo.cwd, 'modules/lib'), 'status', '--porcelain', '-z', '--untracked-files=all']);
     });
 
     it('uses cached submodule paths from the parent refresh when loading submodule status', async () => {

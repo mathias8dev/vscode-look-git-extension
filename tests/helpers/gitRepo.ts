@@ -71,7 +71,8 @@ function fixtureAuthorAt(index: number): FixtureAuthor {
 }
 
 export function createTempGitRepo(): TempGitRepo {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-test-'));
+    // realpath the temp dir so it matches what git reports (e.g. macOS resolves /var -> /private/var).
+    const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-test-')));
 
     const git = (args: string[], options?: { env?: Record<string, string> }) => execFileSync('git', args, {
         cwd,
@@ -148,7 +149,7 @@ export function createTempGitRepo(): TempGitRepo {
 }
 
 export function createBareGitRepo(): TempGitRepo {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-bare-test-'));
+    const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-bare-test-')));
     const git = (args: string[], opts?: { env?: Record<string, string> }) => execFileSync('git', args, {
         cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
         env: { ...process.env, ...opts?.env },
@@ -268,7 +269,7 @@ export function createStashPopBlockedByLocalChangesFixture(): TempGitRepo {
 }
 
 export function addLinkedWorktree(sourceRepo: TempGitRepo, branch: string): { worktreePath: string; cleanup: () => void } {
-    const worktreePath = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-wt-'));
+    const worktreePath = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-wt-')));
     sourceRepo.git(['worktree', 'add', '-q', '-b', branch, worktreePath]);
     return {
         worktreePath,

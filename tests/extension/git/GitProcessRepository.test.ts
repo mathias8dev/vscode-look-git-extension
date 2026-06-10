@@ -259,7 +259,7 @@ describe('GitProcessRepository', () => {
         r.write('a.txt', 'a');
         r.commit('init');
         const git = new GitProcessRepository(r.cwd);
-        const wtPath = path.join(os.tmpdir(), `look-git-wt-test-${Date.now()}`);
+        const wtPath = path.join(fs.realpathSync(os.tmpdir()), `look-git-wt-test-${Date.now()}`);
         cleanups.push({ cleanup() { fs.rmSync(wtPath, { recursive: true, force: true }); } });
         await git.addWorktree(wtPath, 'wt-branch', true);
         const wts = await git.listWorktrees();
