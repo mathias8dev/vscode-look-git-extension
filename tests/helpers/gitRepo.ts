@@ -77,7 +77,15 @@ export function createTempGitRepo(): TempGitRepo {
         cwd,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env, GIT_AUTHOR_DATE: '2024-01-01T00:00:00Z', GIT_COMMITTER_DATE: '2024-01-01T00:00:00Z', ...options?.env },
+        // Identity via env (not just `git config`) so commits run through `-C <submodule>` also have an
+        // author/committer on hosts without a global git identity (e.g. CI runners).
+        env: {
+            ...process.env,
+            GIT_AUTHOR_NAME: 'Test User', GIT_AUTHOR_EMAIL: 'test@example.com',
+            GIT_COMMITTER_NAME: 'Test User', GIT_COMMITTER_EMAIL: 'test@example.com',
+            GIT_AUTHOR_DATE: '2024-01-01T00:00:00Z', GIT_COMMITTER_DATE: '2024-01-01T00:00:00Z',
+            ...options?.env,
+        },
     });
     const gitTrim = (args: string[], options?: { env?: Record<string, string> }) => git(args, options).trim();
 

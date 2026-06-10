@@ -523,7 +523,7 @@ describe('GraphMessageRouter graph data', () => {
 
             expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'diff', '--submodule=short', 'HEAD', '--', 'modules/billing-core']);
             expect(commands.calls.some((call) => call.command === 'vscode.diff')).toBe(false);
-            expect(workspace.documents.at(-1)?.uri.scheme).toBe('lookgit-diff');
+            expect(workspace.documents.at(-1)?.uri?.scheme).toBe('lookgit-diff');
             expect(workspace.documents.at(-1)?.content).toContain('Submodule modules/billing-core');
         } finally {
             disposable.dispose();
@@ -549,7 +549,7 @@ describe('GraphMessageRouter graph data', () => {
 
             expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['diff', '--submodule=short', 'parent123456789', 'abc123456789', '--', 'modules/auth-kit']);
             expect(commands.calls.some((call) => call.command === 'vscode.diff')).toBe(false);
-            expect(workspace.documents.at(-1)?.uri.scheme).toBe('lookgit-diff');
+            expect(workspace.documents.at(-1)?.uri?.scheme).toBe('lookgit-diff');
             expect(workspace.documents.at(-1)?.content).toContain('Submodule modules/auth-kit');
         } finally {
             disposable.dispose();

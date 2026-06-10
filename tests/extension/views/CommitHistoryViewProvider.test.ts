@@ -713,7 +713,7 @@ describe('CommitHistoryViewProvider error propagation', () => {
             isSubmodule: true,
         });
 
-        await vi.waitFor(() => expect(workspace.documents.at(-1)?.uri.scheme).toBe('lookgit-diff'));
+        await vi.waitFor(() => expect(workspace.documents.at(-1)?.uri?.scheme).toBe('lookgit-diff'));
         expect(repo.execRaw).toHaveBeenCalledWith(['diff', '--submodule=short', 'parent123456789', 'abc123456789', '--', 'modules/auth-kit']);
         expect(commands.calls.some((call) => call.command === 'vscode.diff')).toBe(false);
         expect(workspace.documents.at(-1)?.content).toContain('Subproject commit');
