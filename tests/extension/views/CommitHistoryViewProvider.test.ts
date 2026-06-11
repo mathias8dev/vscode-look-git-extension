@@ -677,12 +677,12 @@ describe('CommitHistoryViewProvider error propagation', () => {
         await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === 'vscode.diff')).toBe(true));
         const call = getCommandCalls().find((entry) => entry.command === 'vscode.diff');
         expect(call?.args[0]).toMatchObject({
-            scheme: 'file',
-            query: '',
+            scheme: 'lookgit-blob',
+            path: '/parent-parent123456789/src/old-name.ts',
         });
         expect(call?.args[1]).toMatchObject({
-            scheme: 'file',
-            query: '',
+            scheme: 'lookgit-blob',
+            path: '/commit-abc123456789/src/new-name.ts',
         });
         expect(call?.args[2]).toBe('new-name.ts (abc1234)');
         expect(repo.execRaw).toHaveBeenCalledWith(['-C', '/workspace', 'show', 'parent123456789:src/old-name.ts']);

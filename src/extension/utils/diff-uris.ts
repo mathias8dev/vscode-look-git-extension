@@ -1,8 +1,7 @@
-import * as fs from 'fs/promises';
-import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { GitRepository } from '../../application/ports/git-repository';
+import { gitBlobUri } from './git-blob-documents';
 
 type CommitDiffFile = {
     readonly commitHash: string;
@@ -25,7 +24,7 @@ export async function commitFileDiffUris(cwd: string, file: CommitDiffFile): Pro
 
     if (status === 'A') {
         return {
-            left: await emptyDiffUri(file.commitHash, file.filePath, 'parent'),
+            left: emptyDiffUri(file.commitHash, file.filePath, 'parent'),
             right: toGitUri(fileUri, file.commitHash),
         };
     }
@@ -33,7 +32,7 @@ export async function commitFileDiffUris(cwd: string, file: CommitDiffFile): Pro
     if (status === 'D') {
         return {
             left: toGitUri(origUri, parentRef),
-            right: await emptyDiffUri(file.commitHash, file.filePath, 'commit'),
+            right: emptyDiffUri(file.commitHash, file.filePath, 'commit'),
         };
     }
 
@@ -50,7 +49,7 @@ export async function commitFileTempDiffUris(repo: GitRepository, cwd: string, f
 
     if (status === 'A') {
         return {
-            left: await emptyDiffUri(file.commitHash, file.filePath, 'parent'),
+            left: emptyDiffUri(file.commitHash, file.filePath, 'parent'),
             right: await refBlobUri(repo, cwd, file.commitHash, file.filePath, 'commit'),
         };
     }
@@ -58,7 +57,7 @@ export async function commitFileTempDiffUris(repo: GitRepository, cwd: string, f
     if (status === 'D') {
         return {
             left: await refBlobUri(repo, cwd, parentRef, origPath, 'parent'),
-            right: await emptyDiffUri(file.commitHash, file.filePath, 'commit'),
+            right: emptyDiffUri(file.commitHash, file.filePath, 'commit'),
         };
     }
 
@@ -68,8 +67,8 @@ export async function commitFileTempDiffUris(repo: GitRepository, cwd: string, f
     };
 }
 
-export async function emptyDiffUri(namespace: string, filePath: string, side: string): Promise<vscode.Uri> {
-    return tempDiffUri(namespace, filePath, side, '');
+export function emptyDiffUri(namespace: string, filePath: string, side: string): vscode.Uri {
+    return gitBlobUri(namespace, filePath, side, '');
 }
 
 export async function refBlobUri(
@@ -80,22 +79,7 @@ export async function refBlobUri(
     side: string,
 ): Promise<vscode.Uri> {
     const content = await repo.execRaw(['-C', cwd, 'show', `${ref}:${filePath}`]);
-    return tempDiffUri(ref, filePath, side, content);
-}
-
-export async function tempDiffUri(
-    namespace: string,
-    filePath: string,
-    side: string,
-    content: string,
-): Promise<vscode.Uri> {
-    const dir = path.join(os.tmpdir(), 'look-git-empty-diffs');
-    const safeNamespace = Buffer.from(namespace).toString('base64url').substring(0, 16);
-    const fileName = `${safeNamespace}-${side}-${Buffer.from(filePath).toString('base64url')}`;
-    const tempPath = path.join(dir, fileName);
-    await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(tempPath, content);
-    return vscode.Uri.file(tempPath);
+    return gitBlobUri(ref, filePath, side, content);
 }
 
 export function toGitUri(uri: vscode.Uri, ref: string): vscode.Uri {

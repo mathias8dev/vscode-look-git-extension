@@ -101,6 +101,12 @@ export const Uri = {
         const joined = [base.path, ...segments].join('/').replace(/\/+/g, '/');
         return new TestUri(base.scheme, joined, joined, base.query);
     },
+    from(components: { scheme: string; path?: string; query?: string }) {
+        const pathValue = components.path ?? '';
+        const query = components.query ?? '';
+        const fsPath = components.scheme === 'file' ? pathValue.replace(/\//g, '\\') : pathValue;
+        return new TestUri(components.scheme, pathValue, fsPath, query);
+    },
 };
 
 export const commands = {

@@ -473,7 +473,7 @@ describe('GraphMessageRouter graph data', () => {
         expect(commands.calls).toHaveLength(1);
         const call = commands.calls[0];
         expect(call?.command).toBe('vscode.diff');
-        expect(String(call?.args[0])).toContain('look-git-empty-diffs');
+        expect(String(call?.args[0])).toBe('lookgit-blob:/head-worktree-head/src/dirty.ts');
         expect(String(call?.args[1])).toBe('file:/repo/.worktrees/a/src/dirty.ts');
         expect(call?.args[2]).toBe('dirty.ts (a)');
         expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'show', 'HEAD:src/dirty.ts']);

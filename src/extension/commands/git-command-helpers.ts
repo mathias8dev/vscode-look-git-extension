@@ -89,10 +89,10 @@ async function refChangeResource(repo: GitRepository, leftRef: string, rightRef:
     const origPath = entry.origPath ?? entry.filePath;
 
     if (entry.status === 'A') {
-        return [fileUri, await emptyDiffUri(rightRef, entry.filePath, 'original'), await refBlobUri(repo, repo.cwd, rightRef, entry.filePath, 'modified')];
+        return [fileUri, emptyDiffUri(rightRef, entry.filePath, 'original'), await refBlobUri(repo, repo.cwd, rightRef, entry.filePath, 'modified')];
     }
     if (entry.status === 'D') {
-        return [fileUri, await refBlobUri(repo, repo.cwd, leftRef, origPath, 'original'), await emptyDiffUri(leftRef, entry.filePath, 'modified')];
+        return [fileUri, await refBlobUri(repo, repo.cwd, leftRef, origPath, 'original'), emptyDiffUri(leftRef, entry.filePath, 'modified')];
     }
     return [
         fileUri,
@@ -106,10 +106,10 @@ async function workingTreeChangeResource(repo: GitRepository, worktreePath: stri
     const origPath = entry.origPath ?? entry.filePath;
 
     if (entry.status === 'A' || entry.status === '?') {
-        return [fileUri, await emptyDiffUri('working-tree', entry.filePath, 'original'), fileUri];
+        return [fileUri, emptyDiffUri('working-tree', entry.filePath, 'original'), fileUri];
     }
     if (entry.status === 'D') {
-        return [fileUri, await refBlobUri(repo, worktreePath, baseRef, origPath, 'original'), await emptyDiffUri(baseRef, entry.filePath, 'modified')];
+        return [fileUri, await refBlobUri(repo, worktreePath, baseRef, origPath, 'original'), emptyDiffUri(baseRef, entry.filePath, 'modified')];
     }
     return [fileUri, await refBlobUri(repo, worktreePath, baseRef, origPath, 'original'), fileUri];
 }

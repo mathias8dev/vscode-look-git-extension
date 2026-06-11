@@ -27,7 +27,8 @@ import { runBranchCommand } from '../commands/branch-commands';
 import { runWorktreeCommand } from '../commands/worktree-commands';
 import { operationActionsForStatus } from '../utils/operation-feedback';
 import { openCommitGitlinkDiff, openWorktreeGitlinkDiff } from '../utils/gitlink-diff';
-import { commitFileDiffUris, emptyDiffUri, tempDiffUri } from '../utils/diff-uris';
+import { commitFileDiffUris, emptyDiffUri } from '../utils/diff-uris';
+import { gitBlobUri } from '../utils/git-blob-documents';
 import { createErrorPayload, isAbortError } from './errorSerialization';
 
 type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
@@ -666,7 +667,7 @@ async function createWorktreeDiffUris(repo: GitRepository, msg: OpenWorktreeDiff
 
     if (status === '?' || status === 'A') {
         return {
-            left: await emptyDiffUri('worktree', msg.filePath, 'head'),
+            left: emptyDiffUri('worktree', msg.filePath, 'head'),
             right: fileUri,
         };
     }
@@ -674,7 +675,7 @@ async function createWorktreeDiffUris(repo: GitRepository, msg: OpenWorktreeDiff
     if (status === 'D') {
         return {
             left: await worktreeHeadBlobUri(repo, msg.worktreePath, origPath),
-            right: await emptyDiffUri('worktree', msg.filePath, 'working-tree'),
+            right: emptyDiffUri('worktree', msg.filePath, 'working-tree'),
         };
     }
 
@@ -686,7 +687,7 @@ async function createWorktreeDiffUris(repo: GitRepository, msg: OpenWorktreeDiff
 
 async function worktreeHeadBlobUri(repo: GitRepository, worktreePath: string, filePath: string): Promise<vscode.Uri> {
     const content = await repo.execRaw(['-C', worktreePath, 'show', `HEAD:${filePath}`]);
-    return tempDiffUri('worktree-head', filePath, 'head', content);
+    return gitBlobUri('worktree-head', filePath, 'head', content);
 }
 
 function emptyGraphData(): GraphData {

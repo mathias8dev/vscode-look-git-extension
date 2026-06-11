@@ -7,6 +7,7 @@ import type { HistoryCommitContextTarget, HistoryContextTarget, HistoryFileConte
 import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
 import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHistoryViewProvider';
 import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
+import { registerGitBlobDocumentProvider } from '../../../src/extension/utils/git-blob-documents';
 import { createBareGitRepo, createSubmoduleFixture, createTempGitRepo, removeDirSyncWithRetry, type TempGitRepo } from '../../helpers/gitRepo';
 import { executingRemoteCommandBackend } from '../../helpers/executing-remote-command-backend';
 import { makeWebviewView, resetVscodeMock, type MockWebviewView } from '../../helpers/providerRuntime';
@@ -249,8 +250,12 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
         await vscode.commands.executeCommand('lookGit.history.openFileDiff');
         const diffCall = lastCommandCall('vscode.diff');
         expect(diffCall?.args[2]).toBe('file.ts ('.concat(head.substring(0, 7), ')'));
-        expect(readFileSync(fsPathOf(diffCall?.args[0]), 'utf8')).toBe('base\n');
-        expect(readFileSync(fsPathOf(diffCall?.args[1]), 'utf8')).toBe('head\n');
+        // The diff sides are served from the in-memory git-blob provider (no temp files on disk),
+        // and the URI keeps the real filename so the editor shows it correctly.
+        expect(diffCall?.args[0]).toMatchObject({ scheme: 'lookgit-blob', path: `/parent-${base}/src/file.ts` });
+        expect(diffCall?.args[1]).toMatchObject({ scheme: 'lookgit-blob', path: `/commit-${head}/src/file.ts` });
+        expect(blobContentOf(diffCall?.args[0])).toBe('base\n');
+        expect(blobContentOf(diffCall?.args[1])).toBe('head\n');
     });
 
     async function withCommitPair(run: (context: {
@@ -272,6 +277,7 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
         const view = makeWebviewView();
 
         disposables.push(registerReadonlyDiffDocumentProvider());
+        disposables.push(registerGitBlobDocumentProvider());
         disposables.push(...provider.registerNativeContextCommands());
         provider.resolveWebviewView(view);
 
@@ -303,6 +309,15 @@ function messageType(message: unknown): string | undefined {
     if (typeof message !== 'object' || message === null || !('type' in message)) { return undefined; }
     const type = message.type;
     return typeof type === 'string' ? type : undefined;
+}
+
+function blobContentOf(value: unknown): string {
+    if (typeof value !== 'object' || value === null || !('scheme' in value) || typeof value.scheme !== 'string') {
+        throw new Error('Expected a VS Code URI.');
+    }
+    const provider = workspace.contentProviders.get(value.scheme);
+    if (!provider) { throw new Error(`No content provider registered for scheme "${value.scheme}".`); }
+    return String(provider.provideTextDocumentContent(value as Parameters<typeof provider.provideTextDocumentContent>[0]) ?? '');
 }
 
 function fsPathOf(value: unknown): string {

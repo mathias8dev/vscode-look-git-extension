@@ -7,6 +7,7 @@ import { GraphViewProvider } from './views/GraphViewProvider';
 import { defaultRemoteCommandBackend } from './git/hybrid-remote-command-backend';
 import { getBuiltInGitApi } from './utils/gitExtension';
 import { registerReadonlyDiffDocumentProvider } from './utils/readonly-diff-documents';
+import { registerGitBlobDocumentProvider } from './utils/git-blob-documents';
 import { registerWebviewFontSizeSync } from './views/webview-font';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -33,9 +34,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
         repositories,
         registerReadonlyDiffDocumentProvider(),
-        vscode.workspace.registerTextDocumentContentProvider('lookgit-empty', {
-            provideTextDocumentContent: () => '',
-        }),
+        registerGitBlobDocumentProvider(),
         ...changesProvider.registerNativeContextCommands(),
         ...commitHistoryProvider.registerNativeContextCommands(),
         ...graphProvider.registerNativeContextCommands(),
