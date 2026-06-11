@@ -927,6 +927,7 @@ async function runWorktreeAwareCommitAndBranchMenusE2E(): Promise<void> {
         });
         assert.equal(git(branchWorktreePath, ['branch', '--show-current']), 'feature/menu-source');
         assert.equal(git(branchWorktreePath, ['rev-parse', 'HEAD']), base);
+        const canonicalBranchWorktreePath = git(branchWorktreePath, ['rev-parse', '--show-toplevel']);
 
         const capture = await withPatchedVscode({
             quickPickValues: ['Open in Current Window'],
@@ -959,14 +960,13 @@ async function runWorktreeAwareCommitAndBranchMenusE2E(): Promise<void> {
         fs.writeFileSync(path.join(branchWorktreePath, 'branch-untracked.txt'), 'branch untracked\n');
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
         await router.handle({ type: 'graph/branchCommand', command: 'showDiffWithBranchWorktree', branch: 'feature/menu-source', isRemote: false });
-        await waitForTabLabel(`Diff feature/menu-source with ${path.basename(branchWorktreePath)}`);
+        await waitForTabLabel(`Diff feature/menu-source with ${path.basename(canonicalBranchWorktreePath)}`);
 
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-        // The extension picks worktrees by git's canonical path, so select using that exact form.
-        await withPatchedVscode({ quickPickValues: [git(branchWorktreePath, ['rev-parse', '--show-toplevel'])] }, async () => {
+        await withPatchedVscode({ quickPickValues: [canonicalBranchWorktreePath] }, async () => {
             await router.handle({ type: 'graph/branchCommand', command: 'compareBranchWithWorktree', branch: 'feature/menu-source', isRemote: false });
         });
-        await waitForTabLabel(`Diff feature/menu-source with ${path.basename(branchWorktreePath)}`);
+        await waitForTabLabel(`Diff feature/menu-source with ${path.basename(canonicalBranchWorktreePath)}`);
 
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
         git(branchWorktreePath, ['checkout', '--', 'base.txt']);

@@ -104,15 +104,23 @@ describe('Graph worktree context commands against real git repos', () => {
 
         setWarningChoices(['Force Remove', 'Discard Changes and Remove']);
         await router.handle({ type: 'graph/worktreeCommand', command: 'removeForce', path: forceRemovable.worktreePath });
-        expect(existsSync(forceRemovable.worktreePath)).toBe(false);
+        await waitForPathRemoved(forceRemovable.worktreePath);
 
         setWarningChoice('Remove');
         await router.handle({ type: 'graph/worktreeCommand', command: 'remove', path: removable.worktreePath });
-        expect(existsSync(removable.worktreePath)).toBe(false);
+        await waitForPathRemoved(removable.worktreePath);
     });
 });
 
 function routerFor(cwd: string, messages: GraphExtensionToWebviewMessage[] = []): GraphMessageRouter {
     const repo = new GitProcessRepository(cwd);
     return new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); }, async () => {}, executingRemoteCommandBackend);
+}
+
+async function waitForPathRemoved(target: string): Promise<void> {
+    for (let attempt = 0; attempt < 50; attempt++) {
+        if (!existsSync(target)) { return; }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    expect(existsSync(target)).toBe(false);
 }

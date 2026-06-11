@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
-import { createTempGitRepo, addLinkedWorktree, createRemoteWorkflowFixture, createSubmoduleFixture, createStashPopBlockedByLocalChangesFixture, samePath, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
+import { createTempGitRepo, addLinkedWorktree, createRemoteWorkflowFixture, createSubmoduleFixture, createStashPopBlockedByLocalChangesFixture, removeDirSyncWithRetry, samePath, FIXTURE_AUTHORS, type TempGitRepo } from '../../helpers/gitRepo';
 import { expectItem } from '../../helpers/assertions';
 
 describe('GitProcessRepository', () => {
@@ -260,7 +260,7 @@ describe('GitProcessRepository', () => {
         r.commit('init');
         const git = new GitProcessRepository(r.cwd);
         const wtPath = path.join(fs.realpathSync(os.tmpdir()), `look-git-wt-test-${Date.now()}`);
-        cleanups.push({ cleanup() { fs.rmSync(wtPath, { recursive: true, force: true }); } });
+        cleanups.push({ cleanup() { removeDirSyncWithRetry(wtPath); } });
         await git.addWorktree(wtPath, 'wt-branch', true);
         const wts = await git.listWorktrees();
         expect(wts.some((w) => samePath(w.path, wtPath))).toBe(true);
@@ -274,9 +274,9 @@ describe('GitProcessRepository', () => {
         cleanups.push(wt);
         const git = new GitProcessRepository(r.cwd);
         await git.removeWorktree(wt.worktreePath);
-        fs.rmSync(wt.worktreePath, { recursive: true, force: true });
+        await waitForPathRemoved(wt.worktreePath);
         const wts = await git.listWorktrees();
-        expect(wts.every((w) => w.path !== wt.worktreePath)).toBe(true);
+        expect(wts.every((w) => !samePath(w.path, wt.worktreePath))).toBe(true);
     });
 
     // ── Submodules ────────────────────────────────────────────────────────
@@ -308,3 +308,11 @@ describe('GitProcessRepository', () => {
         },
     );
 });
+
+async function waitForPathRemoved(target: string): Promise<void> {
+    for (let attempt = 0; attempt < 50; attempt++) {
+        if (!fs.existsSync(target)) { return; }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    expect(fs.existsSync(target)).toBe(false);
+}
