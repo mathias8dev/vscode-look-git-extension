@@ -249,6 +249,8 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
         await vscode.commands.executeCommand('lookGit.history.openFileDiff');
         const diffCall = lastCommandCall('vscode.diff');
         expect(diffCall?.args[2]).toBe('file.ts ('.concat(head.substring(0, 7), ')'));
+        expect(readFileSync(fsPathOf(diffCall?.args[0]), 'utf8')).toBe('base\n');
+        expect(readFileSync(fsPathOf(diffCall?.args[1]), 'utf8')).toBe('head\n');
     });
 
     async function withCommitPair(run: (context: {

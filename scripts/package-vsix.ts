@@ -21,10 +21,15 @@ function main(): void {
 }
 
 function packageVsix(out: string): void {
-    childProcess.execFileSync('vsce', ['package', '--allow-missing-repository', '--no-rewrite-relative-links', '--out', out], {
+    childProcess.execFileSync(process.execPath, [vsceCliPath(), 'package', '--allow-missing-repository', '--no-rewrite-relative-links', '--out', out], {
         cwd: repoRoot,
         stdio: 'inherit',
     });
+}
+
+function vsceCliPath(): string {
+    if (process.env.LOOK_GIT_VSCE_CLI) { return process.env.LOOK_GIT_VSCE_CLI; }
+    return require.resolve('@vscode/vsce/vsce');
 }
 
 function readManifest(): PackageManifest {

@@ -20,7 +20,7 @@ import { ScopedGitRepository } from '../git/scoped-git-repository';
 import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
 import { getReachableCommitHashes } from '../../application/usecases/commits/get-reachable-commit-hashes';
 import { openCommitGitlinkDiff } from '../utils/gitlink-diff';
-import { commitFileDiffUris } from '../utils/diff-uris';
+import { commitFileTempDiffUris } from '../utils/diff-uris';
 
 const DEFAULT_PAGE: Pagination = { offset: 0, limit: 50 };
 const MAX_PAGE_LIMIT = 300;
@@ -353,7 +353,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 await openCommitGitlinkDiff(repo, message);
                 return;
             }
-            const { left, right } = await commitFileDiffUris(repo.cwd, message);
+            const { left, right } = await commitFileTempDiffUris(repo, repo.cwd, message);
             await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(message.filePath)} (${message.commitHash.substring(0, 7)})`);
         } catch (error) {
             this.postMessage({

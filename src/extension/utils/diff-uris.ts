@@ -43,6 +43,31 @@ export async function commitFileDiffUris(cwd: string, file: CommitDiffFile): Pro
     };
 }
 
+export async function commitFileTempDiffUris(repo: GitRepository, cwd: string, file: CommitDiffFile): Promise<DiffUris> {
+    const parentRef = file.parentHash ?? `${file.commitHash}~1`;
+    const status = file.status.charAt(0);
+    const origPath = file.origPath ?? file.filePath;
+
+    if (status === 'A') {
+        return {
+            left: await emptyDiffUri(file.commitHash, file.filePath, 'parent'),
+            right: await refBlobUri(repo, cwd, file.commitHash, file.filePath, 'commit'),
+        };
+    }
+
+    if (status === 'D') {
+        return {
+            left: await refBlobUri(repo, cwd, parentRef, origPath, 'parent'),
+            right: await emptyDiffUri(file.commitHash, file.filePath, 'commit'),
+        };
+    }
+
+    return {
+        left: await refBlobUri(repo, cwd, parentRef, origPath, 'parent'),
+        right: await refBlobUri(repo, cwd, file.commitHash, file.filePath, 'commit'),
+    };
+}
+
 export async function emptyDiffUri(namespace: string, filePath: string, side: string): Promise<vscode.Uri> {
     return tempDiffUri(namespace, filePath, side, '');
 }

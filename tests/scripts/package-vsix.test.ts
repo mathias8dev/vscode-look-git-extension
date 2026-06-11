@@ -5,21 +5,20 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('package-vsix', () => {
-    it.skipIf(process.platform === 'win32')('packages the stable displayName and filename on every branch', () => {
+    it('packages the stable displayName and filename on every branch', () => {
         const repoRoot = process.cwd();
         const packageJsonPath = path.join(repoRoot, 'package.json');
         const originalPackageJson = fs.readFileSync(packageJsonPath, 'utf8');
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-package-vsix-'));
-        const bin = path.join(root, 'bin');
+        const vsceCliPath = path.join(root, 'vsce-test.js');
         const capturedManifestPath = path.join(root, 'captured-package.json');
         const capturedArgsPath = path.join(root, 'captured-vsce-args.txt');
-        fs.mkdirSync(bin);
 
         try {
-            writeExecutable(path.join(bin, 'vsce'), [
-                '#!/bin/sh',
-                'cp package.json "$LOOK_GIT_CAPTURE_MANIFEST"',
-                'printf "%s\\n" "$*" > "$LOOK_GIT_CAPTURE_ARGS"',
+            fs.writeFileSync(vsceCliPath, [
+                "const fs = require('node:fs');",
+                "fs.copyFileSync('package.json', process.env.LOOK_GIT_CAPTURE_MANIFEST);",
+                "fs.writeFileSync(process.env.LOOK_GIT_CAPTURE_ARGS, process.argv.slice(2).join('\\n'));",
                 '',
             ].join('\n'));
 
@@ -27,9 +26,9 @@ describe('package-vsix', () => {
                 cwd: repoRoot,
                 env: {
                     ...process.env,
+                    LOOK_GIT_VSCE_CLI: vsceCliPath,
                     LOOK_GIT_CAPTURE_ARGS: capturedArgsPath,
                     LOOK_GIT_CAPTURE_MANIFEST: capturedManifestPath,
-                    PATH: `${bin}${path.delimiter}${process.env.PATH ?? ''}`,
                 },
                 stdio: ['ignore', 'pipe', 'pipe'],
             });
@@ -49,10 +48,6 @@ describe('package-vsix', () => {
         }
     });
 });
-
-function writeExecutable(filePath: string, content: string): void {
-    fs.writeFileSync(filePath, content, { mode: 0o755 });
-}
 
 function readJsonObject(filePath: string): Record<string, unknown> {
     const value: unknown = JSON.parse(fs.readFileSync(filePath, 'utf8'));

@@ -656,10 +656,12 @@ describe('CommitHistoryViewProvider error propagation', () => {
         expect(view.messages).not.toContainEqual(expect.objectContaining({ type: 'history/error' }));
     });
 
-    it('opens commit history file diffs with parent and commit git URIs', async () => {
-        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(makeRepositoryMock({
+    it('opens commit history file diffs with parent and commit blob snapshots', async () => {
+        const repo = makeRepositoryMock({
             cwd: '/workspace',
-        })));
+            execRaw: vi.fn(async () => 'snapshot\n'),
+        });
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
         const view = makeWebviewView();
 
         provider.resolveWebviewView(view);
@@ -675,16 +677,16 @@ describe('CommitHistoryViewProvider error propagation', () => {
         await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === 'vscode.diff')).toBe(true));
         const call = getCommandCalls().find((entry) => entry.command === 'vscode.diff');
         expect(call?.args[0]).toMatchObject({
-            scheme: 'git',
-            path: '/workspace/src/old-name.ts',
-            query: JSON.stringify({ path: path.join('/workspace', 'src/old-name.ts'), ref: 'parent123456789' }),
+            scheme: 'file',
+            query: '',
         });
         expect(call?.args[1]).toMatchObject({
-            scheme: 'git',
-            path: '/workspace/src/new-name.ts',
-            query: JSON.stringify({ path: path.join('/workspace', 'src/new-name.ts'), ref: 'abc123456789' }),
+            scheme: 'file',
+            query: '',
         });
         expect(call?.args[2]).toBe('new-name.ts (abc1234)');
+        expect(repo.execRaw).toHaveBeenCalledWith(['-C', '/workspace', 'show', 'parent123456789:src/old-name.ts']);
+        expect(repo.execRaw).toHaveBeenCalledWith(['-C', '/workspace', 'show', 'abc123456789:src/new-name.ts']);
     });
 
     it('opens commit history submodule gitlink diffs as readonly diff output', async () => {
