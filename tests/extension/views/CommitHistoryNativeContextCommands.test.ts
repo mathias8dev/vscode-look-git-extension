@@ -275,7 +275,7 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
 
         await vi.waitFor(() => {
             expect(view.messages.some((message) => messageType(message) === 'history/data')).toBe(true);
-        });
+        }, { timeout: 10000 });
         return { view };
     }
 

@@ -677,12 +677,12 @@ describe('CommitHistoryViewProvider error propagation', () => {
         expect(call?.args[0]).toMatchObject({
             scheme: 'git',
             path: '/workspace/src/old-name.ts',
-            query: JSON.stringify({ path: '/workspace/src/old-name.ts', ref: 'parent123456789' }),
+            query: JSON.stringify({ path: path.join('/workspace', 'src/old-name.ts'), ref: 'parent123456789' }),
         });
         expect(call?.args[1]).toMatchObject({
             scheme: 'git',
             path: '/workspace/src/new-name.ts',
-            query: JSON.stringify({ path: '/workspace/src/new-name.ts', ref: 'abc123456789' }),
+            query: JSON.stringify({ path: path.join('/workspace', 'src/new-name.ts'), ref: 'abc123456789' }),
         });
         expect(call?.args[2]).toBe('new-name.ts (abc1234)');
     });

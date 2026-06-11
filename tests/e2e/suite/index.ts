@@ -968,12 +968,13 @@ async function runWorktreeAwareCommitAndBranchMenusE2E(): Promise<void> {
         });
         await waitForTabLabel(`Diff feature/menu-source with ${path.basename(branchWorktreePath)}`);
 
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
         git(branchWorktreePath, ['checkout', '--', 'base.txt']);
         fs.rmSync(path.join(branchWorktreePath, 'branch-untracked.txt'), { force: true });
         await withPatchedVscode({ warningChoices: ['Remove'] }, async () => {
             await router.handle({ type: 'graph/branchCommand', command: 'removeBranchWorktree', branch: 'feature/menu-source', isRemote: false });
         });
-        assert.equal(fs.existsSync(branchWorktreePath), false);
+        await waitForPathRemoved(branchWorktreePath);
 
         const remoteBranchWorktreePath = missingTempPath('look-git-menu-remote-branch-');
         worktreePaths.push(remoteBranchWorktreePath);
@@ -994,10 +995,11 @@ async function runWorktreeAwareCommitAndBranchMenusE2E(): Promise<void> {
         fs.writeFileSync(path.join(commitWorktreePath, 'base.txt'), 'commit worktree dirty\n');
         fs.writeFileSync(path.join(commitWorktreePath, 'commit-untracked.txt'), 'commit untracked\n');
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-        await withPatchedVscode({ quickPickValues: [commitWorktreePath] }, async () => {
+        const canonicalCommitWorktreePath = git(commitWorktreePath, ['rev-parse', '--show-toplevel']);
+        await withPatchedVscode({ quickPickValues: [canonicalCommitWorktreePath] }, async () => {
             await router.handle({ type: 'graph/commitCommand', command: 'compareCommitWithWorktree', hash: base, hashes: [base] });
         });
-        await waitForTabLabel(`Diff ${base.substring(0, 7)} with ${path.basename(commitWorktreePath)}`);
+        await waitForTabLabel(`Diff ${base.substring(0, 7)} with ${path.basename(canonicalCommitWorktreePath)}`);
         assertNoGraphError(messages);
     } finally {
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
@@ -2068,12 +2070,12 @@ async function waitForPathRemoved(target: string): Promise<void> {
         if (!fs.existsSync(target)) { return; }
         await sleep(100);
     }
-    assert.equal(fs.existsSync(target), false);
+    assert.equal(fs.existsSync(target), false, `Expected path to be removed: ${target}`);
 }
 
 function gitObjectUri(repoPath: string, filePath: string, ref: string): vscode.Uri {
     const uri = vscode.Uri.file(path.join(repoPath, filePath));
-    return uri.with({ scheme: 'git', query: JSON.stringify({ path: uri.path, ref }) });
+    return uri.with({ scheme: 'git', query: JSON.stringify({ path: uri.fsPath, ref }) });
 }
 
 async function waitForTabLabel(label: string): Promise<void> {

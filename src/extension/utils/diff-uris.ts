@@ -74,5 +74,5 @@ export async function tempDiffUri(
 }
 
 export function toGitUri(uri: vscode.Uri, ref: string): vscode.Uri {
-    return uri.with({ scheme: 'git', query: JSON.stringify({ path: uri.path, ref }) });
+    return uri.with({ scheme: 'git', query: JSON.stringify({ path: uri.fsPath, ref }) });
 }
