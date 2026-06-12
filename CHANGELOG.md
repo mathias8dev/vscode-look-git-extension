@@ -4,6 +4,13 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.0.5] - 2026-06-12
+
+### Added
+
+#### Documentation
+- Add annotated screenshots and an animated demo to the README and Marketplace listing, referenced by absolute URLs so they render on the Marketplace and in-editor Extensions view
+
 ## [1.0.4] - 2026-06-12
 
 ### Fixed
