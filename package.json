@@ -2,7 +2,7 @@
   "name": "look-git",
   "displayName": "Look Git",
   "description": "A modern Git extension with visual commit graph, changes panel, stash management, and commit history.",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "publisher": "mathias8dev",
   "engines": {
     "vscode": "^1.85.0"
@@ -2414,7 +2414,8 @@
     "test:watch": "vitest",
     "test:integration": "npm run compile && npm run compile:tests && node ./out/tests/integration/runTest.js",
     "test:e2e": "npm run compile && npm run compile:tests && node ./out/tests/e2e/runE2e.js",
-    "lint": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\" \"*.js\" \"*.mjs\" --max-warnings=0"
+    "lint": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\" \"*.js\" \"*.mjs\" --max-warnings=0",
+    "publish:ext": "npx @vscode/vsce publish"
   },
   "dependencies": {
     "react": "^19.2.0",

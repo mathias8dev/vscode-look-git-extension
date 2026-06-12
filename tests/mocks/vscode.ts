@@ -1,5 +1,7 @@
 // VS Code API mock for unit tests — mirrors the real API surface used by this extension
 
+import { resetErrorOutputChannel } from '../../src/extension/messaging/errorOutputChannel';
+
 export const TreeItemCollapsibleState = { None: 0, Collapsed: 1, Expanded: 2 } as const;
 export const ProgressLocation = { Notification: 15 } as const;
 export const InputBoxValidationSeverity = { Info: 1, Warning: 2, Error: 3 } as const;
@@ -320,6 +322,7 @@ export function resetMockVscode(): void {
     lm.reset();
     window.reset();
     workspace.reset();
+    resetErrorOutputChannel();
 }
 
 export function setWarningChoice(choice: string | undefined): void {

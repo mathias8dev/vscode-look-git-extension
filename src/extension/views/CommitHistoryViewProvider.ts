@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import type { GitBranch, GitCommit, GitFileChange, GitRepository, GitTag } from '../../application/ports/git-repository';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
-import type { ErrorCode, Pagination } from '../../protocol/shared/base';
+import type { ErrorCode, Pagination, RequestId } from '../../protocol/shared/base';
 import { OperationStatus } from '../../protocol/shared/operation';
 import type { RepoContext } from '../../core/git/domain/RepoContext';
 import type { CommitCommand } from '../../protocol/graph/messages';
@@ -10,6 +10,7 @@ import type { HistoryCommitDetails, HistoryCommitRef, HistoryContextTarget, Hist
 import type { HistoryCommitDetailsRequest, HistoryDataRequest, HistoryExtensionToWebviewMessage, HistoryOpenDiffRequest, HistoryOperationStatusPush, HistoryToolbarCommand, HistoryWebviewToExtensionMessage } from '../../protocol/history/messages';
 import { runCommitCommand } from '../commands/commit-commands';
 import { createErrorPayload } from '../messaging/errorSerialization';
+import { appendErrorToOutput, showErrorOutput } from '../messaging/errorOutputChannel';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
 import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { getWebviewHtml } from './webviewHtml';
@@ -114,14 +115,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             const data = await this.loadHistoryPage(DEFAULT_PAGE);
             this.postMessage({ type: 'history/data', data });
         } catch (error) {
-            this.postMessage({
-                type: 'history/error',
-                ...createErrorPayload(error, {
-                    code: 'refreshFailed',
-                    operation: 'history/refresh',
-                    recoverable: true,
-                }),
-            });
+            this.postHistoryError(error, 'history/refresh', 'refreshFailed');
         }
     }
 
@@ -147,7 +141,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 await this.handleToolbarCommand(message.command);
                 return;
             case 'history/showOutput':
-                await vscode.commands.executeCommand('workbench.action.output.toggleOutput');
+                showErrorOutput();
                 return;
         }
     }
@@ -162,15 +156,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 data,
             });
         } catch (error) {
-            this.postMessage({
-                type: 'history/error',
-                requestId: message.requestId,
-                ...createErrorPayload(error, {
-                    code: 'refreshFailed',
-                    operation: 'history/dataRequest',
-                    recoverable: true,
-                }),
-            });
+            this.postHistoryError(error, 'history/dataRequest', 'refreshFailed', message.requestId);
         }
     }
 
@@ -319,15 +305,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 details,
             });
         } catch (error) {
-            this.postMessage({
-                type: 'history/error',
-                requestId: message.requestId,
-                ...createErrorPayload(error, {
-                    code: 'refreshFailed',
-                    operation: 'history/commitDetails',
-                    recoverable: true,
-                }),
-            });
+            this.postHistoryError(error, 'history/commitDetails', 'refreshFailed', message.requestId);
         }
     }
 
@@ -356,14 +334,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             const { left, right } = await commitFileTempDiffUris(repo, repo.cwd, message);
             await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(message.filePath)} (${message.commitHash.substring(0, 7)})`);
         } catch (error) {
-            this.postMessage({
-                type: 'history/error',
-                ...createErrorPayload(error, {
-                    code: 'vscodeCommandFailed',
-                    operation: 'history/openDiff',
-                    recoverable: true,
-                }),
-            });
+            this.postHistoryError(error, 'history/openDiff', 'vscodeCommandFailed');
         }
     }
 
@@ -438,14 +409,17 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         });
     }
 
-    private postHistoryError(error: unknown, operation: string, code: ErrorCode): void {
+    private postHistoryError(error: unknown, operation: string, code: ErrorCode, requestId?: RequestId): void {
+        const payload = createErrorPayload(error, {
+            code,
+            operation,
+            recoverable: true,
+        });
+        appendErrorToOutput(payload.error, 'history');
         this.postMessage({
             type: 'history/error',
-            ...createErrorPayload(error, {
-                code,
-                operation,
-                recoverable: true,
-            }),
+            ...(requestId !== undefined ? { requestId } : {}),
+            ...payload,
         });
     }
 

@@ -11,7 +11,7 @@ import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHi
 import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
-import { commands, env, getCommandCalls, setQuickPickValue, workspace } from '../../mocks/vscode';
+import { commands, env, getCommandCalls, setQuickPickValue, window, workspace } from '../../mocks/vscode';
 
 describe('CommitHistoryViewProvider error propagation', () => {
     beforeEach(() => {
@@ -502,14 +502,26 @@ describe('CommitHistoryViewProvider error propagation', () => {
         }));
     });
 
-    it('opens the VS Code output panel from history operation notices', async () => {
-        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(makeRepositoryMock()));
+    it('writes history errors to the Look Git output channel and shows it on request', async () => {
+        const error = Object.assign(new Error('history failed'), { stderr: 'fatal: Authentication failed' });
+        const repo = makeRepositoryMock({
+            getLog: vi.fn(async () => { throw error; }),
+        });
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo));
         const view = makeWebviewView();
 
         provider.resolveWebviewView(view);
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'history/error',
+            error: expect.objectContaining({ details: 'fatal: Authentication failed' }),
+        })));
         view.messageHandler?.({ type: 'history/showOutput' });
 
-        expect(getCommandCalls()).toContainEqual({ command: 'workbench.action.output.toggleOutput', args: [] });
+        expect(window.outputChannels.at(-1)).toEqual(expect.objectContaining({
+            name: 'Look Git',
+            shown: true,
+        }));
+        expect(window.outputChannels.at(-1)?.lines.join('\n')).toContain('fatal: Authentication failed');
     });
 
     it('publishes from the history toolbar when the current branch has no upstream', async () => {

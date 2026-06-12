@@ -4,6 +4,13 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.0.4] - 2026-06-12
+
+### Fixed
+
+#### Commit History
+- Make the "Show Output" button on a failed operation reveal the Look Git output channel with the captured error, matching Look Graph, instead of toggling an empty output panel
+
 ## [1.0.3] - 2026-06-11
 
 ### Fixed
