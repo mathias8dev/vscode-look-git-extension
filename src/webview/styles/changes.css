@@ -131,7 +131,7 @@
 
 .commit-message-field {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     min-width: 0;
     min-height: var(--look-git-control-min-height, 26px);
     border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, #3c3c3c));
@@ -147,10 +147,14 @@
     flex: 1 1 0;
     min-width: 0;
     width: 100%;
+    box-sizing: border-box;
     min-height: calc(var(--look-git-control-min-height, 26px) - 2px);
+    max-height: 160px;
+    resize: none;
+    overflow-y: auto;
     border: none;
     outline: none;
-    padding: 0 8px;
+    padding: 3px 8px;
     color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc));
     background: transparent;
     font: inherit;

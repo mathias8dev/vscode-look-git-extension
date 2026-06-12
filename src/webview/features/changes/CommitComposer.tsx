@@ -37,7 +37,7 @@ export function CommitComposer({
     onOpenNativeMenu,
 }: CommitComposerProps) {
     const [message, setMessage] = useState('');
-    const inputRef = useRef<HTMLInputElement>(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
     const appliedGeneratedRequestIdRef = useRef<string | undefined>(undefined);
     const appliedSuccessFeedbackRef = useRef<CommitFeedback | undefined>(undefined);
     const ignoreSyntheticContextMenuRef = useRef(false);
@@ -66,6 +66,14 @@ export function CommitComposer({
         setMessage('');
     }, [feedback]);
 
+    // Grow the textarea to fit the message (multiline), capped by CSS max-height.
+    useEffect(() => {
+        const textarea = inputRef.current;
+        if (!textarea) { return; }
+        textarea.style.height = 'auto';
+        textarea.style.height = `${textarea.scrollHeight}px`;
+    }, [message]);
+
     const submitCommit = (mode: CommitMode) => {
         if (!canSubmitCommit({ message, mode, stagedCount, conflictState })) { return; }
         onCommit(message.trim(), mode);
@@ -92,9 +100,10 @@ export function CommitComposer({
     return (
         <section className="commit-composer" aria-label="Commit composer">
             <div className="commit-message-field">
-                <input
+                <textarea
                     ref={inputRef}
                     className="commit-message-input"
+                    rows={1}
                     value={message}
                     placeholder={commitPlaceholder(targetLabel)}
                     aria-label="Commit message"

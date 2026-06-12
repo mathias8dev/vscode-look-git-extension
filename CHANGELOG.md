@@ -4,6 +4,13 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.0.6] - 2026-06-12
+
+### Added
+
+#### Changes
+- Support multiline commit messages in the commit box — Enter inserts a new line, Ctrl/Cmd+Enter commits, and the field grows to fit the message
+
 ## [1.0.5] - 2026-06-12
 
 ### Added
