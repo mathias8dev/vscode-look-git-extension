@@ -2,6 +2,9 @@
 
 A modern, React-based Git extension for Visual Studio Code — featuring a visual commit graph, an enhanced changes panel with stash management, and an interactive commit history view.
 
+![Look Git — commit graph, changes panel, and commit history in action](docs/look-git/lookgit.gif)
+
+
 ## Features
 
 ### Changes Panel
@@ -30,7 +33,21 @@ A modern, React-based Git extension for Visual Studio Code — featuring a visua
 - **Commit details panel** — click any commit to see its full message, author, and changed files in a side panel
 - **Branch actions** — checkout, push, rename, delete, rebase, merge from the branch panel
 - **Worktree support** — add, remove, and open linked worktrees; WIP status fetched per worktree
-- **Filters** — search by text/hash, filter by branch, author, date range, or path
+- **Filters** — search by text/hash, filter by branch, author, or path
+
+## Screenshots
+
+### Overview
+
+![Look Git overview — Changes panel and Commit History in the sidebar, with the Look Graph open in the panel area](docs/look-git/linux.png)
+
+The Changes panel and Commit History live in the sidebar, while the Look Graph opens in the panel area — here showing a commit's context menu with the full set of commit actions.
+
+### Submodules, worktrees & conflicts
+
+![Look Git submodule support — first-class submodule and worktree entries alongside the modern conflicts editor](docs/look-git/submodules.png)
+
+First-class submodule and worktree support, plus the modern conflicts editor for resolving merges in place.
 
 ## Getting Started
 
@@ -47,7 +64,6 @@ A modern, React-based Git extension for Visual Studio Code — featuring a visua
 
 - The Look Graph view loads up to 300 commits per page by default
 - CI/CD pipeline status indicators are not shown on graph rows
-- Submodule graph navigation (browsing a submodule's own commit history) is not yet available
 
 ## License
 
