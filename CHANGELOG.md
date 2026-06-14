@@ -4,6 +4,13 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.0.8] - 2026-06-14
+
+### Added
+
+#### Commit History
+- Add **Show History for Selection...** to the editor Look Git context menu, opening paginated commit history for the selected line range in a floating history window
+
 ## [1.0.7] - 2026-06-14
 
 ### Added
