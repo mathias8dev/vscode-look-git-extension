@@ -76,11 +76,12 @@ describe('Graph branch commands against real git repos', () => {
     });
 
     it('creates, renames, and deletes a branch from a selected branch', async () => {
+        const messages: GraphExtensionToWebviewMessage[] = [];
         fixture.commitFile('base.txt', 'base\n', 'feat: base');
         fixture.git(['checkout', '-q', '-b', 'source']);
         const source = fixture.commitFile('source.txt', 'source\n', 'feat: source');
         fixture.git(['checkout', '-q', 'main']);
-        const router = routerFor(fixture.cwd);
+        const router = routerFor(fixture.cwd, messages);
 
         setInputBoxValue('created from source');
         await router.handle({ type: 'graph/branchCommand', command: 'newBranchFrom', branch: 'source', isRemote: false });
@@ -90,6 +91,11 @@ describe('Graph branch commands against real git repos', () => {
         setInputBoxValue('renamed/from-source');
         await router.handle({ type: 'graph/branchCommand', command: 'rename', branch: 'created-from-source', isRemote: false });
         expect(fixture.gitTrim(['rev-parse', 'renamed/from-source'])).toBe(source);
+        expect(messages).toContainEqual({
+            type: 'graph/branchFilterInvalidated',
+            branch: 'created-from-source',
+            repositoryScope: undefined,
+        });
         const renameInputOptions = getInputBoxOptions().at(-1) as { readonly validateInput?: (value: string) => unknown } | undefined;
         expect(renameInputOptions?.validateInput?.('feature bad:name')).toEqual({
             message: 'feature bad:name -> feature-bad-name',
@@ -104,6 +110,11 @@ describe('Graph branch commands against real git repos', () => {
         setWarningChoice('Delete');
         await router.handle({ type: 'graph/branchCommand', command: 'delete', branch: 'renamed/from-source', isRemote: false });
         expect(fixture.gitTrim(['branch', '--list', 'renamed/from-source'])).toBe('');
+        expect(messages).toContainEqual({
+            type: 'graph/branchFilterInvalidated',
+            branch: 'renamed/from-source',
+            repositoryScope: undefined,
+        });
     });
 
     it('refuses to delete the current branch', async () => {

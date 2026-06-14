@@ -285,6 +285,8 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
             return reduceGraphDataPush(state, message.data, message.repoId);
         case 'graph/submodulesPush':
             return reduceGraphSubmodulesPush(state, message.repositoryScope, message.submodules, message.repoId);
+        case 'graph/branchFilterInvalidated':
+            return reduceGraphBranchFilterInvalidated(state, message.branch, message.repositoryScope);
         case 'graph/refreshRequested':
             return startGraphReload(state, state.refreshVersion + 1);
         case 'graph/dataResponse':
@@ -365,6 +367,22 @@ function reduceGraphSubmodulesPush(
         submodules,
         repoId: repoId ?? state.repoId,
     };
+}
+
+function reduceGraphBranchFilterInvalidated(
+    state: GraphState,
+    branch: string,
+    repositoryScope: GraphRepositoryScope | undefined,
+): GraphState {
+    if (!sameRepositoryScope(repositoryScope, state.repositoryScope)) { return state; }
+    const nextState = state.selectedBranchFilter === branch
+        ? {
+            ...state,
+            selectedBranchFilter: undefined,
+            filters: { ...state.filters, branches: undefined },
+        }
+        : state;
+    return startGraphReload(nextState, nextState.refreshVersion + 1);
 }
 
 function isExpectedGraphResponse(state: GraphState, requestId: string, responseScope: GraphRepositoryScope | undefined): boolean {

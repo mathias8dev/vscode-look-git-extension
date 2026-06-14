@@ -29,6 +29,12 @@ export interface GraphRefreshRequestedPush {
     readonly type: 'graph/refreshRequested';
 }
 
+export interface GraphBranchFilterInvalidatedPush {
+    readonly type: 'graph/branchFilterInvalidated';
+    readonly branch: string;
+    readonly repositoryScope?: GraphRepositoryScope;
+}
+
 export interface GraphErrorPush {
     readonly type: 'graph/error';
     readonly requestId?: RequestId;
@@ -259,6 +265,7 @@ export type GraphExtensionToWebviewMessage =
     | RepoContextChangedPush
     | WebviewFontSizeChangedPush
     | GraphRefreshRequestedPush
+    | GraphBranchFilterInvalidatedPush
     | GraphDataPush
     | GraphSubmodulesPush
     | GraphDataResponse

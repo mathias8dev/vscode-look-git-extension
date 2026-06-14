@@ -34,6 +34,11 @@ import { appendErrorToOutput, showErrorOutput } from './errorOutputChannel';
 
 type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
 
+interface BranchFilterInvalidation {
+    readonly branch: string;
+    readonly repositoryScope?: GraphRepositoryScope;
+}
+
 export class GraphMessageRouter {
     private readonly pending = new Map<string, AbortController>();
     private operationSequence = 0;
@@ -346,7 +351,14 @@ export class GraphMessageRouter {
     private async handleBranchCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/branchCommand' }>): Promise<void> {
         const repo = await this.repositoryForScope(msg.repositoryScope);
         const shouldRefresh = await runBranchCommand(repo, msg.command, msg.branch, msg.isRemote, this.remoteCommands);
-        if (shouldRefresh) { await this.refreshAfterRepositoryChange(); }
+        if (!shouldRefresh) { return; }
+        // `delete` removes the branch and `rename` frees its old name; if the graph is
+        // filtered to that branch, the next reload would query a now-missing ref, so the
+        // webview has to drop the filter first.
+        const invalidatesBranchFilter = msg.command === 'delete' || msg.command === 'rename';
+        await this.refreshAfterRepositoryChange(invalidatesBranchFilter
+            ? { branch: msg.branch, repositoryScope: msg.repositoryScope }
+            : undefined);
     }
 
     private async handleWorktreeCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/worktreeCommand' }>): Promise<void> {
@@ -394,8 +406,16 @@ export class GraphMessageRouter {
         return `graph-op-${this.operationSequence}`;
     }
 
-    private async refreshAfterRepositoryChange(): Promise<void> {
-        this.requestGraphRefresh();
+    private async refreshAfterRepositoryChange(invalidatedBranchFilter?: BranchFilterInvalidation): Promise<void> {
+        if (invalidatedBranchFilter) {
+            this.postMessage({
+                type: 'graph/branchFilterInvalidated',
+                branch: invalidatedBranchFilter.branch,
+                repositoryScope: invalidatedBranchFilter.repositoryScope,
+            });
+        } else {
+            this.requestGraphRefresh();
+        }
         await this.onRepositoryUpdated();
     }
 

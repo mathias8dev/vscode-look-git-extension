@@ -338,6 +338,79 @@ describe('graphState', () => {
         expect(cleared.activeGraphRequestId).toBe(graphRequestId(2, 'replace'));
     });
 
+    it('clears the selected branch filter when that branch is invalidated (deleted or renamed)', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: graphData([commit('a')], 1, false),
+            },
+        });
+        const filtered = reduceGraphState(loaded, { type: 'setBranchFilter', branch: 'feature/login' });
+        const invalidated = reduceGraphState(filtered, {
+            type: 'message',
+            message: {
+                type: 'graph/branchFilterInvalidated',
+                branch: 'feature/login',
+            },
+        });
+
+        expect(invalidated.selectedBranchFilter).toBeUndefined();
+        expect(invalidated.filters.branches).toBeUndefined();
+        expect(invalidated.loading).toBe(true);
+        expect(invalidated.activeGraphRequestId).toBe(graphRequestId(2, 'replace'));
+    });
+
+    it('keeps a different branch filter when another branch is invalidated', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: graphData([commit('a')], 1, false),
+            },
+        });
+        const filtered = reduceGraphState(loaded, { type: 'setBranchFilter', branch: 'feature/login' });
+        const invalidated = reduceGraphState(filtered, {
+            type: 'message',
+            message: {
+                type: 'graph/branchFilterInvalidated',
+                branch: 'feature/other',
+            },
+        });
+
+        expect(invalidated.selectedBranchFilter).toBe('feature/login');
+        expect(invalidated.filters.branches).toEqual(['feature/login']);
+        expect(invalidated.loading).toBe(true);
+        expect(invalidated.activeGraphRequestId).toBe(graphRequestId(2, 'replace'));
+    });
+
+    it('ignores a branch-filter invalidation for a different repository scope', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: graphData([commit('a')], 1, false),
+            },
+        });
+        const filtered = reduceGraphState(loaded, { type: 'setBranchFilter', branch: 'feature/login' });
+        const ignored = reduceGraphState(filtered, {
+            type: 'message',
+            message: {
+                type: 'graph/branchFilterInvalidated',
+                branch: 'feature/login',
+                repositoryScope: { kind: 'submodule', path: 'libs/widget' },
+            },
+        });
+
+        // Mismatched scope: the filter must be left intact and no reload triggered.
+        expect(ignored).toBe(filtered);
+        expect(ignored.selectedBranchFilter).toBe('feature/login');
+        expect(ignored.activeGraphRequestId).toBe(graphRequestId(1, 'replace'));
+    });
+
     it('ignores commit details responses for commits that are no longer selected', () => {
         const selected = reduceGraphState(createInitialGraphState(), { type: 'selectCommit', hash: 'selected' });
         const stale = reduceGraphState(selected, {
