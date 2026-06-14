@@ -57,6 +57,35 @@ export async function queryCommitLog(
     return parseCommitLog(output);
 }
 
+export async function queryCommitLineRangeLog(
+    execRawReadonly: GitExec,
+    limit: number,
+    skip: number,
+    filePath: string,
+    startLine: number,
+    endLine: number,
+    signal?: AbortSignal,
+): Promise<GitCommit[]> {
+    const format = ['%H', '%h', '%s', '%an', '%ae', '%aI', '%P'].join(LOG_FIELD_SEP) + LOG_RECORD_SEP;
+    const args = [
+        'log',
+        '--no-patch',
+        `--format=${format}`,
+        `--max-count=${limit}`,
+        `--skip=${skip}`,
+        '-L',
+        `${startLine},${endLine}:${filePath}`,
+    ];
+    let output: string;
+    try {
+        output = await execRawReadonly(args, signal);
+    } catch (error) {
+        if (isUnbornCommitHistoryError(error, undefined)) { return []; }
+        throw error;
+    }
+    return parseCommitLog(output);
+}
+
 export async function queryAllBranches(
     execRawReadonly: GitExec,
     getCurrentBranch: (signal?: AbortSignal) => Promise<string>,

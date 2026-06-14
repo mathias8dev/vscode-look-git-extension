@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GitExec } from '../../../src/core/git/git-exec';
-import { queryCommitLog, queryGraphLog } from '../../../src/core/queries/queryGraph';
+import { queryCommitLineRangeLog, queryCommitLog, queryGraphLog } from '../../../src/core/queries/queryGraph';
 import { LOG_FIELD_SEP, LOG_RECORD_SEP } from '../../../src/core/parsing/parseLog';
 import { expectItem } from '../../helpers/assertions';
 
@@ -313,5 +313,29 @@ describe('queryCommitLog', () => {
         await expect(queryCommitLog(failingExec(gitError(
             "fatal: ambiguous argument 'feature/missing': unknown revision or path not in the working tree.",
         )), 25, 0, 'feature/missing')).rejects.toThrow('feature/missing');
+    });
+});
+
+describe('queryCommitLineRangeLog', () => {
+    it('uses metadata-only line range history arguments', async () => {
+        const calls: string[][] = [];
+        await queryCommitLineRangeLog(recordingExec(calls), 25, 50, 'src/app.ts', 3, 8);
+
+        const args = expectItem(calls, 0);
+        expect(args).toEqual(expect.arrayContaining([
+            'log',
+            '--no-patch',
+            '--max-count=25',
+            '--skip=50',
+            '-L',
+            '3,8:src/app.ts',
+        ]));
+        expect(args.indexOf('--no-patch')).toBeLessThan(args.indexOf('-L'));
+    });
+
+    it('returns an empty history when line range history has no commits yet', async () => {
+        await expect(queryCommitLineRangeLog(failingExec(gitError(
+            "fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree.",
+        )), 25, 0, 'src/app.ts', 3, 8)).resolves.toEqual([]);
     });
 });

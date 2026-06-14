@@ -4,7 +4,7 @@ import type { GitCommit, GitFileChange, GitGraphCommit } from '../../core/git/do
 import type { GitBranch, GitStash, GitStatus, GitTag } from '../../core/git/domain/GitStatus';
 import type { GitSubmodule, GitWorktree } from '../../core/git/domain/GitWorktree';
 import type { GitRepository, GraphLogFilters } from '../../application/ports/git-repository';
-import { queryCommitFiles, queryCommitLog, queryCommitMessage, queryAllBranches, queryAllTags, queryCurrentBranch, queryGraphLog, queryRemotes, queryUserName } from '../../core/queries/queryGraph';
+import { queryCommitFiles, queryCommitLog, queryCommitLineRangeLog, queryCommitMessage, queryAllBranches, queryAllTags, queryCurrentBranch, queryGraphLog, queryRemotes, queryUserName } from '../../core/queries/queryGraph';
 import { queryStatus, queryStashFiles, queryStashList, querySubmodulePaths } from '../../core/queries/queryStatus';
 import { addWorktree, queryWorktrees, removeWorktree } from '../../core/queries/queryWorktrees';
 import { querySubmoduleStatus, updateAllSubmodules, updateSubmodule } from '../../core/queries/querySubmodules';
@@ -67,6 +67,10 @@ export class ScopedGitRepository implements GitRepository {
 
     getLogForRefAndPath(ref: string, pathFilter: string, limit: number, skip: number, signal?: AbortSignal): Promise<readonly GitCommit[]> {
         return queryCommitLog(this.raw, limit, skip, ref, pathFilter, signal);
+    }
+
+    getLogForLineRange(filePath: string, startLine: number, endLine: number, limit: number, skip: number, signal?: AbortSignal): Promise<readonly GitCommit[]> {
+        return queryCommitLineRangeLog(this.raw, limit, skip, filePath, startLine, endLine, signal);
     }
 
     getGraphLog(maxCount: number, branches?: readonly string[], pathFilter?: string, filters?: GraphLogFilters, signal?: AbortSignal): Promise<readonly GitGraphCommit[]> {

@@ -216,6 +216,12 @@
         "icon": "$(history)"
       },
       {
+        "command": "lookGit.file.showHistoryForSelection",
+        "title": "Show History for Selection...",
+        "category": "Look Git",
+        "icon": "$(history)"
+      },
+      {
         "command": "lookGit.history.selectRepositoryScope",
         "title": "Select Repository Scope",
         "category": "Look Git",
@@ -1270,6 +1276,10 @@
         "label": "Look Git"
       },
       {
+        "id": "lookGit.editor.contextMenu",
+        "label": "Look Git"
+      },
+      {
         "id": "lookGit.changes.submodule.commitMenu",
         "label": "Commit"
       },
@@ -1308,7 +1318,7 @@
       ],
       "editor/context": [
         {
-          "submenu": "lookGit.file.contextMenu",
+          "submenu": "lookGit.editor.contextMenu",
           "when": "resourceScheme == file",
           "group": "lookGit@1"
         }
@@ -1318,6 +1328,33 @@
           "command": "lookGit.file.showHistory",
           "when": "resourceScheme == file",
           "group": "1_local_history@1"
+        },
+        {
+          "command": "lookGit.history.push",
+          "when": "resourceScheme == file",
+          "group": "2_git@1"
+        },
+        {
+          "command": "lookGit.history.pull",
+          "when": "resourceScheme == file",
+          "group": "2_git@2"
+        },
+        {
+          "command": "lookGit.history.fetchAll",
+          "when": "resourceScheme == file",
+          "group": "2_git@3"
+        }
+      ],
+      "lookGit.editor.contextMenu": [
+        {
+          "command": "lookGit.file.showHistory",
+          "when": "resourceScheme == file",
+          "group": "1_local_history@1"
+        },
+        {
+          "command": "lookGit.file.showHistoryForSelection",
+          "when": "resourceScheme == file && editorHasSelection",
+          "group": "1_local_history@2"
         },
         {
           "command": "lookGit.history.push",

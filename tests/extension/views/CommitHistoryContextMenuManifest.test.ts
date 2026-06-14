@@ -31,14 +31,17 @@ interface LookGitContextMenuActionFixture {
 }
 
 const lookGitFileContextMenuFixture = {
-    submenu: {
+    explorerSubmenu: {
         id: 'lookGit.file.contextMenu',
         label: 'Look Git',
     },
-    parentMenus: ['explorer/context', 'editor/context'],
+    editorSubmenu: {
+        id: 'lookGit.editor.contextMenu',
+        label: 'Look Git',
+    },
     parentWhen: 'resourceScheme == file',
     parentGroup: 'lookGit@1',
-    actions: [
+    sharedActions: [
         {
             command: 'lookGit.file.showHistory',
             title: 'Show History...',
@@ -62,6 +65,14 @@ const lookGitFileContextMenuFixture = {
             title: 'Fetch from All Remotes',
             group: '2_git@3',
             when: 'resourceScheme == file',
+        },
+    ] satisfies readonly LookGitContextMenuActionFixture[],
+    editorOnlyActions: [
+        {
+            command: 'lookGit.file.showHistoryForSelection',
+            title: 'Show History for Selection...',
+            group: '1_local_history@2',
+            when: 'resourceScheme == file && editorHasSelection',
         },
     ] satisfies readonly LookGitContextMenuActionFixture[],
 } as const;
@@ -132,34 +143,29 @@ describe('Commit History native context menu manifest', () => {
 
 function expectLookGitFileContextMenu(pkg: PackageJson): void {
     expect(pkg.contributes?.submenus).toEqual(expect.arrayContaining([
-        expect.objectContaining(lookGitFileContextMenuFixture.submenu),
+        expect.objectContaining(lookGitFileContextMenuFixture.explorerSubmenu),
+        expect.objectContaining(lookGitFileContextMenuFixture.editorSubmenu),
     ]));
 
-    for (const menuId of lookGitFileContextMenuFixture.parentMenus) {
-        const parentMenu = pkg.contributes?.menus?.[menuId] ?? [];
-        expect(parentMenu).toEqual(expect.arrayContaining([
-            expect.objectContaining({
-                submenu: lookGitFileContextMenuFixture.submenu.id,
-                when: lookGitFileContextMenuFixture.parentWhen,
-                group: lookGitFileContextMenuFixture.parentGroup,
-            }),
-        ]));
-        const parentCommands = parentMenu
-            .map((entry) => entry.command)
-            .filter((command): command is string => command !== undefined);
-        expect(parentCommands).not.toEqual(expect.arrayContaining(
-            lookGitFileContextMenuFixture.actions.map((action) => action.command),
-        ));
-    }
+    expectParentSubmenu(pkg, 'explorer/context', lookGitFileContextMenuFixture.explorerSubmenu.id);
+    expectParentSubmenu(pkg, 'editor/context', lookGitFileContextMenuFixture.editorSubmenu.id);
 
-    const submenu = pkg.contributes?.menus?.[lookGitFileContextMenuFixture.submenu.id] ?? [];
+    const explorerSubmenu = pkg.contributes?.menus?.[lookGitFileContextMenuFixture.explorerSubmenu.id] ?? [];
+    const editorSubmenu = pkg.contributes?.menus?.[lookGitFileContextMenuFixture.editorSubmenu.id] ?? [];
 
-    for (const action of lookGitFileContextMenuFixture.actions) {
+    for (const action of lookGitFileContextMenuFixture.sharedActions) {
         expect(pkg.contributes?.commands?.find((entry) => entry.command === action.command)).toMatchObject({
             command: action.command,
             title: action.title,
         });
-        expect(submenu).toEqual(expect.arrayContaining([
+        expect(explorerSubmenu).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                command: action.command,
+                when: action.when,
+                group: action.group,
+            }),
+        ]));
+        expect(editorSubmenu).toEqual(expect.arrayContaining([
             expect.objectContaining({
                 command: action.command,
                 when: action.when,
@@ -167,4 +173,39 @@ function expectLookGitFileContextMenu(pkg: PackageJson): void {
             }),
         ]));
     }
+
+    for (const action of lookGitFileContextMenuFixture.editorOnlyActions) {
+        expect(pkg.contributes?.commands?.find((entry) => entry.command === action.command)).toMatchObject({
+            command: action.command,
+            title: action.title,
+        });
+        expect(explorerSubmenu).not.toEqual(expect.arrayContaining([
+            expect.objectContaining({ command: action.command }),
+        ]));
+        expect(editorSubmenu).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                command: action.command,
+                when: action.when,
+                group: action.group,
+            }),
+        ]));
+    }
+}
+
+function expectParentSubmenu(pkg: PackageJson, menuId: string, submenuId: string): void {
+    const parentMenu = pkg.contributes?.menus?.[menuId] ?? [];
+    expect(parentMenu).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+            submenu: submenuId,
+            when: lookGitFileContextMenuFixture.parentWhen,
+            group: lookGitFileContextMenuFixture.parentGroup,
+        }),
+    ]));
+    const parentCommands = parentMenu
+        .map((entry) => entry.command)
+        .filter((command): command is string => command !== undefined);
+    expect(parentCommands).not.toEqual(expect.arrayContaining([
+        ...lookGitFileContextMenuFixture.sharedActions.map((action) => action.command),
+        ...lookGitFileContextMenuFixture.editorOnlyActions.map((action) => action.command),
+    ]));
 }

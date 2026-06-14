@@ -194,6 +194,21 @@ describe('GitProcessRepository', () => {
         expect(log.map((commit) => commit.message)).toEqual(['tracked update', 'base tracked']);
     });
 
+    it('getLogForLineRange returns commits that touched the selected line range', async () => {
+        const r = repo();
+        r.write('tracked.txt', 'one\ntwo\nthree\n');
+        r.commit('base tracked');
+        r.write('tracked.txt', 'one\nTWO\nthree\n');
+        r.commit('selected line update');
+        r.write('tracked.txt', 'ONE\nTWO\nthree\n');
+        r.commit('other line update');
+
+        const git = new GitProcessRepository(r.cwd);
+        const log = await git.getLogForLineRange('tracked.txt', 2, 2, 10, 0);
+
+        expect(log.map((commit) => commit.message)).toEqual(['selected line update', 'base tracked']);
+    });
+
     it('getAllBranches updates behind counts after fetching all remotes', async () => {
         const fixture = createRemoteWorkflowFixture();
         cleanups.push({ cleanup: fixture.cleanup });

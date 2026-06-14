@@ -62,6 +62,7 @@ const HISTORY_FILE_VIEW_COMMANDS: readonly { readonly id: string; readonly mode:
     { id: 'lookGit.history.viewAsTree', mode: 'tree' },
 ];
 const SHOW_FILE_HISTORY_COMMAND = 'lookGit.file.showHistory';
+const SHOW_FILE_HISTORY_FOR_SELECTION_COMMAND = 'lookGit.file.showHistoryForSelection';
 
 export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     static readonly viewType = 'lookGit.commitHistory';
@@ -105,6 +106,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             ...HISTORY_TITLE_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, (uri?: vscode.Uri) => this.handleToolbarCommand(command, uri))),
             ...HISTORY_FILE_VIEW_COMMANDS.map(({ id, mode }) => vscode.commands.registerCommand(id, () => this.applyFileViewMode(mode))),
             vscode.commands.registerCommand(SHOW_FILE_HISTORY_COMMAND, (uri?: vscode.Uri) => this.showFileHistory(uri)),
+            vscode.commands.registerCommand(SHOW_FILE_HISTORY_FOR_SELECTION_COMMAND, () => this.showFileHistoryForSelection()),
             vscode.commands.registerCommand('lookGit.history.refresh', () => this.refresh()),
             vscode.commands.registerCommand('lookGit.history.goToChildCommit', () => this.selectContextCommit('child')),
             vscode.commands.registerCommand('lookGit.history.goToParentCommit', () => this.selectContextCommit('parent')),
@@ -355,10 +357,31 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async openFileHistoryPanel(repo: GitRepository, pathFilter: string): Promise<void> {
+    async showFileHistoryForSelection(): Promise<void> {
+        try {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) { throw new Error('No editor selection is active.'); }
+            const targetUri = editor.document.uri;
+            if (targetUri.scheme !== 'file') { throw new Error('Selection history is only available for local files.'); }
+            const selection = selectionLineRange(editor.selection);
+            if (!selection) { throw new Error('Select one or more lines to show selection history.'); }
+
+            const repo = await this.repositoryForFileContext(targetUri);
+            const relativePath = repoRelativePath(repo.cwd, targetUri.fsPath);
+            await this.openFileHistoryPanel(repo, relativePath, selection);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            await vscode.window.showErrorMessage(message);
+            this.postHistoryError(error, 'history/showFileHistoryForSelection', 'validationFailed');
+        }
+    }
+
+    private async openFileHistoryPanel(repo: GitRepository, pathFilter: string, lineRange?: LineRange): Promise<void> {
         const panel = vscode.window.createWebviewPanel(
             'lookGit.fileHistory',
-            `Look Git History: ${path.basename(pathFilter)}`,
+            lineRange
+                ? `Look Git History: ${path.basename(pathFilter)}:${lineRange.startLine}-${lineRange.endLine}`
+                : `Look Git History: ${path.basename(pathFilter)}`,
             vscode.ViewColumn.Active,
             {
                 enableScripts: true,
@@ -370,6 +393,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             this.extensionUri,
             repo,
             pathFilter,
+            lineRange,
             (target) => {
                 this.contextTarget = target;
                 this.contextRepository = repo;
@@ -598,11 +622,17 @@ interface HistoryRefCache {
 interface LoadHistoryPageOptions {
     readonly selectedHistoryRef?: string;
     readonly pathFilter?: string;
+    readonly lineRange?: LineRange;
     readonly loadRefs: (repo: GitRepository) => Promise<HistoryRefCache>;
 }
 
 interface HistoryRepositoryScope {
     readonly path: string;
+}
+
+interface LineRange {
+    readonly startLine: number;
+    readonly endLine: number;
 }
 
 class FileHistoryPanelController {
@@ -613,6 +643,7 @@ class FileHistoryPanelController {
         private readonly extensionUri: vscode.Uri,
         private readonly repo: GitRepository,
         private readonly pathFilter: string,
+        private readonly lineRange: LineRange | undefined,
         private readonly onContextTarget: (target: HistoryContextTarget) => void,
     ) {
         this.panel.webview.options = {
@@ -673,6 +704,7 @@ class FileHistoryPanelController {
     private loadHistoryPage(page: Pagination): Promise<HistoryData> {
         return loadHistoryPageFor(this.repo, normalizePage(page), {
             pathFilter: this.pathFilter,
+            lineRange: this.lineRange,
             loadRefs: (repo) => this.loadRefs(repo),
         });
     }
@@ -740,7 +772,7 @@ async function loadHistoryPageFor(
 ): Promise<HistoryData> {
     const pageLimit = page.limit + 1;
     const [commits, refs] = await Promise.all([
-        loadHistoryCommits(repo, pageLimit, page.offset, options.selectedHistoryRef, options.pathFilter),
+        loadHistoryCommits(repo, pageLimit, page.offset, options.selectedHistoryRef, options.pathFilter, options.lineRange),
         options.loadRefs(repo),
     ]);
     const visibleCommits = commits.slice(0, page.limit);
@@ -764,7 +796,14 @@ function loadHistoryCommits(
     offset: number,
     selectedHistoryRef: string | undefined,
     pathFilter: string | undefined,
+    lineRange: LineRange | undefined,
 ): Promise<readonly GitCommit[]> {
+    if (lineRange && selectedHistoryRef) {
+        throw new Error('Selection history does not support branch filtering yet.');
+    }
+    if (lineRange && pathFilter) {
+        return repo.getLogForLineRange(pathFilter, lineRange.startLine, lineRange.endLine, limit, offset);
+    }
     if (selectedHistoryRef && pathFilter) {
         return repo.getLogForRefAndPath(selectedHistoryRef, pathFilter, limit, offset);
     }
@@ -875,6 +914,16 @@ function repoRelativePath(repoCwd: string, filePath: string): string {
         throw new Error('Selected file is outside the active repository.');
     }
     return relative.split(path.sep).join('/');
+}
+
+function selectionLineRange(selection: vscode.Selection | undefined): LineRange | undefined {
+    if (!selection) { return undefined; }
+    if (selection.anchor.line === selection.active.line && selection.anchor.character === selection.active.character) {
+        return undefined;
+    }
+    const startLine = Math.min(selection.anchor.line, selection.active.line) + 1;
+    const endLine = Math.max(selection.anchor.line, selection.active.line) + 1;
+    return { startLine, endLine };
 }
 
 function historyOperationLabel(operation: 'fetchAll' | 'pull' | 'push'): string {

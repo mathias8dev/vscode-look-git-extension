@@ -456,6 +456,47 @@ describe('CommitHistoryViewProvider error propagation', () => {
         disposables.forEach((disposable) => disposable.dispose());
     });
 
+    it('opens file history for the active editor selection from the native file context command', async () => {
+        const root = path.resolve('workspace');
+        const filePath = path.join(root, 'src', 'app.ts');
+        const repo = makeRepositoryMock({
+            cwd: root,
+            getLogForLineRange: vi.fn(async () => [commit('line123456789', 'fix: selected lines')]),
+        });
+        const repositoryResolver = { repositoryForUri: vi.fn(async () => repo) };
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/ext'),
+            makeRepositoryAccessor(repo),
+            async () => {},
+            undefined,
+            repositoryResolver,
+        );
+        const disposables = provider.registerNativeContextCommands();
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        await vi.waitFor(() => expect(repo.getLog).toHaveBeenCalledWith(51, 0));
+
+        const document = await workspace.openTextDocument(vscode.Uri.file(filePath));
+        const editor = await window.showTextDocument(document);
+        editor.selection = new vscode.Selection(new vscode.Position(2, 4), new vscode.Position(5, 7));
+
+        await vscode.commands.executeCommand('lookGit.file.showHistoryForSelection');
+
+        expect(window.webviewPanels).toHaveLength(1);
+        const panel = window.webviewPanels[0];
+        expect(panel).toEqual(expect.objectContaining({
+            viewType: 'lookGit.fileHistory',
+            title: 'Look Git History: app.ts:3-6',
+        }));
+
+        panel?.webview.messageHandler?.({ type: 'history/ready' });
+
+        await vi.waitFor(() => expect(repo.getLogForLineRange).toHaveBeenCalledWith('src/app.ts', 3, 6, 51, 0));
+        await vi.waitFor(() => expect(panel?.webview.messages.some((message) => isRecord(message) && message.type === 'history/data')).toBe(true));
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
     it('reuses branch and tag refs across history pagination', async () => {
         const repo = makeRepositoryMock({
             getLog: vi.fn(async () => [commit('abc123456789', 'feat: history page')]),

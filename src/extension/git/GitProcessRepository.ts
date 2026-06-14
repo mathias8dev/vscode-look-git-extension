@@ -7,7 +7,7 @@ import type { GitCommit, GitGraphCommit, GitFileChange } from '../../core/git/do
 import type { GitStatus, GitStash, GitBranch, GitTag } from '../../core/git/domain/GitStatus';
 import type { GitWorktree, GitSubmodule } from '../../core/git/domain/GitWorktree';
 import { queryStatus, querySubmodulePaths, queryStashList, queryStashFiles } from '../../core/queries/queryStatus';
-import { queryGraphLog, queryCommitLog, queryAllBranches, queryAllTags, queryCurrentBranch, queryUserName, queryRemotes, queryCommitFiles, queryCommitMessage } from '../../core/queries/queryGraph';
+import { queryGraphLog, queryCommitLog, queryCommitLineRangeLog, queryAllBranches, queryAllTags, queryCurrentBranch, queryUserName, queryRemotes, queryCommitFiles, queryCommitMessage } from '../../core/queries/queryGraph';
 import { queryWorktrees, addWorktree, removeWorktree } from '../../core/queries/queryWorktrees';
 import { querySubmoduleStatus, updateSubmodule, updateAllSubmodules } from '../../core/queries/querySubmodules';
 import { detectConflictStateFromFiles } from '../../core/parsing/parseStatus';
@@ -83,6 +83,9 @@ export class GitProcessRepository implements GitRepository {
     }
     getLogForRefAndPath(ref: string, pathFilter: string, limit: number, skip: number, signal?: AbortSignal): Promise<readonly GitCommit[]> {
         return queryCommitLog(this.roRaw, limit, skip, ref, pathFilter, signal);
+    }
+    getLogForLineRange(filePath: string, startLine: number, endLine: number, limit: number, skip: number, signal?: AbortSignal): Promise<readonly GitCommit[]> {
+        return queryCommitLineRangeLog(this.roRaw, limit, skip, filePath, startLine, endLine, signal);
     }
     getGraphLog(maxCount: number, branches?: readonly string[], pathFilter?: string, filters?: GraphLogFilters, signal?: AbortSignal): Promise<readonly GitGraphCommit[]> {
         return queryGraphLog(this.roRaw, maxCount, branches, pathFilter, filters, signal);
