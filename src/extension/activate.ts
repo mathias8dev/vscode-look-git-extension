@@ -9,6 +9,7 @@ import { getBuiltInGitApi } from './utils/gitExtension';
 import { registerReadonlyDiffDocumentProvider } from './utils/readonly-diff-documents';
 import { registerGitBlobDocumentProvider } from './utils/git-blob-documents';
 import { registerWebviewFontSizeSync } from './views/webview-font';
+import { GitRootRepositoryResolver } from './repositories/GitRepositoryResolver';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const gitApi = await getBuiltInGitApi();
@@ -21,6 +22,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         gitApi.repositories.find((r) => r.ui.selected) ?? gitApi.repositories[0];
 
     const repositories = new ActiveRepositoryRegistry();
+    const repositoryResolver = new GitRootRepositoryResolver(repositories);
     const remoteCommands = defaultRemoteCommandBackend;
     const graphRepositoryRefreshers: Array<() => Promise<void>> = [];
     const graphProvider = new GraphViewProvider(context.extensionUri, repositories, async () => {
@@ -28,7 +30,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }, remoteCommands);
     const refreshGraph = () => graphProvider.refresh();
     const changesProvider = new ChangesViewProvider(context.extensionUri, repositories, refreshGraph, remoteCommands);
-    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshGraph, remoteCommands);
+    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshGraph, remoteCommands, repositoryResolver);
     graphRepositoryRefreshers.push(() => changesProvider.refresh(), () => commitHistoryProvider.refresh());
 
     context.subscriptions.push(

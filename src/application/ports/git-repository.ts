@@ -26,6 +26,8 @@ export interface GitRepository {
 
     getLog(limit: number, skip: number, signal?: AbortSignal): Promise<readonly GitCommit[]>;
     getLogForRef(ref: string, limit: number, skip: number, signal?: AbortSignal): Promise<readonly GitCommit[]>;
+    getLogForPath(pathFilter: string, limit: number, skip: number, signal?: AbortSignal): Promise<readonly GitCommit[]>;
+    getLogForRefAndPath(ref: string, pathFilter: string, limit: number, skip: number, signal?: AbortSignal): Promise<readonly GitCommit[]>;
     getGraphLog(maxCount: number, branches?: readonly string[], pathFilter?: string, filters?: GraphLogFilters, signal?: AbortSignal): Promise<readonly GitGraphCommit[]>;
     getCommitFiles(commitHash: string, signal?: AbortSignal): Promise<readonly GitFileChange[]>;
     getCommitMessage(commitHash: string, signal?: AbortSignal): Promise<string>;

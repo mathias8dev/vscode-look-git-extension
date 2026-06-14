@@ -7,7 +7,7 @@ const WEBVIEW_CONTEXT = JSON.stringify({ preventDefaultContextMenuItems: true })
 export function getWebviewHtml(
     webview: vscode.Webview,
     extensionUri: vscode.Uri,
-    scriptName: 'changes' | 'graph' | 'history',
+    scriptName: 'changes' | 'fileHistory' | 'graph' | 'history',
 ): string {
     const nonce = crypto.randomBytes(16).toString('hex');
     const scriptUri = webview.asWebviewUri(

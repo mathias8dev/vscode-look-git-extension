@@ -288,6 +288,15 @@ describe('queryCommitLog', () => {
         expect(args.at(-1)).toBe('feature/history');
     });
 
+    it('passes the selected path after the revision separator', async () => {
+        const calls: string[][] = [];
+        await queryCommitLog(recordingExec(calls), 25, 50, 'feature/history', 'src/app.ts');
+
+        const args = expectItem(calls, 0);
+        expect(args).toEqual(expect.arrayContaining(['feature/history', '--', 'src/app.ts']));
+        expect(args.indexOf('--')).toBeGreaterThan(args.indexOf('feature/history'));
+    });
+
     it('returns an empty history when the current branch has no commits yet', async () => {
         await expect(queryCommitLog(failingExec(gitError(
             "Command failed: git log\nfatal: your current branch 'main' does not have any commits yet",

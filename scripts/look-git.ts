@@ -40,6 +40,8 @@ const scenarios = new Map<string, ScenarioSetup>([
     ['basics', setupBasics],
     ['empty', setupEmptyRepo],
     ['empty-repo', setupEmptyRepo],
+    ['file-context', setupFileContextMenu],
+    ['file-context-menu', setupFileContextMenu],
     ['merge-conflicts', setupMergeConflicts],
     ['merge-conflics', setupMergeConflicts],
     ['graph-heavy', setupGraphHeavy],
@@ -132,6 +134,7 @@ function printHelp(): void {
         '  ./lookGit setup merge-conflics',
         '  ./lookGit setup graph-heavy',
         '  ./lookGit setup empty-repo',
+        '  ./lookGit setup file-context-menu',
         '  ./lookGit setup remote',
         '  ./lookGit setup remote-only',
         '  ./lookGit setup unpublished-branch',
@@ -172,6 +175,7 @@ function uniqueScenarios(): readonly string[] {
     return [
         'basics',
         'empty-repo',
+        'file-context-menu',
         'graph-heavy',
         'merge-conflicts',
         'rebase-conflicts',
@@ -187,6 +191,7 @@ function uniqueScenarios(): readonly string[] {
 
 function canonicalScenarioName(name: string): string {
     if (name === 'empty') { return 'empty-repo'; }
+    if (name === 'file-context') { return 'file-context-menu'; }
     if (name === 'worktree') { return 'worktrees'; }
     if (name === 'remotes') { return 'remote'; }
     if (name === 'heavy-graph') { return 'graph-heavy'; }
@@ -465,6 +470,66 @@ function setupStashPopBlocked(target: string): void {
     write(target, 'src/app.ts', 'stashed\n');
     git(target, ['stash', 'push', '-m', 'wip(changes): blocked stash pop fixture', '--', 'src/app.ts']);
     write(target, 'src/app.ts', 'local unstaged\n');
+}
+
+function setupFileContextMenu(target: string, outputRoot: string): void {
+    const remoteRoot = path.join(outputRoot, '.file-context-menu-remotes');
+    fs.rmSync(remoteRoot, { recursive: true, force: true });
+    fs.mkdirSync(remoteRoot, { recursive: true });
+
+    initRepo(target);
+    write(target, '.gitignore', 'repos/\n');
+    write(target, 'README.md', '# File context menu fixture\n\nOpen this folder, then right-click files inside repos/* to verify Look Git resolves the clicked file repository.\n');
+    commit(target, 'docs(context): add active workspace fixture');
+    write(target, 'src/active-repo.ts', 'export const activeRepo = true;\n');
+    commit(target, 'feat(context): add active repository marker', { author: nextAuthor() });
+
+    setupHistoryTargetRepo(
+        path.join(target, 'repos', 'history-target'),
+        path.join(remoteRoot, 'history-target.git'),
+    );
+    setupPullConflictTargetRepo(
+        path.join(target, 'repos', 'pull-conflict-target'),
+        path.join(remoteRoot, 'pull-conflict-target.git'),
+        path.join(remoteRoot, 'pull-conflict-writer'),
+    );
+}
+
+function setupHistoryTargetRepo(repoPath: string, origin: string): void {
+    initBareRepo(origin);
+    initRepo(repoPath);
+    git(repoPath, ['remote', 'add', 'origin', origin]);
+    write(repoPath, 'README.md', '# History target\n\nRight-click src/app.ts and choose Look Git > Show History.\n');
+    commit(repoPath, 'docs(context): add history target overview', { author: nextAuthor() });
+    write(repoPath, 'src/app.ts', 'export const version = 1;\n');
+    commit(repoPath, 'feat(context): add file history baseline', { author: nextAuthor() });
+    write(repoPath, 'src/app.ts', 'export const version = 2;\n');
+    commit(repoPath, 'feat(context): update file history target', { author: nextAuthor() });
+    git(repoPath, ['push', '-q', '-u', 'origin', 'main']);
+    write(repoPath, 'src/app.ts', 'export const version = 3;\n');
+    commit(repoPath, 'feat(context): add local push candidate', { author: nextAuthor() });
+}
+
+function setupPullConflictTargetRepo(repoPath: string, origin: string, writerPath: string): void {
+    initBareRepo(origin);
+    initRepo(repoPath);
+    git(repoPath, ['remote', 'add', 'origin', origin]);
+    write(repoPath, 'README.md', '# Pull conflict target\n\nRight-click src/app.ts and choose Look Git > Pull to verify native conflict warnings.\n');
+    commit(repoPath, 'docs(context): add pull conflict target overview', { author: nextAuthor() });
+    write(repoPath, 'src/app.ts', 'export const value = "base";\n');
+    commit(repoPath, 'feat(context): add pull conflict baseline', { author: nextAuthor() });
+    git(repoPath, ['push', '-q', '-u', 'origin', 'main']);
+
+    fs.rmSync(writerPath, { recursive: true, force: true });
+    git(path.dirname(writerPath), ['clone', '-q', origin, writerPath]);
+    configureRepo(writerPath);
+    write(writerPath, 'src/app.ts', 'export const value = "remote";\n');
+    commit(writerPath, 'feat(context): add remote pull conflict side', { author: nextAuthor() });
+    git(writerPath, ['push', '-q', 'origin', 'main']);
+    git(repoPath, ['fetch', '-q', 'origin']);
+
+    write(repoPath, 'src/app.ts', 'export const value = "local";\n');
+    commit(repoPath, 'feat(context): add local pull conflict side', { author: nextAuthor() });
 }
 
 function setupRemote(target: string, outputRoot: string): void {

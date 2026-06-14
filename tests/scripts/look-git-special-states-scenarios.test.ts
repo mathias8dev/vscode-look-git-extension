@@ -30,6 +30,14 @@ function lines(output: string): string[] {
     return output.split('\n').filter(Boolean);
 }
 
+function aheadBehind(cwd: string, left: string, right: string): readonly [number, number] {
+    const [ahead, behind] = git(cwd, ['rev-list', '--left-right', '--count', `${left}...${right}`]).trim().split(/\s+/).map(Number);
+    if (ahead === undefined || behind === undefined) {
+        throw new Error(`Unable to parse ahead/behind for ${left}...${right}`);
+    }
+    return [ahead, behind];
+}
+
 function setupScenario(name: string): { readonly outputRoot: string; readonly repo: string; readonly stdout: string } {
     const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), `look-git-${name}-scenario-`));
     roots.push(outputRoot);
@@ -104,5 +112,22 @@ describe('lookGit special state setup scenarios', () => {
         expect(git(repo, ['status', '--porcelain', '-uall'])).toContain(' M src/app.ts');
         expect(gitSucceeds(repo, ['stash', 'pop', 'stash@{0}'])).toBe(false);
         expect(git(repo, ['stash', 'list', '--format=%s'])).toContain('wip(changes): blocked stash pop fixture');
+    });
+
+    it('creates a file-context-menu fixture with clicked-file repositories', () => {
+        const { repo, stdout } = setupScenario('file-context-menu');
+        const historyTarget = path.join(repo, 'repos', 'history-target');
+        const pullConflictTarget = path.join(repo, 'repos', 'pull-conflict-target');
+
+        expect(stdout).toContain(`Created file-context-menu: ${repo}`);
+        expect(git(repo, ['rev-parse', '--show-toplevel']).trim()).toBe(repo);
+        expect(git(historyTarget, ['rev-parse', '--show-toplevel']).trim()).toBe(historyTarget);
+        expect(git(pullConflictTarget, ['rev-parse', '--show-toplevel']).trim()).toBe(pullConflictTarget);
+        expect(git(historyTarget, ['log', '--format=%s', '--', 'src/app.ts'])).toContain('feat(context): update file history target');
+        expect(git(historyTarget, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', 'main@{u}']).trim()).toBe('origin/main');
+        expect(aheadBehind(historyTarget, 'main', 'origin/main')).toEqual([1, 0]);
+        expect(aheadBehind(pullConflictTarget, 'main', 'origin/main')).toEqual([1, 1]);
+        expect(gitSucceeds(pullConflictTarget, ['pull', '--no-rebase'])).toBe(false);
+        expect(git(pullConflictTarget, ['status', '--porcelain', '-uall'])).toContain('UU src/app.ts');
     });
 });

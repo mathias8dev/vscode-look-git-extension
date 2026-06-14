@@ -54,11 +54,19 @@ export class ScopedGitRepository implements GitRepository {
     }
 
     getLog(limit: number, skip: number, signal?: AbortSignal): Promise<readonly GitCommit[]> {
-        return queryCommitLog(this.raw, limit, skip, undefined, signal);
+        return queryCommitLog(this.raw, limit, skip, undefined, undefined, signal);
     }
 
     getLogForRef(ref: string, limit: number, skip: number, signal?: AbortSignal): Promise<readonly GitCommit[]> {
-        return queryCommitLog(this.raw, limit, skip, ref, signal);
+        return queryCommitLog(this.raw, limit, skip, ref, undefined, signal);
+    }
+
+    getLogForPath(pathFilter: string, limit: number, skip: number, signal?: AbortSignal): Promise<readonly GitCommit[]> {
+        return queryCommitLog(this.raw, limit, skip, undefined, pathFilter, signal);
+    }
+
+    getLogForRefAndPath(ref: string, pathFilter: string, limit: number, skip: number, signal?: AbortSignal): Promise<readonly GitCommit[]> {
+        return queryCommitLog(this.raw, limit, skip, ref, pathFilter, signal);
     }
 
     getGraphLog(maxCount: number, branches?: readonly string[], pathFilter?: string, filters?: GraphLogFilters, signal?: AbortSignal): Promise<readonly GitGraphCommit[]> {

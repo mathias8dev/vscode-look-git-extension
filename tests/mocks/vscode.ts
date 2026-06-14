@@ -5,6 +5,7 @@ import { resetErrorOutputChannel } from '../../src/extension/messaging/errorOutp
 export const TreeItemCollapsibleState = { None: 0, Collapsed: 1, Expanded: 2 } as const;
 export const ProgressLocation = { Notification: 15 } as const;
 export const InputBoxValidationSeverity = { Info: 1, Warning: 2, Error: 3 } as const;
+export const ViewColumn = { Active: -1, Beside: -2, One: 1 } as const;
 
 export class TreeItem {
     public description: unknown;
@@ -218,6 +219,7 @@ type MockProgress = {
 };
 
 export const window = {
+    activeTextEditor: undefined as { readonly document: { readonly uri: TestUri } } | undefined,
     errorMessages: [] as string[],
     infoMessages: [] as string[],
     warningMessages: [] as Array<{ message: string; items: string[] }>,
@@ -242,6 +244,23 @@ export const window = {
         isTransient: boolean | undefined;
         texts: string[];
         visible: boolean;
+    }>,
+    webviewPanels: [] as Array<{
+        viewType: string;
+        title: string;
+        showOptions: unknown;
+        options: unknown;
+        webview: {
+            options: Record<string, unknown>;
+            html: string;
+            cspSource: string;
+            messages: unknown[];
+            messageHandler: ((message: unknown) => void) | undefined;
+            postMessage(message: unknown): Promise<boolean>;
+            onDidReceiveMessage(listener: (message: unknown) => unknown): { readonly dispose: () => void };
+            asWebviewUri(uri: TestUri): TestUri;
+        };
+        dispose(): void;
     }>,
     showErrorMessage(message: string, ..._items: string[]) { this.errorMessages.push(message); return Promise.resolve(this.errorChoice); },
     showInformationMessage(message: string) { this.infoMessages.push(message); return Promise.resolve(undefined); },
@@ -284,6 +303,33 @@ export const window = {
         this.terminals.push(terminal);
         return terminal;
     },
+    createWebviewPanel(viewType: string, title: string, showOptions: unknown, options: unknown) {
+        const panel = {
+            viewType,
+            title,
+            showOptions,
+            options,
+            webview: {
+                options: {},
+                html: '',
+                cspSource: 'vscode-webview:',
+                messages: [] as unknown[],
+                messageHandler: undefined as ((message: unknown) => void) | undefined,
+                postMessage(message: unknown): Promise<boolean> {
+                    this.messages.push(message);
+                    return Promise.resolve(true);
+                },
+                onDidReceiveMessage(listener: (message: unknown) => unknown) {
+                    this.messageHandler = (message: unknown) => { listener(message); };
+                    return { dispose() {} };
+                },
+                asWebviewUri(uri: TestUri): TestUri { return uri; },
+            },
+            dispose() {},
+        };
+        this.webviewPanels.push(panel);
+        return panel;
+    },
     withProgress(_opts: unknown, task: (progress: MockProgress, token: MockCancellationToken) => unknown) {
         const token: MockCancellationToken = {
             isCancellationRequested: false,
@@ -292,6 +338,7 @@ export const window = {
         return Promise.resolve(task({ report() {} }, token));
     },
     reset() {
+        this.activeTextEditor = undefined;
         this.errorMessages = [];
         this.infoMessages = [];
         this.warningMessages = [];
@@ -310,6 +357,7 @@ export const window = {
         this.shownDocuments = [];
         this.outputChannels = [];
         this.terminals = [];
+        this.webviewPanels = [];
     },
 };
 

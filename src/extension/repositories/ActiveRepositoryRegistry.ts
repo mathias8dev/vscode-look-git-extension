@@ -16,12 +16,17 @@ export interface ActiveRepositoryAccessor {
     requireRepository(): GitRepository;
 }
 
+export interface GitRepositoryStore extends ActiveRepositoryAccessor {
+    repositoryForRoot(cwd: string): GitRepository;
+}
+
 export type GitRepositoryFactory = (cwd: string) => GitRepository;
 
-export class ActiveRepositoryRegistry implements ActiveRepositoryAccessor, vscode.Disposable {
+export class ActiveRepositoryRegistry implements GitRepositoryStore, vscode.Disposable {
     private readonly onDidChangeEmitter = new vscode.EventEmitter<ActiveRepositoryState>();
     readonly onDidChange = this.onDidChangeEmitter.event;
 
+    private readonly repositoriesByCwd = new Map<string, GitRepository>();
     private repo: GitRepository | undefined;
     private context: RepoContext | undefined;
 
@@ -42,17 +47,27 @@ export class ActiveRepositoryRegistry implements ActiveRepositoryAccessor, vscod
         return this.repo;
     }
 
+    repositoryForRoot(cwd: string): GitRepository {
+        const normalizedCwd = path.normalize(cwd);
+        const existing = this.repositoriesByCwd.get(normalizedCwd);
+        if (existing) { return existing; }
+        const repo = this.createRepository(normalizedCwd);
+        this.repositoriesByCwd.set(normalizedCwd, repo);
+        return repo;
+    }
+
     setActiveRepository(cwd: string | undefined): void {
         if (!cwd) {
             this.update(undefined, undefined);
             return;
         }
 
-        if (this.repo?.cwd === cwd && this.context) {
+        const normalizedCwd = path.normalize(cwd);
+        if (this.repo?.cwd === normalizedCwd && this.context) {
             return;
         }
 
-        this.update(this.createRepository(cwd), createRepoContext(cwd));
+        this.update(this.repositoryForRoot(normalizedCwd), createRepoContext(normalizedCwd));
     }
 
     dispose(): void {

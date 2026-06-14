@@ -179,6 +179,21 @@ describe('GitProcessRepository', () => {
         expect(log.map((commit) => commit.message)).toEqual(['remote feature', 'remote base']);
     });
 
+    it('getLogForPath returns only commits that touched the selected file', async () => {
+        const r = repo();
+        r.write('tracked.txt', 'base');
+        r.commit('base tracked');
+        r.write('other.txt', 'other');
+        r.commit('other file');
+        r.write('tracked.txt', 'next');
+        r.commit('tracked update');
+
+        const git = new GitProcessRepository(r.cwd);
+        const log = await git.getLogForPath('tracked.txt', 10, 0);
+
+        expect(log.map((commit) => commit.message)).toEqual(['tracked update', 'base tracked']);
+    });
+
     it('getAllBranches updates behind counts after fetching all remotes', async () => {
         const fixture = createRemoteWorkflowFixture();
         cleanups.push({ cleanup: fixture.cleanup });

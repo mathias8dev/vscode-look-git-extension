@@ -40,11 +40,13 @@ export async function queryCommitLog(
     limit: number,
     skip: number,
     ref?: string,
+    pathFilter?: string,
     signal?: AbortSignal,
 ): Promise<GitCommit[]> {
     const format = ['%H', '%h', '%s', '%an', '%ae', '%aI', '%P'].join(LOG_FIELD_SEP) + LOG_RECORD_SEP;
     const args = ['log', `--format=${format}`, `--max-count=${limit}`, `--skip=${skip}`];
     if (ref) { args.push(ref); }
+    if (pathFilter) { args.push('--', pathFilter); }
     let output: string;
     try {
         output = await execRawReadonly(args, signal);
