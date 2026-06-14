@@ -66,6 +66,17 @@
           "default": 0,
           "minimum": 0,
           "markdownDescription": "Controls the font size used by Look Git webviews. Set to `0` to follow VS Code `editor.fontSize`."
+        },
+        "lookGit.commitMessageEditor": {
+          "type": "string",
+          "enum": ["window", "editor", "input"],
+          "enumDescriptions": [
+            "Edit in a separate floating window.",
+            "Edit in an editor tab.",
+            "Edit in a single-line input box."
+          ],
+          "default": "window",
+          "markdownDescription": "Controls how Look Git edits commit messages when rewording a commit. `window` opens a floating editor, `editor` opens an editor tab, and `input` uses the single-line input box."
         }
       }
     },

@@ -102,7 +102,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         this.router?.dispose();
         this.router = new GraphMessageRouter(this.repositories, (msg) => {
             webviewView.webview.postMessage(msg);
-        }, this.onRepositoryUpdated, this.remoteCommands);
+        }, this.onRepositoryUpdated, this.remoteCommands, undefined, undefined, undefined, this.extensionUri);
 
         webviewView.webview.onDidReceiveMessage((msg: GraphWebviewToExtensionMessage) => {
             if (msg.type === 'graph/contextTarget') {

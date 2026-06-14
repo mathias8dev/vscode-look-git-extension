@@ -1,5 +1,6 @@
 // VS Code API mock for unit tests — mirrors the real API surface used by this extension
 
+import { readFileSync } from 'node:fs';
 import { resetErrorOutputChannel } from '../../src/extension/messaging/errorOutputChannel';
 
 export const TreeItemCollapsibleState = { None: 0, Collapsed: 1, Expanded: 2 } as const;
@@ -39,6 +40,18 @@ export class ThemeColor {
 
 export class MarkdownString {
     constructor(public value: string) {}
+}
+
+export class Position {
+    constructor(public line: number, public character: number) {}
+}
+
+export class Selection {
+    constructor(public anchor: Position, public active: Position) {}
+}
+
+export class TabInputText {
+    constructor(public uri: TestUri) {}
 }
 
 export class CancellationTokenSource {
@@ -133,6 +146,18 @@ export const commands = {
 
 export type CommandCall = typeof commands.calls[number];
 
+type MockTextDocument = {
+    content: string;
+    language?: string;
+    languageId?: string;
+    readonly uri: TestUri;
+    isDirty: boolean;
+    saveCount: number;
+    getText(): string;
+    positionAt(offset: number): Position;
+    save(): Promise<boolean>;
+};
+
 interface MockExtension<T> {
     readonly isActive: boolean;
     readonly exports: T;
@@ -219,7 +244,7 @@ type MockProgress = {
 };
 
 export const window = {
-    activeTextEditor: undefined as { readonly document: { readonly uri: TestUri } } | undefined,
+    activeTextEditor: undefined as { readonly document: MockTextDocument; selection?: Selection } | undefined,
     errorMessages: [] as string[],
     infoMessages: [] as string[],
     warningMessages: [] as Array<{ message: string; items: string[] }>,
@@ -237,6 +262,28 @@ export const window = {
     warningChoice: undefined as string | undefined,
     warningChoices: [] as string[],
     shownDocuments: [] as unknown[],
+    tabGroups: {
+        all: [] as Array<{ tabs: Array<{ input: TabInputText }> }>,
+        closedTabs: [] as unknown[],
+        close(tabs: unknown[] | unknown, _preserveFocus?: boolean) {
+            const values = Array.isArray(tabs) ? tabs : [tabs];
+            this.closedTabs.push(...values);
+            for (const value of values) {
+                for (const group of this.all) {
+                    group.tabs = group.tabs.filter((tab) => tab !== value);
+                }
+                if (isTabWithTextInput(value)) {
+                    const document = workspace.textDocuments.find((candidate) => candidate.uri.toString() === value.input.uri.toString());
+                    if (document) { workspace.fireDidCloseTextDocument(document); }
+                }
+            }
+            return Promise.resolve(true);
+        },
+        reset() {
+            this.all = [];
+            this.closedTabs = [];
+        },
+    },
     terminals: [] as Array<{
         name: string;
         cwd: string | undefined;
@@ -250,6 +297,9 @@ export const window = {
         title: string;
         showOptions: unknown;
         options: unknown;
+        disposed: boolean;
+        reveal(column?: unknown): void;
+        onDidDispose(listener: () => unknown): { readonly dispose: () => void };
         webview: {
             options: Record<string, unknown>;
             html: string;
@@ -275,7 +325,17 @@ export const window = {
     showQuickPick() { return Promise.resolve(this.quickPickValues.shift() ?? this.quickPickValue); },
     showOpenDialog(options: unknown) { this.openDialogOptions.push(options); return Promise.resolve(this.openDialogValue); },
     showSaveDialog(options: unknown) { this.saveDialogOptions.push(options); return Promise.resolve(this.saveDialogValue); },
-    showTextDocument(document: unknown) { this.shownDocuments.push(document); return Promise.resolve(undefined); },
+    showTextDocument(document: MockTextDocument) {
+        this.shownDocuments.push(document);
+        const editor = { document, selection: undefined as Selection | undefined };
+        this.activeTextEditor = editor;
+        const tab = { input: new TabInputText(document.uri) };
+        if (this.tabGroups.all.length === 0) {
+            this.tabGroups.all.push({ tabs: [] });
+        }
+        this.tabGroups.all[0]?.tabs.push(tab);
+        return Promise.resolve(editor);
+    },
     createOutputChannel(name: string) {
         const channel = {
             name,
@@ -304,11 +364,15 @@ export const window = {
         return terminal;
     },
     createWebviewPanel(viewType: string, title: string, showOptions: unknown, options: unknown) {
+        const disposeEmitter = new EventEmitter<void>();
         const panel = {
             viewType,
             title,
             showOptions,
             options,
+            disposed: false,
+            reveal(_column?: unknown) {},
+            onDidDispose(listener: () => unknown) { return disposeEmitter.event(listener); },
             webview: {
                 options: {},
                 html: '',
@@ -325,7 +389,11 @@ export const window = {
                 },
                 asWebviewUri(uri: TestUri): TestUri { return uri; },
             },
-            dispose() {},
+            dispose() {
+                if (this.disposed) { return; }
+                this.disposed = true;
+                disposeEmitter.fire();
+            },
         };
         this.webviewPanels.push(panel);
         return panel;
@@ -355,9 +423,18 @@ export const window = {
         this.warningChoice = undefined;
         this.warningChoices = [];
         this.shownDocuments = [];
+        this.tabGroups.reset();
         this.outputChannels = [];
         this.terminals = [];
         this.webviewPanels = [];
+    },
+};
+
+export const languages = {
+    setTextDocumentLanguage(document: MockTextDocument, languageId: string) {
+        document.language = languageId;
+        document.languageId = languageId;
+        return Promise.resolve(document);
     },
 };
 
@@ -431,13 +508,6 @@ type TextDocumentOptions = {
     readonly language?: string;
 };
 
-type MockTextDocument = {
-    readonly content: string;
-    readonly language?: string;
-    readonly uri?: TestUri;
-    readonly isDirty?: boolean;
-};
-
 type MockConfigurationChangeEvent = {
     affectsConfiguration(section: string): boolean;
 };
@@ -447,6 +517,10 @@ export const workspace = {
     documents: [] as MockTextDocument[],
     contentProviders: new Map<string, TextDocumentContentProvider>(),
     configurationEmitter: new EventEmitter<MockConfigurationChangeEvent>(),
+    closeEmitter: new EventEmitter<MockTextDocument>(),
+    get textDocuments(): readonly MockTextDocument[] {
+        return this.documents;
+    },
     fs: {
         files: new Map<string, Uint8Array>(),
         writes: [] as Array<{ uri: unknown; content: Uint8Array }>,
@@ -478,6 +552,12 @@ export const workspace = {
     onDidChangeConfiguration(listener: (event: MockConfigurationChangeEvent) => unknown) {
         return this.configurationEmitter.event(listener);
     },
+    onDidCloseTextDocument(listener: (document: MockTextDocument) => unknown) {
+        return this.closeEmitter.event(listener);
+    },
+    fireDidCloseTextDocument(document: MockTextDocument): void {
+        this.closeEmitter.fire(document);
+    },
     fireConfigurationChanged(...sections: readonly string[]): void {
         const changedSections = new Set(sections);
         this.configurationEmitter.fire({
@@ -493,17 +573,17 @@ export const workspace = {
     openTextDocument(input: TextDocumentOptions | TestUri) {
         if (input instanceof TestUri) {
             const provider = this.contentProviders.get(input.scheme);
-            const document = {
+            const document = createMockTextDocument({
                 uri: input,
-                content: provider?.provideTextDocumentContent(input) ?? '',
+                content: provider?.provideTextDocumentContent(input) ?? readFileContent(input),
                 language: languageForPath(input.path),
-                isDirty: false,
-            };
+            });
             this.documents.push(document);
             return Promise.resolve(document);
         }
-        this.documents.push(input);
-        return Promise.resolve(input);
+        const document = createMockTextDocument({ content: input.content, language: input.language });
+        this.documents.push(document);
+        return Promise.resolve(document);
     },
     reset() {
         this.values = new Map();
@@ -511,9 +591,54 @@ export const workspace = {
         this.contentProviders = new Map();
         this.configurationEmitter.dispose();
         this.configurationEmitter = new EventEmitter<MockConfigurationChangeEvent>();
+        this.closeEmitter.dispose();
+        this.closeEmitter = new EventEmitter<MockTextDocument>();
         this.fs.reset();
     },
 };
+
+function createMockTextDocument(input: {
+    readonly content: string;
+    readonly language?: string;
+    readonly uri?: TestUri;
+}): MockTextDocument {
+    return {
+        content: input.content,
+        language: input.language,
+        languageId: input.language,
+        uri: input.uri ?? Uri.parse(`untitled:${workspace.documents.length}`),
+        isDirty: false,
+        saveCount: 0,
+        getText() { return this.content; },
+        positionAt(offset: number) {
+            const safeOffset = Math.max(0, Math.min(offset, this.content.length));
+            const before = this.content.slice(0, safeOffset);
+            const lines = before.split(/\r?\n/);
+            return new Position(lines.length - 1, lines.at(-1)?.length ?? 0);
+        },
+        save() {
+            this.saveCount += 1;
+            this.isDirty = false;
+            return Promise.resolve(true);
+        },
+    };
+}
+
+function readFileContent(uri: TestUri): string {
+    if (uri.scheme !== 'file') { return ''; }
+    try {
+        return readFileSync(uri.fsPath, 'utf8');
+    } catch {
+        return '';
+    }
+}
+
+function isTabWithTextInput(value: unknown): value is { readonly input: TabInputText } {
+    return typeof value === 'object'
+        && value !== null
+        && 'input' in value
+        && value.input instanceof TabInputText;
+}
 
 function languageForPath(path: string): string | undefined {
     if (path.endsWith('.diff')) { return 'diff'; }

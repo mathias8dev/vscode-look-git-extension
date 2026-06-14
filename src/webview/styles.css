@@ -1,6 +1,7 @@
 @import "@vscode/codicons/dist/codicon.css";
 @import "./styles/base.css";
 @import "./styles/changes.css";
+@import "./styles/commit-message.css";
 @import "./styles/history.css";
 @import "./styles/submodules.css";
 @import "./styles/graph.css";

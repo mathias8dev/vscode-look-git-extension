@@ -51,6 +51,7 @@ export class GraphMessageRouter {
         private readonly getGraphData = new GetGraphDataUseCase(),
         private readonly getCommitDetails = new GetCommitDetailsUseCase(),
         private readonly getWorktreeDetails = new GetWorktreeDetailsUseCase(),
+        private readonly extensionUri?: vscode.Uri,
     ) {}
 
     dispose(): void {
@@ -369,7 +370,7 @@ export class GraphMessageRouter {
 
     private async handleCommitCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/commitCommand' }>): Promise<void> {
         const repo = await this.repositoryForScope(msg.repositoryScope);
-        const shouldRefresh = await runCommitCommand(repo, msg.command, msg.hash, msg.hashes, this.remoteCommands, undefined, undefined, undefined, diffExplanationScopeFor(msg.repositoryScope));
+        const shouldRefresh = await runCommitCommand(repo, msg.command, msg.hash, msg.hashes, this.remoteCommands, undefined, undefined, undefined, diffExplanationScopeFor(msg.repositoryScope), this.extensionUri);
         if (shouldRefresh) { await this.refreshAfterRepositoryChange(); }
     }
 

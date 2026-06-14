@@ -19,7 +19,10 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
     const disposables: vscode.Disposable[] = [];
     const linkedWorktrees: Array<{ readonly repo: TempGitRepo; readonly path: string; readonly cleanupParent?: boolean }> = [];
 
-    beforeEach(resetVscodeMock);
+    beforeEach(() => {
+        resetVscodeMock();
+        workspace.values.set('lookGit.commitMessageEditor', 'input');
+    });
 
     afterEach(() => {
         while (disposables.length > 0) {

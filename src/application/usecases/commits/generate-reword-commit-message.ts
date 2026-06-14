@@ -1,23 +1,23 @@
-import type { CommitMessageGenerator } from '../../ports/commit-message-generator';
+import type { RewordCommitMessageGenerator } from '../../ports/commit-message-generator';
 import type { GitRepository } from '../../ports/git-repository';
 import { parseNameStatusZ } from '../../../core/parsing/parseNameStatus';
 import { normalizeGeneratedCommitMessage } from '../commit-message-normalization';
 
-const MAX_STAGED_DIFF_LENGTH = 32000;
+const MAX_COMMIT_DIFF_LENGTH = 32000;
 const RECENT_COMMIT_COUNT = 20;
 
-export interface GenerateCommitMessageResult {
+export interface GenerateRewordCommitMessageResult {
     readonly message: string;
 }
 
-export class GenerateCommitMessageUseCase {
-    constructor(private readonly generator: CommitMessageGenerator) {}
+export class GenerateRewordCommitMessageUseCase {
+    constructor(private readonly generator: RewordCommitMessageGenerator) {}
 
-    async execute(repo: GitRepository, signal?: AbortSignal): Promise<GenerateCommitMessageResult> {
-        const [nameStatusRaw, diffStat, stagedDiff, recentCommitSubjectsRaw] = await Promise.all([
-            repo.execRaw(['diff', '--cached', '--name-status', '-z', '--'], signal),
-            repo.exec(['diff', '--cached', '--stat', '--'], signal),
-            repo.execRaw(['diff', '--cached', '--find-renames', '--find-copies', '--unified=3', '--'], signal),
+    async execute(repo: GitRepository, commitHash: string, currentMessage: string, signal?: AbortSignal): Promise<GenerateRewordCommitMessageResult> {
+        const [nameStatusRaw, diffStat, commitDiff, recentCommitSubjectsRaw] = await Promise.all([
+            repo.execRaw(['diff-tree', '--no-commit-id', '--name-status', '-r', '-z', '--root', commitHash], signal),
+            repo.exec(['show', '--stat', '--format=', '--find-renames', '--find-copies', commitHash], signal),
+            repo.execRaw(['show', '--format=', '--find-renames', '--find-copies', '--unified=3', commitHash], signal),
             readRecentCommitSubjects(repo, signal),
         ]);
 
@@ -25,16 +25,17 @@ export class GenerateCommitMessageUseCase {
             const status = file.origPath ? `${file.status} ${file.origPath} -> ${file.filePath}` : `${file.status} ${file.filePath}`;
             return status.trim();
         });
-        if (changedFiles.length === 0 && !diffStat.trim() && !stagedDiff.trim()) {
-            throw new Error('Stage changes before generating a commit message.');
+        if (changedFiles.length === 0 && !diffStat.trim() && !commitDiff.trim()) {
+            throw new Error('No commit changes were found to generate a message.');
         }
 
-        const truncatedDiff = truncateText(stagedDiff, MAX_STAGED_DIFF_LENGTH);
-        const rawMessage = await this.generator.generateCommitMessage({
+        const truncatedDiff = truncateText(commitDiff, MAX_COMMIT_DIFF_LENGTH);
+        const rawMessage = await this.generator.generateRewordCommitMessage({
+            currentMessage,
             changedFiles,
             diffStat,
-            stagedDiff: truncatedDiff.text,
-            stagedDiffTruncated: truncatedDiff.truncated,
+            commitDiff: truncatedDiff.text,
+            commitDiffTruncated: truncatedDiff.truncated,
             recentCommitSubjects: splitLines(recentCommitSubjectsRaw),
         }, signal);
 
@@ -63,10 +64,9 @@ function truncateText(value: string, maxLength: number): { readonly text: string
     return { text: value.slice(0, maxLength), truncated: true };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
-}
-
 function isAbortError(error: unknown): boolean {
-    return isRecord(error) && error.name === 'AbortError';
+    return typeof error === 'object'
+        && error !== null
+        && 'name' in error
+        && error.name === 'AbortError';
 }

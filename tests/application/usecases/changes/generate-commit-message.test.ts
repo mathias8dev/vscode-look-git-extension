@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { CommitMessageGeneratorInput } from '../../../../src/application/ports/commit-message-generator';
-import { GenerateCommitMessageUseCase, normalizeGeneratedCommitMessage } from '../../../../src/application/usecases/changes/generate-commit-message';
+import { GenerateCommitMessageUseCase } from '../../../../src/application/usecases/changes/generate-commit-message';
+import { normalizeGeneratedCommitMessage } from '../../../../src/application/usecases/commit-message-normalization';
 import { makeRepositoryMock } from '../../../helpers/repositoryMock';
 
 describe('GenerateCommitMessageUseCase', () => {

@@ -3,6 +3,7 @@ export type CodiconName =
     | 'check'
     | 'chevron-down'
     | 'chevron-right'
+    | 'close'
     | 'comment-discussion'
     | 'discard'
     | 'diff'
@@ -20,6 +21,7 @@ export type CodiconName =
     | 'remove'
     | 'search'
     | 'source-control'
+    | 'sparkle'
     | 'trash'
     | 'unarchive'
     | 'warning';

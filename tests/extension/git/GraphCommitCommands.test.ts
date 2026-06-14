@@ -4,13 +4,14 @@ import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessag
 import type { GraphExtensionToWebviewMessage } from '../../../src/protocol/graph/messages';
 import { makeRepositoryAccessor } from '../../helpers/repositoryMock';
 import { createBareGitRepo, createTempGitRepo, type TempGitRepo } from '../../helpers/gitRepo';
-import { resetMockVscode, setInputBoxValue, setWarningChoice } from '../../mocks/vscode';
+import { resetMockVscode, setInputBoxValue, setWarningChoice, workspace } from '../../mocks/vscode';
 
 describe('Graph commit commands against real git repos', () => {
     let fixture: TempGitRepo;
 
     beforeEach(() => {
         resetMockVscode();
+        workspace.values.set('lookGit.commitMessageEditor', 'input');
         fixture = createTempGitRepo();
     });
 

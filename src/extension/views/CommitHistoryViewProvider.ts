@@ -409,6 +409,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 undefined,
                 undefined,
                 this.contextRepository ? undefined : this.selectedRepositoryScope ? { label: 'Submodule', value: this.selectedRepositoryScope.path } : undefined,
+                this.extensionUri,
             );
             if (shouldRefresh) { await this.refresh(); }
         } catch (error) {

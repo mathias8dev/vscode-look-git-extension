@@ -278,6 +278,7 @@ export function run(): Promise<void> {
                 await runResetActionE2E();
                 await runRevertActionE2E();
                 await runUndoActionE2E();
+                await runFloatingCommitMessageEditorE2E();
                 await runEditMessageActionE2E();
                 await runFixupActionE2E();
                 await runSquashActionE2E();
@@ -1381,7 +1382,56 @@ async function runUndoActionE2E(): Promise<void> {
     });
 }
 
+async function runFloatingCommitMessageEditorE2E(): Promise<void> {
+    const configuration = vscode.workspace.getConfiguration();
+    const inspected = configuration.inspect<string>('lookGit.commitMessageEditor');
+    const originalGlobalMode = inspected?.globalValue;
+    const originalWorkspaceMode = inspected?.workspaceValue;
+    await configuration.update('lookGit.commitMessageEditor', 'window', vscode.ConfigurationTarget.Global);
+    await configuration.update('lookGit.commitMessageEditor', 'window', vscode.ConfigurationTarget.Workspace);
+    try {
+        await withTempCommitRepo(async ({ fixture, head, router, messages }) => {
+            await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+            await withPatchedVscode({ interceptCommitMessagePanel: true, interceptFloatingWindowMove: true }, async (capture) => {
+                const edit = router.handle({ type: 'graph/commitCommand', command: 'editCommitMessage', hash: head, hashes: [head] });
+                await waitForCondition(
+                    () => capture.webviewPanel !== undefined,
+                    () => 'Expected Look Git commit message webview panel to open.',
+                );
+                capture.webviewPanel?.webview.messageHandler?.({ type: 'commitMessage/ready' });
+                expectLastCommitMessageInit(capture.webviewPanel, 'feat: head');
+
+                capture.webviewPanel?.webview.messageHandler?.({ type: 'commitMessage/apply', message: 'fix: edited through floating editor\n\nbody' });
+                await withTimeout(edit, 10000, () => commitMessageEditorDiagnostics('floating editor reword did not finish'));
+                assert.ok(capture.commandCalls.some((call) => call.command === 'workbench.action.moveEditorToNewWindow'));
+                assert.equal(capture.webviewPanel?.disposed, true);
+                assert.equal(git(fixture.cwd, ['log', '-1', '--format=%B']), 'fix: edited through floating editor\n\nbody');
+                assertNoGraphError(messages);
+            });
+        });
+    } finally {
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        await configuration.update('lookGit.commitMessageEditor', originalWorkspaceMode, vscode.ConfigurationTarget.Workspace);
+        await configuration.update('lookGit.commitMessageEditor', originalGlobalMode, vscode.ConfigurationTarget.Global);
+    }
+}
+
 async function runEditMessageActionE2E(): Promise<void> {
+    const configuration = vscode.workspace.getConfiguration();
+    const inspected = configuration.inspect<string>('lookGit.commitMessageEditor');
+    const originalGlobalMode = inspected?.globalValue;
+    const originalWorkspaceMode = inspected?.workspaceValue;
+    await configuration.update('lookGit.commitMessageEditor', 'input', vscode.ConfigurationTarget.Global);
+    await configuration.update('lookGit.commitMessageEditor', 'input', vscode.ConfigurationTarget.Workspace);
+    try {
+        await runEditMessageActionE2EBody();
+    } finally {
+        await configuration.update('lookGit.commitMessageEditor', originalWorkspaceMode, vscode.ConfigurationTarget.Workspace);
+        await configuration.update('lookGit.commitMessageEditor', originalGlobalMode, vscode.ConfigurationTarget.Global);
+    }
+}
+
+async function runEditMessageActionE2EBody(): Promise<void> {
     await withTempCommitRepo(async ({ fixture, head, router, messages }) => {
         await withPatchedVscode({ inputBoxValues: ['fix: edited head'] }, async () => {
             await router.handle({ type: 'graph/commitCommand', command: 'editCommitMessage', hash: head, hashes: [head] });
@@ -1716,7 +1766,7 @@ function routerFor(repoPath: string, messages: GraphExtensionToWebviewMessage[])
         currentContext: undefined,
         requireRepository: () => repo,
     };
-    return new GraphMessageRouter(accessor, (message) => { messages.push(message); });
+    return new GraphMessageRouter(accessor, (message) => { messages.push(message); }, async () => {}, undefined, undefined, undefined, undefined, vscode.Uri.file(repoRoot));
 }
 
 async function historyHarnessFor(
@@ -1955,11 +2005,30 @@ interface VscodePatchOptions {
     readonly interceptOpenFolder?: boolean;
     readonly interceptReveal?: boolean;
     readonly interceptTerminal?: boolean;
+    readonly interceptFloatingWindowMove?: boolean;
+    readonly interceptCommitMessagePanel?: boolean;
 }
 
 interface VscodePatchCapture {
     readonly commandCalls: Array<{ readonly command: string; readonly args: readonly unknown[] }>;
     readonly terminalTexts: string[];
+    webviewPanel?: E2EWebviewPanel;
+}
+
+interface E2EWebviewPanel {
+    readonly viewType: string;
+    disposed: boolean;
+    readonly webview: {
+        html: string;
+        messages: unknown[];
+        messageHandler?: (message: unknown) => void;
+        postMessage(message: unknown): Promise<boolean>;
+        onDidReceiveMessage(listener: (message: unknown) => unknown): vscode.Disposable;
+        asWebviewUri(uri: vscode.Uri): vscode.Uri;
+    };
+    reveal(column?: vscode.ViewColumn): void;
+    onDidDispose(listener: () => unknown): vscode.Disposable;
+    dispose(): void;
 }
 
 async function withPatchedVscode<T>(
@@ -1976,6 +2045,7 @@ async function withPatchedVscode<T>(
     const originalSaveDialog = vscode.window.showSaveDialog;
     const originalExecuteCommand = vscode.commands.executeCommand.bind(vscode.commands);
     const originalCreateTerminal = vscode.window.createTerminal;
+    const originalCreateWebviewPanel = vscode.window.createWebviewPanel;
 
     Object.defineProperty(vscode.window, 'showInputBox', {
         configurable: true,
@@ -1999,6 +2069,7 @@ async function withPatchedVscode<T>(
             capture.commandCalls.push({ command, args });
             if (options.interceptOpenFolder && command === 'vscode.openFolder') { return undefined; }
             if (options.interceptReveal && command === 'revealFileInOS') { return undefined; }
+            if (options.interceptFloatingWindowMove && command === 'workbench.action.moveEditorToNewWindow') { return undefined; }
             return originalExecuteCommand(command, ...args);
         },
     });
@@ -2016,6 +2087,17 @@ async function withPatchedVscode<T>(
             dispose() {},
         }),
     });
+    Object.defineProperty(vscode.window, 'createWebviewPanel', {
+        configurable: true,
+        value: (viewType: string, title: string, showOptions: vscode.ViewColumn, panelOptions: vscode.WebviewPanelOptions & vscode.WebviewOptions) => {
+            if (!options.interceptCommitMessagePanel || viewType !== 'lookGit.commitMessageEditor') {
+                return originalCreateWebviewPanel.call(vscode.window, viewType, title, showOptions, panelOptions);
+            }
+            const panel = createE2EWebviewPanel(viewType);
+            capture.webviewPanel = panel;
+            return panel;
+        },
+    });
 
     try {
         return await run(capture);
@@ -2026,7 +2108,39 @@ async function withPatchedVscode<T>(
         Object.defineProperty(vscode.window, 'showSaveDialog', { configurable: true, value: originalSaveDialog });
         Object.defineProperty(vscode.commands, 'executeCommand', { configurable: true, value: originalExecuteCommand });
         Object.defineProperty(vscode.window, 'createTerminal', { configurable: true, value: originalCreateTerminal });
+        Object.defineProperty(vscode.window, 'createWebviewPanel', { configurable: true, value: originalCreateWebviewPanel });
     }
+}
+
+function createE2EWebviewPanel(viewType: string): E2EWebviewPanel {
+    const disposeEmitter = new vscode.EventEmitter<void>();
+    return {
+        viewType,
+        disposed: false,
+        webview: {
+            html: '',
+            messages: [],
+            postMessage(message: unknown): Promise<boolean> {
+                this.messages.push(message);
+                return Promise.resolve(true);
+            },
+            onDidReceiveMessage(listener: (message: unknown) => unknown): vscode.Disposable {
+                this.messageHandler = (message: unknown) => { listener(message); };
+                return { dispose() {} };
+            },
+            asWebviewUri(uri: vscode.Uri): vscode.Uri { return uri; },
+        },
+        reveal() {},
+        onDidDispose(listener: () => unknown): vscode.Disposable {
+            return disposeEmitter.event(listener);
+        },
+        dispose() {
+            if (this.disposed) { return; }
+            this.disposed = true;
+            disposeEmitter.fire();
+            disposeEmitter.dispose();
+        },
+    };
 }
 
 function fsPathOf(value: unknown): string {
@@ -2091,6 +2205,35 @@ async function waitForTabLabel(label: string): Promise<void> {
         .flatMap((group) => group.tabs)
         .map((tab) => tab.label);
     assert.fail(`Expected an open diff tab containing "${label}". Open tabs: ${openLabels.join(', ')}`);
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, message: () => string): Promise<T> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+        return await Promise.race([
+            promise,
+            new Promise<T>((_resolve, reject) => {
+                timeout = setTimeout(() => { reject(new Error(message())); }, ms);
+            }),
+        ]);
+    } finally {
+        if (timeout) { clearTimeout(timeout); }
+    }
+}
+
+function commitMessageEditorDiagnostics(prefix: string): string {
+    const documents = vscode.workspace.textDocuments.map((document) => document.uri.toString());
+    const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs).map((tab) => tab.label);
+    return `${prefix}. Documents: ${documents.join(', ')}. Tabs: ${tabs.join(', ')}.`;
+}
+
+function expectLastCommitMessageInit(panel: E2EWebviewPanel | undefined, expectedMessage: string): void {
+    assert.ok(panel, 'Expected commit message webview panel.');
+    const message = panel.webview.messages.at(-1);
+    assert.ok(typeof message === 'object' && message !== null && 'type' in message);
+    assert.equal(message.type, 'commitMessage/init');
+    assert.ok('message' in message);
+    assert.equal(message.message, expectedMessage);
 }
 
 async function waitForCondition(predicate: () => boolean, failureMessage: () => string): Promise<void> {

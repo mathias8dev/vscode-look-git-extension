@@ -1,0 +1,119 @@
+.commit-message-editor {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto minmax(12em, 1fr) auto;
+  gap: 0.75em;
+  height: 100vh;
+  padding: 0.75em;
+  background: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+}
+
+.commit-message-editor-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.commit-message-editor-header h1 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--vscode-foreground);
+  font-size: 1em;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-message-editor-icon-button,
+.commit-message-editor-generate,
+.commit-message-editor-commit {
+  border: 1px solid transparent;
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  cursor: pointer;
+}
+
+.commit-message-editor-icon-button:hover,
+.commit-message-editor-generate:hover,
+.commit-message-editor-commit:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.commit-message-editor-icon-button:focus-visible,
+.commit-message-editor-generate:focus-visible,
+.commit-message-editor-commit:focus-visible,
+.commit-message-editor-textarea:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.commit-message-editor-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 4px;
+}
+
+.commit-message-editor-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  resize: none;
+  padding: 0.75em;
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  font: inherit;
+  line-height: 1.45;
+}
+
+.commit-message-editor-bottom {
+  display: grid;
+  gap: 0.5em;
+}
+
+.commit-message-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75em;
+  justify-content: flex-end;
+}
+
+.commit-message-editor-secondary-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75em;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.commit-message-editor-generate,
+.commit-message-editor-commit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  min-height: 30px;
+  padding: 0 0.8em;
+  border-radius: 4px;
+  font: inherit;
+}
+
+.commit-message-editor-error {
+  color: var(--vscode-errorForeground);
+  font-size: 0.9em;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.commit-message-editor-generate:disabled,
+.commit-message-editor-commit:disabled {
+  cursor: default;
+  opacity: 0.55;
+}

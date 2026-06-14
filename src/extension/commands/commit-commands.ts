@@ -11,8 +11,10 @@ import { CreateCommitPatchResultKind, type CreateCommitPatchUseCase, type Create
 import { defaultCreateCommitPatch } from '../adapters/vscode/default-create-commit-patch';
 import { type ExplainCommitDiffUseCase } from '../../application/usecases/commits/explain-commit-diff';
 import { defaultExplainCommitDiff } from '../adapters/vscode/default-explain-commit-diff';
+import { GenerateRewordCommitMessageUseCase } from '../../application/usecases/commits/generate-reword-commit-message';
 import { orderSelectedCommits } from '../../application/usecases/commits/order-selected-commits';
 import { getReachableCommitHashes } from '../../application/usecases/commits/get-reachable-commit-hashes';
+import { VscodeLanguageModelRewordCommitMessageGenerator } from '../adapters/vscode/vscode-language-model-reword-commit-message-generator';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
 import { showModalWarningMessage } from '../utils/confirmation';
 import { openDiffExplanationDocument, showDiffExplanationError } from '../utils/diff-explanation-document';
@@ -20,11 +22,14 @@ import { isAbortError } from '../messaging/errorSerialization';
 import { withCancellationSignal } from '../utils/vscode-cancellation';
 import { showBranchNameInput } from '../utils/branch-name-input';
 import { assertNoUnmergedFiles, compareRefWithPickedWorktree, openChangesWithWorkingTree, promptNewWorktreePath } from './git-command-helpers';
+import { promptForCommitMessage } from '../utils/commit-message-editor';
 
 export interface CommitCommandDiffExplanationScope {
     readonly label: string;
     readonly value: string;
 }
+
+const defaultGenerateRewordCommitMessage = new GenerateRewordCommitMessageUseCase(new VscodeLanguageModelRewordCommitMessageGenerator());
 
 export async function runCommitCommand(
     repo: GitRepository,
@@ -36,6 +41,8 @@ export async function runCommitCommand(
     createCommitPatch: CreateCommitPatchUseCase = defaultCreateCommitPatch,
     explainCommitDiffUseCase: ExplainCommitDiffUseCase = defaultExplainCommitDiff,
     diffExplanationScope?: CommitCommandDiffExplanationScope,
+    extensionUri?: vscode.Uri,
+    generateRewordCommitMessage: GenerateRewordCommitMessageUseCase = defaultGenerateRewordCommitMessage,
 ): Promise<boolean> {
     const selected = normalizeSelectedHashes(hash, hashes);
     switch (command) {
@@ -73,7 +80,7 @@ export async function runCommitCommand(
             await undoHeadCommit(repo, hash);
             return true;
         case 'editCommitMessage':
-            await editCommitMessage(repo, hash);
+            await editCommitMessage(repo, hash, extensionUri, generateRewordCommitMessage);
             return true;
         case 'fixup':
             await fixupStagedChanges(repo, hash);
@@ -205,9 +212,19 @@ async function undoHeadCommit(repo: GitRepository, hash: string): Promise<void> 
     await repo.exec(['reset', '--soft', 'HEAD~1']);
 }
 
-async function editCommitMessage(repo: GitRepository, hash: string): Promise<void> {
+async function editCommitMessage(
+    repo: GitRepository,
+    hash: string,
+    extensionUri: vscode.Uri | undefined,
+    generateRewordCommitMessage: GenerateRewordCommitMessageUseCase,
+): Promise<void> {
     const current = await repo.getCommitMessage(hash);
-    const message = await vscode.window.showInputBox({ prompt: 'New commit message:', value: current });
+    const message = await promptForCommitMessage(current, `Reword commit ${hash.substring(0, 7)}`, extensionUri, {
+        generateMessage: async (signal) => {
+            const result = await generateRewordCommitMessage.execute(repo, hash, current, signal);
+            return result.message;
+        },
+    });
     if (!message?.trim()) { return; }
     const messageFile = await writeCommitMessageFile(message);
     try {
