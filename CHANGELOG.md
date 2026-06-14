@@ -4,6 +4,13 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.0.7] - 2026-06-14
+
+### Added
+
+#### Commit History
+- Add a floating commit message editor for rewording commits, with multiline editing, a Commit action that applies the rewritten message, and VS Code language model generation for replacement messages
+
 ## [1.0.6] - 2026-06-12
 
 ### Added
