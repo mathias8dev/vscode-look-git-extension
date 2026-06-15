@@ -108,6 +108,8 @@ export async function runBranchCommand(
             await assertNoUnmergedFiles(repo, 'rebasing branches');
             await repo.rebase(branch);
             return true;
+        case 'planInteractiveRebaseOnto':
+            return false;
         case 'mergeInto':
             await assertNoUnmergedFiles(repo, 'merging branches');
             await repo.merge(branch);

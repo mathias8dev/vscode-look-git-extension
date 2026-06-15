@@ -81,6 +81,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
         private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
         private readonly repositoryResolver: GitRepositoryResolver = activeRepositoryOnlyResolver(repositories),
+        private readonly storageUri?: vscode.Uri,
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -434,6 +435,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 undefined,
                 this.contextRepository ? undefined : this.selectedRepositoryScope ? { label: 'Submodule', value: this.selectedRepositoryScope.path } : undefined,
                 this.extensionUri,
+                this.storageUri,
             );
             if (shouldRefresh) { await this.refresh(); }
         } catch (error) {

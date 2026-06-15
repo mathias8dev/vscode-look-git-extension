@@ -27,6 +27,7 @@ describe('Graph native context menu manifest', () => {
             'lookGit.graph.commit.explainDiff',
             'lookGit.graph.commit.goToParentCommit',
             'lookGit.graph.branch.checkout',
+            'lookGit.graph.branch.planInteractiveRebaseOnto',
             'lookGit.graph.branch.publish',
             'lookGit.graph.branch.removeBranchWorktree',
             'lookGit.graph.worktree.open',
@@ -108,6 +109,10 @@ describe('Graph native context menu manifest', () => {
             expect.objectContaining({
                 command: 'lookGit.graph.branch.delete',
                 when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.graph.branch.planInteractiveRebaseOnto',
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent",
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.worktree.showDiffWithMainWorktree',

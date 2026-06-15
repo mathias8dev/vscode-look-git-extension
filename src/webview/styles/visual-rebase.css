@@ -1,0 +1,499 @@
+.visual-rebase {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 0.75em;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0.75em;
+  color: var(--vscode-editor-foreground);
+  background: var(--vscode-editor-background);
+  user-select: none;
+}
+
+.visual-rebase-header,
+.visual-rebase-footer,
+.visual-rebase-confirm,
+.visual-rebase-conflicts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75em;
+}
+
+.visual-rebase-header h1 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--vscode-foreground);
+  font-size: 1.1em;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visual-rebase-header p {
+  margin: 0.35em 0 0;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.35;
+}
+
+.visual-rebase-layout {
+  display: grid;
+  grid-template-columns: minmax(13em, 0.62fr) minmax(28em, 1.55fr) minmax(13em, 0.68fr);
+  gap: 0.75em;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.visual-rebase-panel,
+.visual-rebase-plan {
+  min-width: 0;
+  min-height: 0;
+  padding: 0.75em;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  background: var(--vscode-sideBar-background);
+}
+
+.visual-rebase-panel {
+  overflow: auto;
+}
+
+.visual-rebase-panel h2,
+.visual-rebase-plan h2 {
+  margin: 0 0 0.75em;
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.visual-rebase-facts {
+  display: grid;
+  gap: 0.35em;
+  margin: 0 0 1.2em;
+}
+
+.visual-rebase-facts dt {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+}
+
+.visual-rebase-facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.visual-rebase-safety {
+  display: grid;
+  gap: 0.55em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.visual-rebase-safety li {
+  padding-left: 1em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.visual-rebase-safety li::before {
+  display: inline-block;
+  width: 0.7em;
+  margin-left: -1em;
+  content: "●";
+}
+
+.visual-rebase-safety li[data-state="ok"]::before {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.visual-rebase-safety li[data-state="warn"]::before {
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.visual-rebase-plan {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.75em;
+}
+
+.visual-rebase-plan-heading {
+  display: grid;
+  gap: 0.25em;
+}
+
+.visual-rebase-plan-heading span,
+.visual-rebase-note {
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.35;
+}
+
+.visual-rebase-message-editor {
+  display: grid;
+  gap: 0.4em;
+}
+
+.visual-rebase-message-editor span {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+}
+
+.visual-rebase-message-editor textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 7em;
+  resize: vertical;
+  padding: 0.55em;
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  font: inherit;
+  line-height: 1.4;
+  user-select: text;
+}
+
+.visual-rebase-rows {
+  display: grid;
+  align-content: start;
+  gap: 0.35em;
+  min-height: 0;
+  overflow: auto;
+}
+
+.visual-rebase-resume {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.55em;
+  min-height: 12em;
+  color: var(--vscode-descriptionForeground);
+  text-align: center;
+}
+
+.visual-rebase-resume .codicon {
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.visual-rebase-resume strong {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+
+.visual-rebase-row {
+  display: grid;
+  grid-template-columns: 1.2em 5.8em minmax(0, 1fr) 8em auto;
+  align-items: center;
+  gap: 0.55em;
+  min-height: 3em;
+  padding: 0.45em 0.55em;
+  border: 1px solid var(--vscode-list-inactiveSelectionBackground, transparent);
+  border-radius: 6px;
+  background: var(--vscode-list-hoverBackground);
+  cursor: default;
+}
+
+.visual-rebase-row-selected {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.visual-rebase-lane {
+  display: grid;
+  place-items: center;
+}
+
+.visual-rebase-lane span {
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 50%;
+  background: var(--vscode-charts-blue);
+}
+
+.visual-rebase-row code,
+.visual-rebase-footer code {
+  color: var(--vscode-textPreformat-foreground);
+  font-family: var(--vscode-editor-font-family);
+}
+
+.visual-rebase-row-main {
+  display: grid;
+  gap: 0.15em;
+  min-width: 0;
+}
+
+.visual-rebase-row-main strong,
+.visual-rebase-row-main span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visual-rebase-row-main span {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+}
+
+.visual-rebase-action {
+  min-width: 0;
+  height: 2em;
+  padding: 0 0.45em;
+  border: 1px solid var(--vscode-dropdown-border);
+  border-radius: 999px;
+  color: var(--vscode-dropdown-foreground);
+  background: var(--vscode-dropdown-background);
+  font: inherit;
+}
+
+.visual-rebase-action-drop {
+  border-color: var(--vscode-errorForeground);
+}
+
+.visual-rebase-action-squash,
+.visual-rebase-action-fixup,
+.visual-rebase-action-reword {
+  border-color: var(--vscode-editorWarning-foreground);
+}
+
+.visual-rebase-row-buttons {
+  display: inline-flex;
+  gap: 0.25em;
+}
+
+.visual-rebase-icon-button,
+.visual-rebase-row-buttons button,
+.visual-rebase-button,
+.visual-rebase-primary {
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  font: inherit;
+  cursor: pointer;
+}
+
+.visual-rebase-icon-button,
+.visual-rebase-row-buttons button {
+  display: inline-grid;
+  place-items: center;
+  width: 2em;
+  height: 2em;
+  padding: 0;
+}
+
+.visual-rebase-button,
+.visual-rebase-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35em;
+  min-height: 2.2em;
+  padding: 0 0.85em;
+}
+
+.visual-rebase-primary {
+  background: var(--vscode-button-background);
+}
+
+.visual-rebase-icon-button:hover,
+.visual-rebase-row-buttons button:hover,
+.visual-rebase-button:hover,
+.visual-rebase-primary:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.visual-rebase-icon-button:focus-visible,
+.visual-rebase-row-buttons button:focus-visible,
+.visual-rebase-button:focus-visible,
+.visual-rebase-primary:focus-visible,
+.visual-rebase-action:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.visual-rebase-row-buttons button:disabled,
+.visual-rebase-button:disabled,
+.visual-rebase-primary:disabled,
+.visual-rebase-action:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.visual-rebase-footer,
+.visual-rebase-confirm,
+.visual-rebase-conflicts {
+  min-width: 0;
+  padding: 0.6em 0.75em;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  background: var(--vscode-sideBar-background);
+}
+
+.visual-rebase-footer code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visual-rebase-confirm,
+.visual-rebase-conflicts {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+
+.visual-rebase-confirm div {
+  display: grid;
+  min-width: 0;
+  gap: 0.2em;
+}
+
+.visual-rebase-confirm span {
+  overflow-wrap: anywhere;
+  color: var(--vscode-descriptionForeground);
+}
+
+.visual-rebase-conflicts {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0.55em;
+  max-height: 32vh;
+  min-height: 0;
+}
+
+.visual-rebase-conflict-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75em;
+  min-width: 0;
+}
+
+.visual-rebase-conflict-heading div {
+  display: grid;
+  gap: 0.15em;
+  min-width: 0;
+}
+
+.visual-rebase-conflict-heading span {
+  color: var(--vscode-descriptionForeground);
+}
+
+.visual-rebase-conflict-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 2em;
+  height: 2em;
+  padding: 0 0.35em;
+  border-radius: 999px;
+  color: var(--vscode-badge-foreground);
+  background: var(--vscode-badge-background);
+}
+
+.visual-rebase-conflict-list {
+  display: grid;
+  gap: 0.4em;
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  padding: 0;
+  list-style: none;
+}
+
+.visual-rebase-conflict-row {
+  display: grid;
+  gap: 0.45em;
+  min-width: 0;
+  padding: 0.55em;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  background: var(--vscode-list-hoverBackground);
+}
+
+.visual-rebase-conflict-file {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45em;
+  min-width: 0;
+}
+
+.visual-rebase-conflict-file .codicon {
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.visual-rebase-conflict-file code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vscode-textPreformat-foreground);
+  font-family: var(--vscode-editor-font-family);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visual-rebase-conflict-file span {
+  color: var(--vscode-editorWarning-foreground);
+  font-size: 0.9em;
+}
+
+.visual-rebase-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45em;
+  min-width: 0;
+}
+
+.visual-rebase-footer-actions {
+  display: flex;
+  gap: 0.5em;
+}
+
+.visual-rebase-error,
+.visual-rebase-success {
+  padding: 0.6em 0.75em;
+  border-radius: 6px;
+  line-height: 1.35;
+}
+
+.visual-rebase-error {
+  color: var(--vscode-errorForeground);
+  background: var(--vscode-inputValidation-errorBackground);
+}
+
+.visual-rebase-success {
+  color: var(--vscode-testing-iconPassed);
+  background: var(--vscode-inputValidation-infoBackground);
+}
+
+@media (max-width: 920px) {
+  .visual-rebase-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .visual-rebase-confirm,
+  .visual-rebase-conflicts,
+  .visual-rebase-footer {
+    grid-template-columns: 1fr;
+  }
+
+  .visual-rebase-row {
+    grid-template-columns: 1.2em 5.8em minmax(0, 1fr);
+  }
+
+  .visual-rebase-action,
+  .visual-rebase-row-buttons {
+    grid-column: 3;
+  }
+
+  .visual-rebase-conflict-file {
+    grid-template-columns: 1fr;
+  }
+
+  .visual-rebase-conflict-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}

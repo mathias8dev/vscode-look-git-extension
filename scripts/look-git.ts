@@ -46,6 +46,8 @@ const scenarios = new Map<string, ScenarioSetup>([
     ['merge-conflics', setupMergeConflicts],
     ['graph-heavy', setupGraphHeavy],
     ['heavy-graph', setupGraphHeavy],
+    ['interactive-rebase-conflicts', setupInteractiveRebaseConflicts],
+    ['interactive-rebase-multiple-conflicts', setupInteractiveRebaseConflicts],
     ['rebase-conflicts', setupRebaseConflicts],
     ['remote', setupRemote],
     ['remote-failure', setupRemoteUnavailable],
@@ -133,6 +135,7 @@ function printHelp(): void {
         '  ./lookGit setup merge-conflicts',
         '  ./lookGit setup merge-conflics',
         '  ./lookGit setup graph-heavy',
+        '  ./lookGit setup interactive-rebase-conflicts',
         '  ./lookGit setup empty-repo',
         '  ./lookGit setup file-context-menu',
         '  ./lookGit setup remote',
@@ -177,6 +180,7 @@ function uniqueScenarios(): readonly string[] {
         'empty-repo',
         'file-context-menu',
         'graph-heavy',
+        'interactive-rebase-conflicts',
         'merge-conflicts',
         'rebase-conflicts',
         'remote',
@@ -195,6 +199,7 @@ function canonicalScenarioName(name: string): string {
     if (name === 'worktree') { return 'worktrees'; }
     if (name === 'remotes') { return 'remote'; }
     if (name === 'heavy-graph') { return 'graph-heavy'; }
+    if (name === 'interactive-rebase-multiple-conflicts') { return 'interactive-rebase-conflicts'; }
     if (name === 'remote-failure' || name === 'remote-offline') { return 'remote-unavailable'; }
     if (name === 'unpublished') { return 'unpublished-branch'; }
     if (name === 'stash-pop-local-changes') { return 'stash-pop-blocked'; }
@@ -459,6 +464,56 @@ function setupRebaseConflicts(target: string): void {
     commit(target, 'feat(conflicts): add main side file', { author: nextAuthor() });
     git(target, ['checkout', '-q', 'feature/rebase-conflict']);
     expectGitFailure(target, ['rebase', 'main']);
+}
+
+function setupInteractiveRebaseConflicts(target: string): void {
+    initRepo(target);
+    write(target, 'README.md', [
+        '# Interactive rebase conflict fixture',
+        '',
+        'Open this repository on `feature/interactive-rebase-conflicts`.',
+        'Start a Visual Rebase onto `main` to hit several sequential conflicts.',
+        '',
+        'Expected conflict order:',
+        '1. `src/app.ts`',
+        '2. `src/settings.ts`',
+        '3. `src/api.ts`',
+        '',
+    ].join('\n'));
+    commit(target, 'docs(rebase): add interactive conflict fixture guide', { author: nextAuthor() });
+    write(target, 'src/app.ts', 'export const appState = "base";\n');
+    write(target, 'src/settings.ts', 'export const settingsMode = "base";\n');
+    write(target, 'src/api.ts', 'export const apiEndpoint = "base";\n');
+    commit(target, 'feat(rebase): add shared interactive rebase base', { author: nextAuthor() });
+    const base = git(target, ['rev-parse', 'HEAD']).trim();
+
+    git(target, ['checkout', '-q', '-b', 'feature/interactive-rebase-conflicts', base]);
+    write(target, 'src/app.ts', 'export const appState = "feature-dashboard";\n');
+    commit(target, 'feat(rebase): update app state on feature branch', { author: nextAuthor() });
+    write(target, 'src/feature/notes.ts', 'export const featureNote = "between app and settings conflicts";\n');
+    commit(target, 'feat(rebase): add feature note between conflicts', { author: nextAuthor() });
+    write(target, 'src/settings.ts', 'export const settingsMode = "feature-relaxed";\n');
+    commit(target, 'feat(rebase): update settings on feature branch', { author: nextAuthor() });
+    write(target, 'src/feature/audit.ts', 'export const auditEnabled = true;\n');
+    commit(target, 'feat(rebase): add audit side commit', { author: nextAuthor() });
+    write(target, 'src/api.ts', 'export const apiEndpoint = "feature-v2";\n');
+    commit(target, 'feat(rebase): update api endpoint on feature branch', { author: nextAuthor() });
+    write(target, 'docs/feature-plan.md', '# Feature plan\n\nFinal clean commit after the conflict sequence.\n');
+    commit(target, 'docs(rebase): add feature plan after conflicts', { author: nextAuthor() });
+
+    git(target, ['checkout', '-q', 'main']);
+    write(target, 'src/app.ts', 'export const appState = "main-dashboard";\n');
+    commit(target, 'feat(rebase): update app state on main branch', { author: nextAuthor() });
+    write(target, 'docs/main-release.md', '# Main release\n\nMain branch commit between conflict sources.\n');
+    commit(target, 'docs(rebase): add main release note', { author: nextAuthor() });
+    write(target, 'src/settings.ts', 'export const settingsMode = "main-strict";\n');
+    commit(target, 'feat(rebase): update settings on main branch', { author: nextAuthor() });
+    write(target, 'src/main/telemetry.ts', 'export const telemetry = "main";\n');
+    commit(target, 'feat(rebase): add main telemetry side commit', { author: nextAuthor() });
+    write(target, 'src/api.ts', 'export const apiEndpoint = "main-v2";\n');
+    commit(target, 'feat(rebase): update api endpoint on main branch', { author: nextAuthor() });
+
+    git(target, ['checkout', '-q', 'feature/interactive-rebase-conflicts']);
 }
 
 function setupStashPopBlocked(target: string): void {
@@ -981,7 +1036,9 @@ function git(cwd: string, args: readonly string[], options: CommitOptions = {}):
     const date = nextCommitDate();
     // Force LF on every command (including `clone`, which checks out before configureRepo runs) so
     // fixture content is byte-identical across OSes; Windows git otherwise defaults to autocrlf=true.
-    return execFileSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', ...args], {
+    // Allow operating on the bare origin/upstream repos even when the host sets
+    // `safe.bareRepository=explicit` (a security default some environments inject).
+    return execFileSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', '-c', 'safe.bareRepository=all', ...args], {
         cwd,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],

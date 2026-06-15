@@ -2,6 +2,7 @@ import { describe, it } from 'vitest';
 import type { GraphExtensionToWebviewMessage, GraphWebviewToExtensionMessage } from '../../src/protocol/graph/messages';
 import type { ChangesExtensionToWebviewMessage, ChangesWebviewToExtensionMessage } from '../../src/protocol/changes/messages';
 import type { HistoryExtensionToWebviewMessage, HistoryWebviewToExtensionMessage } from '../../src/protocol/history/messages';
+import type { VisualRebaseExtensionToWebviewMessage, VisualRebaseWebviewToExtensionMessage } from '../../src/protocol/visual-rebase/messages';
 
 // Type-level tests: if these compile, the discriminated unions are correct.
 describe('protocol discriminated unions', () => {
@@ -97,6 +98,37 @@ describe('protocol discriminated unions', () => {
                 case 'history/contextTarget': return msg.target.kind satisfies string;
                 case 'history/toolbarCommand': return msg.command satisfies string;
                 case 'history/showOutput': return;
+            }
+        };
+        void handle;
+    });
+
+    it('visual rebase extension→webview union is exhaustive', () => {
+        const handle = (msg: VisualRebaseExtensionToWebviewMessage) => {
+            switch (msg.type) {
+                case 'visualRebase/init': return msg.commits satisfies readonly unknown[];
+                case 'visualRebase/started': return;
+                case 'visualRebase/completed': return msg.backupRef satisfies string;
+                case 'visualRebase/error': return msg.recommendedAction satisfies 'continue' | 'skip' | undefined;
+                case 'webview/fontSizeChanged': return msg.fontSize satisfies number;
+            }
+        };
+        void handle;
+    });
+
+    it('visual rebase webview→extension union is exhaustive', () => {
+        const handle = (msg: VisualRebaseWebviewToExtensionMessage) => {
+            switch (msg.type) {
+                case 'visualRebase/ready': return;
+                case 'visualRebase/start': return msg.plan satisfies readonly unknown[];
+                case 'visualRebase/cancel': return;
+                case 'visualRebase/continue': return;
+                case 'visualRebase/abort': return;
+                case 'visualRebase/skip': return;
+                case 'visualRebase/openMergeEditor': return msg.filePath satisfies string;
+                case 'visualRebase/markResolved': return msg.filePath satisfies string;
+                case 'visualRebase/acceptYours': return msg.filePath satisfies string;
+                case 'visualRebase/acceptIncoming': return msg.filePath satisfies string;
             }
         };
         void handle;

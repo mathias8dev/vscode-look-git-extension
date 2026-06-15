@@ -27,12 +27,18 @@ export function CommitMessageEditor({
     onCancel,
 }: CommitMessageEditorProps) {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const messageLengthRef = useRef(message.length);
 
     useEffect(() => {
-        requestAnimationFrame(() => {
+        messageLengthRef.current = message.length;
+    }, [message.length]);
+
+    useEffect(() => {
+        const frame = requestAnimationFrame(() => {
             textareaRef.current?.focus();
-            textareaRef.current?.setSelectionRange(message.length, message.length);
+            textareaRef.current?.setSelectionRange(messageLengthRef.current, messageLengthRef.current);
         });
+        return () => cancelAnimationFrame(frame);
     }, [focusToken]);
 
     const canCommit = message.trim().length > 0;

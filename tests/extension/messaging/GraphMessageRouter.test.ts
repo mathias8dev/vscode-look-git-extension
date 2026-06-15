@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import type { Uri as VscodeUri } from 'vscode';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { GitGraphCommit } from '../../../src/core/git/domain/GitCommit';
 import type { GitSubmodule, GitWorktree } from '../../../src/core/git/domain/GitWorktree';
@@ -834,18 +835,59 @@ describe('GraphMessageRouter commit commands', () => {
         expect(window.shownDocuments).toHaveLength(0);
     });
 
-    it('starts interactive rebase in a terminal', async () => {
-        const repo = makeRepositoryMock({ cwd: '/repo' });
-        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined);
+    it('opens visual rebase for interactive rebase from a commit', async () => {
+        const repo = makeRepositoryMock({
+            cwd: '/repo',
+            getLogForRef: vi.fn(async () => [graphCommit('def4567890abcdef'), graphCommit('abc1234567890abc')]),
+        });
+        const router = new GraphMessageRouter(makeRepositoryAccessor(repo), () => undefined, async () => {}, undefined, undefined, undefined, undefined, testUri('/ext'), testUri('/tmp'));
 
         await router.handle({ type: 'graph/commitCommand', command: 'interactiveRebaseFromHere', hash: 'abc123', hashes: ['abc123'] });
 
-        expect(window.terminals).toEqual([expect.objectContaining({
-            name: 'Look Git',
-            cwd: '/repo',
-            texts: ["git rebase --autostash -i 'abc123'"],
-            visible: true,
-        })]);
+        expect(window.terminals).toEqual([]);
+        expect(window.webviewPanels).toHaveLength(1);
+        const panel = window.webviewPanels[0];
+        expect(panel).toEqual(expect.objectContaining({
+            viewType: 'lookGit.visualRebase',
+            title: 'Visual Rebase from abc123',
+        }));
+        panel?.webview.messageHandler?.({ type: 'visualRebase/ready' });
+
+        expect(panel?.webview.messages).toContainEqual(expect.objectContaining({
+            type: 'visualRebase/init',
+            currentBranch: 'main',
+            upstream: 'abc123',
+            commits: expect.arrayContaining([
+                expect.objectContaining({ hash: 'abc1234567890abc', action: 'pick' }),
+                expect.objectContaining({ hash: 'def4567890abcdef', action: 'pick' }),
+            ]),
+        }));
+
+        panel?.webview.messageHandler?.({
+            type: 'visualRebase/start',
+            plan: [
+                { hash: 'abc1234567890abc', action: 'pick', message: 'feat: first' },
+                { hash: 'def4567890abcdef', action: 'drop', message: 'fix: second' },
+            ],
+        });
+
+        await vi.waitFor(() => expect(vi.mocked(repo.execWithEnv)).toHaveBeenCalledWith(
+            ['rebase', '--autostash', '-i', 'abc123', 'main'],
+            expect.objectContaining({
+                GIT_SEQUENCE_EDITOR: expect.stringContaining('sequence-editor.cjs'),
+                GIT_EDITOR: expect.stringContaining('message-editor.cjs'),
+                LOOK_GIT_REBASE_MESSAGES: expect.stringContaining('messages.json'),
+            }),
+        ));
+        expect(vi.mocked(repo.exec)).toHaveBeenCalledWith([
+            'update-ref',
+            expect.stringMatching(/^refs\/look-git\/backup\/main-/),
+            'HEAD',
+        ]);
+        expect(panel?.webview.messages).toContainEqual(expect.objectContaining({
+            type: 'visualRebase/completed',
+            backupRef: expect.stringMatching(/^refs\/look-git\/backup\/main-/),
+        }));
     });
 
     it('supports keep reset mode for reset-to-revision', async () => {
@@ -1034,6 +1076,11 @@ function graphCommit(hash: string): GitGraphCommit {
         parentHashes: [],
         refs: [],
     };
+}
+
+function testUri(value: string): VscodeUri {
+    // The unit-test VS Code mock implements the Uri members used by this path.
+    return Uri.file(value) as unknown as VscodeUri;
 }
 
 interface CapturedGraphRequest {

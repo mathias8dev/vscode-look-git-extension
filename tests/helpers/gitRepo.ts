@@ -172,7 +172,10 @@ export function createTempGitRepo(): TempGitRepo {
 
 export function createBareGitRepo(): TempGitRepo {
     const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-bare-test-')));
-    const git = (args: string[], opts?: { env?: Record<string, string> }) => execFileSync('git', args, {
+    // `-c safe.bareRepository=all` lets git operate on this bare repo even when the host sets
+    // `safe.bareRepository=explicit` (a security default some environments inject), which would
+    // otherwise make every command here fail with "cannot use bare repository".
+    const git = (args: string[], opts?: { env?: Record<string, string> }) => execFileSync('git', ['-c', 'safe.bareRepository=all', ...args], {
         cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
         env: { ...process.env, ...opts?.env },
     });

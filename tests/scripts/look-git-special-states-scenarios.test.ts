@@ -17,6 +17,15 @@ function git(cwd: string, args: readonly string[]): string {
     return execFileSync('git', [...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
+function gitWithEnv(cwd: string, args: readonly string[], env: Record<string, string>): string {
+    return execFileSync('git', [...args], {
+        cwd,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, ...env },
+    });
+}
+
 function gitSucceeds(cwd: string, args: readonly string[]): boolean {
     try {
         git(cwd, args);
@@ -51,6 +60,16 @@ function setupScenario(name: string): { readonly outputRoot: string; readonly re
     ], { cwd: process.cwd(), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
     return { outputRoot, repo: path.join(outputRoot, name), stdout };
+}
+
+function resolveConflict(cwd: string, filePath: string, content: string, expectNextConflict: boolean): void {
+    fs.writeFileSync(path.join(cwd, filePath), content);
+    git(cwd, ['add', filePath]);
+    if (expectNextConflict) {
+        expect(() => git(cwd, ['-c', 'core.editor=true', 'rebase', '--continue'])).toThrow();
+    } else {
+        git(cwd, ['-c', 'core.editor=true', 'rebase', '--continue']);
+    }
 }
 
 describe('lookGit special state setup scenarios', () => {
@@ -129,5 +148,28 @@ describe('lookGit special state setup scenarios', () => {
         expect(aheadBehind(pullConflictTarget, 'main', 'origin/main')).toEqual([1, 1]);
         expect(gitSucceeds(pullConflictTarget, ['pull', '--no-rebase'])).toBe(false);
         expect(git(pullConflictTarget, ['status', '--porcelain', '-uall'])).toContain('UU src/app.ts');
+    });
+
+    it('creates an interactive rebase fixture with multiple sequential conflicts', () => {
+        const { repo, stdout } = setupScenario('interactive-rebase-conflicts');
+
+        expect(stdout).toContain(`Created interactive-rebase-conflicts: ${repo}`);
+        expect(git(repo, ['branch', '--show-current']).trim()).toBe('feature/interactive-rebase-conflicts');
+        expect(git(repo, ['status', '--porcelain', '-uall'])).toBe('');
+        expect(Number(git(repo, ['rev-list', '--count', 'main..feature/interactive-rebase-conflicts']).trim())).toBeGreaterThanOrEqual(6);
+        expect(Number(git(repo, ['rev-list', '--count', 'feature/interactive-rebase-conflicts..main']).trim())).toBeGreaterThanOrEqual(5);
+
+        expect(() => gitWithEnv(repo, ['rebase', '-i', 'main'], { GIT_SEQUENCE_EDITOR: 'true' })).toThrow();
+        expect(git(repo, ['status', '--porcelain', '-uall'])).toContain('UU src/app.ts');
+
+        resolveConflict(repo, 'src/app.ts', 'export const appState = "resolved-app";\n', true);
+        expect(git(repo, ['status', '--porcelain', '-uall'])).toContain('UU src/settings.ts');
+
+        resolveConflict(repo, 'src/settings.ts', 'export const settingsMode = "resolved-settings";\n', true);
+        expect(git(repo, ['status', '--porcelain', '-uall'])).toContain('UU src/api.ts');
+
+        resolveConflict(repo, 'src/api.ts', 'export const apiEndpoint = "resolved-api";\n', false);
+        expect(git(repo, ['status', '--porcelain', '-uall'])).toBe('');
+        expect(git(repo, ['branch', '--show-current']).trim()).toBe('feature/interactive-rebase-conflicts');
     });
 });

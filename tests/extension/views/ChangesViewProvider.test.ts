@@ -28,6 +28,7 @@ function makeRepo(overrides: Partial<GitRepository> = {}): GitRepository {
         getLogForPath: vi.fn(async () => []),
         getLogForRef: vi.fn(async () => []),
         getLogForRefAndPath: vi.fn(async () => []),
+        getLogForLineRange: vi.fn(async () => []),
         getGraphLog: vi.fn(async () => []),
         getCommitFiles: vi.fn(async () => []),
         getCommitMessage: vi.fn(async () => ''),

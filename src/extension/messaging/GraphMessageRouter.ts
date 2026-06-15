@@ -31,6 +31,7 @@ import { commitFileDiffUris, emptyDiffUri } from '../utils/diff-uris';
 import { gitBlobUri } from '../utils/git-blob-documents';
 import { createErrorPayload, isAbortError } from './errorSerialization';
 import { appendErrorToOutput, showErrorOutput } from './errorOutputChannel';
+import { openVisualRebasePanel } from '../utils/visual-rebase-panel';
 
 type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
 
@@ -52,6 +53,7 @@ export class GraphMessageRouter {
         private readonly getCommitDetails = new GetCommitDetailsUseCase(),
         private readonly getWorktreeDetails = new GetWorktreeDetailsUseCase(),
         private readonly extensionUri?: vscode.Uri,
+        private readonly storageUri?: vscode.Uri,
     ) {}
 
     dispose(): void {
@@ -351,6 +353,16 @@ export class GraphMessageRouter {
 
     private async handleBranchCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/branchCommand' }>): Promise<void> {
         const repo = await this.repositoryForScope(msg.repositoryScope);
+        if (msg.command === 'planInteractiveRebaseOnto') {
+            if (!this.extensionUri) { throw new Error('Visual Rebase requires the extension URI.'); }
+            if (!this.storageUri) { throw new Error('Visual Rebase requires extension storage.'); }
+            await openVisualRebasePanel(repo, this.extensionUri, this.storageUri, {
+                upstream: msg.branch,
+                onto: msg.branch,
+                title: `Visual Rebase onto ${msg.branch}`,
+            });
+            return;
+        }
         const shouldRefresh = await runBranchCommand(repo, msg.command, msg.branch, msg.isRemote, this.remoteCommands);
         if (!shouldRefresh) { return; }
         // `delete` removes the branch and `rename` frees its old name; if the graph is
@@ -370,7 +382,7 @@ export class GraphMessageRouter {
 
     private async handleCommitCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/commitCommand' }>): Promise<void> {
         const repo = await this.repositoryForScope(msg.repositoryScope);
-        const shouldRefresh = await runCommitCommand(repo, msg.command, msg.hash, msg.hashes, this.remoteCommands, undefined, undefined, undefined, diffExplanationScopeFor(msg.repositoryScope), this.extensionUri);
+        const shouldRefresh = await runCommitCommand(repo, msg.command, msg.hash, msg.hashes, this.remoteCommands, undefined, undefined, undefined, diffExplanationScopeFor(msg.repositoryScope), this.extensionUri, this.storageUri);
         if (shouldRefresh) { await this.refreshAfterRepositoryChange(); }
     }
 
@@ -596,6 +608,7 @@ function graphBranchOperation(msg: Extract<GraphWebviewToExtensionMessage, { rea
         case 'showDiffWithWorkingTree':
         case 'compareBranchWithWorktree':
         case 'showDiffWithBranchWorktree':
+        case 'planInteractiveRebaseOnto':
             return undefined;
     }
 }

@@ -45,6 +45,7 @@ const GRAPH_BRANCH_COMMANDS: readonly { readonly id: string; readonly command: B
     { id: 'lookGit.graph.branch.compareBranchWithWorktree', command: 'compareBranchWithWorktree' },
     { id: 'lookGit.graph.branch.showDiffWithBranchWorktree', command: 'showDiffWithBranchWorktree' },
     { id: 'lookGit.graph.branch.rebaseOnto', command: 'rebaseOnto' },
+    { id: 'lookGit.graph.branch.planInteractiveRebaseOnto', command: 'planInteractiveRebaseOnto' },
     { id: 'lookGit.graph.branch.mergeInto', command: 'mergeInto' },
     { id: 'lookGit.graph.branch.push', command: 'push' },
     { id: 'lookGit.graph.branch.publish', command: 'push' },
@@ -88,6 +89,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         private readonly repositories: ActiveRepositoryAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
         private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
+        private readonly storageUri?: vscode.Uri,
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -102,7 +104,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         this.router?.dispose();
         this.router = new GraphMessageRouter(this.repositories, (msg) => {
             webviewView.webview.postMessage(msg);
-        }, this.onRepositoryUpdated, this.remoteCommands, undefined, undefined, undefined, this.extensionUri);
+        }, this.onRepositoryUpdated, this.remoteCommands, undefined, undefined, undefined, this.extensionUri, this.storageUri);
 
         webviewView.webview.onDidReceiveMessage((msg: GraphWebviewToExtensionMessage) => {
             if (msg.type === 'graph/contextTarget') {

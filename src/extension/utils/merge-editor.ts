@@ -1,8 +1,7 @@
-import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { GitRepository } from '../../application/ports/git-repository';
-import { detectConflictStateFromFiles } from '../../core/parsing/parseStatus';
+import { isRebaseInProgress } from './git-operation-state';
 import { createReadonlyDocumentUri } from './readonly-diff-documents';
 
 const OpenMergeEditorCommand = '_open.mergeEditor';
@@ -101,16 +100,6 @@ async function readConflictStageHashes(repo: GitRepository, filePath: string): P
 async function readObject(repo: GitRepository, hash: string | undefined): Promise<string> {
     if (!hash) { return ''; }
     return repo.execRaw(['cat-file', '-p', hash]);
-}
-
-async function isRebaseInProgress(repo: GitRepository): Promise<boolean> {
-    try {
-        const gitDir = await repo.getGitDir();
-        const entries = await fs.readdir(gitDir);
-        return detectConflictStateFromFiles(entries) === 'rebase';
-    } catch {
-        return false;
-    }
 }
 
 function fileExtension(filePath: string): string {

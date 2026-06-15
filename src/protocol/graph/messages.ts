@@ -137,7 +137,7 @@ export type BranchCommand =
     | 'checkout' | 'newBranchFrom' | 'checkoutRebaseOnto'
     | 'compareWithCurrent' | 'showDiffWithWorkingTree'
     | 'delete' | 'rename' | 'push' | 'update'
-    | 'rebaseOnto' | 'mergeInto'
+    | 'rebaseOnto' | 'planInteractiveRebaseOnto' | 'mergeInto'
     | 'newWorktreeFromBranch'
     | 'openBranchWorktree'
     | 'revealBranchWorktree'

@@ -16,6 +16,7 @@ export default defineConfig({
         fileHistory: resolve(__dirname, 'src/webview/file-history/main.tsx'),
         graph: resolve(__dirname, 'src/webview/graph/main.tsx'),
         history: resolve(__dirname, 'src/webview/history/main.tsx'),
+        visualRebase: resolve(__dirname, 'src/webview/visual-rebase/main.tsx'),
       },
       output: {
         assetFileNames: '[name][extname]',

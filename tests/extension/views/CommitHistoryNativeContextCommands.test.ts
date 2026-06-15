@@ -76,7 +76,10 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
         expect(getCommandCalls().at(-1)?.command).toBe('vscode.changes');
 
         await vscode.commands.executeCommand('lookGit.history.interactiveRebaseFromHere');
-        expect(window.terminals.at(-1)?.texts).toEqual([`git rebase --autostash -i '${head}'`]);
+        expect(window.webviewPanels.at(-1)).toEqual(expect.objectContaining({
+            viewType: 'lookGit.visualRebase',
+            title: `Visual Rebase from ${head.substring(0, 7)}`,
+        }));
     });
 
     it('opens revision snapshots, branches, tags, worktrees, and worktree diffs from native commands', async () => {
@@ -276,7 +279,7 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
 
     async function createHistoryHarness(cwd: string): Promise<{ readonly view: MockWebviewView }> {
         const repo = new GitProcessRepository(cwd);
-        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo), async () => {}, executingRemoteCommandBackend);
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo), async () => {}, executingRemoteCommandBackend, undefined, vscode.Uri.file('/storage'));
         const view = makeWebviewView();
 
         disposables.push(registerReadonlyDiffDocumentProvider());

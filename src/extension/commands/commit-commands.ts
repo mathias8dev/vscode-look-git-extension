@@ -23,6 +23,7 @@ import { withCancellationSignal } from '../utils/vscode-cancellation';
 import { showBranchNameInput } from '../utils/branch-name-input';
 import { assertNoUnmergedFiles, compareRefWithPickedWorktree, openChangesWithWorkingTree, promptNewWorktreePath } from './git-command-helpers';
 import { promptForCommitMessage } from '../utils/commit-message-editor';
+import { openVisualRebasePanel } from '../utils/visual-rebase-panel';
 
 export interface CommitCommandDiffExplanationScope {
     readonly label: string;
@@ -42,6 +43,7 @@ export async function runCommitCommand(
     explainCommitDiffUseCase: ExplainCommitDiffUseCase = defaultExplainCommitDiff,
     diffExplanationScope?: CommitCommandDiffExplanationScope,
     extensionUri?: vscode.Uri,
+    storageUri?: vscode.Uri,
     generateRewordCommitMessage: GenerateRewordCommitMessageUseCase = defaultGenerateRewordCommitMessage,
 ): Promise<boolean> {
     const selected = normalizeSelectedHashes(hash, hashes);
@@ -92,7 +94,13 @@ export async function runCommitCommand(
             await dropCommits(repo, await orderSelectedCommits(repo, selected, 'newestFirst'));
             return true;
         case 'interactiveRebaseFromHere':
-            openGitTerminal(repo.cwd, `git rebase --autostash -i ${shellQuote(hash)}`);
+            if (!extensionUri) { throw new Error('Visual Rebase requires the extension URI.'); }
+            if (!storageUri) { throw new Error('Visual Rebase requires extension storage.'); }
+            await openVisualRebasePanel(repo, extensionUri, storageUri, {
+                upstream: hash,
+                onto: hash,
+                title: `Visual Rebase from ${hash.substring(0, 7)}`,
+            });
             return false;
         case 'pushAllUpToHere':
             await pushAllUpToHere(repo, hash, remoteCommands);
@@ -446,12 +454,6 @@ async function dropCommits(repo: GitRepository, hashes: readonly string[]): Prom
     }
 }
 
-function openGitTerminal(cwd: string, command: string): void {
-    const terminal = vscode.window.createTerminal({ name: 'Look Git', cwd });
-    terminal.show();
-    terminal.sendText(command);
-}
-
 async function pushAllUpToHere(repo: GitRepository, hash: string, remoteCommands: RemoteCommandBackend): Promise<void> {
     const remotes = await repo.getRemotes();
     const remote = remotes[0];
@@ -464,8 +466,4 @@ async function pushAllUpToHere(repo: GitRepository, hash: string, remoteCommands
         args: ['push', remote, `${hash}:refs/heads/${branch}`],
         title: `Look Git Remote: ${branch}`,
     });
-}
-
-function shellQuote(value: string): string {
-    return `'${value.replace(/'/g, "'\\''")}'`;
 }

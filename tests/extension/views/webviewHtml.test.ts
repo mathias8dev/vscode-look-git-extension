@@ -9,7 +9,7 @@ describe('getWebviewHtml', () => {
         resetVscodeMock();
     });
 
-    it.each(['changes', 'graph', 'history'] as const)('disables default context menu items for %s webview', (scriptName) => {
+    it.each(['changes', 'graph', 'history', 'visualRebase'] as const)('disables default context menu items for %s webview', (scriptName) => {
         const view = makeWebviewView();
         const html = getWebviewHtml(view.webview, vscode.Uri.file('/ext'), scriptName);
         const context = bodyContext(html);

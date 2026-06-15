@@ -198,11 +198,11 @@ export function run(): Promise<void> {
                     openedWorktreePath = fsPathOf(openFolderCall.args[0]);
                     assert.equal(git(openedWorktreePath, ['rev-parse', 'HEAD']), base);
 
-                    const terminalCapture = await withPatchedVscode({ interceptTerminal: true }, async (capture) => {
+                    const visualRebaseCapture = await withPatchedVscode({ interceptVisualRebasePanel: true, interceptFloatingWindowMove: true }, async (capture) => {
                         await router.handle({ type: 'graph/commitCommand', command: 'interactiveRebaseFromHere', hash: base, hashes: [base] });
                         return capture;
                     });
-                    assert.deepEqual(terminalCapture.terminalTexts, [`git rebase --autostash -i '${base}'`]);
+                    assert.equal(visualRebaseCapture.webviewPanel?.viewType, 'lookGit.visualRebase');
                     assertNoGraphError(messages);
                 } finally {
                     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
@@ -1766,7 +1766,7 @@ function routerFor(repoPath: string, messages: GraphExtensionToWebviewMessage[])
         currentContext: undefined,
         requireRepository: () => repo,
     };
-    return new GraphMessageRouter(accessor, (message) => { messages.push(message); }, async () => {}, undefined, undefined, undefined, undefined, vscode.Uri.file(repoRoot));
+    return new GraphMessageRouter(accessor, (message) => { messages.push(message); }, async () => {}, undefined, undefined, undefined, undefined, vscode.Uri.file(repoRoot), vscode.Uri.file(os.tmpdir()));
 }
 
 async function historyHarnessFor(
@@ -1785,6 +1785,8 @@ async function historyHarnessFor(
         accessor,
         onRepositoryUpdated,
         remoteCommands,
+        undefined,
+        vscode.Uri.file(os.tmpdir()),
     );
     const view = makeHistoryWebviewView();
 
@@ -2007,6 +2009,7 @@ interface VscodePatchOptions {
     readonly interceptTerminal?: boolean;
     readonly interceptFloatingWindowMove?: boolean;
     readonly interceptCommitMessagePanel?: boolean;
+    readonly interceptVisualRebasePanel?: boolean;
 }
 
 interface VscodePatchCapture {
@@ -2090,7 +2093,9 @@ async function withPatchedVscode<T>(
     Object.defineProperty(vscode.window, 'createWebviewPanel', {
         configurable: true,
         value: (viewType: string, title: string, showOptions: vscode.ViewColumn, panelOptions: vscode.WebviewPanelOptions & vscode.WebviewOptions) => {
-            if (!options.interceptCommitMessagePanel || viewType !== 'lookGit.commitMessageEditor') {
+            const shouldInterceptCommitMessage = options.interceptCommitMessagePanel && viewType === 'lookGit.commitMessageEditor';
+            const shouldInterceptVisualRebase = options.interceptVisualRebasePanel && viewType === 'lookGit.visualRebase';
+            if (!shouldInterceptCommitMessage && !shouldInterceptVisualRebase) {
                 return originalCreateWebviewPanel.call(vscode.window, viewType, title, showOptions, panelOptions);
             }
             const panel = createE2EWebviewPanel(viewType);

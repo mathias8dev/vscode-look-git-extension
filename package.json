@@ -1075,6 +1075,11 @@
         "category": "Look Git"
       },
       {
+        "command": "lookGit.graph.branch.planInteractiveRebaseOnto",
+        "title": "Plan Interactive Rebase onto This Branch...",
+        "category": "Look Git"
+      },
+      {
         "command": "lookGit.graph.branch.mergeInto",
         "title": "Merge into Current Branch",
         "category": "Look Git"
@@ -2354,9 +2359,14 @@
           "group": "3_graph_branch_history@1"
         },
         {
-          "command": "lookGit.graph.branch.mergeInto",
+          "command": "lookGit.graph.branch.planInteractiveRebaseOnto",
           "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent",
           "group": "3_graph_branch_history@2"
+        },
+        {
+          "command": "lookGit.graph.branch.mergeInto",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent",
+          "group": "3_graph_branch_history@3"
         },
         {
           "command": "lookGit.graph.branch.push",
