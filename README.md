@@ -26,7 +26,9 @@ A modern, React-based Git extension for Visual Studio Code — featuring a visua
 
 - **Multi-expand commits** — open several commits simultaneously; each expands in-place showing its message, author, relative date, and changed files
 - **Inline diff** — click any changed file to open a VS Code diff editor for that commit
-- **Advanced commit actions** — copy revision, cherry-pick, checkout revision, compare with local or a worktree, reset, revert, undo, fixup, squash, drop, and start an interactive rebase
+- **Advanced commit actions** — copy revision, cherry-pick, checkout revision, compare with local or a worktree, reset, revert, undo, fixup, squash, drop, and start a visual interactive rebase
+- **Visual rebase panel** — plan pick, reword, edit, squash, fixup, drop, and break actions in a floating window; merge-aware plans preserve topology
+- **Rebase conflict flow** — reopen an active interactive rebase, inspect conflicted files, open the merge editor, accept current or incoming changes, mark files resolved, continue, skip, or abort
 - **Floating commit message editor** — reword commits in a dedicated floating editor, with generated replacement messages available from VS Code language models
 - **Patch and AI actions** — create patches from commits and ask VS Code language models to explain commit diffs
 - **Branch and tag actions** — create branches and tags from commits, create a branch with a new worktree, and push commits up to a selected point
@@ -44,7 +46,7 @@ A modern, React-based Git extension for Visual Studio Code — featuring a visua
 - **Branch panel** — collapsible Local / Remote / Worktrees tree on the left
 - **WIP rows** — each worktree with uncommitted changes shows a dashed-circle row above its HEAD commit with staged/unstaged/conflict counts
 - **Commit details panel** — click any commit to see its full message, author, and changed files in a side panel
-- **Commit actions** — copy revisions, create patches, explain diffs, cherry-pick, checkout revisions, compare with local or worktrees, reset, revert, undo, reword, fixup, squash, drop, rebase, branch, tag, and push up to a commit
+- **Commit actions** — copy revisions, create patches, explain diffs, cherry-pick, checkout revisions, compare with local or worktrees, reset, revert, undo, reword, fixup, squash, drop, visual rebase, branch, tag, and push up to a commit
 - **Branch actions** — checkout, push, publish, rename, delete, rebase, merge, compare with current or worktrees, and create new branches or worktrees from any branch
 - **Worktree support** — add, remove, open, reveal, lock, unlock, fetch, pull, push, commit, stash, and diff linked worktrees; WIP status fetched per worktree
 - **Submodule visibility** — display submodule entries in the graph branch panel with their repository context

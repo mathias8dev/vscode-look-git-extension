@@ -4,6 +4,23 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.1.0] - 2026-06-15
+
+### Added
+
+#### Visual Rebase
+- Add a floating Visual Rebase panel for commit and graph interactive rebase actions, with editable pick/reword/edit/squash/fixup/drop/break actions and merge-aware planning that preserves topology
+- Detect active interactive rebases when the panel is reopened, then expose Continue, Skip, Abort, merge editor, mark resolved, accept current, and accept incoming actions for conflicted files
+- Add a `lookGit` interactive-rebase-conflicts fixture for testing multi-commit rebases with multiple conflicts
+
+### Fixed
+
+#### Commit History
+- Harden commit context actions so reset, rebase, and other commit commands consistently target the selected commit from Commit History and Look Graph context menus
+
+#### CI
+- Normalize path assertions across macOS and Windows and stabilize Git-backed Visual Rebase tests
+
 ## [1.0.8] - 2026-06-14
 
 ### Added
