@@ -159,6 +159,7 @@ describe('CommitHistoryApp', () => {
         });
 
         const row = screen.getByRole('option', { name: /feat: parent/ });
+        fireEvent.mouseDown(row, { button: 2 });
         fireEvent.contextMenu(row);
 
         expect(row.getAttribute('data-vscode-context')).toContain('"webviewSection":"historyCommit"');
@@ -174,6 +175,7 @@ describe('CommitHistoryApp', () => {
             canUndoCommit: false,
             canCherryPick: true,
         });
+        expect(onContextTarget).toHaveBeenCalledTimes(2);
     });
 
     it('disables cherry-pick for mixed commit selections when one selected commit is already in current history', () => {

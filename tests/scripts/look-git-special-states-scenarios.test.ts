@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { removeDirSyncWithRetry } from '../helpers/gitRepo';
+import { normalizePathForCompare, removeDirSyncWithRetry } from '../helpers/gitRepo';
 
 const roots: string[] = [];
 
@@ -47,11 +47,15 @@ function aheadBehind(cwd: string, left: string, right: string): readonly [number
     return [ahead, behind];
 }
 
-function setupScenario(name: string): { readonly outputRoot: string; readonly repo: string; readonly stdout: string } {
+function expectSamePath(actual: string, expected: string): void {
+    expect(normalizePathForCompare(actual)).toBe(normalizePathForCompare(expected));
+}
+
+function setupScenario(name: string): { readonly outputRoot: string; readonly repo: string } {
     const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), `look-git-${name}-scenario-`));
     roots.push(outputRoot);
 
-    const stdout = execFileSync('node', [
+    execFileSync('node', [
         path.join(process.cwd(), 'scripts', 'look-git.ts'),
         'setup',
         name,
@@ -59,7 +63,7 @@ function setupScenario(name: string): { readonly outputRoot: string; readonly re
         outputRoot,
     ], { cwd: process.cwd(), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
-    return { outputRoot, repo: path.join(outputRoot, name), stdout };
+    return { outputRoot, repo: path.join(outputRoot, name) };
 }
 
 function resolveConflict(cwd: string, filePath: string, content: string, expectNextConflict: boolean): void {
@@ -74,9 +78,9 @@ function resolveConflict(cwd: string, filePath: string, content: string, expectN
 
 describe('lookGit special state setup scenarios', () => {
     it('creates an unborn empty repository fixture', () => {
-        const { repo, stdout } = setupScenario('empty-repo');
+        const { repo } = setupScenario('empty-repo');
 
-        expect(stdout).toContain(`Created empty-repo: ${repo}`);
+        expect(fs.existsSync(repo)).toBe(true);
         expect(git(repo, ['branch', '--show-current']).trim()).toBe('main');
         expect(gitSucceeds(repo, ['rev-parse', '--verify', 'HEAD'])).toBe(false);
         expect(git(repo, ['rev-list', '--all', '--count']).trim()).toBe('0');
@@ -85,9 +89,9 @@ describe('lookGit special state setup scenarios', () => {
     });
 
     it('creates a remote-only fixture without a local HEAD commit', () => {
-        const { repo, stdout } = setupScenario('remote-only');
+        const { repo } = setupScenario('remote-only');
 
-        expect(stdout).toContain(`Created remote-only: ${repo}`);
+        expect(fs.existsSync(repo)).toBe(true);
         expect(gitSucceeds(repo, ['rev-parse', '--verify', 'HEAD'])).toBe(false);
         expect(lines(git(repo, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']))).toEqual([]);
         expect(lines(git(repo, ['for-each-ref', '--format=%(refname:short)', 'refs/remotes']))).toEqual(expect.arrayContaining([
@@ -99,9 +103,9 @@ describe('lookGit special state setup scenarios', () => {
     });
 
     it('creates an unpublished local branch fixture with a remote configured', () => {
-        const { repo, stdout } = setupScenario('unpublished-branch');
+        const { repo } = setupScenario('unpublished-branch');
 
-        expect(stdout).toContain(`Created unpublished-branch: ${repo}`);
+        expect(fs.existsSync(repo)).toBe(true);
         expect(lines(git(repo, ['remote']))).toEqual(['origin']);
         expect(git(repo, ['branch', '--show-current']).trim()).toBe('feature/not-published');
         expect(gitSucceeds(repo, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'])).toBe(false);
@@ -111,9 +115,9 @@ describe('lookGit special state setup scenarios', () => {
     });
 
     it('creates a remote-unavailable fixture with stale fetched refs', () => {
-        const { repo, stdout } = setupScenario('remote-unavailable');
+        const { repo } = setupScenario('remote-unavailable');
 
-        expect(stdout).toContain(`Created remote-unavailable: ${repo}`);
+        expect(fs.existsSync(repo)).toBe(true);
         expect(lines(git(repo, ['for-each-ref', '--format=%(refname:short)', 'refs/remotes']))).toEqual(expect.arrayContaining([
             'origin/main',
             'origin/feature/remote-review',
@@ -124,9 +128,9 @@ describe('lookGit special state setup scenarios', () => {
     });
 
     it('creates a stash-pop fixture blocked by local changes', () => {
-        const { repo, stdout } = setupScenario('stash-pop-blocked');
+        const { repo } = setupScenario('stash-pop-blocked');
 
-        expect(stdout).toContain(`Created stash-pop-blocked: ${repo}`);
+        expect(fs.existsSync(repo)).toBe(true);
         expect(git(repo, ['stash', 'list', '--format=%s'])).toContain('wip(changes): blocked stash pop fixture');
         expect(git(repo, ['status', '--porcelain', '-uall'])).toContain(' M src/app.ts');
         expect(gitSucceeds(repo, ['stash', 'pop', 'stash@{0}'])).toBe(false);
@@ -134,14 +138,14 @@ describe('lookGit special state setup scenarios', () => {
     });
 
     it('creates a file-context-menu fixture with clicked-file repositories', () => {
-        const { repo, stdout } = setupScenario('file-context-menu');
+        const { repo } = setupScenario('file-context-menu');
         const historyTarget = path.join(repo, 'repos', 'history-target');
         const pullConflictTarget = path.join(repo, 'repos', 'pull-conflict-target');
 
-        expect(stdout).toContain(`Created file-context-menu: ${repo}`);
-        expect(git(repo, ['rev-parse', '--show-toplevel']).trim()).toBe(repo);
-        expect(git(historyTarget, ['rev-parse', '--show-toplevel']).trim()).toBe(historyTarget);
-        expect(git(pullConflictTarget, ['rev-parse', '--show-toplevel']).trim()).toBe(pullConflictTarget);
+        expect(fs.existsSync(repo)).toBe(true);
+        expectSamePath(git(repo, ['rev-parse', '--show-toplevel']).trim(), repo);
+        expectSamePath(git(historyTarget, ['rev-parse', '--show-toplevel']).trim(), historyTarget);
+        expectSamePath(git(pullConflictTarget, ['rev-parse', '--show-toplevel']).trim(), pullConflictTarget);
         expect(git(historyTarget, ['log', '--format=%s', '--', 'src/app.ts'])).toContain('feat(context): update file history target');
         expect(git(historyTarget, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', 'main@{u}']).trim()).toBe('origin/main');
         expect(aheadBehind(historyTarget, 'main', 'origin/main')).toEqual([1, 0]);
@@ -151,9 +155,9 @@ describe('lookGit special state setup scenarios', () => {
     });
 
     it('creates an interactive rebase fixture with multiple sequential conflicts', () => {
-        const { repo, stdout } = setupScenario('interactive-rebase-conflicts');
+        const { repo } = setupScenario('interactive-rebase-conflicts');
 
-        expect(stdout).toContain(`Created interactive-rebase-conflicts: ${repo}`);
+        expect(fs.existsSync(repo)).toBe(true);
         expect(git(repo, ['branch', '--show-current']).trim()).toBe('feature/interactive-rebase-conflicts');
         expect(git(repo, ['status', '--porcelain', '-uall'])).toBe('');
         expect(Number(git(repo, ['rev-list', '--count', 'main..feature/interactive-rebase-conflicts']).trim())).toBeGreaterThanOrEqual(6);

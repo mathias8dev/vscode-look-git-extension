@@ -110,7 +110,7 @@ describe('protocol discriminated unions', () => {
                 case 'visualRebase/started': return;
                 case 'visualRebase/completed': return msg.backupRef satisfies string;
                 case 'visualRebase/error': return msg.recommendedAction satisfies 'continue' | 'skip' | undefined;
-                case 'webview/fontSizeChanged': return msg.fontSize satisfies number;
+                case 'ui/fontSizeChanged': return msg.fontSize satisfies number;
             }
         };
         void handle;

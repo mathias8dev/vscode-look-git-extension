@@ -150,7 +150,10 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
 
     private async runCommitContextCommand(command: CommitCommand): Promise<void> {
         const target = this.contextTarget;
-        if (target?.kind !== 'commit') { return; }
+        if (target?.kind !== 'commit') {
+            await vscode.window.showWarningMessage('No graph commit is selected for this command. Right-click a commit row and try again.');
+            return;
+        }
         if (command === 'cherryPick' && target.canCherryPick === false) {
             await vscode.window.showWarningMessage('Cherry-pick is unavailable because the selected commit already exists in the current branch history.');
             return;

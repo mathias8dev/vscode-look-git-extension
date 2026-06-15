@@ -39,6 +39,9 @@ export function CommitHistoryRow({ commit, expanded, selected, showSelectionChec
                 preventDefaultContextMenuItems: true,
             })}
             onClick={(event) => onSelect(commit.hash, selectionModeForEvent(event))}
+            onMouseDown={(event) => {
+                if (event.button === 2) { onContextMenu(); }
+            }}
             onContextMenu={onContextMenu}
             onKeyDown={(event) => {
                 if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -59,7 +62,7 @@ export function CommitHistoryRow({ commit, expanded, selected, showSelectionChec
                 }
                 if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
                     event.preventDefault();
-                    if (!selected) { onSelect(commit.hash, HistoryCommitSelectionMode.Replace); }
+                    onContextMenu();
                     openKeyboardContextMenu(event.currentTarget);
                 }
             }}

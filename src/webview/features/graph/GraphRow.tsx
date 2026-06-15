@@ -57,6 +57,9 @@ export function GraphCommitRow({ row, branches, selected, childHash, parentHash,
                 const mode = event.shiftKey ? 'range' : event.metaKey || event.ctrlKey ? 'toggle' : 'replace';
                 onSelect(commit.hash, mode);
             }}
+            onMouseDown={(event) => {
+                if (event.button === 2) { onOpenContextMenu(commit); }
+            }}
             onContextMenu={() => onOpenContextMenu(commit)}
             onKeyDown={(e) => {
                 if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -71,7 +74,7 @@ export function GraphCommitRow({ row, branches, selected, childHash, parentHash,
                 }
                 if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
                     e.preventDefault();
-                    if (!selected) { onSelect(commit.hash, 'replace'); }
+                    onOpenContextMenu(commit);
                     openKeyboardContextMenu(e.currentTarget);
                 }
             }}

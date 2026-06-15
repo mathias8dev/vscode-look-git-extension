@@ -1,5 +1,8 @@
+// @vitest-environment jsdom
+
+import { fireEvent, render, screen } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { GraphCommitRow } from '../../../src/webview/features/graph/GraphRow';
 import type { GraphRow } from '../../../src/webview/features/graph/layout/graph-lane-model';
 
@@ -110,6 +113,31 @@ describe('GraphCommitRow', () => {
         );
 
         expect(markup).toContain('2024-05-06 07:08:09');
+    });
+
+    it('sets the native context target before the context menu opens', () => {
+        const onOpenContextMenu = vi.fn();
+        render(
+            <GraphCommitRow
+                row={rowWithLane(0)}
+                branches={[]}
+                selected={false}
+                childHash={undefined}
+                parentHash={undefined}
+                canUndoCommit={false}
+                canCherryPick={true}
+                hasMultipleSelectedCommits={false}
+                style={{}}
+                onSelect={() => undefined}
+                onMoveFocus={() => undefined}
+                onOpenContextMenu={onOpenContextMenu}
+                onBranchDoubleClick={() => undefined}
+            />,
+        );
+
+        fireEvent.mouseDown(screen.getByTitle(/commit 0/), { button: 2 });
+
+        expect(onOpenContextMenu).toHaveBeenCalledWith(rowWithLane(0).commit);
     });
 });
 

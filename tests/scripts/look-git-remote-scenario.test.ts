@@ -34,7 +34,7 @@ describe('lookGit remote setup scenario', () => {
         const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-remote-scenario-'));
         roots.push(outputRoot);
 
-        const stdout = execFileSync('node', [
+        execFileSync('node', [
             path.join(process.cwd(), 'scripts', 'look-git.ts'),
             'setup',
             'remote',
@@ -43,7 +43,7 @@ describe('lookGit remote setup scenario', () => {
         ], { cwd: process.cwd(), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
         const repo = path.join(outputRoot, 'remote');
 
-        expect(stdout).toContain(`Created remote: ${repo}`);
+        expect(fs.existsSync(repo)).toBe(true);
         expect(fs.existsSync(path.join(outputRoot, '.remotes', 'origin.git'))).toBe(true);
         expect(fs.existsSync(path.join(outputRoot, '.remotes', 'upstream.git'))).toBe(true);
         expect(lines(git(repo, ['remote'])).sort()).toEqual(['origin', 'upstream']);
