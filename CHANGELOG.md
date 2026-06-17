@@ -4,6 +4,17 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.1.1] - 2026-06-17
+
+### Added
+
+#### Tooling
+- Add Storybook previews for shared controls, Changes panel components, Look Graph components, Commit History components, and full feature scenarios
+- Add searchable icon gallery generation for bundled file icons, Codicons, and Iconify assets
+
+#### Webview
+- Add file icon support for `.plist`, `.pbxproj`, `.gradle`, and `pom.xml` files
+
 ## [1.1.0] - 2026-06-15
 
 ### Added
