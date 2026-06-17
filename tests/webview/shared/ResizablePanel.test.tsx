@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ResizablePanel } from '../../../src/webview/shared/ResizablePanel';
 import { ResizeAxis } from '../../../src/webview/shared/resizeAxis';
 import { ResizeHandleSide } from '../../../src/webview/shared/resizeHandleSide';
@@ -13,6 +13,7 @@ describe('ResizablePanel', () => {
     });
 
     it('resizes an end-side panel with right and left arrows', async () => {
+        const onSizeChange = vi.fn<(size: number) => void>();
         render(
             <ResizablePanel
                 storageKey="lookGit.test.left"
@@ -23,6 +24,7 @@ describe('ResizablePanel', () => {
                 handleSide={ResizeHandleSide.End}
                 ariaLabel="Resize test panel"
                 title="Resize test panel"
+                onSizeChange={onSizeChange}
             >
                 {(style) => <div data-testid="panel" style={style} />}
             </ResizablePanel>,
@@ -34,6 +36,7 @@ describe('ResizablePanel', () => {
         fireEvent.keyDown(separator, { key: 'ArrowRight' });
         await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', '276'));
         expect(localStorage.getItem('lookGit.test.left')).toBe('276');
+        expect(onSizeChange).toHaveBeenCalledWith(276);
 
         fireEvent.keyDown(separator, { key: 'ArrowLeft' });
         await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', '260'));

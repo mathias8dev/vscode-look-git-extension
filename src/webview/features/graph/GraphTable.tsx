@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { BranchInfo, GraphContextTarget } from '../../../protocol/graph/types';
 import type { GraphRow } from './layout/graph-lane-model';
+import { GraphColumnHeader } from './GraphColumnHeader';
 import { GraphCommitRow, type CommitSelectMode } from './GraphRow';
 import { GraphWIPRow } from './GraphWIPRow';
 import { ROW_HEIGHT, rowHeightForFontSize } from './graphRowSizing';
 import { getVisibleGraphRowRange } from './graphVirtualization';
 import type { DisplayRow } from './graphState';
+import {
+    graphTableColumnStyle,
+    readSavedGraphColumnWidths,
+    type GraphColumnId,
+} from './graphTableColumns';
 
 interface GraphTableProps {
     readonly rows: readonly GraphRow[];
@@ -42,7 +48,9 @@ export function GraphTable({
     const [scrollTop, setScrollTop] = useState(0);
     const [viewportHeight, setViewportHeight] = useState(400);
     const [rowHeight, setRowHeight] = useState(ROW_HEIGHT);
+    const [columnWidths, setColumnWidths] = useState(readSavedGraphColumnWidths);
     const totalHeight = displayRows.length * rowHeight + (hasMore ? rowHeight : 0);
+    const tableStyle = graphTableColumnStyle(columnWidths);
 
     const measureViewport = useCallback(() => {
         const el = wrapperRef.current;
@@ -90,6 +98,9 @@ export function GraphTable({
     const visibleDisplayRows = displayRows.slice(firstVisible, lastVisible + 1);
     const selectedHashSet = useMemo(() => new Set(selectedHashes), [selectedHashes]);
     const commitByHash = useMemo(() => new Map(rows.map((row) => [row.commit.hash, row.commit])), [rows]);
+    const handleColumnSizeChange = useCallback((column: GraphColumnId, width: number) => {
+        setColumnWidths((current) => current[column] === width ? current : { ...current, [column]: width });
+    }, []);
 
     const handleOpenContextMenu = useCallback((hash: string) => {
         const hashes = selectedHashSet.has(hash) ? selectedHashes : [hash];
@@ -108,76 +119,96 @@ export function GraphTable({
     }, [commitByHash, onContextTarget, onSelectCommit, rows, selectedHashSet, selectedHashes]);
 
     return (
-        <div className="graph-table-wrapper">
-            <header
-                className="graph-table-header"
-            >
-                <div className="graph-header-message">Message</div>
-                <div className="graph-header-author">Author</div>
-                <div className="graph-header-date">Date</div>
-            </header>
-            <div
-                ref={wrapperRef}
-                className="graph-scroll-area"
-                onScroll={handleScroll}
-            >
-                <div style={{ height: totalHeight, position: 'relative' }}>
-                    {visibleDisplayRows.map((displayRow, i) => {
-                        const top = (firstVisible + i) * rowHeight;
-                        const rowStyle = { position: 'absolute' as const, top, left: 0, right: 0, height: rowHeight };
-                        if (displayRow.kind === 'wip') {
+        <div className="graph-table-wrapper" style={tableStyle}>
+            <div className="graph-table-horizontal">
+                <header
+                    className="graph-table-header"
+                >
+                    <GraphColumnHeader
+                        className="graph-header-message"
+                        column="message"
+                        onSizeChange={handleColumnSizeChange}
+                    >
+                        Message
+                    </GraphColumnHeader>
+                    <GraphColumnHeader
+                        className="graph-header-author"
+                        column="author"
+                        onSizeChange={handleColumnSizeChange}
+                    >
+                        Author
+                    </GraphColumnHeader>
+                    <GraphColumnHeader
+                        className="graph-header-date"
+                        column="date"
+                        onSizeChange={handleColumnSizeChange}
+                    >
+                        Date
+                    </GraphColumnHeader>
+                </header>
+                <div
+                    ref={wrapperRef}
+                    className="graph-scroll-area"
+                    onScroll={handleScroll}
+                >
+                    <div style={{ height: totalHeight, position: 'relative' }}>
+                        {visibleDisplayRows.map((displayRow, i) => {
+                            const top = (firstVisible + i) * rowHeight;
+                            const rowStyle = { position: 'absolute' as const, top, left: 0, right: 0, height: rowHeight };
+                            if (displayRow.kind === 'wip') {
+                                return (
+                                    <GraphWIPRow
+                                        key={`wip:${displayRow.wip.path}`}
+                                        wip={displayRow.wip}
+                                        laneData={displayRow.laneData}
+                                        style={rowStyle}
+                                        rowHeight={rowHeight}
+                                        selected={displayRow.wip.path === selectedWorktreePath}
+                                        onSelect={onSelectWorktree}
+                                    />
+                                );
+                            }
+                            const { row } = displayRow;
+                            const rowSelected = selectedHashSet.has(row.commit.hash);
+                            const selectedCanCherryPick = selectedHashes.every((hash) => commitByHash.get(hash)?.canCherryPick ?? true);
                             return (
-                                <GraphWIPRow
-                                    key={`wip:${displayRow.wip.path}`}
-                                    wip={displayRow.wip}
-                                    laneData={displayRow.laneData}
+                                <GraphCommitRow
+                                    key={row.commit.hash}
+                                    row={row}
+                                    branches={branches}
+                                    selected={rowSelected}
+                                    childHash={childHash(rows, row.commit.hash)}
+                                    parentHash={parentHash(rows, row.commit.hash)}
+                                    canUndoCommit={rows[0]?.commit.hash === row.commit.hash}
+                                    canCherryPick={rowSelected ? selectedCanCherryPick : row.commit.canCherryPick ?? true}
+                                    hasMultipleSelectedCommits={rowSelected && selectedHashes.length > 1}
                                     style={rowStyle}
                                     rowHeight={rowHeight}
-                                    selected={displayRow.wip.path === selectedWorktreePath}
-                                    onSelect={onSelectWorktree}
+                                    onSelect={onSelectCommit}
+                                    onOpenContextMenu={(commit) => handleOpenContextMenu(commit.hash)}
+                                    onBranchDoubleClick={onBranchDoubleClick}
+                                    onMoveFocus={onMoveFocus}
                                 />
                             );
-                        }
-                        const { row } = displayRow;
-                        const rowSelected = selectedHashSet.has(row.commit.hash);
-                        const selectedCanCherryPick = selectedHashes.every((hash) => commitByHash.get(hash)?.canCherryPick ?? true);
-                        return (
-                            <GraphCommitRow
-                                key={row.commit.hash}
-                                row={row}
-                                branches={branches}
-                                selected={rowSelected}
-                                childHash={childHash(rows, row.commit.hash)}
-                                parentHash={parentHash(rows, row.commit.hash)}
-                                canUndoCommit={rows[0]?.commit.hash === row.commit.hash}
-                                canCherryPick={rowSelected ? selectedCanCherryPick : row.commit.canCherryPick ?? true}
-                                hasMultipleSelectedCommits={rowSelected && selectedHashes.length > 1}
-                                style={rowStyle}
-                                rowHeight={rowHeight}
-                                onSelect={onSelectCommit}
-                                onOpenContextMenu={(commit) => handleOpenContextMenu(commit.hash)}
-                                onBranchDoubleClick={onBranchDoubleClick}
-                                onMoveFocus={onMoveFocus}
-                            />
-                        );
-                    })}
-                    {hasMore && (
-                        <button
-                            type="button"
-                            className="graph-load-more"
-                            style={{
-                                position: 'absolute',
-                                top: displayRows.length * rowHeight,
-                                left: 0,
-                                right: 0,
-                                height: rowHeight,
-                            }}
-                            disabled={loadingMore}
-                            onClick={onLoadMore}
-                        >
-                            {loadingMore ? 'Loading commits...' : 'Load more commits'}
-                        </button>
-                    )}
+                        })}
+                        {hasMore && (
+                            <button
+                                type="button"
+                                className="graph-load-more"
+                                style={{
+                                    position: 'absolute',
+                                    top: displayRows.length * rowHeight,
+                                    left: 0,
+                                    right: 0,
+                                    height: rowHeight,
+                                }}
+                                disabled={loadingMore}
+                                onClick={onLoadMore}
+                            >
+                                {loadingMore ? 'Loading commits...' : 'Load more commits'}
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

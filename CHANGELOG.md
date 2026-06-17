@@ -4,9 +4,13 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+
 ## [1.1.1] - 2026-06-17
 
 ### Added
+
+#### Look Graph
+- Add persistent resizable columns for commit message, author, and date in the graph table, with mouse and keyboard resizing
 
 #### Tooling
 - Add Storybook previews for shared controls, Changes panel components, Look Graph components, Commit History components, and full feature scenarios

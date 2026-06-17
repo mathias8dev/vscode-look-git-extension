@@ -460,12 +460,21 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.graph-table-horizontal {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: max(100%, var(--graph-table-min-width, 790px));
+    min-height: 0;
 }
 
 .graph-table-header {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 110px 150px;
+    grid-template-columns: var(--graph-message-column-width, 520px) var(--graph-author-column-width, 120px) var(--graph-date-column-width, 160px);
     align-items: center;
     height: 28px;
     padding: 0 var(--look-git-space-sm);
@@ -479,6 +488,26 @@
     flex-shrink: 0;
 }
 
+.graph-header-cell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    height: 100%;
+    padding: 0 var(--look-git-space-sm);
+}
+
+.graph-header-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.graph-table-header > .resizable-panel-handle-horizontal {
+    height: 100%;
+    margin-left: -5px;
+}
+
 .graph-scroll-area {
     flex: 1;
     overflow-y: auto;
@@ -487,7 +516,7 @@
 
 .graph-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 110px 150px;
+    grid-template-columns: var(--graph-message-column-width, 520px) var(--graph-author-column-width, 120px) var(--graph-date-column-width, 160px);
     align-items: center;
     position: relative;
     height: 28px;

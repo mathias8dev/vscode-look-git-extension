@@ -19,6 +19,7 @@ interface ResizablePanelProps {
     readonly handleSide: ResizeHandleSide;
     readonly ariaLabel: string;
     readonly title: string;
+    readonly onSizeChange?: (size: number) => void;
     readonly children: (style: CSSProperties) => ReactNode;
 }
 
@@ -39,6 +40,7 @@ export function ResizablePanel({
     handleSide,
     ariaLabel,
     title,
+    onSizeChange,
     children,
 }: ResizablePanelProps) {
     const [size, setSize] = useState(() => readSavedSize(storageKey, minSize, maxSize, defaultSize));
@@ -50,6 +52,12 @@ export function ResizablePanel({
     const saveSize = useCallback((value: number) => {
         try { localStorage.setItem(storageKey, String(value)); } catch {}
     }, [storageKey]);
+
+    const setPanelSize = useCallback((value: number, save: boolean) => {
+        setSize(value);
+        onSizeChange?.(value);
+        if (save) { saveSize(value); }
+    }, [onSizeChange, saveSize]);
 
     const finishResize = useCallback((target?: HTMLDivElement, nextSize?: number) => {
         const drag = dragRef.current;
@@ -91,16 +99,16 @@ export function ResizablePanel({
     const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         const drag = dragRef.current;
         if (!drag || drag.pointerId !== event.pointerId) { return; }
-        setSize(sizeForCoordinate(coordinateForEvent(event, axis)));
-    }, [axis, sizeForCoordinate]);
+        setPanelSize(sizeForCoordinate(coordinateForEvent(event, axis)), false);
+    }, [axis, setPanelSize, sizeForCoordinate]);
 
     const handlePointerEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         const drag = dragRef.current;
         if (!drag || drag.pointerId !== event.pointerId) { return; }
         const nextSize = sizeForCoordinate(coordinateForEvent(event, axis));
-        setSize(nextSize);
+        setPanelSize(nextSize, false);
         finishResize(event.currentTarget, nextSize);
-    }, [axis, finishResize, sizeForCoordinate]);
+    }, [axis, finishResize, setPanelSize, sizeForCoordinate]);
 
     const handlePointerCancel = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         const drag = dragRef.current;
@@ -147,9 +155,8 @@ export function ResizablePanel({
             }
         }
         event.preventDefault();
-        setSize(nextSize);
-        saveSize(nextSize);
-    }, [axis, clampSize, handleSide, maxSize, minSize, saveSize, size]);
+        setPanelSize(nextSize, true);
+    }, [axis, clampSize, handleSide, maxSize, minSize, setPanelSize, size]);
 
     const style = styleForAxis(axis, size);
     const handle = (
