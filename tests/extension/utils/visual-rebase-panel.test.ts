@@ -83,7 +83,7 @@ describe('openVisualRebasePanel', () => {
         panel?.webview.messageHandler?.({ type: 'visualRebase/abort' });
 
         await expect.poll(() => rebaseDirectoryExists(fixture.cwd), GIT_OPERATION_POLL).toBe(false);
-        expect(panel?.webview.messages).toContainEqual(expect.objectContaining({
+        await expect.poll(() => panel?.webview.messages, GIT_OPERATION_POLL).toContainEqual(expect.objectContaining({
             type: 'visualRebase/error',
             message: 'Rebase aborted.',
         }));

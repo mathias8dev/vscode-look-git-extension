@@ -4,18 +4,29 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-const RETRYABLE_RM_ERRORS = new Set(['EBUSY', 'ENOTEMPTY', 'EPERM']);
+const RETRYABLE_RM_ERRORS = new Set(['EBUSY', 'ENOTEMPTY', 'EPERM', 'EACCES']);
+const RM_MAX_ATTEMPTS = 10;
 
 function sleepSync(ms: number): void {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 export function removeDirSyncWithRetry(dirPath: string): void {
-    for (let attempt = 0; attempt < 8; attempt++) {
-        try { fs.rmSync(dirPath, { recursive: true, force: true }); return; }
-        catch (error) {
+    for (let attempt = 0; attempt < RM_MAX_ATTEMPTS; attempt++) {
+        try {
+            // maxRetries/retryDelay add native linear backoff for Windows file-lock errors
+            // (EBUSY/EPERM/ENOTEMPTY) within a single call; the outer loop waits longer between
+            // calls for a lingering git child-process handle on the temp repo to be released.
+            fs.rmSync(dirPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+            return;
+        } catch (error) {
             const code = (error as NodeJS.ErrnoException).code;
-            if (!code || !RETRYABLE_RM_ERRORS.has(code) || attempt === 7) { throw error; }
+            if (!code || !RETRYABLE_RM_ERRORS.has(code)) { throw error; }
+            if (attempt === RM_MAX_ATTEMPTS - 1) {
+                // Best-effort teardown: a temp dir we cannot unlink (a stuck git handle on Windows)
+                // must not fail an otherwise-passing test. The OS reclaims os.tmpdir() eventually.
+                return;
+            }
             sleepSync(100 * (attempt + 1));
         }
     }
