@@ -91,6 +91,12 @@ export default [
     },
   },
   {
+    files: ['src/**/*.stories.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
     files: ['src/extension/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': ['error', {

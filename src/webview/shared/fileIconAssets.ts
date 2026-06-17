@@ -11,6 +11,7 @@ import fileTypeDocker from '@iconify/icons-vscode-icons/file-type-docker';
 import fileTypeFlutter from '@iconify/icons-vscode-icons/file-type-flutter';
 import fileTypeGit from '@iconify/icons-vscode-icons/file-type-git';
 import fileTypeGo from '@iconify/icons-vscode-icons/file-type-go';
+import fileTypeGradle from '@iconify/icons-vscode-icons/file-type-gradle';
 import fileTypeGraphql from '@iconify/icons-vscode-icons/file-type-graphql';
 import fileTypeHtml from '@iconify/icons-vscode-icons/file-type-html';
 import fileTypeImage from '@iconify/icons-vscode-icons/file-type-image';
@@ -20,6 +21,7 @@ import fileTypeJsOfficial from '@iconify/icons-vscode-icons/file-type-js-officia
 import fileTypeJson from '@iconify/icons-vscode-icons/file-type-json';
 import fileTypeKotlin from '@iconify/icons-vscode-icons/file-type-kotlin';
 import fileTypeMarkdown from '@iconify/icons-vscode-icons/file-type-markdown';
+import fileTypeMaven from '@iconify/icons-vscode-icons/file-type-maven';
 import fileTypeNpm from '@iconify/icons-vscode-icons/file-type-npm';
 import fileTypePhp from '@iconify/icons-vscode-icons/file-type-php';
 import fileTypePowershell from '@iconify/icons-vscode-icons/file-type-powershell';
@@ -36,6 +38,7 @@ import fileTypeToml from '@iconify/icons-vscode-icons/file-type-toml';
 import fileTypeTypescriptOfficial from '@iconify/icons-vscode-icons/file-type-typescript-official';
 import fileTypeVue from '@iconify/icons-vscode-icons/file-type-vue';
 import fileTypeXml from '@iconify/icons-vscode-icons/file-type-xml';
+import fileTypeXcode from '@iconify/icons-vscode-icons/file-type-xcode';
 import fileTypeYaml from '@iconify/icons-vscode-icons/file-type-yaml';
 import type { IconifySvgData } from './IconifySvg';
 import type { WebviewFileIconKind } from './fileIconModel';
@@ -110,6 +113,14 @@ export function iconForFileKind(kind: WebviewFileIconKind): IconifySvgData {
             return fileTypePrisma;
         case 'tailwind':
             return fileTypeTailwind;
+        case 'xcode':
+            return fileTypeXcode;
+        case 'plist':
+            return fileTypeConfig;
+        case 'gradle':
+            return fileTypeGradle;
+        case 'maven':
+            return fileTypeMaven;
         case 'package':
             return fileTypeNpm;
         case 'git':

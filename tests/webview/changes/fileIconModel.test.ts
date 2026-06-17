@@ -23,6 +23,10 @@ describe('fileIconModel', () => {
         expect(iconKindForPath('schema.prisma')).toBe('prisma');
         expect(iconKindForPath('src/App.vue')).toBe('vue');
         expect(iconKindForPath('src/App.svelte')).toBe('svelte');
+        expect(iconKindForPath('ios/Info.plist')).toBe('plist');
+        expect(iconKindForPath('ios/App.xcodeproj/project.pbxproj')).toBe('xcode');
+        expect(iconKindForPath('android/build.gradle')).toBe('gradle');
+        expect(iconKindForPath('pom.xml')).toBe('maven');
     });
 
     it('marks submodule status entries explicitly', () => {

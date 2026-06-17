@@ -1,0 +1,105 @@
+.storybook-vscode-shell {
+    min-height: 100vh;
+    padding: 1em;
+    color: var(--vscode-foreground, #cccccc);
+    background: var(--vscode-sideBar-background, var(--vscode-editor-background, #1e1e1e));
+    --vscode-font-family: system-ui, sans-serif;
+    --vscode-font-size: 13px;
+    --vscode-foreground: #cccccc;
+    --vscode-descriptionForeground: #9d9d9d;
+    --vscode-editor-background: #1e1e1e;
+    --vscode-sideBar-background: #252526;
+    --vscode-sideBarSectionHeader-background: #2d2d2d;
+    --vscode-sideBarSectionHeader-border: #3c3c3c;
+    --vscode-panel-border: #3c3c3c;
+    --vscode-focusBorder: #007fd4;
+    --vscode-input-background: #3c3c3c;
+    --vscode-input-foreground: #cccccc;
+    --vscode-input-border: #3c3c3c;
+    --vscode-input-placeholderForeground: #9d9d9d;
+    --vscode-inputValidation-errorForeground: #f14c4c;
+    --vscode-inputValidation-errorBorder: #f14c4c;
+    --vscode-inputValidation-warningBorder: #cca700;
+    --vscode-button-foreground: #ffffff;
+    --vscode-button-background: #0e639c;
+    --vscode-button-hoverBackground: #1177bb;
+    --vscode-button-border: transparent;
+    --vscode-button-secondaryForeground: #cccccc;
+    --vscode-button-secondaryBackground: #333333;
+    --vscode-button-secondaryHoverBackground: #444444;
+    --vscode-toolbar-hoverBackground: rgba(255, 255, 255, 0.1);
+    --vscode-list-hoverBackground: rgba(255, 255, 255, 0.08);
+    --vscode-list-activeSelectionBackground: #04395e;
+    --vscode-list-activeSelectionForeground: #ffffff;
+    --vscode-gitDecoration-modifiedResourceForeground: #cca700;
+    --vscode-gitDecoration-addedResourceForeground: #89d185;
+    --vscode-gitDecoration-deletedResourceForeground: #f14c4c;
+    --vscode-gitDecoration-untrackedResourceForeground: #73c991;
+    --vscode-gitDecoration-conflictingResourceForeground: #ffab70;
+    --vscode-progressBar-background: #0e70c0;
+    --vscode-testing-iconPassed: #89d185;
+}
+
+.storybook-surface {
+    max-width: 720px;
+}
+
+.storybook-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6em;
+}
+
+.storybook-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(8em, 1fr));
+    gap: 0.8em;
+}
+
+.storybook-icon-card {
+    display: grid;
+    gap: 0.45em;
+    justify-items: center;
+    min-width: 0;
+    border: 1px solid var(--vscode-panel-border, #3c3c3c);
+    border-radius: 4px;
+    padding: 0.8em;
+    background: var(--vscode-editor-background, #1e1e1e);
+}
+
+.storybook-icon-label {
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.85em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.storybook-app-frame {
+    height: 42em;
+    overflow: auto;
+    border: 1px solid var(--vscode-panel-border, #3c3c3c);
+    background: var(--vscode-sideBar-background, #252526);
+}
+
+.storybook-graph-frame {
+    display: grid;
+    grid-template-columns: minmax(14em, 18em) minmax(24em, 1fr) minmax(16em, 22em);
+    height: 34em;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--vscode-panel-border, #3c3c3c);
+    background: var(--vscode-editor-background, #1e1e1e);
+}
+
+.storybook-graph-frame .graph-table-wrapper {
+    min-width: 0;
+}
+
+.storybook-graph-panel {
+    min-width: 0;
+    overflow: hidden;
+    border-left: 1px solid var(--vscode-panel-border, #3c3c3c);
+}

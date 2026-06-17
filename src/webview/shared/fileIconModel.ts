@@ -33,6 +33,10 @@ export type WebviewFileIconKind =
     | 'graphql'
     | 'prisma'
     | 'tailwind'
+    | 'xcode'
+    | 'plist'
+    | 'gradle'
+    | 'maven'
     | 'config'
     | 'properties'
     | 'package'
@@ -45,11 +49,12 @@ export function iconKindForPath(filePath: string): WebviewFileIconKind {
     const extension = name.includes('.') ? name.split('.').pop() ?? '' : '';
 
     if (name === 'package.json') { return 'package'; }
+    if (name === 'pom.xml') { return 'maven'; }
     if (name === 'fastfile') { return 'ruby'; }
     if (name === 'bin') { return 'binary'; }
     if (name.startsWith('.git') || name === 'gitignore' || name === 'gitattributes') { return 'git'; }
     if (name === 'pubspec.yaml' || name === 'pubspec.yml' || name === 'pubspec.lock') { return 'flutter'; }
-    if (name === 'dockerfile' || name.startsWith('dockerfile.') || name === 'docker-compose.yml' || name === 'docker-compose.yaml') { return 'docker'; }
+    if (name === 'dockerfile' || name.startsWith('dockerfile.') || name === 'docker-compose.yml' || name === 'docker-compose.yaml' || (name.includes('docker') && (name.endsWith('.yml') || name.endsWith('.yaml')))) { return 'docker'; }
     if (name.startsWith('tailwind.config.')) { return 'tailwind'; }
     if (name === 'rust-toolchain' || name === 'rust-toolchain.toml') { return 'rust'; }
     if (isConfigFile(name)) { return 'config'; }
@@ -118,6 +123,12 @@ export function iconKindForPath(filePath: string): WebviewFileIconKind {
             return 'yaml';
         case 'xml':
             return 'xml';
+        case 'plist':
+            return 'plist';
+        case 'pbxproj':
+            return 'xcode';
+        case 'gradle':
+            return 'gradle';
         case 'vue':
             return 'vue';
         case 'svelte':
