@@ -4,6 +4,13 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.1.2] - 2026-06-17
+
+### Changed
+
+#### Packaging
+- Exclude Storybook configuration and generated Storybook/artifact output from VSCE packages
+
 
 ## [1.1.1] - 2026-06-17
 

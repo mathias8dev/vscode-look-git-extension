@@ -10,6 +10,7 @@
 
 # Dev tools & config
 node_modules/**
+.storybook/**
 .vscode-test/**
 .wdio-vscode/**
 .look-git-fixtures
@@ -32,6 +33,8 @@ vitest.config.ts
 index.html
 
 # Artifacts
+artifacts/**
+storybook-static/**
 *.tsbuildinfo
 *.vsix
 
