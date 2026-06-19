@@ -18,22 +18,24 @@ export function GraphColumnHeader({
 }: GraphColumnHeaderProps) {
     const config = GRAPH_COLUMNS[column];
     return (
-        <ResizablePanel
-            storageKey={config.storageKey}
-            defaultSize={config.defaultSize}
-            minSize={config.minSize}
-            maxSize={config.maxSize}
-            axis={ResizeAxis.Horizontal}
-            handleSide={ResizeHandleSide.End}
-            ariaLabel={`Resize ${config.label} column`}
-            title={`Drag or use arrow keys to resize ${config.label} column`}
-            onSizeChange={(width) => onSizeChange(column, width)}
-        >
-            {(style) => (
-                <div className={`graph-header-cell ${className}`} style={style}>
-                    <span className="graph-header-label">{children}</span>
-                </div>
-            )}
-        </ResizablePanel>
+        <div className="graph-header-resizable-column">
+            <ResizablePanel
+                storageKey={config.storageKey}
+                defaultSize={config.defaultSize}
+                minSize={config.minSize}
+                maxSize={config.maxSize}
+                axis={ResizeAxis.Horizontal}
+                handleSide={ResizeHandleSide.End}
+                ariaLabel={`Resize ${config.label} column`}
+                title={`Drag or use arrow keys to resize ${config.label} column`}
+                onSizeChange={(width) => onSizeChange(column, width)}
+            >
+                {(style) => (
+                    <div className={`graph-header-cell ${className}`} style={style}>
+                        <span className="graph-header-label">{children}</span>
+                    </div>
+                )}
+            </ResizablePanel>
+        </div>
     );
 }

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { RenderResult } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { GraphTable } from '../../../src/webview/features/graph/GraphTable';
 
@@ -41,6 +42,18 @@ describe('GraphTable column resizing', () => {
         expect(localStorage.getItem('lookGit.graph.dateColumnWidth')).toBe('260');
     });
 
+    it('keeps graph column headers aligned with table columns', () => {
+        const { container } = renderGraphTable();
+
+        const header = container.querySelector('.graph-table-header');
+        expect(header?.children).toHaveLength(3);
+        expect(Array.from(header?.children ?? []).map((child) => child.textContent)).toEqual([
+            'Message',
+            'Author',
+            'Date',
+        ]);
+    });
+
     it('resizes a graph column by dragging', async () => {
         renderGraphTable();
 
@@ -58,8 +71,8 @@ describe('GraphTable column resizing', () => {
     });
 });
 
-function renderGraphTable(): void {
-    render(
+function renderGraphTable(): RenderResult {
+    return render(
         <GraphTable
             rows={[]}
             displayRows={[]}

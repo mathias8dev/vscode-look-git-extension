@@ -497,13 +497,20 @@
     padding: 0 var(--look-git-space-sm);
 }
 
+.graph-header-resizable-column {
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+    height: 100%;
+}
+
 .graph-header-label {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.graph-table-header > .resizable-panel-handle-horizontal {
+.graph-header-resizable-column > .resizable-panel-handle-horizontal {
     height: 100%;
     margin-left: -5px;
 }
