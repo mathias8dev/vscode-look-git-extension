@@ -398,6 +398,19 @@ function isExpectedGraphError(state: GraphState, requestId: string | undefined):
 function applyGraphData(state: GraphState, data: GraphData, repoId: string | undefined): GraphState {
     const currentBranch = data.currentBranch;
     const appending = state.loadingMore && sameRepositoryScope(data.repositoryScope, state.repositoryScope);
+    const submodules = appending
+        ? state.submodules
+        : mergeSubmoduleSummaries(state.submodules, data.submodules);
+    if (!appending && graphDataMatchesState(state, data, submodules)) {
+        return {
+            ...state,
+            loading: false,
+            loadingMore: false,
+            error: undefined,
+            repoId: repoId ?? state.repoId,
+            activeGraphRequestId: undefined,
+        };
+    }
     const firstLoadedHash = state.rows[0]?.commit.hash;
     const expandedPrefixLoadMore = appending
         && firstLoadedHash !== undefined
@@ -415,9 +428,6 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
     });
     const rows = layoutState.rows;
     const displayRows = buildDisplayRows(rows, data.worktreeWips ?? []);
-    const submodules = appending
-        ? state.submodules
-        : data.submodules;
     return {
         ...state,
         rows,
@@ -485,6 +495,14 @@ function repositoryScopeKey(scope: GraphRepositoryScope | undefined): string {
     return `submodule:${scope.path ?? ''}`;
 }
 
+function repositoryScopesEqual(a: GraphRepositoryScope | undefined, b: GraphRepositoryScope | undefined): boolean {
+    const left = a ?? { kind: 'main' };
+    const right = b ?? { kind: 'main' };
+    return left.kind === right.kind
+        && left.path === right.path
+        && left.label === right.label;
+}
+
 function currentBranchHash(branches: readonly BranchInfo[]): string | undefined {
     return branches.find((branch) => branch.isCurrent && !branch.isRemote)?.hash;
 }
@@ -513,4 +531,124 @@ function uniqueGraphCommits(commits: readonly GraphCommit[]): readonly GraphComm
 function newGraphCommits(rows: readonly GraphRow[], commits: readonly GraphCommit[]): readonly GraphCommit[] {
     const seen = new Set(rows.map((row) => row.commit.hash));
     return commits.filter((commit) => !seen.has(commit.hash));
+}
+
+function graphDataMatchesState(state: GraphState, data: GraphData, submodules: readonly GraphSubmoduleInfo[]): boolean {
+    return repositoryScopesEqual(data.repositoryScope, state.repositoryScope)
+        && state.currentBranch === data.currentBranch
+        && state.currentUser === data.currentUser
+        && state.hasRemotes === data.hasRemotes
+        && state.hasMore === data.hasMore
+        && state.loadedCount === data.loadedCount
+        && graphCommitsEqual(state.rows.map((row) => row.commit), data.commits)
+        && branchesEqual(state.branches, data.branches)
+        && tagsEqual(state.tags, data.tags)
+        && worktreesEqual(state.worktrees, data.worktrees)
+        && worktreeWipsEqual(state.displayRows, data.worktreeWips)
+        && submodulesEqual(state.submodules, submodules);
+}
+
+function mergeSubmoduleSummaries(
+    previous: readonly GraphSubmoduleInfo[],
+    incoming: readonly GraphSubmoduleInfo[],
+): readonly GraphSubmoduleInfo[] {
+    const previousByPath = new Map(previous.map((submodule) => [submodule.path, submodule]));
+    return incoming.map((submodule) => {
+        const existing = previousByPath.get(submodule.path);
+        if (!existing || existing.name !== submodule.name || existing.status !== submodule.status) { return submodule; }
+        if (submodule.branches.length > 0 || submodule.worktrees.length > 0) { return submodule; }
+        return existing;
+    });
+}
+
+function graphCommitsEqual(a: readonly GraphCommit[], b: readonly GraphCommit[]): boolean {
+    return arraysEqual(a, b, graphCommitEqual);
+}
+
+function graphCommitEqual(a: GraphCommit, b: GraphCommit): boolean {
+    return a.hash === b.hash
+        && a.shortHash === b.shortHash
+        && a.message === b.message
+        && a.authorName === b.authorName
+        && a.authorEmail === b.authorEmail
+        && a.authorDate === b.authorDate
+        && a.matchesFilter === b.matchesFilter
+        && a.canCherryPick === b.canCherryPick
+        && stringArraysEqual(a.parentHashes, b.parentHashes)
+        && stringArraysEqual(a.refs, b.refs);
+}
+
+function branchesEqual(a: readonly BranchInfo[], b: readonly BranchInfo[]): boolean {
+    return arraysEqual(a, b, branchEqual);
+}
+
+function branchEqual(a: BranchInfo, b: BranchInfo): boolean {
+    return a.name === b.name
+        && a.isRemote === b.isRemote
+        && a.isCurrent === b.isCurrent
+        && a.hash === b.hash
+        && a.upstream === b.upstream
+        && a.ahead === b.ahead
+        && a.behind === b.behind;
+}
+
+function tagsEqual(a: readonly TagInfo[], b: readonly TagInfo[]): boolean {
+    return arraysEqual(a, b, (left, right) => left.name === right.name && left.hash === right.hash);
+}
+
+function worktreesEqual(a: readonly WorktreeInfo[], b: readonly WorktreeInfo[]): boolean {
+    return arraysEqual(a, b, worktreeEqual);
+}
+
+function worktreeEqual(a: WorktreeInfo, b: WorktreeInfo): boolean {
+    return a.path === b.path
+        && a.head === b.head
+        && a.branch === b.branch
+        && a.isMain === b.isMain
+        && a.isDetached === b.isDetached
+        && a.isLocked === b.isLocked
+        && a.lockReason === b.lockReason;
+}
+
+function worktreeWipsEqual(displayRows: readonly DisplayRow[], wips: readonly WorktreeWip[]): boolean {
+    const currentWips = displayRows
+        .filter((displayRow): displayRow is Extract<DisplayRow, { readonly kind: 'wip' }> => displayRow.kind === 'wip')
+        .map((displayRow) => displayRow.wip);
+    return arraysEqual(currentWips, wips, worktreeWipEqual);
+}
+
+function worktreeWipEqual(a: WorktreeWip, b: WorktreeWip): boolean {
+    return a.path === b.path
+        && a.head === b.head
+        && a.branch === b.branch
+        && a.staged === b.staged
+        && a.unstaged === b.unstaged
+        && a.untracked === b.untracked
+        && a.conflicts === b.conflicts;
+}
+
+function submodulesEqual(a: readonly GraphSubmoduleInfo[], b: readonly GraphSubmoduleInfo[]): boolean {
+    return arraysEqual(a, b, submoduleEqual);
+}
+
+function submoduleEqual(a: GraphSubmoduleInfo, b: GraphSubmoduleInfo): boolean {
+    return a.path === b.path
+        && a.name === b.name
+        && a.status === b.status
+        && branchesEqual(a.branches, b.branches)
+        && worktreesEqual(a.worktrees, b.worktrees);
+}
+
+function stringArraysEqual(a: readonly string[], b: readonly string[]): boolean {
+    return arraysEqual(a, b, (left, right) => left === right);
+}
+
+function arraysEqual<T>(a: readonly T[], b: readonly T[], itemEqual: (left: T, right: T) => boolean): boolean {
+    if (a.length !== b.length) { return false; }
+    for (let index = 0; index < a.length; index += 1) {
+        const left = a[index];
+        const right = b[index];
+        if (left === undefined || right === undefined || !itemEqual(left, right)) { return false; }
+    }
+    return true;
 }

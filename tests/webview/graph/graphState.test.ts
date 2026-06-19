@@ -265,6 +265,37 @@ describe('graphState', () => {
         expect(refreshed.filters).toEqual({ search: 'needle' });
     });
 
+    it('keeps graph row identity when refreshed graph data is unchanged', () => {
+        const data = {
+            ...graphData([commit('b', ['a']), commit('a')], 2, false),
+            branches: [branch('main')],
+        };
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data,
+            },
+        });
+        const refreshing = reduceGraphState(loaded, { type: 'refreshRequested' });
+        const refreshed = reduceGraphState(refreshing, {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(1, 'replace'),
+                data,
+            },
+        });
+
+        expect(refreshed.loading).toBe(false);
+        expect(refreshed.activeGraphRequestId).toBeUndefined();
+        expect(refreshed.rows).toBe(loaded.rows);
+        expect(refreshed.layoutState).toBe(loaded.layoutState);
+        expect(refreshed.displayRows).toBe(loaded.displayRows);
+        expect(refreshed.branches).toBe(loaded.branches);
+    });
+
     it('uses the current branch hash to mark the primary spine when refs are missing', () => {
         const head = commit('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', ['base']);
         const state = reduceGraphState(createInitialGraphState(), {
@@ -712,6 +743,57 @@ describe('graphState', () => {
         expect(hydrated.rows).toBe(loaded.rows);
         expect(hydrated.displayRows).toBe(loaded.displayRows);
         expect(hydrated.submodules[0]?.branches).toEqual([branch('feature/oauth')]);
+    });
+
+    it('preserves hydrated submodule summaries when refreshed graph data only includes summaries', () => {
+        const summarySubmodule = {
+            path: 'modules/auth-kit',
+            name: 'auth-kit',
+            status: SubmoduleStatus.Dirty,
+            branches: [],
+            worktrees: [],
+        };
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: {
+                    ...graphData([commit('a')], 1, false),
+                    submodules: [summarySubmodule],
+                },
+            },
+        });
+        const hydrated = reduceGraphState(loaded, {
+            type: 'message',
+            message: {
+                type: 'graph/submodulesPush',
+                repoId: '/repo',
+                repositoryScope: { kind: 'main' },
+                submodules: [{
+                    ...summarySubmodule,
+                    branches: [branch('feature/oauth')],
+                    worktrees: [],
+                }],
+            },
+        });
+        const refreshing = reduceGraphState(hydrated, { type: 'refreshRequested' });
+        const refreshed = reduceGraphState(refreshing, {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(1, 'replace'),
+                data: {
+                    ...graphData([commit('a')], 1, false),
+                    submodules: [summarySubmodule],
+                },
+            },
+        });
+
+        expect(refreshed.rows).toBe(hydrated.rows);
+        expect(refreshed.displayRows).toBe(hydrated.displayRows);
+        expect(refreshed.submodules).toBe(hydrated.submodules);
+        expect(refreshed.submodules[0]?.branches).toEqual([branch('feature/oauth')]);
     });
 
     it('preserves hydrated submodule summaries while loading more commits', () => {
