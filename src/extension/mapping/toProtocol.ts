@@ -4,7 +4,7 @@ import type { GitBranch } from '../../core/git/domain/GitStatus';
 import type { GitWorktree, GitSubmodule } from '../../core/git/domain/GitWorktree';
 import { RepoKind, type RepoContext } from '../../core/git/domain/RepoContext';
 import type { BranchInfo, GraphCommit, GraphSubmoduleInfo, WorktreeInfo } from '../../protocol/graph/types';
-import { SubmoduleStatus, type SerializedRepoContext } from '../../protocol/shared/repo';
+import { SubmoduleStatus, type RepositoryLocator, type SerializedRepoContext, type WorktreeLocator } from '../../protocol/shared/repo';
 
 export function toProtocolGraphCommit(commit: GitGraphCommit): GraphCommit {
     return {
@@ -78,6 +78,24 @@ export function toSerializedRepoContext(context: RepoContext): SerializedRepoCon
         kind: toSerializedRepoKind(context.kind),
         parentId: context.parentId,
         label: context.label,
+    };
+}
+
+export function toRepositoryLocator(context: RepoContext): RepositoryLocator {
+    const repoId = context.kind === RepoKind.Worktree ? context.parentId ?? context.id : context.id;
+    return {
+        repoId,
+        kind: context.kind === RepoKind.Submodule ? 'submodule' : 'main',
+        path: context.cwd,
+        parentRepoId: context.kind === RepoKind.Submodule ? context.parentId : undefined,
+    };
+}
+
+export function toWorktreeLocator(context: RepoContext): WorktreeLocator {
+    return {
+        repoId: context.parentId ?? context.id,
+        worktreeId: context.id,
+        path: context.cwd,
     };
 }
 

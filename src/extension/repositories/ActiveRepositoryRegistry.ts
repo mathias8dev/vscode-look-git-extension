@@ -4,6 +4,8 @@ import * as vscode from 'vscode';
 import type { GitRepository } from '../../application/ports/git-repository';
 import { RepoKind, type RepoContext } from '../../core/git/domain/RepoContext';
 import { GitProcessRepository } from '../git/GitProcessRepository';
+import { RuntimeRepositoryFactory } from '../git/runtime-repository-factory';
+import type { RepositoryRegistry } from './RepositoryRegistry';
 
 export interface ActiveRepositoryState {
     readonly repo: GitRepository | undefined;
@@ -30,7 +32,10 @@ export class ActiveRepositoryRegistry implements GitRepositoryStore, vscode.Disp
     private repo: GitRepository | undefined;
     private context: RepoContext | undefined;
 
-    constructor(private readonly createRepository: GitRepositoryFactory = (cwd) => new GitProcessRepository(cwd)) {}
+    constructor(
+        private readonly createRepository: GitRepositoryFactory = (cwd) => new GitProcessRepository(cwd),
+        private readonly runtimeRepositoryFactory = new RuntimeRepositoryFactory(),
+    ) {}
 
     get currentRepository(): GitRepository | undefined {
         return this.repo;
@@ -68,6 +73,17 @@ export class ActiveRepositoryRegistry implements GitRepositoryStore, vscode.Disp
         }
 
         this.update(this.repositoryForRoot(normalizedCwd), createRepoContext(normalizedCwd));
+    }
+
+    async registerCurrentRuntimeContext(registry: RepositoryRegistry): Promise<void> {
+        if (!this.repo || !this.context) { return; }
+
+        const [repository, worktree] = await Promise.all([
+            this.runtimeRepositoryFactory.createRepository(this.repo, this.context),
+            this.runtimeRepositoryFactory.createMainWorktree(this.repo, this.context),
+        ]);
+        registry.registerRepository(repository);
+        registry.registerWorktree(worktree);
     }
 
     dispose(): void {
