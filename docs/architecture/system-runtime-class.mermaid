@@ -1,0 +1,243 @@
+classDiagram
+direction LR
+
+class ExtensionActivator {
+  <<extension>>
+  +activate(context)
+  +deactivate()
+}
+
+class RepositoryRegistry {
+  <<extension service>>
+  +setActiveRepository(cwd)
+  +onDidChangeRepository()
+  +repositories()
+}
+
+class GitApiAdapter {
+  <<extension adapter>>
+  +discoverOpenRepositories()
+  +watchRepositoryState()
+}
+
+class GitRepositoryFactory {
+  <<extension service>>
+  +createRepository(locator)
+  +createWorktree(repository, worktreeMetadata)
+}
+
+class RuntimeGitRepository {
+  <<extension adapter>>
+  +getCommitGraph(query, pageRequest, signal)
+  +getCommitDetails(commit, signal)
+  +getCommitFileDiff(commit, path, signal)
+  +listBranches(signal)
+  +listTags(signal)
+  +listWorktrees(signal)
+  +listSubmodules(signal)
+  +addWorktree(input, signal)
+  +removeWorktree(worktree, signal)
+  +updateSubmodule(path, signal)
+  +fetch(remote, signal)
+}
+
+class RuntimeWorktree {
+  <<extension adapter>>
+  +getStatus(signal)
+  +stage(paths, signal)
+  +unstage(paths, signal)
+  +commit(message, signal)
+  +stash(message, signal)
+  +cherryPick(commit, signal)
+  +checkout(ref, signal)
+  +pull(signal)
+  +push(remote, signal)
+}
+
+class RepositoryOperationCapabilities {
+  <<application port>>
+  history()
+  fileHistory()
+  blame()
+  compare()
+  references()
+  branches()
+  tags()
+  fetch()
+  worktreeTopology()
+  submodules()
+}
+
+class WorktreeOperationCapabilities {
+  <<application port>>
+  status()
+  index()
+  patch()
+  commit()
+  stash()
+  checkout()
+  merge()
+  rebase()
+  interactiveRebase()
+  cherryPickAndRevert()
+  resetAndUndo()
+  clean()
+  pullAndPush()
+}
+
+class GitRuntime {
+  <<application port>>
+  +supports(operation, context)
+  +execute(operation, context, input, signal)
+}
+
+class CliGitRuntime {
+  <<extension adapter>>
+  +supports(operation, context)
+}
+
+class VscodeGitRuntime {
+  <<extension adapter>>
+  +supports(operation, context)
+}
+
+class HybridGitRuntime {
+  <<extension service>>
+  +supports(operation, context)
+  +selectRuntime(operation, context)
+}
+
+class FeatureCoordinator {
+  <<extension service>>
+  +refreshAll()
+  +notifyRepoChanged()
+}
+
+class ViewProvider {
+  <<extension>>
+  +resolveWebviewView()
+  +refresh()
+  +notifyRepoChanged()
+}
+
+class MessageRouter {
+  <<extension>>
+  +handle(message)
+  +dispose()
+}
+
+class UseCase {
+  <<application>>
+  +execute(input, signal)
+}
+
+class SemanticActionPolicy {
+  <<application value>>
+  +action
+}
+
+class OperationGuard {
+  <<application value>>
+  +kind
+  +level
+  +reason
+}
+
+class OperationPlan {
+  <<application value>>
+  +id
+  +action
+}
+
+class OperationTarget {
+  <<application value>>
+  +kind
+  +id
+  +label
+}
+
+class OperationPreview {
+  <<application value>>
+  +kind
+  +summary
+}
+
+class RecoveryHint {
+  <<application value>>
+  +kind
+  +description
+}
+
+class GuardAcknowledgement {
+  <<protocol value>>
+  +planId
+  +acknowledgedGuards
+}
+
+class OperationPlanRegistry {
+  <<extension service>>
+  +store(plan)
+  +get(planId)
+  +expire(planId)
+}
+
+class GuardAcknowledgementValidator {
+  <<extension service>>
+  +validate(acknowledgement, context)
+}
+
+class WebviewApp {
+  <<webview>>
+  +render()
+  +dispatch(action)
+  +postMessage(message)
+}
+
+ExtensionActivator --> GitApiAdapter
+ExtensionActivator --> RepositoryRegistry
+ExtensionActivator --> FeatureCoordinator
+ExtensionActivator --> ViewProvider
+GitApiAdapter --> RepositoryRegistry
+RepositoryRegistry --> GitRepositoryFactory
+GitRepositoryFactory --> RuntimeGitRepository
+GitRepositoryFactory --> RuntimeWorktree
+RepositoryOperationCapabilities <|.. RuntimeGitRepository
+WorktreeOperationCapabilities <|.. RuntimeWorktree
+RuntimeGitRepository --> GitRuntime : delegates
+RuntimeGitRepository o-- RuntimeWorktree : owns
+RuntimeWorktree --> GitRuntime : delegates
+GitRuntime <|.. CliGitRuntime
+GitRuntime <|.. VscodeGitRuntime
+GitRuntime <|.. HybridGitRuntime
+HybridGitRuntime --> CliGitRuntime : selects
+HybridGitRuntime --> VscodeGitRuntime : selects
+FeatureCoordinator --> ViewProvider
+ViewProvider o-- MessageRouter
+ViewProvider --> WebviewApp : hosts
+MessageRouter --> UseCase
+MessageRouter --> RepositoryRegistry : resolves locators only
+UseCase --> RepositoryOperationCapabilities
+UseCase --> WorktreeOperationCapabilities
+UseCase --> SemanticActionPolicy : evaluates
+UseCase --> OperationPlan : creates
+SemanticActionPolicy o-- OperationGuard
+OperationPlan o-- OperationGuard
+OperationPlan o-- OperationTarget
+OperationPlan --> OperationPreview
+OperationPlan --> RecoveryHint
+MessageRouter --> GuardAcknowledgement : receives
+MessageRouter --> GuardAcknowledgementValidator : asks
+GuardAcknowledgementValidator --> OperationPlanRegistry
+OperationPlanRegistry o-- OperationPlan
+
+note for ExtensionActivator "Wires dependencies only"
+note for RepositoryRegistry "Owns repository and worktree lifecycle"
+note for GitRuntime "Implements the semantic operation catalog for execution facts, not protocol locators"
+note for RuntimeGitRepository "Repository object exposes repository, history, topology, and repository-safe remote operations"
+note for RuntimeWorktree "Worktree object exposes checkout-bound operations"
+note for CliGitRuntime "Runs local git CLI with configured credential helpers"
+note for VscodeGitRuntime "Delegates supported remote operations to VS Code Git runtime"
+note for MessageRouter "Translates protocol and cancellation, then calls use cases"
+note for UseCase "Owns orchestration and guard evaluation before semantic actions"
+note for GuardAcknowledgementValidator "Host-side validator binds acknowledgement to plan, context, and expiry"
+note for WebviewApp "Owns UI state, not git state"

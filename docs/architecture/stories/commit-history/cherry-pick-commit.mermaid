@@ -1,0 +1,33 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as Commit History Webview
+participant Router as HistoryMessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as CherryPickCommitUseCase
+participant Worktree as Worktree implements WorktreeOperationCapabilities
+participant Runtime as HybridGitRuntime
+participant Cli as CliGitRuntime
+
+User->>App: Cherry-pick commit
+App->>Router: history/cherryPick(worktreeLocator, commitHash, requestId)
+Router->>Registry: resolveWorktree(worktreeLocator)
+Registry-->>Router: Worktree
+Router->>UseCase: execute(Worktree, commitHash, signal)
+UseCase->>Worktree: cherryPick(commitHash, signal)
+Worktree->>Runtime: cherryPick(executionContext, commitHash, signal)
+Runtime->>Cli: cherryPick(executionContext, commitHash, signal)
+alt Cherry-pick succeeds
+  Cli-->>Runtime: success
+  Runtime-->>Worktree: success
+  Worktree-->>UseCase: success
+  UseCase-->>Router: success
+  Router-->>App: history/cherryPickResponse(requestId)
+  Router-->>App: history/refreshRequested
+else Cherry-pick conflicts
+  Cli-->>Runtime: conflict error with conflicted paths
+  Runtime-->>Worktree: conflict error with conflicted paths
+  Worktree-->>UseCase: conflict error
+  UseCase-->>Router: conflict state
+  Router-->>App: history/conflictPush(conflictState)
+end

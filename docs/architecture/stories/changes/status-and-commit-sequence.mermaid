@@ -1,0 +1,62 @@
+sequenceDiagram
+autonumber
+actor User
+participant ChangesApp as Changes Webview
+participant ChangesRouter as ChangesMessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as ChangesUseCases
+participant Worktree as Worktree implements WorktreeOperationCapabilities
+participant Runtime as HybridGitRuntime
+participant Cli as CliGitRuntime
+participant Vscode as VscodeGitRuntime
+
+User->>ChangesApp: Open Changes view
+ChangesApp->>ChangesRouter: changes/statusRequest(repositoryLocator, worktreeLocator, requestId)
+ChangesRouter->>Registry: resolveWorktree(worktreeLocator)
+Registry-->>ChangesRouter: Worktree
+ChangesRouter->>UseCase: getStatus(Worktree, signal)
+UseCase->>Worktree: getStatus(signal)
+Worktree->>Runtime: getStatus(executionContext, signal)
+Runtime->>Cli: getStatus(executionContext, signal)
+Cli-->>Runtime: GitStatus
+Runtime-->>Worktree: GitStatus
+Worktree-->>UseCase: GitStatus
+UseCase-->>ChangesRouter: GitStatus
+ChangesRouter-->>ChangesApp: changes/statusResponse(requestId, status)
+ChangesApp-->>User: Render staged, unstaged, conflicts, stash, submodules
+
+User->>ChangesApp: Commit staged changes
+ChangesApp->>ChangesRouter: changes/commit(worktreeLocator, message, requestId)
+ChangesRouter->>Registry: resolveWorktree(worktreeLocator)
+Registry-->>ChangesRouter: Worktree
+ChangesRouter->>UseCase: commit(Worktree, message, signal)
+UseCase->>Worktree: commit(message, signal)
+Worktree->>Runtime: commit(executionContext, message, signal)
+Runtime->>Cli: commit(executionContext, message, signal)
+Cli-->>Runtime: success
+Runtime-->>Worktree: success
+Worktree-->>UseCase: success
+UseCase-->>ChangesRouter: success
+ChangesRouter-->>ChangesApp: changes/commitResponse(requestId)
+ChangesRouter-->>ChangesApp: changes/refreshRequested
+
+alt Follow-up remote sync requested
+  ChangesApp->>ChangesRouter: changes/push(worktreeLocator, remote, requestId)
+  ChangesRouter->>Registry: resolveWorktree(worktreeLocator)
+  Registry-->>ChangesRouter: Worktree
+  ChangesRouter->>UseCase: push(Worktree, remote, signal)
+  UseCase->>Worktree: push(remote, signal)
+  Worktree->>Runtime: push(executionContext, remote, signal)
+  alt VS Code runtime can provide credentials
+    Runtime->>Vscode: push(executionContext, remote, signal)
+    Vscode-->>Runtime: success
+  else CLI credentials are available
+    Runtime->>Cli: push(executionContext, remote, signal)
+    Cli-->>Runtime: success
+  end
+  Runtime-->>Worktree: success
+  Worktree-->>UseCase: success
+  UseCase-->>ChangesRouter: success
+  ChangesRouter-->>ChangesApp: changes/pushResponse(requestId)
+  ChangesRouter-->>ChangesApp: changes/refreshRequested
+end

@@ -1,0 +1,23 @@
+sequenceDiagram
+autonumber
+participant App as Webview
+participant Router as MessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as FeatureUseCase
+participant Repo as GitRepository
+participant Worktree as Worktree
+
+App->>Router: feature/request(repositoryLocator, worktreeLocator, requestId)
+Router->>Registry: resolveRepository(repositoryLocator)
+Registry-->>Router: Repo
+alt request needs a checkout
+  Router->>Registry: resolveWorktree(worktreeLocator)
+  Registry-->>Router: Worktree
+  Router->>UseCase: execute(Repo, Worktree, requestInput, signal)
+  UseCase->>Worktree: supported semantic operation
+else request needs repository metadata
+  Router->>UseCase: execute(Repo, requestInput, signal)
+  UseCase->>Repo: supported semantic operation
+end
+UseCase-->>Router: feature result
+Router-->>App: feature/response(requestId, result)

@@ -1,0 +1,28 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as Look Graph Webview
+participant Router as GraphMessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as CreateWorktreeUseCase
+participant Repo as GitRepository implements RepositoryOperationCapabilities
+participant Runtime as HybridGitRuntime
+participant Cli as CliGitRuntime
+
+User->>App: New worktree from branch
+App->>Router: graph/createWorktree(repositoryLocator, branch, path, requestId)
+Router->>Registry: resolveRepository(repositoryLocator)
+Registry-->>Router: Repo
+Router->>UseCase: execute(Repo, branch, path, signal)
+UseCase->>Repo: addWorktree({ branch, path }, signal)
+Repo->>Runtime: addWorktree(executionContext, { branch, path }, signal)
+Runtime->>Cli: addWorktree(executionContext, { branch, path }, signal)
+Cli-->>Runtime: success
+Runtime-->>Repo: success
+Repo-->>UseCase: success
+UseCase->>Registry: discoverWorktrees(Repo)
+Registry-->>UseCase: updated WorktreeLocator list
+UseCase-->>Router: updated WorktreeLocator list
+Router-->>App: graph/createWorktreeResponse(requestId, worktrees)
+Router-->>App: graph/refreshRequested
+App-->>User: Show new worktree annotation

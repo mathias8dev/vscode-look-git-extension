@@ -1,0 +1,25 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as Commit History Webview
+participant Router as HistoryMessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as GetCommitDetailsUseCase
+participant Repo as GitRepository implements GitHistoryOperations
+participant Runtime as HybridGitRuntime
+participant Cli as CliGitRuntime
+
+User->>App: Select commit
+App->>Router: history/commitDetailsRequest(repositoryLocator, commitHash, requestId)
+Router->>Registry: resolveRepository(repositoryLocator)
+Registry-->>Router: Repo
+Router->>UseCase: execute(Repo, commitHash, signal)
+UseCase->>Repo: getCommitDetails(commitHash, signal)
+Repo->>Runtime: getCommitDetails(executionContext, commitHash, signal)
+Runtime->>Cli: getCommitDetails(executionContext, commitHash, signal)
+Cli-->>Runtime: GitCommit details and file changes
+Runtime-->>Repo: GitCommit details and file changes
+Repo-->>UseCase: GitCommit details and file changes
+UseCase-->>Router: CommitDetails
+Router-->>App: history/commitDetailsResponse(requestId, details)
+App-->>User: Render message and changed files

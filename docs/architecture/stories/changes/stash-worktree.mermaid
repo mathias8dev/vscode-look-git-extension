@@ -1,0 +1,39 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as Changes Webview
+participant Router as ChangesMessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as StashWorktreeUseCase
+participant StatusUseCase as GetStatusUseCase
+participant Worktree as Worktree implements WorktreeOperationCapabilities
+participant Runtime as HybridGitRuntime
+participant Cli as CliGitRuntime
+
+User->>App: Click Stash
+App->>Router: changes/stash(worktreeLocator, message, requestId)
+Router->>Registry: resolveWorktree(worktreeLocator)
+Registry-->>Router: Worktree
+Router->>UseCase: execute(Worktree, message, signal)
+UseCase->>Worktree: stash(message, signal)
+Worktree->>Runtime: stash(executionContext, message, signal)
+Runtime->>Cli: stash(executionContext, message, signal)
+Cli-->>Runtime: success
+Runtime-->>Worktree: success
+Worktree-->>UseCase: success
+UseCase-->>Router: success
+Router-->>App: changes/stashResponse(requestId)
+Router-->>App: changes/refreshRequested
+
+App->>Router: changes/statusRequest(repositoryLocator, worktreeLocator, requestId)
+Router->>Registry: resolveWorktree(worktreeLocator)
+Registry-->>Router: Worktree
+Router->>StatusUseCase: execute(Worktree, signal)
+StatusUseCase->>Worktree: getStatus(signal)
+Worktree->>Runtime: getStatus(executionContext, signal)
+Runtime->>Cli: getStatus(executionContext, signal)
+Cli-->>Runtime: clean status and stash list
+Runtime-->>Worktree: clean status and stash list
+Worktree-->>StatusUseCase: clean status and stash list
+StatusUseCase-->>Router: clean status and stash list
+Router-->>App: changes/statusResponse(requestId, status)

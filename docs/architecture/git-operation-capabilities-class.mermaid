@@ -1,0 +1,303 @@
+classDiagram
+direction TB
+
+class GitRepository {
+  <<runtime abstraction>>
+}
+
+class Worktree {
+  <<runtime abstraction>>
+}
+
+class GitHistoryOperations {
+  <<repository capability>>
+  +getCommitGraph(query, pageRequest, signal)
+  +getCommitDetails(commit, signal)
+  +getCommitPatch(commit, signal)
+  +getCommitFileDiff(commit, path, signal)
+  +getCommitRange(fromRef, toRef, pageRequest, signal)
+  +searchCommits(query, pageRequest, signal)
+  +getMergeBase(leftRef, rightRef, signal)
+  +getAheadBehind(localRef, upstreamRef, signal)
+}
+
+class GitFileHistoryOperations {
+  <<repository capability>>
+  +getFileHistory(path, query, pageRequest, signal)
+  +getFileSelectionHistory(path, selection, query, pageRequest, signal)
+  +getFileAtRevision(path, revision, signal)
+  +getFileRenameHistory(path, pageRequest, signal)
+}
+
+class GitBlameOperations {
+  <<repository capability>>
+  +getBlame(path, revision, signal)
+  +getBlameForSelection(path, selection, revision, signal)
+  +getBlameCommit(commit, signal)
+}
+
+class GitCompareOperations {
+  <<repository capability>>
+  +compareRefs(baseRef, headRef, options, signal)
+  +compareBranches(baseBranch, headBranch, options, signal)
+  +compareWithWorkingTree(baseRef, worktree, options, signal)
+  +compareFiles(baseRef, headRef, path, signal)
+  +listChangedFiles(baseRef, headRef, pageRequest, signal)
+}
+
+class GitReferenceOperations {
+  <<repository capability>>
+  +listBranches(signal)
+  +listRemoteBranches(signal)
+  +listTags(signal)
+  +listRemotes(signal)
+  +resolveRef(ref, signal)
+}
+
+class GitBranchOperations {
+  <<repository capability>>
+  +createBranch(name, startPoint, signal)
+  +renameBranch(oldName, newName, signal)
+  +deleteBranch(name, force, signal)
+  +setUpstream(branch, upstream, signal)
+}
+
+class GitTagOperations {
+  <<repository capability>>
+  +createTag(name, target, message, signal)
+  +deleteTag(name, signal)
+}
+
+class GitFetchOperations {
+  <<repository capability>>
+  +fetch(remote, options, signal)
+  +fetchAll(options, signal)
+  +pruneRemote(remote, signal)
+  +getRemoteUrl(remote, signal)
+  +setRemoteUrl(remote, url, signal)
+}
+
+class GitWorktreeTopologyOperations {
+  <<repository capability>>
+  +listWorktrees(signal)
+  +addWorktree(input, signal)
+  +removeWorktree(worktree, force, signal)
+  +pruneWorktrees(signal)
+  +repairWorktree(worktree, signal)
+}
+
+class GitSubmoduleOperations {
+  <<repository capability>>
+  +listSubmodules(signal)
+  +getSubmoduleStatus(path, signal)
+  +initSubmodule(path, signal)
+  +updateSubmodule(path, options, signal)
+  +syncSubmodule(path, signal)
+  +fetchSubmodule(path, signal)
+  +deinitSubmodule(path, force, signal)
+  +openSubmoduleRepository(path, signal)
+}
+
+class GitStatusOperations {
+  <<worktree capability>>
+  +getStatus(signal)
+  +getUntrackedFiles(pageRequest, signal)
+  +getIgnoredFiles(pageRequest, signal)
+}
+
+class GitIndexOperations {
+  <<worktree capability>>
+  +stage(paths, signal)
+  +stageAll(signal)
+  +stageHunks(hunks, signal)
+  +stageLines(selection, signal)
+  +unstage(paths, signal)
+  +unstageAll(signal)
+  +unstageHunks(hunks, signal)
+  +discard(paths, signal)
+  +discardHunks(hunks, signal)
+  +markResolved(paths, signal)
+}
+
+class GitPatchOperations {
+  <<worktree capability>>
+  +getWorkingTreeDiff(paths, signal)
+  +getIndexDiff(paths, signal)
+  +getCombinedDiff(paths, signal)
+  +getPatch(scope, paths, signal)
+  +applyPatch(patch, options, signal)
+  +reverseApplyPatch(patch, options, signal)
+  +applyPatchToIndex(patch, options, signal)
+  +checkPatch(patch, signal)
+}
+
+class GitCommitOperations {
+  <<worktree capability>>
+  +commit(message, options, signal)
+  +amendCommit(message, options, signal)
+  +commitAll(message, options, signal)
+  +createFixupCommit(targetCommit, message, signal)
+  +createSquashCommit(targetCommit, message, signal)
+}
+
+class GitStashOperations {
+  <<worktree capability>>
+  +listStashes(pageRequest, signal)
+  +stash(message, options, signal)
+  +applyStash(stash, options, signal)
+  +popStash(stash, options, signal)
+  +dropStash(stash, signal)
+  +clearStashes(signal)
+  +branchFromStash(stash, branchName, signal)
+}
+
+class GitCheckoutOperations {
+  <<worktree capability>>
+  +checkout(ref, options, signal)
+  +checkoutNewBranch(name, startPoint, signal)
+  +restorePaths(paths, sourceRef, signal)
+  +restoreStaged(paths, signal)
+  +restoreWorkingTree(paths, signal)
+}
+
+class GitMergeOperations {
+  <<worktree capability>>
+  +merge(ref, options, signal)
+  +continueMerge(signal)
+  +abortMerge(signal)
+  +quitMerge(signal)
+}
+
+class GitRebaseOperations {
+  <<worktree capability>>
+  +rebase(upstream, branch, options, signal)
+  +continueRebase(signal)
+  +abortRebase(signal)
+  +skipRebase(signal)
+  +quitRebase(signal)
+}
+
+class GitInteractiveRebaseOperations {
+  <<worktree capability>>
+  +getInteractiveRebasePlan(baseRef, headRef, signal)
+  +startInteractiveRebase(baseRef, plan, options, signal)
+  +rewordCommit(commit, message, signal)
+  +squashCommits(commits, message, signal)
+  +fixupCommits(commits, signal)
+  +reorderCommits(orderedCommits, signal)
+  +editCommit(commit, signal)
+  +dropCommit(commit, signal)
+}
+
+class GitCherryPickRevertOperations {
+  <<worktree capability>>
+  +cherryPick(commit, options, signal)
+  +continueCherryPick(signal)
+  +abortCherryPick(signal)
+  +skipCherryPick(signal)
+  +revertCommit(commit, options, signal)
+  +continueRevert(signal)
+  +abortRevert(signal)
+  +skipRevert(signal)
+}
+
+class GitResetUndoOperations {
+  <<worktree capability>>
+  +resetSoft(ref, signal)
+  +resetMixed(ref, signal)
+  +resetHard(ref, signal)
+  +resetPaths(paths, sourceRef, signal)
+  +undoLastCommit(mode, signal)
+  +undoAmend(previousHead, signal)
+  +undoCheckout(previousHead, signal)
+  +getReflog(pageRequest, signal)
+  +restoreFromReflog(entry, mode, signal)
+}
+
+class GitCleanOperations {
+  <<worktree capability>>
+  +cleanUntracked(paths, options, signal)
+  +cleanIgnored(paths, options, signal)
+  +previewClean(paths, options, signal)
+}
+
+class GitPullPushOperations {
+  <<worktree capability>>
+  +pull(options, signal)
+  +push(remote, options, signal)
+  +pushBranch(remote, branch, options, signal)
+  +pushTags(remote, options, signal)
+  +forcePushWithLease(remote, branch, signal)
+}
+
+class SemanticActionPolicy {
+  <<application value>>
+  +action
+}
+
+class OperationGuard {
+  <<application value>>
+  +kind
+  +level
+  +reason
+}
+
+class OperationPlan {
+  <<application value>>
+  +id
+  +action
+}
+
+class OperationTarget {
+  <<application value>>
+  +kind
+  +id
+  +label
+}
+
+class OperationPreview {
+  <<application value>>
+  +kind
+  +summary
+}
+
+class RecoveryHint {
+  <<application value>>
+  +kind
+  +description
+}
+
+GitHistoryOperations <|.. GitRepository
+GitFileHistoryOperations <|.. GitRepository
+GitBlameOperations <|.. GitRepository
+GitCompareOperations <|.. GitRepository
+GitReferenceOperations <|.. GitRepository
+GitBranchOperations <|.. GitRepository
+GitTagOperations <|.. GitRepository
+GitFetchOperations <|.. GitRepository
+GitWorktreeTopologyOperations <|.. GitRepository
+GitSubmoduleOperations <|.. GitRepository
+GitStatusOperations <|.. Worktree
+GitIndexOperations <|.. Worktree
+GitPatchOperations <|.. Worktree
+GitCommitOperations <|.. Worktree
+GitStashOperations <|.. Worktree
+GitCheckoutOperations <|.. Worktree
+GitMergeOperations <|.. Worktree
+GitRebaseOperations <|.. Worktree
+GitInteractiveRebaseOperations <|.. Worktree
+GitCherryPickRevertOperations <|.. Worktree
+GitResetUndoOperations <|.. Worktree
+GitCleanOperations <|.. Worktree
+GitPullPushOperations <|.. Worktree
+SemanticActionPolicy o-- OperationGuard
+OperationPlan o-- OperationGuard
+OperationPlan o-- OperationTarget
+OperationPlan --> OperationPreview
+OperationPlan --> RecoveryHint
+GitRepository --> SemanticActionPolicy : actions declare
+Worktree --> SemanticActionPolicy : actions declare
+
+note for GitRepository "Repository capabilities are read/model/topology/ref operations plus fetch and submodule management"
+note for Worktree "Worktree capabilities are checkout-bound actions that can mutate index, working tree, HEAD, or branch state"
+note for OperationGuard "Use cases evaluate guards before calling semantic git actions"

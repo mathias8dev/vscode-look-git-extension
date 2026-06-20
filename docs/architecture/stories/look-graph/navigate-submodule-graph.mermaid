@@ -1,0 +1,30 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as Look Graph Webview
+participant Router as GraphMessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as GetGraphDataUseCase
+participant SubmoduleRepo as Initialized Submodule GitRepository implements GitHistoryOperations
+participant Runtime as HybridGitRuntime
+participant Cli as CliGitRuntime
+
+User->>App: Select submodule node
+App->>Router: graph/dataRequest(submoduleRepositoryLocator, PageRequest, filters, requestId)
+Router->>Registry: resolveRepository(submoduleRepositoryLocator)
+alt submodule repository is initialized
+  Registry-->>Router: SubmoduleRepo
+  Router->>UseCase: execute(SubmoduleRepo, filters, PageRequest, signal)
+  UseCase->>SubmoduleRepo: getCommitGraph(filters, PageRequest, signal)
+  SubmoduleRepo->>Runtime: getCommitGraph(executionContext, filters, PageRequest, signal)
+  Runtime->>Cli: getCommitGraph(executionContext, filters, PageRequest, signal)
+  Cli-->>Runtime: Page(GitCommit)
+  Runtime-->>SubmoduleRepo: Page(GitCommit)
+  SubmoduleRepo-->>UseCase: Page(GitCommit)
+  UseCase-->>Router: GraphData
+  Router-->>App: graph/dataResponse(requestId, GraphData)
+  App-->>User: Render submodule repository graph
+else submodule repository is not initialized
+  Registry-->>Router: not initialized
+  Router-->>App: graph/error(requestId, notInitialized)
+end

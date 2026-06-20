@@ -1,0 +1,95 @@
+classDiagram
+direction TB
+
+class FeatureSlice {
+  <<abstract>>
+  +ProtocolMessages messages
+  +MessageRouter router
+  +UseCases useCases
+  +WebviewState state
+}
+
+class GraphSlice {
+  +graphData()
+  +branches()
+  +tags()
+  +commitLanes()
+  +worktreeAnnotations()
+}
+
+class ChangesSlice {
+  +workingTreeStatus()
+  +staging()
+  +conflicts()
+  +stashes()
+  +submoduleChanges()
+}
+
+class HistorySlice {
+  +commitHistory()
+  +fileHistory()
+  +commitDetails()
+}
+
+class WorktreesSlice {
+  +listWorktrees()
+  +addWorktree()
+  +removeWorktree()
+  +openWorktree()
+}
+
+class SubmodulesSlice {
+  +listSubmodules()
+  +initSubmodule()
+  +updateSubmodule()
+  +openSubmoduleRepository()
+}
+
+class ProtocolMessages {
+  <<protocol>>
+  +requests()
+  +responses()
+  +pushes()
+  +commands()
+}
+
+class MessageRouter {
+  <<extension>>
+  +handle(message)
+}
+
+class UseCases {
+  <<application>>
+  +execute()
+}
+
+class WebviewState {
+  <<webview pure>>
+  +reduce(state, action)
+}
+
+class GitRepository {
+  <<operation capabilities>>
+}
+
+class Worktree {
+  <<operation capabilities>>
+}
+
+FeatureSlice <|-- GraphSlice
+FeatureSlice <|-- ChangesSlice
+FeatureSlice <|-- HistorySlice
+FeatureSlice <|-- WorktreesSlice
+FeatureSlice <|-- SubmodulesSlice
+FeatureSlice --> ProtocolMessages
+FeatureSlice --> MessageRouter
+FeatureSlice --> UseCases
+FeatureSlice --> WebviewState
+MessageRouter --> UseCases
+UseCases --> GitRepository
+UseCases --> Worktree
+
+note for FeatureSlice "Each feature owns its protocol messages, router behavior, use cases, and webview state"
+note for MessageRouter "Routers translate protocol and delegate orchestration to use cases"
+note for WorktreesSlice "Worktrees belong to repositories; they are semantic operation contexts and graph annotations"
+note for SubmodulesSlice "Submodules are repositories linked from parent repositories"

@@ -1,0 +1,40 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as Commit History Webview
+participant Router as HistoryMessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as GetCommitHistoryUseCase
+participant Repo as GitRepository implements GitHistoryOperations
+participant Runtime as HybridGitRuntime
+participant Cli as CliGitRuntime
+
+User->>App: Open Commit History
+App->>Router: history/dataRequest(repositoryLocator, PageRequest, filters, requestId)
+Router->>Registry: resolveRepository(repositoryLocator)
+Registry-->>Router: Repo
+Router->>UseCase: execute(Repo, filters, PageRequest, signal)
+UseCase->>Repo: getCommitGraph(filters, PageRequest, signal)
+Repo->>Runtime: getCommitGraph(executionContext, filters, PageRequest, signal)
+Runtime->>Cli: getCommitGraph(executionContext, filters, PageRequest, signal)
+Cli-->>Runtime: Page(GitCommit)
+Runtime-->>Repo: Page(GitCommit)
+Repo-->>UseCase: Page(GitCommit)
+UseCase-->>Router: Page(HistoryCommit)
+Router-->>App: history/dataResponse(requestId, Page(HistoryCommit))
+App-->>User: Render first cursor page
+
+User->>App: Click Load More
+App->>Router: history/dataRequest(repositoryLocator, NextCursorPageRequest, filters, requestId)
+Router->>Registry: resolveRepository(repositoryLocator)
+Registry-->>Router: Repo
+Router->>UseCase: execute(Repo, filters, NextCursorPageRequest, signal)
+UseCase->>Repo: getCommitGraph(filters, NextCursorPageRequest, signal)
+Repo->>Runtime: getCommitGraph(executionContext, filters, NextCursorPageRequest, signal)
+Runtime->>Cli: getCommitGraph(executionContext, filters, NextCursorPageRequest, signal)
+Cli-->>Runtime: Page(GitCommit)
+Runtime-->>Repo: Page(GitCommit)
+Repo-->>UseCase: Page(GitCommit)
+UseCase-->>Router: Page(HistoryCommit)
+Router-->>App: history/dataResponse(requestId, Page(HistoryCommit))
+App-->>User: Append cursor page

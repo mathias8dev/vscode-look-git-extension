@@ -1,0 +1,25 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as Changes Webview
+participant Router as ChangesMessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as GetStatusUseCase
+participant Worktree as Worktree implements WorktreeOperationCapabilities
+participant Runtime as HybridGitRuntime
+participant Cli as CliGitRuntime
+
+User->>App: Open Changes
+App->>Router: changes/statusRequest(repositoryLocator, worktreeLocator, requestId)
+Router->>Registry: resolveWorktree(worktreeLocator)
+Registry-->>Router: Worktree
+Router->>UseCase: execute(Worktree, signal)
+UseCase->>Worktree: getStatus(signal)
+Worktree->>Runtime: getStatus(executionContext, signal)
+Runtime->>Cli: getStatus(executionContext, signal)
+Cli-->>Runtime: status domain data
+Runtime-->>Worktree: status domain data
+Worktree-->>UseCase: status domain data
+UseCase-->>Router: status domain data
+Router-->>App: changes/statusResponse(requestId, status)
+App-->>User: Render change sections and submodule rows

@@ -1,0 +1,31 @@
+sequenceDiagram
+autonumber
+participant Watcher as Git Watcher
+participant Router as GraphMessageRouter
+participant App as Look Graph Webview
+participant Registry as RepositoryRegistry
+participant UseCase as GetGraphDataUseCase
+participant Repo as GitRepository implements GitHistoryOperations
+participant Runtime as HybridGitRuntime
+participant Cli as CliGitRuntime
+
+Watcher-->>Router: repositoryChanged(repositoryLocator)
+Router-->>App: graph/refreshRequested
+App->>Router: graph/dataRequest(repositoryLocator, CurrentCursorPageRequest, filters, requestId)
+Router->>Registry: resolveRepository(repositoryLocator)
+Registry-->>Router: Repo
+Router->>UseCase: execute(Repo, filters, CurrentCursorPageRequest, signal)
+UseCase->>Repo: getCommitGraph(filters, CurrentCursorPageRequest, signal)
+Repo->>Runtime: getCommitGraph(executionContext, filters, CurrentCursorPageRequest, signal)
+Runtime->>Cli: getCommitGraph(executionContext, filters, CurrentCursorPageRequest, signal)
+Cli-->>Runtime: Page(GitCommit)
+Runtime-->>Repo: Page(GitCommit)
+Repo-->>UseCase: Page(GitCommit)
+UseCase-->>Router: GraphData
+Router-->>App: graph/dataResponse(requestId, GraphData)
+App->>App: compare GraphData with current state
+alt data changed
+  App->>App: reduce with new graph state
+else data unchanged
+  App->>App: clear refreshing without replacing rows
+end

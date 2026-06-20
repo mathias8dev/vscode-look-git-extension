@@ -1,0 +1,39 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as Changes Webview
+participant Router as ChangesMessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as SubmoduleActionsUseCase
+participant ParentRepo as Parent GitRepository implements RepositoryOperationCapabilities
+participant SubmoduleRepo as Initialized Submodule GitRepository
+participant Runtime as HybridGitRuntime
+participant Cli as CliGitRuntime
+
+User->>App: Click Open Submodule
+App->>Router: changes/openSubmodule(repositoryLocator, submodulePath, requestId)
+Router->>Registry: resolveSubmoduleRepository(repositoryLocator, submodulePath)
+alt submodule repository is initialized
+  Registry-->>Router: SubmoduleRepo
+  Router->>UseCase: openSubmodule(SubmoduleRepo)
+  UseCase-->>Router: submoduleRepositoryLocator
+  Router-->>App: changes/openSubmoduleResponse(requestId, submoduleRepositoryLocator)
+else submodule repository is not initialized
+  Registry-->>Router: not initialized
+  Router-->>App: changes/error(requestId, notInitialized)
+end
+
+User->>App: Click Update Submodule
+App->>Router: changes/updateSubmodule(repositoryLocator, submodulePath, requestId)
+Router->>Registry: resolveRepository(repositoryLocator)
+Registry-->>Router: ParentRepo
+Router->>UseCase: updateSubmodule(ParentRepo, submodulePath, signal)
+UseCase->>ParentRepo: updateSubmodule(submodulePath, signal)
+ParentRepo->>Runtime: updateSubmodule(executionContext, submodulePath, signal)
+Runtime->>Cli: updateSubmodule(executionContext, submodulePath, signal)
+Cli-->>Runtime: success
+Runtime-->>ParentRepo: success
+ParentRepo-->>UseCase: success
+UseCase-->>Router: success
+Router-->>App: changes/updateSubmoduleResponse(requestId)
+Router-->>App: changes/refreshRequested

@@ -1,0 +1,41 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as Look Graph Webview
+participant Router as GraphMessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as GetGraphDataUseCase
+participant Repo as GitRepository implements RepositoryOperationCapabilities
+participant Runtime as HybridGitRuntime
+participant Cli as CliGitRuntime
+
+User->>App: Open Look Graph
+App->>Router: graph/dataRequest(repositoryLocator, PageRequest, filters, requestId)
+Router->>Registry: resolveRepository(repositoryLocator)
+Registry-->>Router: Repo
+Router->>UseCase: execute(Repo, filters, PageRequest, signal)
+par Commit graph
+  UseCase->>Repo: getCommitGraph(filters, PageRequest, signal)
+and Branches and tags
+  UseCase->>Repo: listBranches(signal)
+  UseCase->>Repo: listTags(signal)
+and Worktrees and submodules
+  UseCase->>Repo: listWorktrees(signal)
+  UseCase->>Repo: listSubmodules(signal)
+end
+Repo->>Runtime: getCommitGraph(executionContext, filters, PageRequest, signal)
+Repo->>Runtime: listBranches(executionContext, signal)
+Repo->>Runtime: listTags(executionContext, signal)
+Repo->>Runtime: listWorktrees(executionContext, signal)
+Repo->>Runtime: listSubmodules(executionContext, signal)
+Runtime->>Cli: getCommitGraph(executionContext, filters, PageRequest, signal)
+Runtime->>Cli: listBranches(executionContext, signal)
+Runtime->>Cli: listTags(executionContext, signal)
+Runtime->>Cli: listWorktrees(executionContext, signal)
+Runtime->>Cli: listSubmodules(executionContext, signal)
+Cli-->>Runtime: graph domain values
+Runtime-->>Repo: graph domain values
+Repo-->>UseCase: graph domain values
+UseCase-->>Router: GraphData
+Router-->>App: graph/dataResponse(requestId, GraphData)
+App-->>User: Render graph

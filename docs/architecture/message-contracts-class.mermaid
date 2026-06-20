@@ -1,0 +1,147 @@
+classDiagram
+direction TB
+
+class ProtocolMessage {
+  <<protocol>>
+  +string type
+}
+
+class RequestMessage {
+  <<protocol>>
+  +string requestId
+}
+
+class ResponseMessage {
+  <<protocol>>
+  +string requestId
+}
+
+class PushMessage {
+  <<protocol>>
+}
+
+class ErrorMessage {
+  <<protocol>>
+  +string requestId
+  +ProtocolError error
+}
+
+class RepositoryLocator {
+  <<protocol value>>
+  +string repoId
+  +string kind
+  +string parentRepoId
+  +string path
+}
+
+class WorktreeLocator {
+  <<protocol value>>
+  +string repoId
+  +string worktreeId
+  +string path
+}
+
+class PageRequest {
+  <<protocol value>>
+  +number limit
+  +string cursor
+}
+
+class Page {
+  <<protocol value>>
+  +FeatureData[] items
+  +string nextCursor
+  +boolean hasMore
+}
+
+class GuardAcknowledgement {
+  <<protocol value>>
+  +string planId
+  +string[] acknowledgedGuards
+}
+
+class FeatureDataRequest {
+  +RepositoryLocator repository
+  +PageRequest page
+}
+
+class FeatureDataResponse {
+  +RepositoryLocator repository
+  +Page data
+}
+
+class FeatureDataPush {
+  +RepositoryLocator repository
+  +FeatureData data
+}
+
+class CommitChangesRequest {
+  +WorktreeLocator worktree
+  +string message
+}
+
+class StagePathsRequest {
+  +WorktreeLocator worktree
+  +string[] paths
+}
+
+class CreateWorktreeRequest {
+  +RepositoryLocator repository
+  +string branch
+  +string path
+}
+
+class UpdateSubmoduleRequest {
+  +RepositoryLocator repository
+  +string submodulePath
+}
+
+class PushRequest {
+  +WorktreeLocator worktree
+  +string remote
+}
+
+class GuardedOperationRequest {
+  +WorktreeLocator worktree
+  +GuardAcknowledgement acknowledgement
+}
+
+class RequestIdOnlyResponse {
+  +string requestId
+}
+
+ProtocolMessage <|-- RequestMessage
+ProtocolMessage <|-- ResponseMessage
+ProtocolMessage <|-- PushMessage
+PushMessage <|-- ErrorMessage
+RequestMessage <|-- FeatureDataRequest
+ResponseMessage <|-- FeatureDataResponse
+PushMessage <|-- FeatureDataPush
+RequestMessage <|-- CommitChangesRequest
+RequestMessage <|-- StagePathsRequest
+RequestMessage <|-- CreateWorktreeRequest
+RequestMessage <|-- UpdateSubmoduleRequest
+RequestMessage <|-- PushRequest
+RequestMessage <|-- GuardedOperationRequest
+ResponseMessage <|-- RequestIdOnlyResponse
+FeatureDataRequest --> PageRequest
+FeatureDataRequest --> RepositoryLocator
+FeatureDataResponse --> RepositoryLocator
+FeatureDataResponse --> Page
+FeatureDataPush --> RepositoryLocator
+CommitChangesRequest --> WorktreeLocator
+StagePathsRequest --> WorktreeLocator
+CreateWorktreeRequest --> RepositoryLocator
+UpdateSubmoduleRequest --> RepositoryLocator
+PushRequest --> WorktreeLocator
+GuardedOperationRequest --> WorktreeLocator
+GuardedOperationRequest --> GuardAcknowledgement
+WorktreeLocator --> RepositoryLocator : belongs to
+
+note for RequestMessage "Every message expecting a reply carries requestId"
+note for ProtocolMessage "This diagram is representative; concrete protocol types remain feature-sliced"
+note for PageRequest "Cursor is an opaque string produced by the extension; webviews do not construct cursor internals"
+note for CommitChangesRequest "Mutating operations are typed protocol messages, not open string values"
+note for GuardAcknowledgement "Webviews acknowledge guards from an operation plan; host/application validates before execution"
+note for RepositoryLocator "Protocol-safe value used to resolve a repository, including initialized submodules"
+note for WorktreeLocator "Protocol-safe value used to resolve a checkout belonging to a repository"

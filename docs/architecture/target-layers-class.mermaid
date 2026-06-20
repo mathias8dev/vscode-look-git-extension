@@ -1,0 +1,61 @@
+classDiagram
+direction LR
+
+class CoreLayer {
+  <<layer>>
+  +domainTypes()
+  +pureParsers()
+  +graphLayoutInputs()
+}
+
+class ApplicationLayer {
+  <<layer>>
+  +useCases()
+  +ports()
+  +orchestrateInterfaces()
+}
+
+class ProtocolLayer {
+  <<layer>>
+  +jsonContracts()
+  +featureSlices()
+  +sharedValueHelpers()
+}
+
+class ExtensionLayer {
+  <<layer>>
+  +vscodeLifecycle()
+  +gitProcessAdapter()
+  +messageRouters()
+  +commands()
+  +watchers()
+}
+
+class WebviewLayer {
+  <<layer>>
+  +reactViews()
+  +featureReducers()
+  +uiModels()
+  +protocolCommands()
+}
+
+class GitCli {
+  <<external>>
+}
+
+class VSCodeApi {
+  <<external>>
+}
+
+CoreLayer <.. ApplicationLayer : imports domain
+ProtocolLayer <.. ExtensionLayer : imports contracts
+ApplicationLayer <.. ExtensionLayer : runs use cases
+CoreLayer <.. ExtensionLayer : maps domain only
+ProtocolLayer <.. WebviewLayer : imports contracts
+VSCodeApi <.. ExtensionLayer : host APIs
+GitCli <.. ExtensionLayer : child process adapter
+
+note for CoreLayer "No vscode, react, child_process, or protocol imports"
+note for ProtocolLayer "No imports from core, extension, or webview"
+note for WebviewLayer "No extension/core imports and no direct git knowledge"
+note for ExtensionLayer "Only layer that resolves protocol locators to runtime repositories and worktrees"

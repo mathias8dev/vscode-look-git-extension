@@ -1,0 +1,35 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as Any Webview
+participant Router as MessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as RemoteOperationUseCase
+participant Worktree as Worktree implements WorktreeOperationCapabilities
+participant Hybrid as HybridGitRuntime
+participant Vscode as VscodeGitRuntime
+participant Look as LookNativeGitRuntime
+participant Cli as CliGitRuntime
+
+User->>App: Push current branch
+App->>Router: feature/push(worktreeLocator, remote, requestId)
+Router->>Registry: resolveWorktree(worktreeLocator)
+Registry-->>Router: Worktree
+Router->>UseCase: push(Worktree, remote, signal)
+UseCase->>Worktree: push(remote, signal)
+Worktree->>Hybrid: push(executionContext, remote, signal)
+alt VS Code runtime supports push and has credentials
+  Hybrid->>Vscode: push(executionContext, remote, signal)
+  Vscode-->>Hybrid: success
+else Look-native credentials exist
+  Hybrid->>Look: push(executionContext, remote, signal)
+  Look-->>Hybrid: success
+else CLI credentials are configured
+  Hybrid->>Cli: push(executionContext, remote, signal)
+  Cli-->>Hybrid: success
+else no runtime can authenticate
+  Hybrid-->>Worktree: authentication required error
+end
+Worktree-->>UseCase: result
+UseCase-->>Router: result
+Router-->>App: operationStatus(requestId, result)

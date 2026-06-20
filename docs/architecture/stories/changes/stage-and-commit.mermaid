@@ -1,0 +1,40 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as Changes Webview
+participant Router as ChangesMessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as ChangesMutationUseCase
+participant Worktree as Worktree implements WorktreeOperationCapabilities
+participant Runtime as HybridGitRuntime
+participant Cli as CliGitRuntime
+
+User->>App: Select files and click Stage
+App->>Router: changes/stagePaths(worktreeLocator, paths, requestId)
+Router->>Registry: resolveWorktree(worktreeLocator)
+Registry-->>Router: Worktree
+Router->>UseCase: stage(Worktree, paths, signal)
+UseCase->>Worktree: stage(paths, signal)
+Worktree->>Runtime: stage(executionContext, paths, signal)
+Runtime->>Cli: stage(executionContext, paths, signal)
+Cli-->>Runtime: success
+Runtime-->>Worktree: success
+Worktree-->>UseCase: success
+UseCase-->>Router: success
+Router-->>App: changes/stagePathsResponse(requestId)
+Router-->>App: changes/refreshRequested
+
+User->>App: Enter commit message and commit
+App->>Router: changes/commit(worktreeLocator, message, requestId)
+Router->>Registry: resolveWorktree(worktreeLocator)
+Registry-->>Router: Worktree
+Router->>UseCase: commit(Worktree, message, signal)
+UseCase->>Worktree: commit(message, signal)
+Worktree->>Runtime: commit(executionContext, message, signal)
+Runtime->>Cli: commit(executionContext, message, signal)
+Cli-->>Runtime: success
+Runtime-->>Worktree: success
+Worktree-->>UseCase: success
+UseCase-->>Router: success
+Router-->>App: changes/commitResponse(requestId)
+Router-->>App: changes/refreshRequested

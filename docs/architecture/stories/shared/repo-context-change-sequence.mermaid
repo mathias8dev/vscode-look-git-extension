@@ -1,0 +1,31 @@
+sequenceDiagram
+autonumber
+actor User
+participant VSCode as VS Code Git API
+participant GitApi as GitApiAdapter
+participant Registry as RepositoryRegistry
+participant Coordinator as FeatureCoordinator
+participant Changes as ChangesViewProvider
+participant History as CommitHistoryViewProvider
+participant Graph as GraphViewProvider
+participant ChangesApp as Changes Webview
+participant HistoryApp as History Webview
+participant GraphApp as Graph Webview
+
+User->>VSCode: Select active repository
+VSCode-->>GitApi: repository UI/state changed
+GitApi->>Registry: setActiveRepository(cwd)
+Registry->>Registry: discover repository, worktrees, submodules
+Registry-->>Coordinator: RepositoryLocator and active WorktreeLocator
+Coordinator->>Changes: notifyRepoChanged(repositoryLocator, worktreeLocator)
+Coordinator->>History: notifyRepoChanged(repositoryLocator)
+Coordinator->>Graph: notifyRepoChanged(repositoryLocator)
+Changes-->>ChangesApp: repo/contextChanged(repositoryLocator, worktreeLocator)
+History-->>HistoryApp: repo/contextChanged(repositoryLocator)
+Graph-->>GraphApp: repo/contextChanged(repositoryLocator)
+ChangesApp->>ChangesApp: reset feature state
+HistoryApp->>HistoryApp: reset feature state
+GraphApp->>GraphApp: reset feature state
+ChangesApp-->>Changes: changes/statusRequest(repositoryLocator, worktreeLocator)
+HistoryApp-->>History: history/dataRequest(repositoryLocator, firstPage)
+GraphApp-->>Graph: graph/dataRequest(repositoryLocator, firstPage)

@@ -1,0 +1,27 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as Commit History Webview
+participant Router as HistoryMessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as OpenHistoryDiffUseCase
+participant Repo as GitRepository implements GitHistoryOperations
+participant Runtime as HybridGitRuntime
+participant Cli as CliGitRuntime
+participant VSCode as VS Code Diff Editor
+
+User->>App: Open file diff
+App->>Router: history/openDiff(repositoryLocator, commitHash, filePath, requestId)
+Router->>Registry: resolveRepository(repositoryLocator)
+Registry-->>Router: Repo
+Router->>UseCase: execute(Repo, commitHash, filePath, signal)
+UseCase->>Repo: getCommitFileDiff(commitHash, filePath, signal)
+Repo->>Runtime: getCommitFileDiff(executionContext, commitHash, filePath, signal)
+Runtime->>Cli: getCommitFileDiff(executionContext, commitHash, filePath, signal)
+Cli-->>Runtime: readonly left/right content
+Runtime-->>Repo: readonly left/right content
+Repo-->>UseCase: readonly left/right content
+UseCase-->>Router: diff model
+Router->>VSCode: openDiff(leftUri, rightUri, title)
+VSCode-->>User: Show diff
+Router-->>App: history/openDiffResponse(requestId)

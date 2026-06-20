@@ -1,0 +1,280 @@
+classDiagram
+direction TB
+
+class GitRepository {
+  <<runtime abstraction>>
+  +string repoId
+  +string gitDir
+  +RepositoryKind kind
+  +string label
+  +listWorktrees(signal)
+  +listSubmodules(signal)
+}
+
+class Worktree {
+  <<runtime abstraction>>
+  +string worktreeId
+  +string repoId
+  +string path
+  +boolean isMain
+  +string head
+  +string branch
+  +boolean dirty
+}
+
+class RepositoryOperationCapabilities {
+  <<application port>>
+  history()
+  fileHistory()
+  blame()
+  compare()
+  references()
+  branches()
+  tags()
+  fetch()
+  worktreeTopology()
+  submodules()
+}
+
+class WorktreeOperationCapabilities {
+  <<application port>>
+  status()
+  index()
+  patch()
+  commit()
+  stash()
+  checkout()
+  merge()
+  rebase()
+  interactiveRebase()
+  cherryPickAndRevert()
+  resetAndUndo()
+  clean()
+  pullAndPush()
+}
+
+class GitRuntime {
+  <<application port>>
+  +supports(operation, context)
+  +execute(operation, context, input, signal)
+}
+
+class CliGitRuntime {
+  <<extension adapter>>
+  +supports(operation, context)
+}
+
+class VscodeGitRuntime {
+  <<extension adapter>>
+  +supports(operation, context)
+}
+
+class HybridGitRuntime {
+  <<extension service>>
+  +supports(operation, context)
+  +selectRuntime(operation, context)
+}
+
+class GitExecutionContext {
+  <<application value>>
+  +string cwd
+  +string gitDir
+  +string repositoryId
+  +string worktreeId
+  +RepositoryKind kind
+  +string parentRepositoryId
+}
+
+class UnsupportedGitOperationError {
+  <<application error>>
+  +string operation
+  +string context
+}
+
+class GitCommit {
+  <<domain value>>
+  +string hash
+  +string shortHash
+  +string message
+  +string authorName
+  +string authorEmail
+  +string authorDate
+  +string[] parentHashes
+  +string[] refs
+}
+
+class PageRequest {
+  <<domain value>>
+  +number limit
+  +string encodedCursor
+}
+
+class PageCursor {
+  <<domain value>>
+  +string kind
+  +string repositoryId
+  +string worktreeId
+  +string queryHash
+  +string anchor
+  +string snapshot
+  +string direction
+}
+
+class Page {
+  <<domain value>>
+  +T[] items
+  +string encodedNextCursor
+  +boolean hasMore
+}
+
+class SemanticActionPolicy {
+  <<application value>>
+  +string action
+}
+
+class OperationGuard {
+  <<application value>>
+  +string kind
+  +string level
+  +string reason
+}
+
+class OperationPlan {
+  <<application value>>
+  +string id
+  +string action
+}
+
+class OperationTarget {
+  <<application value>>
+  +string kind
+  +string id
+  +string label
+}
+
+class OperationPreview {
+  <<application value>>
+  +string kind
+  +object summary
+}
+
+class RecoveryHint {
+  <<application value>>
+  +string kind
+  +string description
+}
+
+class OperationPlanRegistry {
+  <<extension service>>
+  +store(plan)
+  +get(planId)
+  +expire(planId)
+}
+
+class GuardAcknowledgementValidator {
+  <<extension service>>
+  +validate(acknowledgement, context)
+}
+
+class RepositoryKind {
+  <<enum>>
+  main
+  submodule
+}
+
+class SubmoduleStatus {
+  <<enum>>
+  clean
+  dirty
+  outOfSync
+  notInitialized
+}
+
+class SubmoduleLink {
+  <<domain concept>>
+  +string parentRepoId
+  +string path
+  +string registeredCommit
+  +string childRepoId?
+  +string childHead?
+  +SubmoduleStatus status
+}
+
+class RepositoryRegistry {
+  <<extension service>>
+  +discoverRoots()
+  +discoverSubmodules(parent)
+  +discoverWorktrees(repository)
+  +getRepository(repoId)
+  +getWorktree(worktreeId)
+}
+
+class RepositoryLocator {
+  <<protocol value>>
+  +string repoId
+  +RepositoryKind kind
+  +string parentRepoId
+  +string path
+}
+
+class WorktreeLocator {
+  <<protocol value>>
+  +string repoId
+  +string worktreeId
+  +string path
+}
+
+RepositoryOperationCapabilities <|.. GitRepository
+WorktreeOperationCapabilities <|.. Worktree
+RepositoryOperationCapabilities --> GitCommit : returns
+RepositoryOperationCapabilities --> Page : returns
+RepositoryOperationCapabilities --> PageRequest : accepts
+PageRequest --> PageCursor : decodes to
+Page --> PageCursor : encodes next
+GitRepository --> RepositoryKind
+GitRepository --> GitRuntime : delegates
+Worktree --> GitRuntime : delegates
+GitRuntime <|.. CliGitRuntime
+GitRuntime <|.. VscodeGitRuntime
+GitRuntime <|.. HybridGitRuntime
+HybridGitRuntime --> CliGitRuntime : selects
+HybridGitRuntime --> VscodeGitRuntime : selects
+GitRuntime --> GitExecutionContext : uses
+GitRuntime --> UnsupportedGitOperationError : throws when invalid
+RepositoryOperationCapabilities --> SemanticActionPolicy : declares
+WorktreeOperationCapabilities --> SemanticActionPolicy : declares
+SemanticActionPolicy o-- OperationGuard
+OperationPlan o-- OperationGuard
+OperationPlan o-- OperationTarget
+OperationPlan --> OperationPreview
+OperationPlan --> RecoveryHint
+OperationPlanRegistry o-- OperationPlan
+GuardAcknowledgementValidator --> OperationPlanRegistry
+GitRepository "1" o-- "1..*" Worktree : has checkouts
+GitRepository "1" o-- "0..*" SubmoduleLink : declares
+SubmoduleLink --> GitRepository : child repository when initialized
+SubmoduleLink --> SubmoduleStatus
+RepositoryRegistry o-- GitRepository : owns
+RepositoryRegistry o-- Worktree : indexes
+RepositoryLocator --> RepositoryKind
+WorktreeLocator --> RepositoryLocator : belongs to
+RepositoryRegistry --> RepositoryLocator : resolves
+RepositoryRegistry --> WorktreeLocator : resolves
+
+note for GitRepository "Main repos and initialized submodules are both repositories"
+note for Worktree "A worktree is a checkout, not a repository"
+note for RepositoryOperationCapabilities "Full method list lives in git-operation-capabilities-class.mermaid and git-semantic-operations.md"
+note for WorktreeOperationCapabilities "Checkout-bound operations include patch, rebase, reset, undo, clean, pull, and push"
+note for GitExecutionContext "Runtime context contains execution facts, not protocol locators"
+note for GitRuntime "Implements the semantic operation catalog for execution facts, not protocol locators"
+note for CliGitRuntime "Implements operations with local git CLI, shell environment, SSH agent, and git credential helpers"
+note for VscodeGitRuntime "Implements supported remote operations through VS Code Git runtime and credentials"
+note for HybridGitRuntime "Central policy for selecting CLI or VS Code runtime"
+note for UnsupportedGitOperationError "Unsupported operations fail explicitly for the current bound context"
+note for GitCommit "Domain value used before protocol mapping"
+note for PageCursor "Decoded cursor state is extension-owned; protocol carries opaque strings"
+note for OperationGuard "Guards are evaluated by use cases before semantic git actions execute"
+note for GuardAcknowledgementValidator "Host-side validation prevents webviews from inventing trust"
+note for SubmoduleLink "Registered path and commit always exist; child repo id/head exist only when initialized"
+note for RepositoryLocator "Protocol-safe handle resolved by the extension layer"
+note for WorktreeLocator "Protocol-safe checkout handle resolved by the extension layer"

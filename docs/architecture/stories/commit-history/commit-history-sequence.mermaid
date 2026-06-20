@@ -1,0 +1,55 @@
+sequenceDiagram
+autonumber
+actor User
+participant HistoryApp as Commit History Webview
+participant HistoryRouter as HistoryMessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as HistoryUseCases
+participant Repository as GitRepository implements GitHistoryOperations
+participant Runtime as HybridGitRuntime
+participant Cli as CliGitRuntime
+
+User->>HistoryApp: Open Commit History
+HistoryApp->>HistoryRouter: history/dataRequest(repositoryLocator, PageRequest, filters, requestId)
+HistoryRouter->>Registry: resolveRepository(repositoryLocator)
+Registry-->>HistoryRouter: GitRepository
+HistoryRouter->>UseCase: getCommitHistory(Repository, filters, PageRequest, signal)
+UseCase->>Repository: getCommitGraph(filters, PageRequest, signal)
+Repository->>Runtime: getCommitGraph(executionContext, filters, PageRequest, signal)
+Runtime->>Cli: getCommitGraph(executionContext, filters, PageRequest, signal)
+Cli-->>Runtime: Page(GitCommit)
+Runtime-->>Repository: Page(GitCommit)
+Repository-->>UseCase: Page(GitCommit)
+UseCase-->>HistoryRouter: Page(CommitSummary)
+HistoryRouter-->>HistoryApp: history/dataResponse(requestId, Page(CommitSummary))
+HistoryApp-->>User: Render cursor page of commit history
+
+User->>HistoryApp: Select commit
+HistoryApp->>HistoryRouter: history/commitDetailsRequest(repositoryLocator, commitHash, requestId)
+HistoryRouter->>Registry: resolveRepository(repositoryLocator)
+Registry-->>HistoryRouter: GitRepository
+HistoryRouter->>UseCase: getCommitDetails(Repository, commitHash, signal)
+UseCase->>Repository: getCommitDetails(commitHash, signal)
+Repository->>Runtime: getCommitDetails(executionContext, commitHash, signal)
+Runtime->>Cli: getCommitDetails(executionContext, commitHash, signal)
+Cli-->>Runtime: GitCommit details and file changes
+Runtime-->>Repository: GitCommit details and file changes
+Repository-->>UseCase: GitCommit details and file changes
+UseCase-->>HistoryRouter: CommitDetails
+HistoryRouter-->>HistoryApp: history/commitDetailsResponse(requestId, details)
+HistoryApp-->>User: Render commit message and changed files
+
+User->>HistoryApp: Load more
+HistoryApp->>HistoryRouter: history/dataRequest(repositoryLocator, NextCursorPageRequest, filters, requestId)
+HistoryRouter->>Registry: resolveRepository(repositoryLocator)
+Registry-->>HistoryRouter: GitRepository
+HistoryRouter->>UseCase: getCommitHistory(Repository, filters, NextCursorPageRequest, signal)
+UseCase->>Repository: getCommitGraph(filters, NextCursorPageRequest, signal)
+Repository->>Runtime: getCommitGraph(executionContext, filters, NextCursorPageRequest, signal)
+Runtime->>Cli: getCommitGraph(executionContext, filters, NextCursorPageRequest, signal)
+Cli-->>Runtime: Page(GitCommit)
+Runtime-->>Repository: Page(GitCommit)
+Repository-->>UseCase: Page(GitCommit)
+UseCase-->>HistoryRouter: Page(CommitSummary)
+HistoryRouter-->>HistoryApp: history/dataResponse(requestId, Page(CommitSummary))
+HistoryApp-->>User: Append next cursor page

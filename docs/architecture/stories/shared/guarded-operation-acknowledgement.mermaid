@@ -1,0 +1,48 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as Any Webview
+participant Router as MessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as Feature Use Case
+participant Policy as SemanticActionPolicy
+participant PlanRegistry as OperationPlanRegistry
+participant Validator as GuardAcknowledgementValidator
+participant Worktree as Worktree implements WorktreeOperationCapabilities
+participant Runtime as GitRuntime
+
+User->>App: Request guarded action
+App->>Router: guarded action request(worktreeLocator, actionInput, requestId)
+Router->>Registry: resolveWorktree(worktreeLocator)
+Registry-->>Router: Worktree
+Router->>UseCase: prepare(Worktree, actionInput, signal)
+UseCase->>Policy: guardsFor(semanticAction)
+Policy-->>UseCase: OperationGuard list
+UseCase->>UseCase: Build targets, preview, and recovery hints
+UseCase-->>Router: OperationPlan
+Router->>PlanRegistry: store(OperationPlan, Worktree)
+PlanRegistry-->>Router: stored OperationPlan
+Router-->>App: operation plan response(requestId, OperationPlan)
+App-->>User: Show guards and preview
+
+User->>App: Acknowledge guards
+App->>Router: guarded action execute(worktreeLocator, actionInput, GuardAcknowledgement, requestId)
+Router->>Registry: resolveWorktree(worktreeLocator)
+Registry-->>Router: Worktree
+Router->>Validator: validate(GuardAcknowledgement, Worktree)
+Validator->>PlanRegistry: get(planId)
+PlanRegistry-->>Validator: OperationPlan
+alt acknowledgement is valid
+  Validator-->>Router: validated acknowledgement
+  Router->>UseCase: execute(Worktree, actionInput, validated acknowledgement, signal)
+  UseCase->>Worktree: semantic action(signal)
+  Worktree->>Runtime: execute(operation, executionContext, input, signal)
+  Runtime-->>Worktree: result
+  Worktree-->>UseCase: result
+  UseCase-->>Router: result
+  Router->>PlanRegistry: expire(planId)
+  Router-->>App: guarded action response(requestId, result)
+else acknowledgement is invalid, stale, or expired
+  Validator-->>Router: validation error
+  Router-->>App: error(requestId, invalid acknowledgement)
+end

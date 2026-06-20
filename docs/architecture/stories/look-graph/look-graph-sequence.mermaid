@@ -1,0 +1,74 @@
+sequenceDiagram
+autonumber
+actor User
+participant GraphApp as Look Graph Webview
+participant GraphRouter as GraphMessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as GraphDataUseCase
+participant Repository as GitRepository implements RepositoryOperationCapabilities
+participant Runtime as HybridGitRuntime
+participant Cli as CliGitRuntime
+
+User->>GraphApp: Open Look Graph
+GraphApp->>GraphRouter: graph/dataRequest(repositoryLocator, PageRequest, filters, requestId)
+GraphRouter->>Registry: resolveRepository(repositoryLocator)
+Registry-->>GraphRouter: GitRepository
+GraphRouter->>UseCase: getGraphData(Repository, filters, PageRequest, signal)
+par Commit graph
+  UseCase->>Repository: getCommitGraph(filters, PageRequest, signal)
+  Repository->>Runtime: getCommitGraph(executionContext, filters, PageRequest, signal)
+  Runtime->>Cli: getCommitGraph(executionContext, filters, PageRequest, signal)
+and Branches and tags
+  UseCase->>Repository: listBranches(signal)
+  Repository->>Runtime: listBranches(executionContext, signal)
+  Runtime->>Cli: listBranches(executionContext, signal)
+  UseCase->>Repository: listTags(signal)
+  Repository->>Runtime: listTags(executionContext, signal)
+  Runtime->>Cli: listTags(executionContext, signal)
+and Worktrees and submodules
+  UseCase->>Repository: listWorktrees(signal)
+  Repository->>Runtime: listWorktrees(executionContext, signal)
+  Runtime->>Cli: listWorktrees(executionContext, signal)
+  UseCase->>Repository: listSubmodules(signal)
+  Repository->>Runtime: listSubmodules(executionContext, signal)
+  Runtime->>Cli: listSubmodules(executionContext, signal)
+end
+Cli-->>Runtime: graph domain values
+Runtime-->>Repository: graph domain values
+Repository-->>UseCase: graph domain values
+UseCase-->>GraphRouter: GraphData
+GraphRouter-->>GraphApp: graph/dataResponse(requestId, GraphData)
+GraphApp-->>User: Render graph rows, branches, tags, worktrees, submodules
+
+User->>GraphApp: Select initialized submodule repository
+GraphApp->>GraphRouter: graph/dataRequest(submoduleRepositoryLocator, PageRequest, filters, requestId)
+GraphRouter->>Registry: resolveRepository(submoduleRepositoryLocator)
+Registry-->>GraphRouter: GitRepository for initialized submodule
+GraphRouter->>UseCase: getGraphData(Repository, filters, PageRequest, signal)
+UseCase->>Repository: getCommitGraph(filters, PageRequest, signal)
+Repository->>Runtime: getCommitGraph(executionContext, filters, PageRequest, signal)
+Runtime->>Cli: getCommitGraph(executionContext, filters, PageRequest, signal)
+Cli-->>Runtime: Page(GitCommit)
+Runtime-->>Repository: Page(GitCommit)
+Repository-->>UseCase: Page(GitCommit)
+UseCase-->>GraphRouter: GraphData
+GraphRouter-->>GraphApp: graph/dataResponse(requestId, GraphData)
+GraphApp-->>User: Render submodule graph
+
+alt Git watcher requests auto-refresh
+  GraphRouter-->>GraphApp: graph/refreshRequested
+  GraphApp->>GraphRouter: graph/dataRequest(repositoryLocator, CurrentCursorPageRequest, filters, requestId)
+  GraphRouter->>Registry: resolveRepository(repositoryLocator)
+  Registry-->>GraphRouter: GitRepository
+  GraphRouter->>UseCase: getGraphData(Repository, filters, CurrentCursorPageRequest, signal)
+  UseCase->>Repository: getCommitGraph(filters, CurrentCursorPageRequest, signal)
+  Repository->>Runtime: getCommitGraph(executionContext, filters, CurrentCursorPageRequest, signal)
+  Runtime->>Cli: getCommitGraph(executionContext, filters, CurrentCursorPageRequest, signal)
+  Cli-->>Runtime: Page(GitCommit)
+  Runtime-->>Repository: Page(GitCommit)
+  Repository-->>UseCase: Page(GitCommit)
+  UseCase-->>GraphRouter: GraphData
+  GraphRouter-->>GraphApp: graph/dataResponse(requestId, GraphData)
+  GraphApp->>GraphApp: Reduce only if graph data changed
+  GraphApp-->>User: Preserve stable UI when unchanged
+end
