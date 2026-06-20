@@ -37,6 +37,7 @@ export interface GitRepository
         GitWorktreeTopologyOperations,
         GitSubmoduleOperations {
     readonly repoId: string;
+    readonly cwd: string;
     readonly gitDir: string;
     readonly kind: RepositoryKind;
     readonly label: string;

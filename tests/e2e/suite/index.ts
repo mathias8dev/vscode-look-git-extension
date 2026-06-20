@@ -11,8 +11,6 @@ import type { ActiveRepositoryAccessor } from '../../../src/extension/repositori
 import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHistoryViewProvider';
 import { getConfiguredWebviewFontSize, registerWebviewFontSizeSync } from '../../../src/extension/views/webview-font';
 import type { CommitMessageGeneratorInput } from '../../../src/application/ports/commit-message-generator';
-import type { GitRepository } from '../../../src/application/ports/git-repository';
-import { VscodeRemoteCommand, type CliRemoteCommand, type RemoteCommandBackend } from '../../../src/application/ports/remote-command-backend';
 import { GenerateCommitMessageUseCase } from '../../../src/application/usecases/changes/generate-commit-message';
 import type { ChangesExtensionToWebviewMessage } from '../../../src/protocol/changes/messages';
 import { ConflictState } from '../../../src/protocol/changes/types';
@@ -1268,7 +1266,6 @@ function createRemoteOnlyBranchE2E(fixture: TempGitRepo, branch: string, startPo
 
 async function runCommitHistorySubmoduleScopeE2E(): Promise<void> {
     await runCommitHistorySubmoduleReadNavigationStoryE2E();
-    await runCommitHistorySubmoduleRemoteToolbarStoryE2E();
 }
 
 async function runCommitHistorySubmoduleReadNavigationStoryE2E(): Promise<void> {
@@ -1296,46 +1293,6 @@ async function runCommitHistorySubmoduleReadNavigationStoryE2E(): Promise<void> 
         view.messages = [];
         sendHistoryMessage(view, { type: 'history/toolbarCommand', command: 'goToCurrent' });
         await waitForHistorySelectCommit(view.messages, fixture.featureHead);
-        await waitForHistoryCommitMessage(view.messages, 'feat(auth-kit): add oauth support');
-    } finally {
-        fixture.cleanup();
-    }
-}
-
-async function runCommitHistorySubmoduleRemoteToolbarStoryE2E(): Promise<void> {
-    const fixture = createCommitHistorySubmoduleFixture();
-    const remoteBackend = capturingRemoteBackend();
-    let repositoryUpdateCount = 0;
-    try {
-        const { view } = await historyHarnessFor(
-            fixture.parent.cwd,
-            remoteBackend.backend,
-            async () => { repositoryUpdateCount++; },
-        );
-        const submoduleCwd = path.join(fixture.parent.cwd, 'modules', 'auth-kit');
-
-        await withPatchedVscode({ quickPickValues: ['Submodule: modules/auth-kit'] }, async () => {
-            sendHistoryMessage(view, { type: 'history/toolbarCommand', command: 'selectRepositoryScope' });
-            await waitForHistoryCommitMessage(view.messages, 'feat(auth-kit): add oauth support');
-        });
-
-        for (const command of ['fetchAll', 'pull', 'push'] as const) {
-            sendHistoryMessage(view, { type: 'history/toolbarCommand', command });
-            await waitForCondition(
-                () => remoteBackend.calls.some((call) => call.command === command),
-                () => `Expected commit history toolbar command ${command} to run.`,
-            );
-        }
-
-        assert.deepEqual(remoteBackend.calls.map((call) => ({ command: call.command, cwd: call.cwd })), [
-            { command: VscodeRemoteCommand.FetchAll, cwd: submoduleCwd },
-            { command: VscodeRemoteCommand.Pull, cwd: submoduleCwd },
-            { command: VscodeRemoteCommand.Push, cwd: submoduleCwd },
-        ]);
-        await waitForCondition(
-            () => repositoryUpdateCount === 3,
-            () => `Expected repository update callback after each remote action, got ${repositoryUpdateCount}.`,
-        );
         await waitForHistoryCommitMessage(view.messages, 'feat(auth-kit): add oauth support');
     } finally {
         fixture.cleanup();
@@ -1771,7 +1728,6 @@ function routerFor(repoPath: string, messages: GraphExtensionToWebviewMessage[])
 
 async function historyHarnessFor(
     repoPath: string,
-    remoteCommands?: RemoteCommandBackend,
     onRepositoryUpdated: () => Promise<void> = async () => {},
 ): Promise<{ readonly view: HistoryE2eWebviewView; readonly provider: CommitHistoryViewProvider }> {
     const repo = new GitProcessRepository(repoPath);
@@ -1784,8 +1740,6 @@ async function historyHarnessFor(
         vscode.Uri.file(repoRoot),
         accessor,
         onRepositoryUpdated,
-        remoteCommands,
-        undefined,
         vscode.Uri.file(os.tmpdir()),
     );
     const view = makeHistoryWebviewView();
@@ -1817,15 +1771,9 @@ function changesRouterFor(
         (message) => { messages.push(message); },
         async () => undefined,
         async () => undefined,
-        noOpRemoteCommandBackend,
         generateCommitMessage,
     );
 }
-
-const noOpRemoteCommandBackend: RemoteCommandBackend = {
-    runVscode: async () => undefined,
-    runCli: async () => undefined,
-};
 
 interface HistoryE2eWebviewView extends vscode.WebviewView {
     messages: HistoryExtensionToWebviewMessage[];
@@ -1907,20 +1855,6 @@ function createCommitHistorySubmoduleFixture(): CommitHistorySubmoduleFixture {
         source.cleanup();
         throw error;
     }
-}
-
-function capturingRemoteBackend(): {
-    readonly calls: Array<{ readonly command: VscodeRemoteCommand; readonly cwd: string }>;
-    readonly backend: RemoteCommandBackend;
-} {
-    const calls: Array<{ readonly command: VscodeRemoteCommand; readonly cwd: string }> = [];
-    const backend: RemoteCommandBackend = {
-        async runVscode(repo: GitRepository, command: VscodeRemoteCommand): Promise<void> {
-            calls.push({ command, cwd: repo.cwd });
-        },
-        async runCli(_repo: GitRepository, _command: CliRemoteCommand): Promise<void> {},
-    };
-    return { calls, backend };
 }
 
 async function requestGraphDataForState(

@@ -5,8 +5,6 @@ import type { GraphContextTarget } from '../../protocol/graph/types';
 import type { RepoContext } from '../../core/git/domain/RepoContext';
 import { toSerializedRepoContext } from '../mapping/toProtocol';
 import { GraphMessageRouter } from '../messaging/GraphMessageRouter';
-import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
-import type { RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { getWebviewHtml } from './webviewHtml';
 import { webviewFontSizeMessage } from './webview-font';
 import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
@@ -89,7 +87,6 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         private readonly extensionUri: vscode.Uri,
         private readonly repositories: ActiveRepositoryAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
-        private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
         private readonly storageUri?: vscode.Uri,
         private readonly runtimeRepositories?: RepositoryRegistry,
     ) {}
@@ -106,7 +103,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         this.router?.dispose();
         this.router = new GraphMessageRouter(this.repositories, (msg) => {
             webviewView.webview.postMessage(msg);
-        }, this.onRepositoryUpdated, this.remoteCommands, undefined, undefined, undefined, this.extensionUri, this.storageUri, this.runtimeRepositories);
+        }, this.onRepositoryUpdated, undefined, undefined, undefined, this.extensionUri, this.storageUri, this.runtimeRepositories);
 
         webviewView.webview.onDidReceiveMessage((msg: GraphWebviewToExtensionMessage) => {
             if (msg.type === 'graph/contextTarget') {

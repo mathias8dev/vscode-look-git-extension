@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import * as path from 'path';
 import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
 import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessageRouter';
 import type { GraphExtensionToWebviewMessage } from '../../../src/protocol/graph/messages';
-import { makeRepositoryAccessor } from '../../helpers/repositoryMock';
 import { createBareGitRepo, createTempGitRepo, type TempGitRepo } from '../../helpers/gitRepo';
 import { resetMockVscode, setInputBoxValue, setWarningChoice, workspace } from '../../mocks/vscode';
+import { RepositoryRegistry } from '../../../src/extension/repositories/RepositoryRegistry';
+import { RuntimeGitRepository } from '../../../src/extension/git/runtime-git-repository';
+import { RuntimeWorktree } from '../../../src/extension/git/runtime-worktree';
+import { stableRepoContextId } from '../../../src/extension/repositories/repo-context-id';
+import { RepoKind } from '../../../src/core/git/domain/RepoContext';
 
 describe('Graph commit commands against real git repos', () => {
     let fixture: TempGitRepo;
@@ -256,5 +261,29 @@ describe('Graph commit commands against real git repos', () => {
 
 function routerFor(cwd: string, messages: GraphExtensionToWebviewMessage[] = []): GraphMessageRouter {
     const repo = new GitProcessRepository(cwd);
-    return new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); });
+    const repoId = stableRepoContextId(cwd);
+    const gitDir = path.join(cwd, '.git');
+    const runtimeRegistry = new RepositoryRegistry();
+    runtimeRegistry.registerRepository(new RuntimeGitRepository({
+        repoId,
+        cwd,
+        gitDir,
+        kind: 'main',
+        label: path.basename(cwd),
+    }));
+    runtimeRegistry.registerWorktree(new RuntimeWorktree({
+        repoId,
+        worktreeId: repoId,
+        path: cwd,
+        gitDir,
+        repositoryKind: 'main',
+        isMain: true,
+        head: 'HEAD',
+        dirty: false,
+    }));
+    return new GraphMessageRouter({
+        currentRepository: repo,
+        currentContext: { id: repoId, cwd, kind: RepoKind.Main, label: path.basename(cwd) },
+        requireRepository: () => repo,
+    }, (message) => { messages.push(message); }, async () => {}, undefined, undefined, undefined, undefined, undefined, undefined, runtimeRegistry);
 }

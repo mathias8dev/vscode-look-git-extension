@@ -4,7 +4,6 @@ import * as path from 'path';
 import type { GitFileChange } from '../../../src/application/ports/git-repository';
 import type { GitRepository as RuntimeRepository, Worktree } from '../../../src/application/ports/git-topology';
 import type { GitRuntime } from '../../../src/application/ports/git-runtime';
-import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../../src/application/ports/remote-command-backend';
 import { OperationStatus } from '../../../src/protocol/shared/operation';
 import { ConflictState } from '../../../src/protocol/changes/types';
 import { RepoKind, type RepoContext } from '../../../src/core/git/domain/RepoContext';
@@ -878,115 +877,6 @@ describe('CommitHistoryViewProvider error propagation', () => {
 
         await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith(['-C', 'modules/auth-kit', 'rev-parse', 'HEAD'], undefined));
         await vi.waitFor(() => expect(view.messages).toContainEqual({ type: 'history/selectCommit', hash: 'submodule-head' }));
-    });
-
-    it('runs history remote toolbar commands against the selected submodule scope', async () => {
-        setQuickPickValue('Submodule: modules/auth-kit');
-        const repo = makeRepositoryMock({
-            getSubmoduleStatus: vi.fn(async () => [{ path: 'modules/auth-kit', status: ' ' as const }]),
-            execRaw: vi.fn(async (args) => scopedHistoryOutput(args)),
-            exec: vi.fn(async (args) => args.join(' ') === '-C modules/auth-kit rev-parse --abbrev-ref HEAD' ? 'feature/auth' : ''),
-        });
-        const remoteCommands: RemoteCommandBackend = {
-            runVscode: vi.fn(async () => {}),
-            runCli: vi.fn(async () => {}),
-        };
-        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo), async () => {}, remoteCommands);
-        const view = makeWebviewView();
-
-        provider.resolveWebviewView(view);
-        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'selectRepositoryScope' });
-        await vi.waitFor(() => expect(repo.execRaw).toHaveBeenCalledWith(expect.arrayContaining(['-C', 'modules/auth-kit', 'log']), undefined));
-
-        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'fetchAll' });
-
-        await vi.waitFor(() => expect(remoteCommands.runVscode).toHaveBeenCalledWith(
-            expect.objectContaining({ cwd: path.resolve(repo.cwd, 'modules/auth-kit') }),
-            'fetchAll',
-        ));
-    });
-
-    it('runs native file context git commands against the clicked file repository', async () => {
-        const activeRoot = path.resolve('workspace-a');
-        const clickedRoot = path.resolve('workspace-b');
-        const activeRepo = makeRepositoryMock({ cwd: activeRoot });
-        const clickedRepo = makeRepositoryMock({ cwd: clickedRoot });
-        const remoteCommands: RemoteCommandBackend = {
-            runVscode: vi.fn(async () => {}),
-            runCli: vi.fn(async () => {}),
-        };
-        const repositoryResolver = { repositoryForUri: vi.fn(async () => clickedRepo) };
-        const provider = new CommitHistoryViewProvider(
-            vscode.Uri.file('/ext'),
-            makeRepositoryAccessor(activeRepo),
-            async () => {},
-            remoteCommands,
-            repositoryResolver,
-        );
-        const disposables = provider.registerNativeContextCommands();
-        const uri = vscode.Uri.file(path.join(clickedRoot, 'src', 'app.ts'));
-
-        await vscode.commands.executeCommand('lookGit.history.push', uri);
-
-        expect(repositoryResolver.repositoryForUri).toHaveBeenCalledWith(uri);
-        expect(remoteCommands.runVscode).toHaveBeenCalledWith(clickedRepo, VscodeRemoteCommand.Push);
-        expect(remoteCommands.runVscode).not.toHaveBeenCalledWith(activeRepo, VscodeRemoteCommand.Push);
-        disposables.forEach((disposable) => disposable.dispose());
-    });
-
-    it('shows native file context git command failures as VS Code errors', async () => {
-        const root = path.resolve('workspace');
-        const repo = makeRepositoryMock({ cwd: root });
-        const remoteCommands: RemoteCommandBackend = {
-            runVscode: vi.fn(async () => { throw new Error('push failed'); }),
-            runCli: vi.fn(async () => {}),
-        };
-        const repositoryResolver = { repositoryForUri: vi.fn(async () => repo) };
-        const provider = new CommitHistoryViewProvider(
-            vscode.Uri.file('/ext'),
-            makeRepositoryAccessor(repo),
-            async () => {},
-            remoteCommands,
-            repositoryResolver,
-        );
-        const disposables = provider.registerNativeContextCommands();
-
-        await vscode.commands.executeCommand('lookGit.history.push', vscode.Uri.file(path.join(root, 'src', 'app.ts')));
-
-        expect(window.errorMessages).toContain('Push failed: push failed');
-        disposables.forEach((disposable) => disposable.dispose());
-    });
-
-    it('shows native file context pull conflicts as VS Code warnings', async () => {
-        const root = path.resolve('workspace');
-        const repo = makeRepositoryMock({
-            cwd: root,
-            getStatus: vi.fn(async () => ({
-                staged: [],
-                unstaged: [],
-                conflicts: [{ indexStatus: 'U', workTreeStatus: 'U', filePath: 'src/conflict.ts' }],
-                conflictState: ConflictState.Merge,
-            })),
-        });
-        const remoteCommands: RemoteCommandBackend = {
-            runVscode: vi.fn(async () => { throw new Error('Automatic merge failed; fix conflicts and then commit the result.'); }),
-            runCli: vi.fn(async () => {}),
-        };
-        const repositoryResolver = { repositoryForUri: vi.fn(async () => repo) };
-        const provider = new CommitHistoryViewProvider(
-            vscode.Uri.file('/ext'),
-            makeRepositoryAccessor(repo),
-            async () => {},
-            remoteCommands,
-            repositoryResolver,
-        );
-        const disposables = provider.registerNativeContextCommands();
-
-        await vscode.commands.executeCommand('lookGit.history.pull', vscode.Uri.file(path.join(root, 'src', 'app.ts')));
-
-        expect(window.warningMessages).toContainEqual({ message: 'Pull stopped with conflicts.', items: [] });
-        expect(window.errorMessages).toEqual([]);
-        disposables.forEach((disposable) => disposable.dispose());
     });
 
     it('posts a recoverable toolbar error when a git operation fails', async () => {

@@ -1,4 +1,4 @@
-import type { GitCommit, GitFileChange } from '../../core/git/domain/GitCommit';
+import type { GitFileChange } from '../../core/git/domain/GitCommit';
 import type { Page, PageRequest } from '../../core/git/domain/Page';
 import type { GitStash, GitStatus } from '../../core/git/domain/GitStatus';
 import type {
@@ -354,6 +354,10 @@ export class RuntimeWorktree implements Worktree {
         return this.execute('resetHard', ref, signal);
     }
 
+    resetKeep(ref: string, signal?: AbortSignal): Promise<void> {
+        return this.execute('resetKeep', ref, signal);
+    }
+
     resetPaths(paths: readonly string[], sourceRef: string | undefined, signal?: AbortSignal): Promise<void> {
         return this.execute('resetPaths', { paths, sourceRef }, signal);
     }
@@ -400,6 +404,10 @@ export class RuntimeWorktree implements Worktree {
 
     pushBranch(remote: string, branch: string, options: PushOptions, signal?: AbortSignal): Promise<void> {
         return this.execute('pushBranch', { remote, branch, options }, signal);
+    }
+
+    pushRef(remote: string, sourceRef: string, destinationRef: string, options: PushOptions, signal?: AbortSignal): Promise<void> {
+        return this.execute('pushRef', { remote, sourceRef, destinationRef, options }, signal);
     }
 
     pushTags(remote: string, options: PushOptions, signal?: AbortSignal): Promise<void> {

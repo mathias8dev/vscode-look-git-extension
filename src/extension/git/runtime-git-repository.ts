@@ -1,6 +1,6 @@
 import type { GitCommit, GitFileChange } from '../../core/git/domain/GitCommit';
 import type { Page, PageRequest } from '../../core/git/domain/Page';
-import type { GitBranch, GitStatus, GitTag } from '../../core/git/domain/GitStatus';
+import type { GitBranch, GitTag } from '../../core/git/domain/GitStatus';
 import type { GitSubmodule, GitWorktree } from '../../core/git/domain/GitWorktree';
 import type {
     AddWorktreeInput,
@@ -91,6 +91,14 @@ export class RuntimeGitRepository implements GitRepository {
         return this.execute('getAheadBehind', { localRef, upstreamRef }, signal);
     }
 
+    getReachableCommitHashes(hashes: readonly string[], signal?: AbortSignal): Promise<ReadonlySet<string>> {
+        return this.execute('getReachableCommitHashes', { hashes }, signal);
+    }
+
+    orderCommits(hashes: readonly string[], direction: 'newestFirst' | 'oldestFirst', signal?: AbortSignal): Promise<readonly string[]> {
+        return this.execute('orderCommits', { hashes, direction }, signal);
+    }
+
     getFileHistory(path: string, query: CommitGraphQuery, pageRequest: PageRequest, signal?: AbortSignal): Promise<Page<GitCommit>> {
         return this.execute('getFileHistory', { path, query, pageRequest }, signal);
     }
@@ -159,6 +167,14 @@ export class RuntimeGitRepository implements GitRepository {
         return this.execute('resolveRef', ref, signal);
     }
 
+    getUserName(signal?: AbortSignal): Promise<string> {
+        return this.execute('getUserName', undefined, signal);
+    }
+
+    getUpstreamBranch(branch: string, signal?: AbortSignal): Promise<string | undefined> {
+        return this.execute('getUpstreamBranch', { branch }, signal);
+    }
+
     createBranch(name: string, startPoint: string | undefined, signal?: AbortSignal): Promise<void> {
         return this.execute('createBranch', { name, startPoint }, signal);
     }
@@ -169,6 +185,10 @@ export class RuntimeGitRepository implements GitRepository {
 
     deleteBranch(name: string, force: boolean, signal?: AbortSignal): Promise<void> {
         return this.execute('deleteBranch', { name, force }, signal);
+    }
+
+    deleteRemoteBranch(remote: string, branch: string, signal?: AbortSignal): Promise<void> {
+        return this.execute('deleteRemoteBranch', { remote, branch }, signal);
     }
 
     setUpstream(branch: string, upstream: string, signal?: AbortSignal): Promise<void> {
@@ -219,6 +239,10 @@ export class RuntimeGitRepository implements GitRepository {
         return this.execute('addWorktree', input, signal);
     }
 
+    addDetachedWorktree(path: string, ref: string, signal?: AbortSignal): Promise<void> {
+        return this.execute('addDetachedWorktree', { path, ref }, signal);
+    }
+
     removeWorktree(worktree: string, force: boolean, signal?: AbortSignal): Promise<void> {
         return this.execute('removeWorktree', { worktree, force }, signal);
     }
@@ -229,6 +253,14 @@ export class RuntimeGitRepository implements GitRepository {
 
     repairWorktree(worktree: string, signal?: AbortSignal): Promise<void> {
         return this.execute('repairWorktree', { worktree }, signal);
+    }
+
+    lockWorktree(worktree: string, signal?: AbortSignal): Promise<void> {
+        return this.execute('lockWorktree', { worktree }, signal);
+    }
+
+    unlockWorktree(worktree: string, signal?: AbortSignal): Promise<void> {
+        return this.execute('unlockWorktree', { worktree }, signal);
     }
 
     listSubmodules(signal?: AbortSignal): Promise<readonly GitSubmodule[]> {

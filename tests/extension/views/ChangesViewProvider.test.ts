@@ -7,7 +7,6 @@ import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime'
 import type { GitRepository } from '../../../src/application/ports/git-repository';
 import type { GitRepository as RuntimeRepository, Worktree } from '../../../src/application/ports/git-topology';
 import type { GitRuntime } from '../../../src/application/ports/git-runtime';
-import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../../src/application/ports/remote-command-backend';
 import { OperationStatus } from '../../../src/protocol/shared/operation';
 import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
 import { RepositoryRegistry } from '../../../src/extension/repositories/RepositoryRegistry';
@@ -112,13 +111,6 @@ function makeProvider(
     explainSelectedChanges?: ExplainSelectedChangesUseCase,
 ): ChangesViewProvider {
     return new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), async () => {}, undefined, undefined, generateCommitMessage, undefined, undefined, explainSelectedChanges);
-}
-
-function makeRemoteCommands(): RemoteCommandBackend {
-    return {
-        runVscode: vi.fn(async () => {}),
-        runCli: vi.fn(async () => {}),
-    };
 }
 
 const runtime = {
@@ -668,47 +660,6 @@ describe('ChangesViewProvider', () => {
         await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
     });
 
-    it('toolbar pull conflicts refresh dependent views and show an actionable notification', async () => {
-        setWarningChoice('Open All in Merge Editor');
-        const onRepositoryUpdated = vi.fn(async () => {});
-        const remoteCommands = makeRemoteCommands();
-        vi.mocked(remoteCommands.runVscode).mockRejectedValue(new Error('Automatic merge failed; fix conflicts and then commit the result.'));
-        const repo = makeRepo({
-            execRaw: conflictStageExecRaw(undefined, ['src/conflict.ts']),
-        });
-        const provider = new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), onRepositoryUpdated, remoteCommands);
-        const view = makeWebviewView();
-        provider.resolveWebviewView(view);
-        await vi.waitFor(() => expect(repo.getStatus).toHaveBeenCalled());
-        vi.mocked(repo.getStatus).mockReset();
-        vi.mocked(repo.getStatus)
-            .mockResolvedValueOnce({ staged: [], unstaged: [], conflicts: [], conflictState: 'none' as const })
-            .mockResolvedValue({
-                staged: [],
-                unstaged: [],
-                conflicts: [{ indexStatus: 'U', workTreeStatus: 'U', filePath: 'src/conflict.ts' }],
-                conflictState: 'merge' as const,
-            });
-
-        view.messageHandler?.({ type: 'changes/toolbarCommand', command: 'pull' });
-
-        await vi.waitFor(() => expect(remoteCommands.runVscode).toHaveBeenCalledWith(repo, VscodeRemoteCommand.Pull));
-        await vi.waitFor(() => expect(mockWindow.warningMessages.some((entry) => entry.message === 'Pull stopped with conflicts. 1 unresolved conflict.')).toBe(true));
-        await vi.waitFor(() => expect(getCommandCalls().some((call) => call.command === '_open.mergeEditor')).toBe(true));
-        expect(view.messages).toContainEqual(expect.objectContaining({
-            type: 'changes/operationStatus',
-            status: OperationStatus.Running,
-            command: 'pull',
-        }));
-        expect(view.messages).toContainEqual(expect.objectContaining({
-            type: 'changes/operationStatus',
-            status: OperationStatus.Conflict,
-            command: 'pull',
-        }));
-        expect(view.messages).not.toContainEqual(expect.objectContaining({ type: 'changes/error' }));
-        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
-    });
-
     it('toolbar merge conflicts are treated as an actionable repository state', async () => {
         setQuickPickValue('feature/conflict');
         setWarningChoice('Open All in Merge Editor');
@@ -751,56 +702,6 @@ describe('ChangesViewProvider', () => {
         }));
         expect(view.messages).not.toContainEqual(expect.objectContaining({ type: 'changes/error' }));
         expect(onRepositoryUpdated).toHaveBeenCalledOnce();
-    });
-
-    it('submodule toolbar pull push and fetch run against the selected submodule repository', async () => {
-        const repo = makeRepo({
-            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
-        });
-        const remoteCommands = makeRemoteCommands();
-        const provider = new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), async () => {}, remoteCommands);
-        const view = makeWebviewView();
-        provider.resolveWebviewView(view);
-
-        view.messageHandler?.({ type: 'changes/submoduleToolbarCommand', submodulePath: 'modules/lib', command: 'pull' });
-        view.messageHandler?.({ type: 'changes/submoduleToolbarCommand', submodulePath: 'modules/lib', command: 'push' });
-        view.messageHandler?.({ type: 'changes/submoduleToolbarCommand', submodulePath: 'modules/lib', command: 'fetch' });
-
-        await vi.waitFor(() => expect(remoteCommands.runVscode).toHaveBeenCalledWith(
-            expect.objectContaining({ cwd: path.resolve(repo.cwd, 'modules/lib') }),
-            VscodeRemoteCommand.Pull,
-        ));
-        expect(remoteCommands.runVscode).toHaveBeenCalledWith(
-            expect.objectContaining({ cwd: path.resolve(repo.cwd, 'modules/lib') }),
-            VscodeRemoteCommand.Push,
-        );
-        expect(remoteCommands.runVscode).toHaveBeenCalledWith(
-            expect.objectContaining({ cwd: path.resolve(repo.cwd, 'modules/lib') }),
-            VscodeRemoteCommand.Fetch,
-        );
-    });
-
-    it('native submodule context commands run against the selected submodule', async () => {
-        const repo = makeRepo({
-            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
-        });
-        const remoteCommands = makeRemoteCommands();
-        const provider = new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), async () => {}, remoteCommands);
-        const view = makeWebviewView();
-        const disposables = provider.registerNativeContextCommands();
-        provider.resolveWebviewView(view);
-
-        view.messageHandler?.({
-            type: 'changes/contextTarget',
-            target: { kind: 'submoduleToolbar', submodulePath: 'modules/lib' },
-        });
-        await vscode.commands.executeCommand('lookGit.changes.submodule.fetch');
-
-        await vi.waitFor(() => expect(remoteCommands.runVscode).toHaveBeenCalledWith(
-            expect.objectContaining({ cwd: path.resolve(repo.cwd, 'modules/lib') }),
-            VscodeRemoteCommand.Fetch,
-        ));
-        disposables.forEach((disposable) => disposable.dispose());
     });
 
     it('native submodule changes commands use submodule-scoped file operations', async () => {
@@ -859,40 +760,6 @@ describe('ChangesViewProvider', () => {
         await vscode.commands.executeCommand('lookGit.changes.commitComposer.amend');
 
         await vi.waitFor(() => expect(repo.commitAmend).toHaveBeenCalledWith('fix(changes): amend from native menu'));
-        disposables.forEach((disposable) => disposable.dispose());
-    });
-
-    it('native commit composer commands submit the captured submodule message', async () => {
-        const repo = makeRepo({
-            getSubmodulePaths: vi.fn(async () => new Set(['modules/lib'])),
-        });
-        const remoteCommands = makeRemoteCommands();
-        const provider = new ChangesViewProvider(vscode.Uri.file('/ext'), makeAccessor(repo), async () => {}, remoteCommands);
-        const view = makeWebviewView();
-        const disposables = provider.registerNativeContextCommands();
-        provider.resolveWebviewView(view);
-
-        view.messageHandler?.({
-            type: 'changes/contextTarget',
-            target: {
-                kind: 'commitComposer',
-                submodulePath: 'modules/lib',
-                message: 'feat(lib): commit from native menu',
-            },
-        });
-        await vscode.commands.executeCommand('lookGit.changes.commitComposer.commitPush');
-
-        await vi.waitFor(() => expect(repo.exec).toHaveBeenCalledWith([
-            '-C',
-            path.join(repo.cwd, 'modules/lib'),
-            'commit',
-            '-m',
-            'feat(lib): commit from native menu',
-        ]));
-        expect(remoteCommands.runCli).toHaveBeenCalledWith(repo, expect.objectContaining({
-            cwd: path.join(repo.cwd, 'modules/lib'),
-            args: ['push'],
-        }));
         disposables.forEach((disposable) => disposable.dispose());
     });
 

@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs/promises';
 import type { GitRepository } from '../../application/ports/git-repository';
 import type { GitStatusEntry } from '../../core/git/domain/GitStatus';
 import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
@@ -13,15 +12,11 @@ import { SubmoduleStatus } from '../../protocol/shared/repo';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
 import type { GitRepository as RuntimeGitRepository, Worktree } from '../../application/ports/git-topology';
-import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
-import { CliRemoteCommandKind, VscodeRemoteCommand, type RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { confirmTypedPhrase, showModalWarningMessage } from '../utils/confirmation';
 import { showBranchNameInput } from '../utils/branch-name-input';
 import { createReadonlyDocumentUri } from '../utils/readonly-diff-documents';
 import { openStatusGitlinkDiff } from '../utils/gitlink-diff';
 import { toProtocolSubmoduleStatus, toRepositoryLocator, toWorktreeLocator } from '../mapping/toProtocol';
-import { detectConflictStateFromFiles, parsePorcelainStatus } from '../../core/parsing/parseStatus';
-import { parseNameStatusZ } from '../../core/parsing/parseNameStatus';
 import { GenerateCommitMessageUseCase } from '../../application/usecases/changes/generate-commit-message';
 import { VscodeLanguageModelCommitMessageGenerator } from '../adapters/vscode/vscode-language-model-commit-message-generator';
 import { ScopedGitRepository } from '../git/scoped-git-repository';
@@ -54,7 +49,6 @@ export class ChangesMessageRouter {
         private readonly postMessage: PostMessage,
         private readonly refresh: RefreshCallback,
         private readonly onRepositoryUpdated: RepositoryUpdatedCallback = async () => {},
-        private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
         private readonly generateCommitMessage = new GenerateCommitMessageUseCase(new VscodeLanguageModelCommitMessageGenerator()),
         private readonly runtimeRepositories?: RepositoryRegistry,
     ) {}
@@ -103,51 +97,37 @@ export class ChangesMessageRouter {
         }
 
         const repo = this.repositories.requireRepository();
-        const runtimeWorktree = this.currentRuntimeWorktree();
+        const currentRuntimeWorktree = () => this.requireCurrentRuntimeWorktree();
 
         switch (msg.type) {
 
             case 'changes/stageFile':
-                if (runtimeWorktree) { await runtimeWorktree.stage([msg.filePath]); }
-                else { await repo.stageFile(msg.filePath); }
+                await currentRuntimeWorktree().stage([msg.filePath]);
                 await this.refresh();
                 break;
 
             case 'changes/stageFiles':
-                if (runtimeWorktree) { await runtimeWorktree.stage(msg.filePaths); }
-                else {
-                    for (const filePath of msg.filePaths) {
-                        await repo.stageFile(filePath);
-                    }
-                }
+                await currentRuntimeWorktree().stage(msg.filePaths);
                 await this.refresh();
                 break;
 
             case 'changes/unstageFile':
-                if (runtimeWorktree) { await runtimeWorktree.unstage([msg.filePath]); }
-                else { await repo.unstageFile(msg.filePath); }
+                await currentRuntimeWorktree().unstage([msg.filePath]);
                 await this.refresh();
                 break;
 
             case 'changes/unstageFiles':
-                if (runtimeWorktree) { await runtimeWorktree.unstage(msg.filePaths); }
-                else {
-                    for (const filePath of msg.filePaths) {
-                        await repo.unstageFile(filePath);
-                    }
-                }
+                await currentRuntimeWorktree().unstage(msg.filePaths);
                 await this.refresh();
                 break;
 
             case 'changes/stageAll':
-                if (runtimeWorktree) { await runtimeWorktree.stageAll(); }
-                else { await repo.stageAll(); }
+                await currentRuntimeWorktree().stageAll();
                 await this.refresh();
                 break;
 
             case 'changes/unstageAll':
-                if (runtimeWorktree) { await runtimeWorktree.unstageAll(); }
-                else { await repo.unstageAll(); }
+                await currentRuntimeWorktree().unstageAll();
                 await this.refresh();
                 break;
 
@@ -156,8 +136,7 @@ export class ChangesMessageRouter {
                     `Discard changes to "${msg.filePath}"? This cannot be undone.`, 'Discard',
                 );
                 if (choice === 'Discard') {
-                    if (runtimeWorktree) { await runtimeWorktree.discard([msg.filePath]); }
-                    else { await repo.discardFile(msg.filePath); }
+                    await discardRuntimeFile(currentRuntimeWorktree(), msg.filePath);
                     await this.refresh();
                 }
                 break;
@@ -169,11 +148,8 @@ export class ChangesMessageRouter {
                     `Discard changes to ${count} file${count === 1 ? '' : 's'}? This cannot be undone.`, 'Discard',
                 );
                 if (choice === 'Discard') {
-                    if (runtimeWorktree) { await runtimeWorktree.discard(msg.filePaths); }
-                    else {
-                        for (const filePath of msg.filePaths) {
-                            await repo.discardFile(filePath);
-                        }
+                    for (const filePath of msg.filePaths) {
+                        await discardRuntimeFile(currentRuntimeWorktree(), filePath);
                     }
                     await this.refresh();
                 }
@@ -184,22 +160,16 @@ export class ChangesMessageRouter {
                 const confirmed = await confirmTypedPhrase('Discard all changes? This cannot be undone.', 'DISCARD ALL');
                 if (confirmed) {
                     try {
-                        if (runtimeWorktree) { await runtimeWorktree.unstageAll(); }
-                        else { await repo.unstageAll(); }
+                        await currentRuntimeWorktree().unstageAll();
                     } catch (error) {
                         this.postChangesError(error, {
                             operation: 'changes/discardAll:unstage',
                             code: 'gitOperationFailed',
                         });
                     }
-                    const status = runtimeWorktree ? await runtimeWorktree.getStatus() : await repo.getStatus();
-                    const paths = status.unstaged.map((entry) => entry.filePath);
-                    if (runtimeWorktree) {
-                        await runtimeWorktree.discard(paths);
-                    } else {
-                        for (const filePath of paths) {
-                            await repo.discardFile(filePath);
-                        }
+                    const status = await currentRuntimeWorktree().getStatus();
+                    for (const entry of status.unstaged) {
+                        await discardRuntimeFile(currentRuntimeWorktree(), entry.filePath);
                     }
                     await this.refresh();
                 }
@@ -207,58 +177,32 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/markResolved':
-                if (runtimeWorktree) { await runtimeWorktree.markResolved([msg.filePath]); }
-                else { await repo.stageFile(msg.filePath); }
+                await currentRuntimeWorktree().markResolved([msg.filePath]);
                 await this.refresh();
                 break;
 
             case 'changes/markResolvedFiles':
-                if (runtimeWorktree) { await runtimeWorktree.markResolved(msg.filePaths); }
-                else {
-                    for (const filePath of msg.filePaths) {
-                        await repo.stageFile(filePath);
-                    }
-                }
+                await currentRuntimeWorktree().markResolved(msg.filePaths);
                 await this.refresh();
                 break;
 
             case 'changes/acceptOurs':
-                if (runtimeWorktree) { await runtimeWorktree.acceptOurs([msg.filePath]); }
-                else {
-                    await repo.acceptOurs(msg.filePath);
-                    await repo.stageFile(msg.filePath);
-                }
+                await currentRuntimeWorktree().acceptOurs([msg.filePath]);
                 await this.refresh();
                 break;
 
             case 'changes/acceptOursFiles':
-                if (runtimeWorktree) { await runtimeWorktree.acceptOurs(msg.filePaths); }
-                else {
-                    for (const filePath of msg.filePaths) {
-                        await repo.acceptOurs(filePath);
-                        await repo.stageFile(filePath);
-                    }
-                }
+                await currentRuntimeWorktree().acceptOurs(msg.filePaths);
                 await this.refresh();
                 break;
 
             case 'changes/acceptTheirs':
-                if (runtimeWorktree) { await runtimeWorktree.acceptTheirs([msg.filePath]); }
-                else {
-                    await repo.acceptTheirs(msg.filePath);
-                    await repo.stageFile(msg.filePath);
-                }
+                await currentRuntimeWorktree().acceptTheirs([msg.filePath]);
                 await this.refresh();
                 break;
 
             case 'changes/acceptTheirsFiles':
-                if (runtimeWorktree) { await runtimeWorktree.acceptTheirs(msg.filePaths); }
-                else {
-                    for (const filePath of msg.filePaths) {
-                        await repo.acceptTheirs(filePath);
-                        await repo.stageFile(filePath);
-                    }
-                }
+                await currentRuntimeWorktree().acceptTheirs(msg.filePaths);
                 await this.refresh();
                 break;
 
@@ -267,15 +211,9 @@ export class ChangesMessageRouter {
                     'Accept incoming changes for all conflicts?', 'Accept All Theirs',
                 );
                 if (choice !== 'Accept All Theirs') { break; }
-                const status = runtimeWorktree ? await runtimeWorktree.getStatus() : await repo.getStatus();
+                const status = await currentRuntimeWorktree().getStatus();
                 const conflictPaths = status.conflicts.map((entry) => entry.filePath);
-                if (runtimeWorktree) { await runtimeWorktree.acceptTheirs(conflictPaths); }
-                else {
-                    for (const filePath of conflictPaths) {
-                        await repo.acceptTheirs(filePath);
-                        await repo.stageFile(filePath);
-                    }
-                }
+                await currentRuntimeWorktree().acceptTheirs(conflictPaths);
                 await this.refresh();
                 break;
             }
@@ -297,22 +235,19 @@ export class ChangesMessageRouter {
                 try {
                     switch (msg.mode) {
                         case CommitMode.Amend:
-                            if (runtimeWorktree) { await runtimeWorktree.amendCommit(message, {}); }
-                            else { await repo.commitAmend(message); }
+                            await currentRuntimeWorktree().amendCommit(message, {});
                             break;
                         case CommitMode.CommitPush:
-                            if (runtimeWorktree) { await runtimeWorktree.commit(message, {}); }
-                            else { await repo.commit(message); }
-                            await this.remoteCommands.runVscode(repo, VscodeRemoteCommand.Push);
+                            await currentRuntimeWorktree().commit(message, {});
+                            await currentRuntimeWorktree().push(undefined, {});
                             break;
                         case CommitMode.CommitSync:
-                            if (runtimeWorktree) { await runtimeWorktree.commit(message, {}); }
-                            else { await repo.commit(message); }
-                            await this.remoteCommands.runVscode(repo, VscodeRemoteCommand.Sync);
+                            await currentRuntimeWorktree().commit(message, {});
+                            await currentRuntimeWorktree().pull({ rebase: true });
+                            await currentRuntimeWorktree().push(undefined, {});
                             break;
                         default:
-                            if (runtimeWorktree) { await runtimeWorktree.commit(message, {}); }
-                            else { await repo.commit(message); }
+                            await currentRuntimeWorktree().commit(message, {});
                             break;
                     }
                     this.postMessage({ type: 'changes/commitResult', success: true });
@@ -402,37 +337,23 @@ export class ChangesMessageRouter {
                     });
                     return;
                 }
-                const submoduleCwd = path.join(repo.cwd, submodulePath);
-                const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
+                const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(repo, submodulePath);
                 try {
                     switch (msg.mode) {
                         case CommitMode.Amend:
-                            if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.amendCommit(message, {}); }
-                            else { await repo.exec(['-C', submoduleCwd, 'commit', '--amend', '-m', message]); }
+                            await runtimeSubmoduleWorktree.amendCommit(message, {});
                             break;
                         case CommitMode.CommitPush:
-                            if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.commit(message, {}); }
-                            else { await repo.exec(['-C', submoduleCwd, 'commit', '-m', message]); }
-                            await this.remoteCommands.runCli(repo, {
-                                kind: CliRemoteCommandKind.Args,
-                                cwd: submoduleCwd,
-                                args: ['push'],
-                                title: `Look Git Remote: ${submodulePath}`,
-                            });
+                            await runtimeSubmoduleWorktree.commit(message, {});
+                            await runtimeSubmoduleWorktree.push(undefined, {});
                             break;
                         case CommitMode.CommitSync:
-                            if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.commit(message, {}); }
-                            else { await repo.exec(['-C', submoduleCwd, 'commit', '-m', message]); }
-                            await this.remoteCommands.runCli(repo, {
-                                kind: CliRemoteCommandKind.CommandLine,
-                                cwd: submoduleCwd,
-                                commandLine: 'git pull --rebase && git push',
-                                title: `Look Git Remote: ${submodulePath}`,
-                            });
+                            await runtimeSubmoduleWorktree.commit(message, {});
+                            await runtimeSubmoduleWorktree.pull({ rebase: true });
+                            await runtimeSubmoduleWorktree.push(undefined, {});
                             break;
                         default:
-                            if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.commit(message, {}); }
-                            else { await repo.exec(['-C', submoduleCwd, 'commit', '-m', message]); }
+                            await runtimeSubmoduleWorktree.commit(message, {});
                             break;
                     }
                     this.postMessage({ type: 'changes/submoduleCommitResult', path: submodulePath, success: true });
@@ -528,9 +449,7 @@ export class ChangesMessageRouter {
 
             case 'changes/submoduleStageFile': {
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
-                if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.stage([msg.filePath]); }
-                else { await repo.exec(['-C', path.join(repo.cwd, submodulePath), 'add', '--', msg.filePath]); }
+                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).stage([msg.filePath]);
                 await this.refresh();
                 break;
             }
@@ -538,18 +457,14 @@ export class ChangesMessageRouter {
             case 'changes/submoduleStageFiles': {
                 if (msg.filePaths.length === 0) { break; }
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
-                if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.stage(msg.filePaths); }
-                else { await repo.exec(['-C', path.join(repo.cwd, submodulePath), 'add', '--', ...msg.filePaths]); }
+                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).stage(msg.filePaths);
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleUnstageFile': {
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
-                if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.unstage([msg.filePath]); }
-                else { await repo.exec(['-C', path.join(repo.cwd, submodulePath), 'reset', 'HEAD', '--', msg.filePath]); }
+                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).unstage([msg.filePath]);
                 await this.refresh();
                 break;
             }
@@ -557,9 +472,7 @@ export class ChangesMessageRouter {
             case 'changes/submoduleUnstageFiles': {
                 if (msg.filePaths.length === 0) { break; }
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
-                if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.unstage(msg.filePaths); }
-                else { await repo.exec(['-C', path.join(repo.cwd, submodulePath), 'reset', 'HEAD', '--', ...msg.filePaths]); }
+                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).unstage(msg.filePaths);
                 await this.refresh();
                 break;
             }
@@ -570,9 +483,7 @@ export class ChangesMessageRouter {
                     `Discard changes to "${submodulePath}/${msg.filePath}"? This cannot be undone.`, 'Discard',
                 );
                 if (choice === 'Discard') {
-                    const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
-                    if (runtimeSubmoduleWorktree) { await discardRuntimeFile(runtimeSubmoduleWorktree, msg.filePath); }
-                    else { await discardSubmoduleFile(repo, submodulePath, msg.filePath); }
+                    await discardRuntimeFile(this.requireRuntimeSubmoduleWorktree(repo, submodulePath), msg.filePath);
                     await this.refresh();
                 }
                 break;
@@ -587,15 +498,9 @@ export class ChangesMessageRouter {
                     'Discard',
                 );
                 if (choice === 'Discard') {
-                    const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
-                    if (runtimeSubmoduleWorktree) {
-                        for (const filePath of msg.filePaths) {
-                            await discardRuntimeFile(runtimeSubmoduleWorktree, filePath);
-                        }
-                    } else {
-                        for (const filePath of msg.filePaths) {
-                            await discardSubmoduleFile(repo, submodulePath, filePath);
-                        }
+                    const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(repo, submodulePath);
+                    for (const filePath of msg.filePaths) {
+                        await discardRuntimeFile(runtimeSubmoduleWorktree, filePath);
                     }
                     await this.refresh();
                 }
@@ -622,95 +527,64 @@ export class ChangesMessageRouter {
 
             case 'changes/submoduleMarkResolved': {
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
-                if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.markResolved([msg.filePath]); }
-                else { await repo.exec(['-C', path.join(repo.cwd, submodulePath), 'add', '--', msg.filePath]); }
+                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).markResolved([msg.filePath]);
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleAcceptOurs': {
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                const submoduleCwd = path.join(repo.cwd, submodulePath);
-                const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
-                if (runtimeSubmoduleWorktree) {
-                    await runtimeSubmoduleWorktree.acceptOurs([msg.filePath]);
-                } else {
-                    await repo.exec(['-C', submoduleCwd, 'checkout', '--ours', '--', msg.filePath]);
-                    await repo.exec(['-C', submoduleCwd, 'add', '--', msg.filePath]);
-                }
+                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).acceptOurs([msg.filePath]);
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleAcceptTheirs': {
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                const submoduleCwd = path.join(repo.cwd, submodulePath);
-                const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
-                if (runtimeSubmoduleWorktree) {
-                    await runtimeSubmoduleWorktree.acceptTheirs([msg.filePath]);
-                } else {
-                    await repo.exec(['-C', submoduleCwd, 'checkout', '--theirs', '--', msg.filePath]);
-                    await repo.exec(['-C', submoduleCwd, 'add', '--', msg.filePath]);
-                }
+                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).acceptTheirs([msg.filePath]);
                 await this.refresh();
                 break;
             }
 
             case 'changes/stash':
-                if (runtimeWorktree) { await runtimeWorktree.stash(msg.message, {}); }
-                else { await repo.stash(msg.message); }
+                await currentRuntimeWorktree().stash(msg.message, {});
                 await this.refresh();
                 break;
 
             case 'changes/stashStaged':
-                if (runtimeWorktree) { await runtimeWorktree.stash(msg.message, { staged: true }); }
-                else { await repo.stashStaged(msg.message); }
+                await currentRuntimeWorktree().stash(msg.message, { staged: true });
                 await this.refresh();
                 break;
 
             case 'changes/stashSelectedFiles': {
                 if (msg.filePaths.length === 0) { break; }
                 const message = msg.message?.trim();
-                if (runtimeWorktree) {
-                    await runtimeWorktree.stash(message, { includeUntracked: msg.includeUntracked, paths: msg.filePaths });
-                } else {
-                    const args = ['stash', 'push'];
-                    if (msg.includeUntracked) { args.push('--include-untracked'); }
-                    if (message) { args.push('-m', message); }
-                    args.push('--', ...msg.filePaths);
-                    await repo.exec(args);
-                }
+                await currentRuntimeWorktree().stash(message, { includeUntracked: msg.includeUntracked, paths: msg.filePaths });
                 await this.refresh();
                 break;
             }
 
             case 'changes/stashPop':
-                if (runtimeWorktree) { await runtimeWorktree.popStash(stashRef(msg.index), {}); }
-                else { await repo.stashPop(msg.index); }
+                await currentRuntimeWorktree().popStash(stashRef(msg.index), {});
                 await this.refresh();
                 break;
 
             case 'changes/stashApply':
-                if (runtimeWorktree) { await runtimeWorktree.applyStash(stashRef(msg.index), {}); }
-                else { await repo.stashApply(msg.index); }
+                await currentRuntimeWorktree().applyStash(stashRef(msg.index), {});
                 await this.refresh();
                 break;
 
             case 'changes/stashDrop': {
                 const choice = await showModalWarningMessage('Drop this stash entry? This cannot be undone.', 'Drop');
                 if (choice === 'Drop') {
-                    if (runtimeWorktree) { await runtimeWorktree.dropStash(stashRef(msg.index)); }
-                    else { await repo.stashDrop(msg.index); }
+                    await currentRuntimeWorktree().dropStash(stashRef(msg.index));
                     await this.refresh();
                 }
                 break;
             }
 
             case 'changes/getStashFiles': {
-                const files = runtimeWorktree
-                    ? await runtimeWorktree.getStashFiles(stashRef(msg.index))
-                    : await repo.getStashFiles(msg.index);
+                const files = await currentRuntimeWorktree().getStashFiles(stashRef(msg.index));
                 this.postMessage({
                     type: 'changes/stashFiles',
                     requestId: msg.requestId,
@@ -721,7 +595,7 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/openStashDiff': {
-                await openStashDiff(repo, msg, { repository: this.currentRuntimeRepository() });
+                await openStashDiff(msg, { repository: this.currentRuntimeRepository() });
                 break;
             }
 
@@ -733,61 +607,37 @@ export class ChangesMessageRouter {
             case 'changes/getSubmoduleStashFiles':
             case 'changes/openSubmoduleStashDiff': {
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                const submoduleCwd = path.join(repo.cwd, submodulePath);
-                const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
+                const runtimeSubmoduleWorktree = () => this.requireRuntimeSubmoduleWorktree(repo, submodulePath);
                 switch (msg.type) {
                     case 'changes/submoduleStash':
-                        if (runtimeSubmoduleWorktree) {
-                            await runtimeSubmoduleWorktree.stash(msg.message, {});
-                        } else {
-                            await repo.exec(msg.message
-                                ? ['-C', submoduleCwd, 'stash', 'push', '-m', msg.message]
-                                : ['-C', submoduleCwd, 'stash', 'push']);
-                        }
+                        await runtimeSubmoduleWorktree().stash(msg.message, {});
                         await this.refresh();
                         break;
                     case 'changes/submoduleStashSelectedFiles': {
                         if (msg.filePaths.length === 0) { break; }
                         const message = msg.message?.trim();
-                        if (runtimeSubmoduleWorktree) {
-                            await runtimeSubmoduleWorktree.stash(message, { includeUntracked: msg.includeUntracked, paths: msg.filePaths });
-                        } else {
-                            const args = ['-C', submoduleCwd, 'stash', 'push'];
-                            if (msg.includeUntracked) { args.push('--include-untracked'); }
-                            if (message) { args.push('-m', message); }
-                            args.push('--', ...msg.filePaths);
-                            await repo.exec(args);
-                        }
+                        await runtimeSubmoduleWorktree().stash(message, { includeUntracked: msg.includeUntracked, paths: msg.filePaths });
                         await this.refresh();
                         break;
                     }
                     case 'changes/submoduleStashPop':
-                        if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.popStash(stashRef(msg.index), {}); }
-                        else { await repo.exec(['-C', submoduleCwd, 'stash', 'pop', `stash@{${msg.index}}`]); }
+                        await runtimeSubmoduleWorktree().popStash(stashRef(msg.index), {});
                         await this.refresh();
                         break;
                     case 'changes/submoduleStashApply':
-                        if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.applyStash(stashRef(msg.index), {}); }
-                        else { await repo.exec(['-C', submoduleCwd, 'stash', 'apply', `stash@{${msg.index}}`]); }
+                        await runtimeSubmoduleWorktree().applyStash(stashRef(msg.index), {});
                         await this.refresh();
                         break;
                     case 'changes/submoduleStashDrop': {
                         const choice = await showModalWarningMessage('Drop this submodule stash entry? This cannot be undone.', 'Drop');
                         if (choice === 'Drop') {
-                            if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.dropStash(stashRef(msg.index)); }
-                            else { await repo.exec(['-C', submoduleCwd, 'stash', 'drop', `stash@{${msg.index}}`]); }
+                            await runtimeSubmoduleWorktree().dropStash(stashRef(msg.index));
                             await this.refresh();
                         }
                         break;
                     }
                     case 'changes/getSubmoduleStashFiles': {
-                        const files = runtimeSubmoduleWorktree
-                            ? await runtimeSubmoduleWorktree.getStashFiles(stashRef(msg.index))
-                            : parseNameStatusZ(await repo.execRaw([
-                                '-C', submoduleCwd,
-                                'stash', 'show', '--include-untracked', '--name-status', '-M', '-z',
-                                `stash@{${msg.index}}`,
-                            ]));
+                        const files = await runtimeSubmoduleWorktree().getStashFiles(stashRef(msg.index));
                         this.postMessage({
                             type: 'changes/submoduleStashFiles',
                             requestId: msg.requestId,
@@ -799,7 +649,6 @@ export class ChangesMessageRouter {
                     }
                     case 'changes/openSubmoduleStashDiff':
                         await openStashDiff(
-                            new ScopedGitRepository(repo, submodulePath),
                             msg,
                             { repository: this.runtimeSubmoduleRepository(repo, submodulePath) },
                         );
@@ -829,18 +678,14 @@ export class ChangesMessageRouter {
 
             case 'changes/submoduleStageAll': {
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
-                if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.stageAll(); }
-                else { await repo.exec(['-C', path.join(repo.cwd, submodulePath), 'add', '-A']); }
+                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).stageAll();
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleUnstageAll': {
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
-                if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.unstageAll(); }
-                else { await repo.exec(['-C', path.join(repo.cwd, submodulePath), 'reset', 'HEAD']); }
+                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).unstageAll();
                 await this.refresh();
                 break;
             }
@@ -852,19 +697,12 @@ export class ChangesMessageRouter {
                     'DISCARD ALL',
                 );
                 if (confirmed) {
-                    const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
-                    if (runtimeSubmoduleWorktree) {
-                        const status = await runtimeSubmoduleWorktree.getStatus();
-                        const stagedPaths = status.staged.map((entry) => entry.filePath);
-                        if (stagedPaths.length > 0) { await runtimeSubmoduleWorktree.unstage(stagedPaths); }
-                        for (const entry of status.unstaged) {
-                            await discardRuntimeFile(runtimeSubmoduleWorktree, entry.filePath);
-                        }
-                    } else {
-                        const raw = await repo.execRaw(['-C', path.join(repo.cwd, submodulePath), 'status', '--porcelain', '-z', '--untracked-files=all']);
-                        const status = parsePorcelainStatus(raw);
-                        for (const entry of status.staged) { await repo.exec(['-C', path.join(repo.cwd, submodulePath), 'reset', 'HEAD', '--', entry.filePath]); }
-                        for (const entry of status.unstaged) { await discardSubmoduleFile(repo, submodulePath, entry.filePath); }
+                    const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(repo, submodulePath);
+                    const status = await runtimeSubmoduleWorktree.getStatus();
+                    const stagedPaths = status.staged.map((entry) => entry.filePath);
+                    if (stagedPaths.length > 0) { await runtimeSubmoduleWorktree.unstage(stagedPaths); }
+                    for (const entry of status.unstaged) {
+                        await discardRuntimeFile(runtimeSubmoduleWorktree, entry.filePath);
                     }
                     await this.refresh();
                 }
@@ -877,68 +715,32 @@ export class ChangesMessageRouter {
                     `Accept incoming changes for all conflicts inside "${submodulePath}"?`, 'Accept All Theirs',
                 );
                 if (choice !== 'Accept All Theirs') { break; }
-                const submoduleCwd = path.join(repo.cwd, submodulePath);
-                const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
-                if (runtimeSubmoduleWorktree) {
-                    const status = await runtimeSubmoduleWorktree.getStatus();
-                    const conflictPaths = status.conflicts.map((entry) => entry.filePath);
-                    await runtimeSubmoduleWorktree.acceptTheirs(conflictPaths);
-                } else {
-                    const raw = await repo.execRaw(['-C', submoduleCwd, 'status', '--porcelain', '-z', '--untracked-files=all']);
-                    const status = parsePorcelainStatus(raw);
-                    const conflictPaths = status.conflicts.map((entry) => entry.filePath);
-                    for (const filePath of conflictPaths) {
-                        await repo.exec(['-C', submoduleCwd, 'checkout', '--theirs', '--', filePath]);
-                        await repo.exec(['-C', submoduleCwd, 'add', '--', filePath]);
-                    }
-                }
+                const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(repo, submodulePath);
+                const status = await runtimeSubmoduleWorktree.getStatus();
+                const conflictPaths = status.conflicts.map((entry) => entry.filePath);
+                await runtimeSubmoduleWorktree.acceptTheirs(conflictPaths);
                 await this.refresh();
                 break;
             }
 
             case 'changes/getSubmoduleStatus': {
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.path);
-                const subPath = path.join(repo.cwd, submodulePath);
-                const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
-                if (runtimeSubmoduleWorktree) {
-                    const [status, stashPage, currentBranch] = await Promise.all([
-                        runtimeSubmoduleWorktree.getStatus(),
-                        runtimeSubmoduleWorktree.listStashes({ limit: Number.MAX_SAFE_INTEGER }),
-                        readCurrentBranch(repo, subPath),
-                    ]);
-                    this.postMessage({
-                        type: 'changes/submoduleStatusData',
-                        requestId: msg.requestId,
-                        path: msg.path,
-                        data: {
-                            ...(currentBranch ? { currentBranch } : {}),
-                            staged: status.staged.map(toStatusEntry),
-                            unstaged: status.unstaged.map(toStatusEntry),
-                            conflicts: status.conflicts.map(toStatusEntry),
-                            conflictState: toProtocolConflictState(status.conflictState),
-                            stashes: stashPage.items,
-                        },
-                    });
-                    break;
-                }
-                const [raw, stashRaw, conflictState, currentBranch] = await Promise.all([
-                    repo.execRaw(['--no-optional-locks', '-C', subPath, 'status', '--porcelain', '-z', '--untracked-files=all']),
-                    repo.exec(['--no-optional-locks', '-C', subPath, 'stash', 'list', '--format=%gd %s']),
-                    detectSubmoduleConflictState(repo, subPath),
-                    readCurrentBranch(repo, subPath),
+                const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(repo, submodulePath);
+                const [status, stashPage] = await Promise.all([
+                    runtimeSubmoduleWorktree.getStatus(),
+                    runtimeSubmoduleWorktree.listStashes({ limit: Number.MAX_SAFE_INTEGER }),
                 ]);
-                const { staged, unstaged, conflicts } = parsePorcelainStatus(raw);
                 this.postMessage({
                     type: 'changes/submoduleStatusData',
                     requestId: msg.requestId,
                     path: msg.path,
                     data: {
-                        ...(currentBranch ? { currentBranch } : {}),
-                        staged: staged.map(toStatusEntry),
-                        unstaged: unstaged.map(toStatusEntry),
-                        conflicts: conflicts.map(toStatusEntry),
-                        conflictState,
-                        stashes: parseStashList(stashRaw),
+                        ...(runtimeSubmoduleWorktree.branch ? { currentBranch: runtimeSubmoduleWorktree.branch } : {}),
+                        staged: status.staged.map(toStatusEntry),
+                        unstaged: status.unstaged.map(toStatusEntry),
+                        conflicts: status.conflicts.map(toStatusEntry),
+                        conflictState: toProtocolConflictState(status.conflictState),
+                        stashes: stashPage.items,
                     },
                 });
                 break;
@@ -946,11 +748,9 @@ export class ChangesMessageRouter {
 
             case 'changes/continueOp':
                 if (msg.conflictState === ConflictState.Merge) {
-                    if (runtimeWorktree) { await runtimeWorktree.continueMerge(); }
-                    else { await repo.mergeContinue(); }
+                    await currentRuntimeWorktree().continueMerge();
                 } else {
-                    if (runtimeWorktree) { await runtimeWorktree.continueRebase(); }
-                    else { await repo.rebaseContinue(); }
+                    await currentRuntimeWorktree().continueRebase();
                 }
                 await this.refresh();
                 break;
@@ -960,11 +760,9 @@ export class ChangesMessageRouter {
                 const choice = await showModalWarningMessage(`Abort the current ${opName}?`, 'Abort');
                 if (choice === 'Abort') {
                     if (msg.conflictState === ConflictState.Merge) {
-                        if (runtimeWorktree) { await runtimeWorktree.abortMerge(); }
-                        else { await repo.mergeAbort(); }
+                        await currentRuntimeWorktree().abortMerge();
                     } else {
-                        if (runtimeWorktree) { await runtimeWorktree.abortRebase(); }
-                        else { await repo.rebaseAbort(); }
+                        await currentRuntimeWorktree().abortRebase();
                     }
                     await this.refresh();
                 }
@@ -973,14 +771,11 @@ export class ChangesMessageRouter {
 
             case 'changes/submoduleContinueOp': {
                 const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                const submoduleCwd = path.join(repo.cwd, submodulePath);
-                const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
+                const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(repo, submodulePath);
                 if (msg.conflictState === ConflictState.Merge) {
-                    if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.continueMerge(); }
-                    else { await repo.exec(['-C', submoduleCwd, '-c', 'core.editor=true', 'merge', '--continue']); }
+                    await runtimeSubmoduleWorktree.continueMerge();
                 } else {
-                    if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.continueRebase(); }
-                    else { await repo.exec(['-C', submoduleCwd, '-c', 'core.editor=true', 'rebase', '--continue']); }
+                    await runtimeSubmoduleWorktree.continueRebase();
                 }
                 await this.refresh();
                 break;
@@ -991,14 +786,11 @@ export class ChangesMessageRouter {
                 const opName = msg.conflictState === ConflictState.Merge ? 'merge' : 'rebase';
                 const choice = await showModalWarningMessage(`Abort the current ${opName} in "${submodulePath}"?`, 'Abort');
                 if (choice === 'Abort') {
-                    const submoduleCwd = path.join(repo.cwd, submodulePath);
-                    const runtimeSubmoduleWorktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
+                    const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(repo, submodulePath);
                     if (msg.conflictState === ConflictState.Merge) {
-                        if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.abortMerge(); }
-                        else { await repo.exec(['-C', submoduleCwd, 'merge', '--abort']); }
+                        await runtimeSubmoduleWorktree.abortMerge();
                     } else {
-                        if (runtimeSubmoduleWorktree) { await runtimeSubmoduleWorktree.abortRebase(); }
-                        else { await repo.exec(['-C', submoduleCwd, 'rebase', '--abort']); }
+                        await runtimeSubmoduleWorktree.abortRebase();
                     }
                     await this.refresh();
                 }
@@ -1018,6 +810,14 @@ export class ChangesMessageRouter {
         } catch {
             return undefined;
         }
+    }
+
+    private requireCurrentRuntimeWorktree(): Worktree {
+        const worktree = this.currentRuntimeWorktree();
+        if (!worktree) {
+            throw new Error('Runtime Worktree is required for this git operation.');
+        }
+        return worktree;
     }
 
     private currentRuntimeRepository(): RuntimeGitRepository | undefined {
@@ -1045,6 +845,14 @@ export class ChangesMessageRouter {
         }
     }
 
+    private requireRuntimeSubmoduleWorktree(repo: GitRepository, submodulePath: string): Worktree {
+        const worktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
+        if (!worktree) {
+            throw new Error(`Runtime Worktree is required for submodule "${submodulePath}".`);
+        }
+        return worktree;
+    }
+
     private runtimeSubmoduleRepository(repo: GitRepository, submodulePath: string): RuntimeGitRepository | undefined {
         if (!this.runtimeRepositories) { return undefined; }
         const submoduleCwd = path.resolve(repo.cwd, submodulePath);
@@ -1070,136 +878,187 @@ export class ChangesMessageRouter {
         const canUseCurrentRuntime = repo === this.repositories.currentRepository;
         const runtimeRepository = runtimeTargets?.repository ?? (canUseCurrentRuntime ? this.currentRuntimeRepository() : undefined);
         const runtimeWorktree = runtimeTargets?.worktree ?? (canUseCurrentRuntime ? this.currentRuntimeWorktree() : undefined);
+        const requireRuntimeRepository = () => {
+            if (!runtimeRepository) { throw new Error('Runtime GitRepository is required for this git operation.'); }
+            return runtimeRepository;
+        };
+        const requireRuntimeWorktree = () => {
+            if (!runtimeWorktree) { throw new Error('Runtime Worktree is required for this git operation.'); }
+            return runtimeWorktree;
+        };
         switch (command) {
             case 'pull':
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Pull, 'Pull stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(repo, () => requireRuntimeWorktree().pull({}), 'Pull stopped with conflicts.'));
                 return;
             case 'push':
-                await this.runTrackedToolbarOperation(command, () =>
-                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Push));
+                await this.runTrackedToolbarOperation(command, async () => {
+                    await requireRuntimeWorktree().push(undefined, {});
+                    await this.refreshAfterRepositoryUpdate();
+                    return undefined;
+                });
                 return;
             case 'fetch':
-                await this.runTrackedToolbarOperation(command, () =>
-                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Fetch));
+                await this.runTrackedToolbarOperation(command, async () => {
+                    const remote = await pickRemote('Fetch remote', requireRuntimeRepository());
+                    if (!remote) { return undefined; }
+                    await requireRuntimeRepository().fetch(remote, {});
+                    await this.refreshAfterRepositoryUpdate();
+                    return undefined;
+                });
                 return;
             case 'fetchAll':
-                await this.runTrackedToolbarOperation(command, () =>
-                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.FetchAll));
+                await this.runTrackedToolbarOperation(command, async () => {
+                    await requireRuntimeRepository().fetchAll({});
+                    await this.refreshAfterRepositoryUpdate();
+                    return undefined;
+                });
                 return;
             case 'sync':
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Sync, 'Sync stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(repo, async () => {
+                        await requireRuntimeWorktree().pull({ rebase: true });
+                        await requireRuntimeWorktree().push(undefined, {});
+                    }, 'Sync stopped with conflicts.'));
                 return;
             case 'pullRebase':
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PullRebase, 'Pull with rebase stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(repo, () => requireRuntimeWorktree().pull({ rebase: true }), 'Pull with rebase stopped with conflicts.'));
                 return;
             case 'pullFrom':
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PullFrom, 'Pull from remote stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(repo, async () => {
+                        const ref = await pickRemoteBranch('Pull from remote branch', requireRuntimeRepository());
+                        if (!ref) { return; }
+                        const parsed = remoteBranchName(ref);
+                        await requireRuntimeRepository().fetch(parsed.remote, {});
+                        await requireRuntimeWorktree().merge(ref, {});
+                    }, 'Pull from remote stopped with conflicts.'));
                 return;
             case 'pushForce':
-                await this.runTrackedToolbarOperation(command, () =>
-                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PushForce));
+                await this.runTrackedToolbarOperation(command, async () => {
+                    await requireRuntimeWorktree().push(undefined, { forceWithLease: true });
+                    await this.refreshAfterRepositoryUpdate();
+                    return undefined;
+                });
                 return;
             case 'pushTo':
-                await this.runTrackedToolbarOperation(command, () =>
-                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PushTo));
+                await this.runTrackedToolbarOperation(command, async () => {
+                    await pushCurrentBranchToPickedRemote(requireRuntimeRepository(), requireRuntimeWorktree(), false);
+                    await this.refreshAfterRepositoryUpdate();
+                    return undefined;
+                });
                 return;
             case 'pushToForce':
-                await this.runTrackedToolbarOperation(command, () =>
-                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PushToForce));
+                await this.runTrackedToolbarOperation(command, async () => {
+                    await pushCurrentBranchToPickedRemote(requireRuntimeRepository(), requireRuntimeWorktree(), true);
+                    await this.refreshAfterRepositoryUpdate();
+                    return undefined;
+                });
                 return;
             case 'fetchPrune':
-                await this.runTrackedToolbarOperation(command, () =>
-                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.FetchPrune));
+                await this.runTrackedToolbarOperation(command, async () => {
+                    const remote = await pickRemote('Fetch and prune remote', requireRuntimeRepository());
+                    if (!remote) { return undefined; }
+                    await requireRuntimeRepository().pruneRemote(remote);
+                    await requireRuntimeRepository().fetch(remote, { prune: true });
+                    await this.refreshAfterRepositoryUpdate();
+                    return undefined;
+                });
                 return;
             case 'checkout': {
-                const branch = await pickBranch(repo, 'Checkout branch', runtimeRepository);
+                const branch = await pickBranch('Checkout branch', requireRuntimeRepository());
                 if (!branch) { return; }
-                if (runtimeWorktree) { await runtimeWorktree.checkout(branch, {}); }
-                else { await repo.checkout(branch); }
+                await requireRuntimeWorktree().checkout(branch, {});
                 await this.refresh();
                 return;
             }
             case 'undoLastCommit': {
                 const choice = await showModalWarningMessage('Undo the last commit and keep its changes staged?', 'Undo Commit');
                 if (choice !== 'Undo Commit') { return; }
-                if (runtimeWorktree) { await runtimeWorktree.undoLastCommit('soft'); }
-                else { await repo.exec(['reset', '--soft', 'HEAD~1']); }
+                await requireRuntimeWorktree().undoLastCommit('soft');
                 await this.refresh();
                 return;
             }
             case 'abortRebase': {
                 const choice = await showModalWarningMessage('Abort the current rebase?', 'Abort Rebase');
                 if (choice !== 'Abort Rebase') { return; }
-                if (runtimeWorktree) { await runtimeWorktree.abortRebase(); }
-                else { await repo.rebaseAbort(); }
+                await requireRuntimeWorktree().abortRebase();
                 await this.refresh();
                 return;
             }
             case 'mergeBranch': {
-                const branch = await pickBranch(repo, 'Merge branch', runtimeRepository);
+                const branch = await pickBranch('Merge branch', requireRuntimeRepository());
                 if (!branch) { return; }
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, () => runtimeWorktree ? runtimeWorktree.merge(branch, {}) : repo.merge(branch), 'Merge stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(repo, () => requireRuntimeWorktree().merge(branch, {}), 'Merge stopped with conflicts.'));
                 return;
             }
             case 'rebaseBranch': {
-                const branch = await pickBranch(repo, 'Rebase current branch onto', runtimeRepository);
+                const branch = await pickBranch('Rebase current branch onto', requireRuntimeRepository());
                 if (!branch) { return; }
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, () => runtimeWorktree ? runtimeWorktree.rebase(branch, undefined, {}) : repo.rebase(branch), 'Rebase stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(repo, () => requireRuntimeWorktree().rebase(branch, undefined, {}), 'Rebase stopped with conflicts.'));
                 return;
             }
             case 'createBranch': {
                 const branch = await inputBranchName('Create branch');
                 if (!branch) { return; }
-                if (runtimeWorktree) { await runtimeWorktree.checkoutNewBranch(branch, undefined); }
-                else { await repo.checkoutNewBranch(branch); }
+                await requireRuntimeWorktree().checkoutNewBranch(branch, undefined);
                 await this.refresh();
                 return;
             }
             case 'createBranchFrom': {
                 const branch = await inputBranchName('Create branch');
                 if (!branch) { return; }
-                const startPoint = await pickRef(repo, 'Create branch from', runtimeRepository);
+                const startPoint = await pickRef('Create branch from', requireRuntimeRepository());
                 if (!startPoint) { return; }
-                if (runtimeWorktree) { await runtimeWorktree.checkoutNewBranch(branch, startPoint); }
-                else { await repo.checkoutNewBranch(branch, startPoint); }
+                await requireRuntimeWorktree().checkoutNewBranch(branch, startPoint);
                 await this.refresh();
                 return;
             }
             case 'renameBranch': {
-                const current = await currentBranchName(repo, runtimeRepository);
-                const oldName = await pickLocalBranch(repo, 'Rename branch', current, runtimeRepository);
+                const current = await currentBranchName(requireRuntimeRepository());
+                const oldName = await pickLocalBranch('Rename branch', requireRuntimeRepository(), current);
                 if (!oldName) { return; }
                 const newName = await inputText('New branch name', oldName);
                 if (!newName || newName === oldName) { return; }
-                if (runtimeRepository) { await runtimeRepository.renameBranch(oldName, newName); }
-                else { await repo.renameBranch(oldName, newName); }
+                await requireRuntimeRepository().renameBranch(oldName, newName);
                 await this.refresh();
                 return;
             }
             case 'deleteBranch': {
-                const branch = await pickLocalBranch(repo, 'Delete branch', undefined, runtimeRepository);
+                const branch = await pickLocalBranch('Delete branch', requireRuntimeRepository());
                 if (!branch) { return; }
                 const choice = await showModalWarningMessage(`Delete branch "${branch}"?`, 'Delete');
                 if (choice !== 'Delete') { return; }
-                if (runtimeRepository) { await runtimeRepository.deleteBranch(branch, false); }
-                else { await repo.deleteBranch(branch); }
+                await requireRuntimeRepository().deleteBranch(branch, false);
                 await this.refresh();
                 return;
             }
             case 'deleteRemoteBranch': {
-                await this.runTrackedToolbarOperation(command, () =>
-                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.DeleteRemoteBranch));
+                await this.runTrackedToolbarOperation(command, async () => {
+                    const selected = await pickRemoteBranch('Delete remote branch', requireRuntimeRepository());
+                    if (!selected) { return undefined; }
+                    const parsed = remoteBranchName(selected);
+                    const choice = await showModalWarningMessage(`Delete remote branch "${selected}"?`, 'Delete');
+                    if (choice !== 'Delete') { return undefined; }
+                    await requireRuntimeRepository().deleteRemoteBranch(parsed.remote, parsed.branch);
+                    await this.refreshAfterRepositoryUpdate();
+                    return undefined;
+                });
                 return;
             }
             case 'publishBranch': {
-                await this.runTrackedToolbarOperation(command, () =>
-                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.Publish));
+                await this.runTrackedToolbarOperation(command, async () => {
+                    const branch = await currentBranchName(requireRuntimeRepository());
+                    if (!branch || branch === 'HEAD') { throw new Error('No local branch is checked out.'); }
+                    const remote = await pickRemote('Publish branch to remote', requireRuntimeRepository());
+                    if (!remote) { return undefined; }
+                    await requireRuntimeWorktree().pushBranch(remote, branch, { setUpstream: true });
+                    await this.refreshAfterRepositoryUpdate();
+                    return undefined;
+                });
                 return;
             }
             case 'addRemote': {
@@ -1207,98 +1066,83 @@ export class ChangesMessageRouter {
                 if (!name) { return; }
                 const url = await inputText('Remote URL');
                 if (!url) { return; }
-                if (runtimeRepository) { await runtimeRepository.addRemote(name, url); }
-                else { await repo.exec(['remote', 'add', name, url]); }
+                await requireRuntimeRepository().addRemote(name, url);
                 await this.refresh();
                 return;
             }
             case 'removeRemote': {
-                const remote = await pickRemote(repo, 'Remove remote', runtimeRepository);
+                const remote = await pickRemote('Remove remote', requireRuntimeRepository());
                 if (!remote) { return; }
                 const choice = await showModalWarningMessage(`Remove remote "${remote}"?`, 'Remove');
                 if (choice !== 'Remove') { return; }
-                if (runtimeRepository) { await runtimeRepository.removeRemote(remote); }
-                else { await repo.exec(['remote', 'remove', remote]); }
+                await requireRuntimeRepository().removeRemote(remote);
                 await this.refresh();
                 return;
             }
             case 'stash':
                 await this.runTrackedToolbarOperation(command, async () => {
-                    if (runtimeWorktree) { await runtimeWorktree.stash(undefined, {}); }
-                    else { await repo.stash(); }
+                    await requireRuntimeWorktree().stash(undefined, {});
                     await this.refreshAfterRepositoryUpdate();
                     return undefined;
                 });
                 return;
             case 'stashIncludeUntracked':
                 await this.runTrackedToolbarOperation(command, async () => {
-                    if (runtimeWorktree) { await runtimeWorktree.stash(undefined, { includeUntracked: true }); }
-                    else { await repo.exec(['stash', 'push', '-u']); }
+                    await requireRuntimeWorktree().stash(undefined, { includeUntracked: true });
                     await this.refreshAfterRepositoryUpdate();
                     return undefined;
                 });
                 return;
             case 'stashStaged':
                 await this.runTrackedToolbarOperation(command, async () => {
-                    if (runtimeWorktree) { await runtimeWorktree.stash(undefined, { staged: true }); }
-                    else { await repo.stashStaged(); }
+                    await requireRuntimeWorktree().stash(undefined, { staged: true });
                     await this.refreshAfterRepositoryUpdate();
                     return undefined;
                 });
                 return;
             case 'applyLatestStash':
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, () => runtimeWorktree ? runtimeWorktree.applyStash(stashRef(0), {}) : repo.stashApply(0), 'Apply stash stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(repo, () => requireRuntimeWorktree().applyStash(stashRef(0), {}), 'Apply stash stopped with conflicts.'));
                 return;
             case 'applyStash': {
-                const index = await pickStash(repo, 'Apply stash', runtimeWorktree);
+                const index = await pickStash('Apply stash', requireRuntimeWorktree());
                 if (index === undefined) { return; }
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, () => runtimeWorktree ? runtimeWorktree.applyStash(stashRef(index), {}) : repo.stashApply(index), 'Apply stash stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(repo, () => requireRuntimeWorktree().applyStash(stashRef(index), {}), 'Apply stash stopped with conflicts.'));
                 return;
             }
             case 'popLatestStash':
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, () => runtimeWorktree ? popRuntimeStashWithLocalChangesHint(runtimeWorktree, stashRef(0)) : popStashWithLocalChangesHint(repo, 0), 'Pop stash stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(repo, () => popRuntimeStashWithLocalChangesHint(requireRuntimeWorktree(), stashRef(0)), 'Pop stash stopped with conflicts.'));
                 return;
             case 'popStash': {
-                const index = await pickStash(repo, 'Pop stash', runtimeWorktree);
+                const index = await pickStash('Pop stash', requireRuntimeWorktree());
                 if (index === undefined) { return; }
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, () => runtimeWorktree ? popRuntimeStashWithLocalChangesHint(runtimeWorktree, stashRef(index)) : popStashWithLocalChangesHint(repo, index), 'Pop stash stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(repo, () => popRuntimeStashWithLocalChangesHint(requireRuntimeWorktree(), stashRef(index)), 'Pop stash stopped with conflicts.'));
                 return;
             }
             case 'dropStash': {
-                const index = await pickStash(repo, 'Drop stash', runtimeWorktree);
+                const index = await pickStash('Drop stash', requireRuntimeWorktree());
                 if (index === undefined) { return; }
                 const choice = await showModalWarningMessage(`Drop stash@{${index}}? This cannot be undone.`, 'Drop');
                 if (choice !== 'Drop') { return; }
-                if (runtimeWorktree) { await runtimeWorktree.dropStash(stashRef(index)); }
-                else { await repo.stashDrop(index); }
+                await requireRuntimeWorktree().dropStash(stashRef(index));
                 await this.refresh();
                 return;
             }
             case 'dropAllStashes': {
                 const confirmed = await confirmTypedPhrase('Drop all stashes? This cannot be undone.', 'DROP ALL STASHES');
                 if (!confirmed) { return; }
-                if (runtimeWorktree) {
-                    await runtimeWorktree.clearStashes();
-                } else {
-                    const stashes = await repo.stashList();
-                    for (const stash of stashes) {
-                        await repo.stashDrop(stash.index);
-                    }
-                }
+                await requireRuntimeWorktree().clearStashes();
                 await this.refresh();
                 return;
             }
             case 'viewStash': {
-                const index = await pickStash(repo, 'View stash', runtimeWorktree);
+                const index = await pickStash('View stash', requireRuntimeWorktree());
                 if (index === undefined) { return; }
                 const stash = stashRef(index);
-                const content = runtimeWorktree
-                    ? await runtimeWorktree.getStashSummary(stash)
-                    : await repo.exec(['stash', 'show', '--stat', stash]);
+                const content = await requireRuntimeWorktree().getStashSummary(stash);
                 const document = await vscode.workspace.openTextDocument({
                     content: content || stash,
                     language: 'plaintext',
@@ -1309,29 +1153,41 @@ export class ChangesMessageRouter {
             case 'createTag': {
                 const tag = await inputText('Create tag');
                 if (!tag) { return; }
-                if (runtimeRepository) { await runtimeRepository.createTag(tag, 'HEAD', undefined); }
-                else { await repo.exec(['tag', tag]); }
+                await requireRuntimeRepository().createTag(tag, 'HEAD', undefined);
                 await this.refresh();
                 return;
             }
             case 'deleteTag': {
-                const tag = await pickTag(repo, 'Delete tag', runtimeRepository);
+                const tag = await pickTag('Delete tag', requireRuntimeRepository());
                 if (!tag) { return; }
                 const choice = await showModalWarningMessage(`Delete tag "${tag}"?`, 'Delete');
                 if (choice !== 'Delete') { return; }
-                if (runtimeRepository) { await runtimeRepository.deleteTag(tag); }
-                else { await repo.exec(['tag', '-d', tag]); }
+                await requireRuntimeRepository().deleteTag(tag);
                 await this.refresh();
                 return;
             }
             case 'deleteRemoteTag': {
-                await this.runTrackedToolbarOperation(command, () =>
-                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.DeleteRemoteTag));
+                await this.runTrackedToolbarOperation(command, async () => {
+                    const tag = await pickTag('Delete remote tag', requireRuntimeRepository());
+                    if (!tag) { return undefined; }
+                    const remote = await pickRemote('Delete tag from remote', requireRuntimeRepository());
+                    if (!remote) { return undefined; }
+                    const choice = await showModalWarningMessage(`Delete tag "${tag}" from "${remote}"?`, 'Delete');
+                    if (choice !== 'Delete') { return undefined; }
+                    await requireRuntimeWorktree().pushRef(remote, '', `refs/tags/${tag}`, {});
+                    await this.refreshAfterRepositoryUpdate();
+                    return undefined;
+                });
                 return;
             }
             case 'pushTags': {
-                await this.runTrackedToolbarOperation(command, () =>
-                    this.runVscodeRemoteToolbarCommand(repo, VscodeRemoteCommand.PushTags));
+                await this.runTrackedToolbarOperation(command, async () => {
+                    const remote = await pickRemote('Push tags to remote', requireRuntimeRepository());
+                    if (!remote) { return undefined; }
+                    await requireRuntimeWorktree().pushTags(remote, {});
+                    await this.refreshAfterRepositoryUpdate();
+                    return undefined;
+                });
                 return;
             }
         }
@@ -1409,29 +1265,6 @@ export class ChangesMessageRouter {
                 : undefined;
         } catch (error) {
             if (await this.refreshAndNotifyNewConflicts(repo, existingConflicts, conflictMessage)) { return OperationStatus.Conflict; }
-            throw error;
-        }
-    }
-
-    private async runVscodeRemoteToolbarCommand(
-        repo: GitRepository,
-        command: VscodeRemoteCommand,
-        conflictMessage?: string,
-    ): Promise<OperationStatus | undefined> {
-        const existingConflicts = conflictMessage ? await conflictFileSet(repo) : undefined;
-        try {
-            await this.remoteCommands.runVscode(repo, command);
-            await this.refreshAfterRepositoryUpdate();
-            if (existingConflicts && conflictMessage) {
-                return await this.notifyNewConflicts(repo, existingConflicts, conflictMessage)
-                    ? OperationStatus.Conflict
-                    : undefined;
-            }
-            return undefined;
-        } catch (error) {
-            if (existingConflicts && conflictMessage && await this.refreshAndNotifyNewConflicts(repo, existingConflicts, conflictMessage)) {
-                return OperationStatus.Conflict;
-            }
             throw error;
         }
     }
@@ -1581,24 +1414,38 @@ async function inputBranchName(placeHolder: string, value?: string): Promise<str
     return showBranchNameInput({ placeHolder, value });
 }
 
-async function pickBranch(repo: GitRepository, placeHolder: string, runtimeRepository?: RuntimeGitRepository): Promise<string | undefined> {
-    const branches = runtimeRepository ? await runtimeRepository.listBranches() : await repo.getAllBranches();
+async function pickBranch(placeHolder: string, runtimeRepository: RuntimeGitRepository): Promise<string | undefined> {
+    const branches = await runtimeRepository.listBranches();
     return vscode.window.showQuickPick(branches.map((branch) => branch.name), { placeHolder });
 }
 
-async function currentBranchName(repo: GitRepository, runtimeRepository?: RuntimeGitRepository): Promise<string | undefined> {
-    if (!runtimeRepository) { return repo.getCurrentBranch(); }
+async function pickRemoteBranch(placeHolder: string, runtimeRepository: RuntimeGitRepository): Promise<string | undefined> {
+    const branches = (await runtimeRepository.listRemoteBranches())
+        .filter((branch) => branch.isRemote)
+        .map((branch) => branch.name);
+    return vscode.window.showQuickPick(branches, { placeHolder });
+}
+
+function remoteBranchName(ref: string): { readonly remote: string; readonly branch: string } {
+    const slashIdx = ref.indexOf('/');
+    if (slashIdx === -1) { throw new Error(`Expected remote branch name, got "${ref}".`); }
+    return {
+        remote: ref.substring(0, slashIdx),
+        branch: ref.substring(slashIdx + 1),
+    };
+}
+
+async function currentBranchName(runtimeRepository: RuntimeGitRepository): Promise<string | undefined> {
     const branches = await runtimeRepository.listBranches();
     return branches.find((branch) => branch.isCurrent && !branch.isRemote)?.name;
 }
 
 async function pickLocalBranch(
-    repo: GitRepository,
     placeHolder: string,
+    runtimeRepository: RuntimeGitRepository,
     preferred?: string,
-    runtimeRepository?: RuntimeGitRepository,
 ): Promise<string | undefined> {
-    const branches = (runtimeRepository ? await runtimeRepository.listBranches() : await repo.getAllBranches())
+    const branches = (await runtimeRepository.listBranches())
         .filter((branch) => !branch.isRemote)
         .map((branch) => branch.name);
     const ordered = preferred && branches.includes(preferred)
@@ -1607,16 +1454,28 @@ async function pickLocalBranch(
     return vscode.window.showQuickPick(ordered, { placeHolder });
 }
 
-async function pickRemote(repo: GitRepository, placeHolder: string, runtimeRepository?: RuntimeGitRepository): Promise<string | undefined> {
-    const remotes = runtimeRepository ? await runtimeRepository.listRemotes() : await repo.getRemotes();
+async function pickRemote(placeHolder: string, runtimeRepository: RuntimeGitRepository): Promise<string | undefined> {
+    const remotes = await runtimeRepository.listRemotes();
     if (remotes.length === 1) { return remotes[0]; }
     return vscode.window.showQuickPick(remotes, { placeHolder });
 }
 
-async function pickRef(repo: GitRepository, placeHolder: string, runtimeRepository?: RuntimeGitRepository): Promise<string | undefined> {
+async function pushCurrentBranchToPickedRemote(
+    runtimeRepository: RuntimeGitRepository,
+    worktree: Worktree,
+    forceWithLease: boolean,
+): Promise<void> {
+    const branch = await currentBranchName(runtimeRepository);
+    if (!branch || branch === 'HEAD') { throw new Error('No local branch is checked out.'); }
+    const remote = await pickRemote('Push branch to remote', runtimeRepository);
+    if (!remote) { return; }
+    await worktree.pushBranch(remote, branch, { forceWithLease });
+}
+
+async function pickRef(placeHolder: string, runtimeRepository: RuntimeGitRepository): Promise<string | undefined> {
     const [branches, tags] = await Promise.all([
-        runtimeRepository ? runtimeRepository.listBranches() : repo.getAllBranches(),
-        runtimeRepository ? runtimeRepository.listTags() : repo.getAllTags(),
+        runtimeRepository.listBranches(),
+        runtimeRepository.listTags(),
     ]);
     return vscode.window.showQuickPick([
         ...branches.map((branch) => branch.name),
@@ -1624,31 +1483,18 @@ async function pickRef(repo: GitRepository, placeHolder: string, runtimeReposito
     ], { placeHolder });
 }
 
-async function pickTag(repo: GitRepository, placeHolder: string, runtimeRepository?: RuntimeGitRepository): Promise<string | undefined> {
-    const tags = runtimeRepository ? await runtimeRepository.listTags() : await repo.getAllTags();
+async function pickTag(placeHolder: string, runtimeRepository: RuntimeGitRepository): Promise<string | undefined> {
+    const tags = await runtimeRepository.listTags();
     return vscode.window.showQuickPick(tags.map((tag) => tag.name), { placeHolder });
 }
 
-async function pickStash(repo: GitRepository, placeHolder: string, runtimeWorktree?: Worktree): Promise<number | undefined> {
-    const stashes = runtimeWorktree
-        ? (await runtimeWorktree.listStashes({ limit: Number.MAX_SAFE_INTEGER })).items
-        : await repo.stashList();
+async function pickStash(placeHolder: string, runtimeWorktree: Worktree): Promise<number | undefined> {
+    const stashes = (await runtimeWorktree.listStashes({ limit: Number.MAX_SAFE_INTEGER })).items;
     const items = stashes.map((stash) => `stash@{${stash.index}} ${stash.message}`);
     const selected = await vscode.window.showQuickPick(items, { placeHolder });
     if (!selected) { return undefined; }
     const match = selected.match(/^stash@\{(\d+)\}/);
     return match?.[1] ? parseInt(match[1], 10) : undefined;
-}
-
-async function popStashWithLocalChangesHint(repo: GitRepository, index: number): Promise<void> {
-    try {
-        await repo.stashPop(index);
-    } catch (error) {
-        if (!isLocalChangesWouldBeOverwrittenError(error)) { throw error; }
-        throw Object.assign(new Error('Stash pop could not be applied because local changes would be overwritten. Commit, stash, or discard your local changes, then try again.'), {
-            stderr: errorText(error),
-        });
-    }
 }
 
 async function popRuntimeStashWithLocalChangesHint(worktree: Worktree, stash: string): Promise<void> {
@@ -1707,17 +1553,17 @@ async function openStatusDiff(repo: GitRepository, msg: StatusDiffInput, runtime
     if (isAddedStatus(status)) {
         left = emptyUri;
         right = msg.isStaged
-            ? await gitContentUri(repo, msg.filePath, ':', `${baseName} index`, runtimeTargets)
+            ? await gitContentUri(msg.filePath, ':', `${baseName} index`, runtimeTargets)
             : fileUri;
         title = `${baseName} (Added)`;
     } else if (isDeletedStatus(status)) {
-        left = await gitContentUri(repo, basePath, baseRef, `${baseName} base`, runtimeTargets);
+        left = await gitContentUri(basePath, baseRef, `${baseName} base`, runtimeTargets);
         right = emptyUri;
         title = `${baseName} (Deleted)`;
     } else {
-        left = await gitContentUri(repo, basePath, baseRef, `${baseName} base`, runtimeTargets);
+        left = await gitContentUri(basePath, baseRef, `${baseName} base`, runtimeTargets);
         right = msg.isStaged
-            ? await gitContentUri(repo, msg.filePath, ':', `${baseName} index`, runtimeTargets)
+            ? await gitContentUri(msg.filePath, ':', `${baseName} index`, runtimeTargets)
             : fileUri;
         title = `${baseName} (${msg.isStaged ? 'Staged' : 'Working Tree'})`;
     }
@@ -1735,17 +1581,16 @@ interface StashDiffInput {
     readonly status: string;
 }
 
-async function openStashDiff(repo: GitRepository, msg: StashDiffInput, runtimeTargets?: DiffRuntimeTargets): Promise<void> {
+async function openStashDiff(msg: StashDiffInput, runtimeTargets?: DiffRuntimeTargets): Promise<void> {
     const emptyUri = readonlyContentUri(`${path.basename(msg.filePath)} empty`, msg.filePath, '');
     const stashRef = `stash@{${msg.index}}`;
     const basePath = isRenameLikeStatus(msg.status) ? msg.origPath ?? msg.filePath : msg.filePath;
     const left = isAddedStatus(msg.status)
         ? emptyUri
-        : await gitContentUri(repo, basePath, `${stashRef}^`, `${path.basename(basePath)} stash parent`, runtimeTargets);
+        : await gitContentUri(basePath, `${stashRef}^`, `${path.basename(basePath)} stash parent`, runtimeTargets);
     const right = isDeletedStatus(msg.status)
         ? emptyUri
         : await gitContentUriFromRefs(
-            repo,
             msg.filePath,
             isAddedStatus(msg.status) ? [stashRef, `${stashRef}^3`] : [stashRef],
             `${path.basename(msg.filePath)} stash`,
@@ -1760,18 +1605,16 @@ async function openStashDiff(repo: GitRepository, msg: StashDiffInput, runtimeTa
 }
 
 async function gitContentUri(
-    repo: GitRepository,
     filePath: string,
     ref: string,
     title: string,
     runtimeTargets?: DiffRuntimeTargets,
 ): Promise<vscode.Uri> {
-    const content = await gitContent(repo, filePath, ref, runtimeTargets);
+    const content = await gitContent(filePath, ref, runtimeTargets);
     return readonlyContentUri(title, filePath, content);
 }
 
 async function gitContent(
-    repo: GitRepository,
     filePath: string,
     ref: string,
     runtimeTargets?: DiffRuntimeTargets,
@@ -1782,11 +1625,10 @@ async function gitContent(
     if (ref !== ':' && runtimeTargets?.repository) {
         return runtimeTargets.repository.getFileAtRevision(filePath, ref);
     }
-    return repo.execRaw(['--no-optional-locks', 'show', `${ref}${ref.endsWith(':') ? '' : ':'}${filePath}`]);
+    throw new Error(`Runtime ${ref === ':' ? 'Worktree' : 'GitRepository'} is required to read "${filePath}".`);
 }
 
 async function gitContentUriFromRefs(
-    repo: GitRepository,
     filePath: string,
     refs: readonly string[],
     title: string,
@@ -1795,7 +1637,7 @@ async function gitContentUriFromRefs(
     let lastError: unknown;
     for (const ref of refs) {
         try {
-            return await gitContentUri(repo, filePath, ref, title, runtimeTargets);
+            return await gitContentUri(filePath, ref, title, runtimeTargets);
         } catch (error) {
             lastError = error;
         }
@@ -1810,15 +1652,6 @@ function readonlyContentUri(title: string, filePath: string, content: string): v
 function documentExtension(filePath: string): string {
     const extension = path.extname(filePath).replace(/^\./, '');
     return extension || 'txt';
-}
-
-async function discardSubmoduleFile(repo: GitRepository, submodulePath: string, filePath: string): Promise<void> {
-    const submoduleCwd = path.join(repo.cwd, submodulePath);
-    try {
-        await repo.exec(['-C', submoduleCwd, 'checkout', '--', filePath]);
-    } catch {
-        await repo.exec(['-C', submoduleCwd, 'clean', '-f', '--', filePath]);
-    }
 }
 
 async function discardRuntimeFile(worktree: Worktree, filePath: string): Promise<void> {
@@ -1837,34 +1670,6 @@ function toStatusEntry(entry: GitStatusEntry): StatusEntry {
         origPath: entry.origPath,
         isSubmodule: entry.isSubmodule,
     };
-}
-
-function parseStashList(output: string): readonly { readonly index: number; readonly message: string }[] {
-    if (!output) { return []; }
-    return output.split('\n').filter(Boolean).map((line) => {
-        const match = line.match(/^stash@\{(\d+)\}\s+(.*)/);
-        if (!match) { return { index: 0, message: line }; }
-        return { index: parseInt(match[1] ?? '0', 10), message: match[2] ?? '' };
-    });
-}
-
-async function detectSubmoduleConflictState(repo: GitRepository, submoduleCwd: string): Promise<ConflictState> {
-    try {
-        const gitDir = await repo.exec(['--no-optional-locks', '-C', submoduleCwd, 'rev-parse', '--git-dir']);
-        const absoluteGitDir = path.isAbsolute(gitDir) ? gitDir : path.resolve(submoduleCwd, gitDir);
-        return toProtocolConflictState(detectConflictStateFromFiles(await fs.readdir(absoluteGitDir)));
-    } catch {
-        return ConflictState.None;
-    }
-}
-
-async function readCurrentBranch(repo: GitRepository, cwd: string): Promise<string | undefined> {
-    try {
-        const branch = await repo.exec(['--no-optional-locks', '-C', cwd, 'rev-parse', '--abbrev-ref', 'HEAD']);
-        return branch || undefined;
-    } catch {
-        return undefined;
-    }
 }
 
 function isAddedStatus(status: string): boolean {

@@ -16,6 +16,8 @@ type DiffUris = {
     readonly right: vscode.Uri;
 };
 
+export type BlobContentReader = (ref: string, filePath: string) => Promise<string>;
+
 export async function commitFileDiffUris(cwd: string, file: CommitDiffFile): Promise<DiffUris> {
     const fileUri = vscode.Uri.file(path.join(cwd, file.filePath));
     const origUri = file.origPath ? vscode.Uri.file(path.join(cwd, file.origPath)) : fileUri;
@@ -79,6 +81,16 @@ export async function refBlobUri(
     side: string,
 ): Promise<vscode.Uri> {
     const content = await repo.execRaw(['-C', cwd, 'show', `${ref}:${filePath}`]);
+    return gitBlobUri(ref, filePath, side, content);
+}
+
+export async function refBlobUriFrom(
+    readBlob: BlobContentReader,
+    ref: string,
+    filePath: string,
+    side: string,
+): Promise<vscode.Uri> {
+    const content = await readBlob(ref, filePath);
     return gitBlobUri(ref, filePath, side, content);
 }
 
