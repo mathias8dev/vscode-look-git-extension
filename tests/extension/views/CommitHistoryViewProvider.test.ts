@@ -2,16 +2,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import type { GitFileChange } from '../../../src/application/ports/git-repository';
+import type { GitRepository as RuntimeRepository, Worktree } from '../../../src/application/ports/git-topology';
+import type { GitRuntime } from '../../../src/application/ports/git-runtime';
 import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../../src/application/ports/remote-command-backend';
 import { OperationStatus } from '../../../src/protocol/shared/operation';
 import { ConflictState } from '../../../src/protocol/changes/types';
-import { RepoKind } from '../../../src/core/git/domain/RepoContext';
+import { RepoKind, type RepoContext } from '../../../src/core/git/domain/RepoContext';
 import { LOG_FIELD_SEP, LOG_RECORD_SEP } from '../../../src/core/parsing/parseLog';
 import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHistoryViewProvider';
 import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import { makeRepositoryAccessor, makeRepositoryMock } from '../../helpers/repositoryMock';
 import { commands, env, getCommandCalls, setQuickPickValue, window, workspace } from '../../mocks/vscode';
+import { RepositoryRegistry } from '../../../src/extension/repositories/RepositoryRegistry';
+import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
 
 describe('CommitHistoryViewProvider error propagation', () => {
     beforeEach(() => {
@@ -108,6 +112,57 @@ describe('CommitHistoryViewProvider error propagation', () => {
                 ],
             }),
         })));
+    });
+
+    it('uses runtime repository refs when loading main history data', async () => {
+        const legacyGetAllBranches = vi.fn(async () => { throw new Error('legacy getAllBranches should not run'); });
+        const legacyGetAllTags = vi.fn(async () => { throw new Error('legacy getAllTags should not run'); });
+        const repo = makeRepositoryMock({
+            getLog: vi.fn(async () => [commit('abc123456789', 'feat: runtime history refs')]),
+            getAllBranches: legacyGetAllBranches,
+            getAllTags: legacyGetAllTags,
+        });
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeRepository = runtimeRepositoryModel({
+            listBranches: vi.fn(async () => [
+                { name: 'feature/runtime', isRemote: false, isCurrent: true, hash: 'abc1234', ahead: 0, behind: 0 },
+            ]),
+            listTags: vi.fn(async () => [{ name: 'v2.0.0', hash: 'abc1234' }]),
+        });
+        runtimeRegistry.registerRepository(runtimeRepository);
+        runtimeRegistry.registerWorktree(runtimeWorktreeModel());
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/ext'),
+            makeAccessorWithContext(repo, context),
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry,
+        );
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'history/data',
+            data: expect.objectContaining({
+                commits: [
+                    expect.objectContaining({
+                        hash: 'abc123456789',
+                        refs: [
+                            { name: 'feature/runtime', kind: 'local', isCurrent: true },
+                            { name: 'v2.0.0', kind: 'tag' },
+                        ],
+                    }),
+                ],
+            }),
+        })));
+        expect(runtimeRepository.listBranches).toHaveBeenCalled();
+        expect(runtimeRepository.listTags).toHaveBeenCalled();
+        expect(legacyGetAllBranches).not.toHaveBeenCalled();
+        expect(legacyGetAllTags).not.toHaveBeenCalled();
     });
 
     it('posts an empty history payload when no repository is active', async () => {
@@ -360,6 +415,75 @@ describe('CommitHistoryViewProvider error propagation', () => {
         expect(repo.getLogForRef).not.toHaveBeenCalled();
     });
 
+    it('uses runtime repository branch listing when selecting a history branch', async () => {
+        setQuickPickValue('feature/runtime');
+        const legacyGetAllBranches = vi.fn(async () => { throw new Error('legacy getAllBranches should not run'); });
+        const repo = makeRepositoryMock({
+            getAllBranches: legacyGetAllBranches,
+            getLogForRef: vi.fn(async () => [commit('runtimebranch1', 'feat: runtime branch history')]),
+        });
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeRepository = runtimeRepositoryModel({
+            listBranches: vi.fn(async () => [{
+                name: 'feature/runtime',
+                isRemote: false,
+                isCurrent: false,
+                hash: 'runtimebranch1',
+                ahead: 0,
+                behind: 0,
+            }]),
+        });
+        runtimeRegistry.registerRepository(runtimeRepository);
+        runtimeRegistry.registerWorktree(runtimeWorktreeModel());
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/ext'),
+            makeAccessorWithContext(repo, context),
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry,
+        );
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'selectBranch' });
+
+        await vi.waitFor(() => expect(repo.getLogForRef).toHaveBeenCalledWith('feature/runtime', 51, 0));
+        expect(runtimeRepository.listBranches).toHaveBeenCalled();
+        expect(legacyGetAllBranches).not.toHaveBeenCalled();
+    });
+
+    it('uses runtime repository ref resolution when going to the current history item', async () => {
+        const legacyExec = vi.fn(async () => { throw new Error('legacy exec should not run'); });
+        const repo = makeRepositoryMock({ exec: legacyExec });
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeRepository = runtimeRepositoryModel({
+            resolveRef: vi.fn(async () => 'head123456789'),
+        });
+        runtimeRegistry.registerRepository(runtimeRepository);
+        runtimeRegistry.registerWorktree(runtimeWorktreeModel());
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/ext'),
+            makeAccessorWithContext(repo, context),
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry,
+        );
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'goToCurrent' });
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual({ type: 'history/selectCommit', hash: 'head123456789' }));
+        expect(runtimeRepository.resolveRef).toHaveBeenCalledWith('HEAD');
+        expect(legacyExec).not.toHaveBeenCalled();
+    });
+
     it('loads subsequent pages from the selected branch history', async () => {
         setQuickPickValue('feature/history');
         const repo = makeRepositoryMock({
@@ -453,6 +577,66 @@ describe('CommitHistoryViewProvider error propagation', () => {
 
         await vi.waitFor(() => expect(repo.getLogForPath).toHaveBeenCalledWith('src/app.ts', 26, 50));
         await vi.waitFor(() => expect(panel?.webview.messages.some((message) => isHistoryDataResponse(message, 'history-file-page-2'))).toBe(true));
+        disposables.forEach((disposable) => disposable.dispose());
+    });
+
+    it('uses runtime repository refs when loading active repository file history panels', async () => {
+        const root = '/workspace';
+        const filePath = path.join(root, 'src', 'app.ts');
+        const legacyGetAllBranches = vi.fn(async () => { throw new Error('legacy getAllBranches should not run'); });
+        const legacyGetAllTags = vi.fn(async () => { throw new Error('legacy getAllTags should not run'); });
+        const repo = makeRepositoryMock({
+            cwd: root,
+            getLogForPath: vi.fn(async () => [commit('file123456789', 'feat: runtime file history')]),
+            getAllBranches: legacyGetAllBranches,
+            getAllTags: legacyGetAllTags,
+        });
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeRepository = runtimeRepositoryModel({
+            listBranches: vi.fn(async () => [
+                { name: 'feature/file-history', isRemote: false, isCurrent: true, hash: 'file1234', ahead: 0, behind: 0 },
+            ]),
+            listTags: vi.fn(async () => [{ name: 'v-file', hash: 'file1234' }]),
+        });
+        runtimeRegistry.registerRepository(runtimeRepository);
+        runtimeRegistry.registerWorktree(runtimeWorktreeModel());
+        const repositoryResolver = { repositoryForUri: vi.fn(async () => repo) };
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/ext'),
+            makeAccessorWithContext(repo, context),
+            async () => {},
+            undefined,
+            repositoryResolver,
+            undefined,
+            runtimeRegistry,
+        );
+        const disposables = provider.registerNativeContextCommands();
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        await vscode.commands.executeCommand('lookGit.file.showHistory', vscode.Uri.file(filePath));
+        const panel = window.webviewPanels[0];
+        panel?.webview.messageHandler?.({ type: 'history/ready' });
+
+        await vi.waitFor(() => expect(panel?.webview.messages).toContainEqual(expect.objectContaining({
+            type: 'history/data',
+            data: expect.objectContaining({
+                commits: [
+                    expect.objectContaining({
+                        hash: 'file123456789',
+                        refs: [
+                            { name: 'feature/file-history', kind: 'local', isCurrent: true },
+                            { name: 'v-file', kind: 'tag' },
+                        ],
+                    }),
+                ],
+            }),
+        })));
+        expect(runtimeRepository.listBranches).toHaveBeenCalled();
+        expect(runtimeRepository.listTags).toHaveBeenCalled();
+        expect(legacyGetAllBranches).not.toHaveBeenCalled();
+        expect(legacyGetAllTags).not.toHaveBeenCalled();
         disposables.forEach((disposable) => disposable.dispose());
     });
 
@@ -1043,6 +1227,57 @@ function commit(hash: string, message: string) {
         authorDate: '2024-01-01T00:00:00Z',
         parentHashes: [],
     };
+}
+
+function repoContext(): RepoContext {
+    return {
+        id: 'repo',
+        cwd: '/workspace',
+        kind: RepoKind.Main,
+        label: 'workspace',
+    };
+}
+
+function makeAccessorWithContext(repo: ReturnType<typeof makeRepositoryMock>, context: RepoContext): ActiveRepositoryAccessor {
+    return {
+        currentRepository: repo,
+        currentContext: context,
+        requireRepository() {
+            return repo;
+        },
+    };
+}
+
+const runtime = {
+    supports: () => false,
+    execute: async () => undefined,
+} satisfies GitRuntime;
+
+function runtimeRepositoryModel(overrides: Partial<RuntimeRepository>): RuntimeRepository {
+    return {
+        repoId: 'repo',
+        gitDir: '/workspace/.git',
+        kind: 'main',
+        label: 'workspace',
+        runtime,
+        listBranches: vi.fn(async () => []),
+        listTags: vi.fn(async () => []),
+        resolveRef: vi.fn(async () => ''),
+        ...overrides,
+    } as RuntimeRepository;
+}
+
+function runtimeWorktreeModel(overrides: Partial<Worktree> = {}): Worktree {
+    return {
+        repoId: 'repo',
+        worktreeId: 'repo',
+        path: '/workspace',
+        isMain: true,
+        head: 'abc123',
+        dirty: false,
+        runtime,
+        ...overrides,
+    } as Worktree;
 }
 
 function scopedHistoryOutput(args: readonly string[]): string {

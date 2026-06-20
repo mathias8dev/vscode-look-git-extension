@@ -117,7 +117,7 @@ export class GitProcessRepository implements GitRepository {
         return queryWorktrees(this.roRaw, signal);
     }
     addWorktree(worktreePath: string, branch: string, createNew = false, signal?: AbortSignal): Promise<void> {
-        return addWorktree(this.rw, worktreePath, branch, createNew, signal);
+        return addWorktree(this.rw, worktreePath, branch, createNew, undefined, signal);
     }
     removeWorktree(worktreePath: string, force = false, signal?: AbortSignal): Promise<void> {
         return removeWorktree(this.rw, worktreePath, force, signal);

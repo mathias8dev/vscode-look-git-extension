@@ -54,6 +54,7 @@ export interface StashOptions {
     readonly includeUntracked?: boolean;
     readonly keepIndex?: boolean;
     readonly staged?: boolean;
+    readonly paths?: readonly string[];
 }
 
 export interface CheckoutOptions {
@@ -77,6 +78,7 @@ export interface CherryPickOptions {
 
 export interface RevertOptions {
     readonly noCommit?: boolean;
+    readonly noEdit?: boolean;
 }
 
 export type ResetMode = 'soft' | 'mixed' | 'hard';
@@ -98,6 +100,8 @@ export interface PushOptions {
 export interface GitHistoryOperations {
     getCommitGraph(query: CommitGraphQuery, pageRequest: PageRequest, signal?: AbortSignal): Promise<Page<GitCommit>>;
     getCommitDetails(commit: string, signal?: AbortSignal): Promise<GitCommit>;
+    getCommitFiles(commit: string, signal?: AbortSignal): Promise<readonly GitFileChange[]>;
+    getCommitMessage(commit: string, signal?: AbortSignal): Promise<string>;
     getCommitPatch(commit: string, signal?: AbortSignal): Promise<string>;
     getCommitFileDiff(commit: string, path: string, signal?: AbortSignal): Promise<string>;
     getCommitRange(fromRef: string, toRef: string, pageRequest: PageRequest, signal?: AbortSignal): Promise<Page<GitCommit>>;
@@ -153,6 +157,8 @@ export interface GitFetchOperations {
     pruneRemote(remote: string, signal?: AbortSignal): Promise<void>;
     getRemoteUrl(remote: string, signal?: AbortSignal): Promise<string>;
     setRemoteUrl(remote: string, url: string, signal?: AbortSignal): Promise<void>;
+    addRemote(name: string, url: string, signal?: AbortSignal): Promise<void>;
+    removeRemote(remote: string, signal?: AbortSignal): Promise<void>;
 }
 
 export interface GitWorktreeTopologyOperations {
@@ -181,6 +187,7 @@ export interface GitStatusOperations {
 }
 
 export interface GitIndexOperations {
+    getFileFromIndex(path: string, signal?: AbortSignal): Promise<string>;
     stage(paths: readonly string[], signal?: AbortSignal): Promise<void>;
     stageAll(signal?: AbortSignal): Promise<void>;
     stageHunks(hunks: readonly string[], signal?: AbortSignal): Promise<void>;
@@ -191,9 +198,12 @@ export interface GitIndexOperations {
     discard(paths: readonly string[], signal?: AbortSignal): Promise<void>;
     discardHunks(hunks: readonly string[], signal?: AbortSignal): Promise<void>;
     markResolved(paths: readonly string[], signal?: AbortSignal): Promise<void>;
+    acceptOurs(paths: readonly string[], signal?: AbortSignal): Promise<void>;
+    acceptTheirs(paths: readonly string[], signal?: AbortSignal): Promise<void>;
 }
 
 export interface GitPatchOperations {
+    getFileAtRevision(path: string, revision: string, signal?: AbortSignal): Promise<string>;
     getWorkingTreeDiff(paths: readonly string[], signal?: AbortSignal): Promise<string>;
     getIndexDiff(paths: readonly string[], signal?: AbortSignal): Promise<string>;
     getCombinedDiff(paths: readonly string[], signal?: AbortSignal): Promise<string>;
@@ -214,6 +224,8 @@ export interface GitCommitOperations {
 
 export interface GitStashOperations {
     listStashes(pageRequest: PageRequest, signal?: AbortSignal): Promise<Page<GitStash>>;
+    getStashFiles(stash: string, signal?: AbortSignal): Promise<readonly GitFileChange[]>;
+    getStashSummary(stash: string, signal?: AbortSignal): Promise<string>;
     stash(message: string | undefined, options: StashOptions, signal?: AbortSignal): Promise<void>;
     applyStash(stash: string, options: StashOptions, signal?: AbortSignal): Promise<void>;
     popStash(stash: string, options: StashOptions, signal?: AbortSignal): Promise<void>;

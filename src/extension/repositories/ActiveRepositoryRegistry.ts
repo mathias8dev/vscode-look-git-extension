@@ -1,11 +1,13 @@
-import * as crypto from 'crypto';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { GitRepository } from '../../application/ports/git-repository';
 import { RepoKind, type RepoContext } from '../../core/git/domain/RepoContext';
+import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
 import { GitProcessRepository } from '../git/GitProcessRepository';
 import { RuntimeRepositoryFactory } from '../git/runtime-repository-factory';
+import { ScopedGitRepository } from '../git/scoped-git-repository';
 import type { RepositoryRegistry } from './RepositoryRegistry';
+import { stableRepoContextId } from './repo-context-id';
 
 export interface ActiveRepositoryState {
     readonly repo: GitRepository | undefined;
@@ -78,12 +80,15 @@ export class ActiveRepositoryRegistry implements GitRepositoryStore, vscode.Disp
     async registerCurrentRuntimeContext(registry: RepositoryRegistry): Promise<void> {
         if (!this.repo || !this.context) { return; }
 
-        const [repository, worktree] = await Promise.all([
+        const [repository, worktrees] = await Promise.all([
             this.runtimeRepositoryFactory.createRepository(this.repo, this.context),
-            this.runtimeRepositoryFactory.createMainWorktree(this.repo, this.context),
+            this.runtimeRepositoryFactory.createWorktrees(this.repo, this.context),
         ]);
         registry.registerRepository(repository);
-        registry.registerWorktree(worktree);
+        for (const worktree of worktrees) {
+            registry.registerWorktree(worktree);
+        }
+        await this.registerSubmoduleRuntimeContexts(registry, this.repo, this.context);
     }
 
     dispose(): void {
@@ -95,13 +100,54 @@ export class ActiveRepositoryRegistry implements GitRepositoryStore, vscode.Disp
         this.context = context;
         this.onDidChangeEmitter.fire({ repo, context });
     }
+
+    private async registerSubmoduleRuntimeContexts(
+        registry: RepositoryRegistry,
+        parentRepository: GitRepository,
+        parentContext: RepoContext,
+    ): Promise<void> {
+        const submodules = await parentRepository.getSubmoduleStatus();
+        for (const submodule of submodules) {
+            if (submodule.status === '-') { continue; }
+            await this.registerSubmoduleRuntimeContext(registry, parentRepository, parentContext, submodule);
+        }
+    }
+
+    private async registerSubmoduleRuntimeContext(
+        registry: RepositoryRegistry,
+        parentRepository: GitRepository,
+        parentContext: RepoContext,
+        submodule: GitSubmodule,
+    ): Promise<void> {
+        const submoduleCwd = path.resolve(parentRepository.cwd, submodule.path);
+        const context = createSubmoduleRepoContext(submoduleCwd, parentContext.id);
+        const repository = new ScopedGitRepository(parentRepository, submodule.path);
+        const [runtimeRepository, worktrees] = await Promise.all([
+            this.runtimeRepositoryFactory.createRepository(repository, context),
+            this.runtimeRepositoryFactory.createWorktrees(repository, context),
+        ]);
+        registry.registerRepository(runtimeRepository);
+        for (const worktree of worktrees) {
+            registry.registerWorktree(worktree);
+        }
+    }
 }
 
 export function createRepoContext(cwd: string): RepoContext {
     return {
-        id: crypto.createHash('sha256').update(cwd).digest('hex').substring(0, 16),
+        id: stableRepoContextId(cwd),
         cwd,
         kind: RepoKind.Main,
+        label: path.basename(cwd) || cwd,
+    };
+}
+
+function createSubmoduleRepoContext(cwd: string, parentId: string): RepoContext {
+    return {
+        id: stableRepoContextId(cwd),
+        cwd,
+        kind: RepoKind.Submodule,
+        parentId,
         label: path.basename(cwd) || cwd,
     };
 }

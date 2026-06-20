@@ -18,13 +18,14 @@ import { GetGraphDataUseCase, type GraphDataResult } from '../../application/use
 import { GetCommitDetailsUseCase } from '../../application/usecases/graph/get-commit-details';
 import { GetWorktreeDetailsUseCase } from '../../application/usecases/graph/get-worktree-details';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
-import { toProtocolBranch, toProtocolGraphCommit, toProtocolGraphSubmodule, toProtocolWorktree } from '../mapping/toProtocol';
+import { toProtocolBranch, toProtocolGraphCommit, toProtocolGraphSubmodule, toProtocolWorktree, toRepositoryLocator, toWorktreeLocator } from '../mapping/toProtocol';
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
 import { ScopedGitRepository } from '../git/scoped-git-repository';
 import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { runCommitCommand } from '../commands/commit-commands';
 import { runBranchCommand } from '../commands/branch-commands';
 import { runWorktreeCommand } from '../commands/worktree-commands';
+import type { RuntimeCommandTargets } from '../commands/runtime-command-targets';
 import { operationActionsForStatus } from '../utils/operation-feedback';
 import { openCommitGitlinkDiff, openWorktreeGitlinkDiff } from '../utils/gitlink-diff';
 import { commitFileDiffUris, emptyDiffUri } from '../utils/diff-uris';
@@ -32,6 +33,7 @@ import { gitBlobUri } from '../utils/git-blob-documents';
 import { createErrorPayload, isAbortError } from './errorSerialization';
 import { appendErrorToOutput, showErrorOutput } from './errorOutputChannel';
 import { openVisualRebasePanel } from '../utils/visual-rebase-panel';
+import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
 
 type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
 
@@ -54,6 +56,7 @@ export class GraphMessageRouter {
         private readonly getWorktreeDetails = new GetWorktreeDetailsUseCase(),
         private readonly extensionUri?: vscode.Uri,
         private readonly storageUri?: vscode.Uri,
+        private readonly runtimeRepositories?: RepositoryRegistry,
     ) {}
 
     dispose(): void {
@@ -171,7 +174,7 @@ export class GraphMessageRouter {
             }
 
             case 'graph/commitDetailsRequest': {
-                const repo = await this.repositoryForScope(msg.repositoryScope);
+                const repo = this.runtimeTargetsForScope(msg.repositoryScope).repository ?? await this.repositoryForScope(msg.repositoryScope);
                 const details = await this.getCommitDetails.execute(repo, msg.hash);
                 const response: CommitDetailsResponse = {
                     type: 'graph/commitDetailsResponse',
@@ -190,8 +193,10 @@ export class GraphMessageRouter {
             }
 
             case 'graph/worktreeDetailsRequest': {
-                const repo = await this.repositoryForScope(msg.repositoryScope);
-                const details = await this.getWorktreeDetails.execute(repo, msg.path);
+                const runtimeWorktree = this.runtimeTargetsForWorktreePath(msg.repositoryScope, msg.path).worktree;
+                const details = runtimeWorktree
+                    ? await this.getWorktreeDetails.executeWorktree(runtimeWorktree)
+                    : await this.getWorktreeDetails.execute(await this.repositoryForScope(msg.repositoryScope), msg.path);
                 const response: WorktreeDetailsResponse = {
                     type: 'graph/worktreeDetailsResponse',
                     requestId: msg.requestId,
@@ -237,7 +242,7 @@ export class GraphMessageRouter {
                     await openWorktreeGitlinkDiff(repo, msg);
                     break;
                 }
-                const { left, right } = await createWorktreeDiffUris(repo, msg);
+                const { left, right } = await createWorktreeDiffUris(repo, msg, this.runtimeTargetsForWorktreePath(msg.repositoryScope, msg.worktreePath));
                 await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(msg.filePath)} (${path.basename(msg.worktreePath)})`);
                 break;
             }
@@ -363,7 +368,7 @@ export class GraphMessageRouter {
             });
             return;
         }
-        const shouldRefresh = await runBranchCommand(repo, msg.command, msg.branch, msg.isRemote, this.remoteCommands);
+        const shouldRefresh = await runBranchCommand(repo, msg.command, msg.branch, msg.isRemote, this.remoteCommands, undefined, this.runtimeTargetsForScope(msg.repositoryScope));
         if (!shouldRefresh) { return; }
         // `delete` removes the branch and `rename` frees its old name; if the graph is
         // filtered to that branch, the next reload would query a now-missing ref, so the
@@ -376,14 +381,48 @@ export class GraphMessageRouter {
 
     private async handleWorktreeCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/worktreeCommand' }>): Promise<void> {
         const repo = await this.repositoryForScope(msg.repositoryScope);
-        const shouldRefresh = await runWorktreeCommand(repo, msg.command, msg.path, this.remoteCommands);
+        const runtimeTargets = msg.path
+            ? this.runtimeTargetsForWorktreePath(msg.repositoryScope, msg.path)
+            : this.runtimeTargetsForScope(msg.repositoryScope);
+        const shouldRefresh = await runWorktreeCommand(repo, msg.command, msg.path, this.remoteCommands, runtimeTargets);
         if (shouldRefresh) { await this.refreshAfterRepositoryChange(); }
     }
 
     private async handleCommitCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/commitCommand' }>): Promise<void> {
         const repo = await this.repositoryForScope(msg.repositoryScope);
-        const shouldRefresh = await runCommitCommand(repo, msg.command, msg.hash, msg.hashes, this.remoteCommands, undefined, undefined, undefined, diffExplanationScopeFor(msg.repositoryScope), this.extensionUri, this.storageUri);
+        const shouldRefresh = await runCommitCommand(repo, msg.command, msg.hash, msg.hashes, this.remoteCommands, undefined, undefined, undefined, diffExplanationScopeFor(msg.repositoryScope), this.extensionUri, this.storageUri, undefined, this.runtimeTargetsForScope(msg.repositoryScope));
         if (shouldRefresh) { await this.refreshAfterRepositoryChange(); }
+    }
+
+    private runtimeTargetsForScope(scope: GraphRepositoryScope | undefined): RuntimeCommandTargets {
+        const context = this.repositories.currentContext;
+        if (!context || !this.runtimeRepositories || normalizedScope(scope).kind !== 'main') { return {}; }
+        let repository: RuntimeCommandTargets['repository'];
+        let worktree: RuntimeCommandTargets['worktree'];
+        try {
+            repository = this.runtimeRepositories.resolveRepository(toRepositoryLocator(context));
+        } catch {
+        }
+        try {
+            worktree = this.runtimeRepositories.resolveWorktree(toWorktreeLocator(context));
+        } catch {
+        }
+        return { repository, worktree };
+    }
+
+    private runtimeTargetsForWorktreePath(scope: GraphRepositoryScope | undefined, worktreePath: string): RuntimeCommandTargets {
+        const context = this.repositories.currentContext;
+        if (!context || !this.runtimeRepositories || normalizedScope(scope).kind !== 'main') { return {}; }
+        try {
+            const repository = this.runtimeRepositories.resolveRepository(toRepositoryLocator(context));
+            const normalizedWorktreePath = path.normalize(worktreePath);
+            const worktree = this.runtimeRepositories
+                .worktrees(repository.repoId)
+                .find((candidate) => path.normalize(candidate.path) === normalizedWorktreePath);
+            return worktree ? { repository, worktree } : { repository };
+        } catch {
+            return {};
+        }
     }
 
     private postGraphError(
@@ -680,7 +719,11 @@ function diffExplanationScopeFor(scope: GraphRepositoryScope | undefined): { rea
     return { label: 'Submodule', value: scope.path };
 }
 
-async function createWorktreeDiffUris(repo: GitRepository, msg: OpenWorktreeDiffRequest): Promise<{ readonly left: vscode.Uri; readonly right: vscode.Uri }> {
+async function createWorktreeDiffUris(
+    repo: GitRepository,
+    msg: OpenWorktreeDiffRequest,
+    runtimeTargets?: RuntimeCommandTargets,
+): Promise<{ readonly left: vscode.Uri; readonly right: vscode.Uri }> {
     const fileUri = vscode.Uri.file(path.join(msg.worktreePath, msg.filePath));
     const origPath = msg.origPath ?? msg.filePath;
     const status = msg.status.charAt(0);
@@ -694,19 +737,26 @@ async function createWorktreeDiffUris(repo: GitRepository, msg: OpenWorktreeDiff
 
     if (status === 'D') {
         return {
-            left: await worktreeHeadBlobUri(repo, msg.worktreePath, origPath),
+            left: await worktreeHeadBlobUri(repo, msg.worktreePath, origPath, runtimeTargets),
             right: emptyDiffUri('worktree', msg.filePath, 'working-tree'),
         };
     }
 
     return {
-        left: await worktreeHeadBlobUri(repo, msg.worktreePath, origPath),
+        left: await worktreeHeadBlobUri(repo, msg.worktreePath, origPath, runtimeTargets),
         right: fileUri,
     };
 }
 
-async function worktreeHeadBlobUri(repo: GitRepository, worktreePath: string, filePath: string): Promise<vscode.Uri> {
-    const content = await repo.execRaw(['-C', worktreePath, 'show', `HEAD:${filePath}`]);
+async function worktreeHeadBlobUri(
+    repo: GitRepository,
+    worktreePath: string,
+    filePath: string,
+    runtimeTargets?: RuntimeCommandTargets,
+): Promise<vscode.Uri> {
+    const content = runtimeTargets?.worktree
+        ? await runtimeTargets.worktree.getFileAtRevision(filePath, 'HEAD')
+        : await repo.execRaw(['-C', worktreePath, 'show', `HEAD:${filePath}`]);
     return gitBlobUri('worktree-head', filePath, 'head', content);
 }
 

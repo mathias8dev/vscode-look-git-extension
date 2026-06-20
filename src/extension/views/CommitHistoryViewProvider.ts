@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import type { GitBranch, GitCommit, GitFileChange, GitRepository, GitTag } from '../../application/ports/git-repository';
+import type { GitRepository as RuntimeGitRepository } from '../../application/ports/git-topology';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import type { ErrorCode, Pagination, RequestId } from '../../protocol/shared/base';
 import { OperationStatus } from '../../protocol/shared/operation';
@@ -14,7 +15,7 @@ import { appendErrorToOutput, showErrorOutput } from '../messaging/errorOutputCh
 import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
 import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { getWebviewHtml } from './webviewHtml';
-import { toSerializedRepoContext } from '../mapping/toProtocol';
+import { toRepositoryLocator, toSerializedRepoContext, toWorktreeLocator } from '../mapping/toProtocol';
 import { webviewFontSizeMessage } from './webview-font';
 import { operationActionsForStatus } from '../utils/operation-feedback';
 import { ScopedGitRepository } from '../git/scoped-git-repository';
@@ -23,6 +24,8 @@ import { getReachableCommitHashes } from '../../application/usecases/commits/get
 import { openCommitGitlinkDiff } from '../utils/gitlink-diff';
 import { commitFileTempDiffUris } from '../utils/diff-uris';
 import type { GitRepositoryResolver } from '../repositories/GitRepositoryResolver';
+import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
+import type { RuntimeCommandTargets } from '../commands/runtime-command-targets';
 
 const DEFAULT_PAGE: Pagination = { offset: 0, limit: 50 };
 const MAX_PAGE_LIMIT = 300;
@@ -82,6 +85,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
         private readonly repositoryResolver: GitRepositoryResolver = activeRepositoryOnlyResolver(repositories),
         private readonly storageUri?: vscode.Uri,
+        private readonly runtimeRepositories?: RepositoryRegistry,
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -212,7 +216,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     private async selectHistoryBranch(): Promise<void> {
         try {
             const repo = this.requireHistoryRepository();
-            const branches = await repo.getAllBranches();
+            const branches = await this.listHistoryBranches(repo);
             const branchNames = branches.map((branch) => branch.name);
             const selected = await vscode.window.showQuickPick(['Current Branch', ...branchNames], {
                 placeHolder: 'Select history branch',
@@ -228,7 +232,10 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     private async goToCurrentHistoryItem(): Promise<void> {
         try {
             const repo = this.requireHistoryRepository();
-            const hash = await repo.exec(['rev-parse', 'HEAD']);
+            const runtimeRepository = this.runtimeTargetsForHistoryScope().repository;
+            const hash = runtimeRepository
+                ? await runtimeRepository.resolveRef('HEAD')
+                : await repo.exec(['rev-parse', 'HEAD']);
             this.selectedHistoryRef = undefined;
             await this.refresh();
             this.postMessage({ type: 'history/selectCommit', hash });
@@ -301,12 +308,18 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private async loadRefs(repo: GitRepository): Promise<HistoryRefCache> {
         if (this.refCache) { return this.refCache; }
+        const runtimeRepository = this.runtimeTargetsForHistoryScope().repository;
         const [branches, tags] = await Promise.all([
-            repo.getAllBranches(),
-            repo.getAllTags(),
+            runtimeRepository ? runtimeRepository.listBranches() : repo.getAllBranches(),
+            runtimeRepository ? runtimeRepository.listTags() : repo.getAllTags(),
         ]);
         this.refCache = { branches, tags };
         return this.refCache;
+    }
+
+    private async listHistoryBranches(repo: GitRepository): Promise<readonly GitBranch[]> {
+        const runtimeRepository = this.runtimeTargetsForHistoryScope().repository;
+        return runtimeRepository ? runtimeRepository.listBranches() : repo.getAllBranches();
     }
 
     private applyFileViewMode(mode: 'list' | 'tree'): void {
@@ -393,6 +406,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             panel,
             this.extensionUri,
             repo,
+            this.runtimeRepositoryForRepository(repo),
             pathFilter,
             lineRange,
             (target) => {
@@ -436,6 +450,8 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 this.contextRepository ? undefined : this.selectedRepositoryScope ? { label: 'Submodule', value: this.selectedRepositoryScope.path } : undefined,
                 this.extensionUri,
                 this.storageUri,
+                undefined,
+                this.runtimeTargetsForHistoryScope(),
             );
             if (shouldRefresh) { await this.refresh(); }
         } catch (error) {
@@ -553,6 +569,29 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             : repo;
     }
 
+    private runtimeRepositoryForRepository(repo: GitRepository): RuntimeGitRepository | undefined {
+        const context = this.repositories.currentContext;
+        if (!context || !this.runtimeRepositories || path.normalize(repo.cwd) !== path.normalize(context.cwd)) { return undefined; }
+        try {
+            return this.runtimeRepositories.resolveRepository(toRepositoryLocator(context));
+        } catch {
+            return undefined;
+        }
+    }
+
+    private runtimeTargetsForHistoryScope(): RuntimeCommandTargets {
+        const context = this.repositories.currentContext;
+        if (!context || !this.runtimeRepositories || this.contextRepository || this.selectedRepositoryScope) { return {}; }
+        try {
+            return {
+                repository: this.runtimeRepositories.resolveRepository(toRepositoryLocator(context)),
+                worktree: this.runtimeRepositories.resolveWorktree(toWorktreeLocator(context)),
+            };
+        } catch {
+            return {};
+        }
+    }
+
     private async selectRepositoryScope(): Promise<void> {
         try {
             const repo = this.repositories.requireRepository();
@@ -644,6 +683,7 @@ class FileHistoryPanelController {
         private readonly panel: vscode.WebviewPanel,
         private readonly extensionUri: vscode.Uri,
         private readonly repo: GitRepository,
+        private readonly runtimeRepository: RuntimeGitRepository | undefined,
         private readonly pathFilter: string,
         private readonly lineRange: LineRange | undefined,
         private readonly onContextTarget: (target: HistoryContextTarget) => void,
@@ -714,8 +754,8 @@ class FileHistoryPanelController {
     private async loadRefs(repo: GitRepository): Promise<HistoryRefCache> {
         if (this.refCache) { return this.refCache; }
         const [branches, tags] = await Promise.all([
-            repo.getAllBranches(),
-            repo.getAllTags(),
+            this.runtimeRepository ? this.runtimeRepository.listBranches() : repo.getAllBranches(),
+            this.runtimeRepository ? this.runtimeRepository.listTags() : repo.getAllTags(),
         ]);
         this.refCache = { branches, tags };
         return this.refCache;

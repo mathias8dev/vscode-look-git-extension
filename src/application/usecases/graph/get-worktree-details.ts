@@ -1,5 +1,6 @@
 import type { GitRepository } from '../../ports/git-repository';
-import type { GitStatusEntry } from '../../../core/git/domain/GitStatus';
+import type { Worktree } from '../../ports/git-topology';
+import type { GitStatus, GitStatusEntry } from '../../../core/git/domain/GitStatus';
 import { parsePorcelainStatus } from '../../../core/parsing/parseStatus';
 import { parseSubmodulePaths } from '../../../core/parsing/parseSubmoduleStatus';
 
@@ -33,6 +34,15 @@ export class GetWorktreeDetailsUseCase {
             files: porcelainStatusFiles(raw, submodulePaths),
         };
     }
+
+    async executeWorktree(worktree: Worktree, signal?: AbortSignal): Promise<WorktreeDetailsResult> {
+        return {
+            path: worktree.path,
+            head: worktree.head,
+            branch: worktree.branch,
+            files: statusFiles(await worktree.getStatus(signal)),
+        };
+    }
 }
 
 async function execRaw(repo: GitRepository, args: readonly string[], signal: AbortSignal | undefined): Promise<string> {
@@ -53,6 +63,10 @@ async function worktreeSubmodulePaths(
 
 function porcelainStatusFiles(raw: string, submodulePaths: ReadonlySet<string>): readonly WorktreeDetailsFile[] {
     const status = parsePorcelainStatus(raw, submodulePaths);
+    return statusFiles({ ...status, conflictState: 'none' });
+}
+
+function statusFiles(status: GitStatus): readonly WorktreeDetailsFile[] {
     const files = new Map<string, WorktreeDetailsFile>();
 
     for (const entry of status.conflicts) {

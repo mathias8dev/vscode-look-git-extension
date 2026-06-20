@@ -110,7 +110,7 @@ export class ScopedGitRepository implements GitRepository {
     }
 
     addWorktree(worktreePath: string, branch: string, createNew = false, signal?: AbortSignal): Promise<void> {
-        return addWorktree(this.trimmed, worktreePath, branch, createNew, signal);
+        return addWorktree(this.trimmed, worktreePath, branch, createNew, undefined, signal);
     }
 
     removeWorktree(worktreePath: string, force = false, signal?: AbortSignal): Promise<void> {

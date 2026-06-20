@@ -2,8 +2,9 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { Page } from '../../core/git/domain/Page';
 import type { GitExec } from '../../core/git/git-exec';
-import { queryAllBranches, queryAllTags, queryCommitLog, queryCurrentBranch, queryGraphLog } from '../../core/queries/queryGraph';
+import { queryAllBranches, queryAllTags, queryCommitFiles, queryCommitLog, queryCommitMessage, queryCurrentBranch, queryGraphLog } from '../../core/queries/queryGraph';
 import { queryStatus, queryStashList } from '../../core/queries/queryStatus';
+import { parseNameStatusZ } from '../../core/parsing/parseNameStatus';
 import { querySubmoduleStatus, updateSubmodule } from '../../core/queries/querySubmodules';
 import { addWorktree, queryWorktrees, removeWorktree } from '../../core/queries/queryWorktrees';
 import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '../../application/ports/git-runtime';
@@ -76,12 +77,16 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     pruneRemote: (input) => ({ args: ['remote', 'prune', requiredString(input, 'remote')] }),
     getRemoteUrl: (input) => ({ args: ['remote', 'get-url', requiredString(input, 'remote')] }),
     setRemoteUrl: (input) => ({ args: ['remote', 'set-url', requiredStringField(input, 'remote'), requiredStringField(input, 'url')] }),
+    addRemote: (input) => ({ args: ['remote', 'add', requiredStringField(input, 'name'), requiredStringField(input, 'url')] }),
+    removeRemote: (input) => ({ args: ['remote', 'remove', requiredString(input, 'remote')] }),
+    getFileAtRevision: (input) => ({ args: ['show', `${requiredStringField(input, 'revision')}:${requiredStringField(input, 'path')}`], trim: false }),
+    getFileFromIndex: (input) => ({ args: ['show', `:${requiredStringField(input, 'path')}`], trim: false }),
     createBranch: (input) => ({ args: createBranchArgs(input) }),
     renameBranch: (input) => ({ args: ['branch', '-m', requiredStringField(input, 'oldName'), requiredStringField(input, 'newName')] }),
     deleteBranch: (input) => ({ args: deleteBranchArgs(input) }),
     setUpstream: (input) => ({ args: ['branch', '--set-upstream-to', requiredStringField(input, 'upstream'), requiredStringField(input, 'branch')] }),
     createTag: (input) => ({ args: createTagArgs(input) }),
-    deleteTag: (input) => ({ args: ['tag', '-d', requiredString(input, 'name')] }),
+    deleteTag: (input) => ({ args: ['tag', '-d', requiredStringField(input, 'name')] }),
     stage: (input) => ({ args: ['add', '--', ...requiredStringArrayField(input, 'paths')] }),
     stageAll: () => ({ args: ['add', '-A'] }),
     unstage: (input) => ({ args: ['reset', 'HEAD', '--', ...requiredStringArrayField(input, 'paths')] }),
@@ -90,11 +95,12 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     markResolved: (input) => ({ args: ['add', '--', ...requiredStringArrayField(input, 'paths')] }),
     commit: (input) => ({ args: ['commit', '-m', requiredStringField(input, 'message')] }),
     amendCommit: (input) => ({ args: ['commit', '--amend', '-m', requiredStringField(input, 'message')] }),
-    stash: (input) => ({ args: withOptionalMessage(['stash', 'push'], optionalStringField(input, 'message')) }),
+    stash: (input) => ({ args: stashArgs(input) }),
     applyStash: (input) => ({ args: ['stash', 'apply', requiredStringField(input, 'stash')] }),
     popStash: (input) => ({ args: ['stash', 'pop', requiredStringField(input, 'stash')] }),
     dropStash: (input) => ({ args: ['stash', 'drop', requiredString(input, 'stash')] }),
     clearStashes: () => ({ args: ['stash', 'clear'] }),
+    getStashSummary: (input) => ({ args: ['stash', 'show', '--stat', requiredStringField(input, 'stash')] }),
     checkout: (input) => ({ args: ['checkout', requiredStringField(input, 'ref')] }),
     checkoutNewBranch: (input) => ({ args: checkoutNewBranchArgs(input) }),
     restorePaths: (input) => ({ args: restorePathsArgs(input) }),
@@ -109,11 +115,11 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     abortRebase: () => ({ args: ['rebase', '--abort'] }),
     skipRebase: () => ({ args: ['rebase', '--skip'] }),
     quitRebase: () => ({ args: ['rebase', '--quit'] }),
-    cherryPick: (input) => ({ args: ['cherry-pick', requiredStringField(input, 'commit')] }),
+    cherryPick: (input) => ({ args: cherryPickArgs(input) }),
     continueCherryPick: () => ({ args: ['cherry-pick', '--continue'] }),
     abortCherryPick: () => ({ args: ['cherry-pick', '--abort'] }),
     skipCherryPick: () => ({ args: ['cherry-pick', '--skip'] }),
-    revertCommit: (input) => ({ args: ['revert', requiredStringField(input, 'commit')] }),
+    revertCommit: (input) => ({ args: revertCommitArgs(input) }),
     continueRevert: () => ({ args: ['revert', '--continue'] }),
     abortRevert: () => ({ args: ['revert', '--abort'] }),
     skipRevert: () => ({ args: ['revert', '--skip'] }),
@@ -147,7 +153,14 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
         return await queryWorktrees(readonlyRawExec(runProcess, context), signal);
     },
     addWorktree: async (input, runProcess, context, signal) => {
-        await addWorktree(trimmedExec(runProcess, context), requiredStringField(input, 'path'), requiredStringField(input, 'branch'), optionalBooleanField(input, 'createNew') ?? false, signal);
+        await addWorktree(
+            trimmedExec(runProcess, context),
+            requiredStringField(input, 'path'),
+            requiredStringField(input, 'branch'),
+            optionalBooleanField(input, 'createNew') ?? false,
+            optionalStringField(input, 'startPoint'),
+            signal,
+        );
     },
     removeWorktree: async (input, runProcess, context, signal) => {
         await removeWorktree(trimmedExec(runProcess, context), requiredStringField(input, 'worktree'), optionalBooleanField(input, 'force') ?? false, signal);
@@ -170,10 +183,23 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
     initSubmodule: async (input, runProcess, context, signal) => {
         await updateSubmodule(trimmedExec(runProcess, context), requiredStringField(input, 'path'), signal);
     },
+    acceptOurs: async (input, runProcess, context, signal) => {
+        await acceptConflictSide(trimmedExec(runProcess, context), 'ours', requiredStringArrayField(input, 'paths'), signal);
+    },
+    acceptTheirs: async (input, runProcess, context, signal) => {
+        await acceptConflictSide(trimmedExec(runProcess, context), 'theirs', requiredStringArrayField(input, 'paths'), signal);
+    },
     listStashes: async (input, runProcess, context, signal) => {
         const pageRequest = pageRequestFromInput(input);
         const items = await queryStashList(readonlyTrimmedExec(runProcess, context), signal);
         return pageFromOffset(items, pageRequest.limit, decodeOffset(pageRequest.encodedCursor));
+    },
+    getStashFiles: async (input, runProcess, context, signal) => {
+        const output = await readonlyRawExec(runProcess, context)(
+            ['stash', 'show', '--include-untracked', '--name-status', '-M', '-z', requiredStringField(input, 'stash')],
+            signal,
+        );
+        return output ? parseNameStatusZ(output) : [];
     },
     getCommitGraph: async (input, runProcess, context, signal) => {
         const pageRequest = pageRequestFromInput(input);
@@ -204,6 +230,12 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
         }
         return first;
     },
+    getCommitFiles: async (input, runProcess, context, signal) => {
+        return await queryCommitFiles(readonlyRawExec(runProcess, context), requiredStringField(input, 'commit'), signal);
+    },
+    getCommitMessage: async (input, runProcess, context, signal) => {
+        return await queryCommitMessage(readonlyTrimmedExec(runProcess, context), requiredStringField(input, 'commit'), signal);
+    },
     getCommitPatch: async (input, runProcess, context, signal) => {
         return await readonlyRawExec(runProcess, context)(['show', '--format=', '--patch', requiredStringField(input, 'commit')], signal);
     },
@@ -211,6 +243,17 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
         return await readonlyRawExec(runProcess, context)(['show', '--format=', '--patch', requiredStringField(input, 'commit'), '--', requiredStringField(input, 'path')], signal);
     },
 };
+
+async function acceptConflictSide(
+    exec: GitExec,
+    side: 'ours' | 'theirs',
+    paths: readonly string[],
+    signal?: AbortSignal,
+): Promise<void> {
+    if (paths.length === 0) { return; }
+    await exec(['checkout', `--${side}`, '--', ...paths], signal);
+    await exec(['add', '--', ...paths], signal);
+}
 
 function resultFor(operation: SemanticGitOperation, output: string): unknown {
     switch (operation) {
@@ -278,6 +321,13 @@ function requiredStringArrayField(input: unknown, field: string): readonly strin
     throw new Error(`${field} must be a string array.`);
 }
 
+function optionalStringArrayField(input: unknown, field: string): readonly string[] {
+    const value = objectField(input, field);
+    if (value === undefined) { return []; }
+    if (Array.isArray(value) && value.every((item) => typeof item === 'string')) { return value; }
+    throw new Error(`${field} must be a string array.`);
+}
+
 function objectField(input: unknown, field: string): unknown {
     if (typeof input !== 'object' || input === null) { return undefined; }
     return (input as Readonly<Record<string, unknown>>)[field];
@@ -309,6 +359,29 @@ function withOptionalMessage(args: readonly string[], message: string | undefine
     return message ? [...args, '-m', message] : args;
 }
 
+function stashArgs(input: unknown): readonly string[] {
+    const message = optionalStringField(input, 'message');
+    const options = objectField(input, 'options');
+    const args = ['stash', 'push'];
+    if (booleanOption(options, 'includeUntracked')) { args.push('--include-untracked'); }
+    if (booleanOption(options, 'keepIndex')) { args.push('--keep-index'); }
+    if (booleanOption(options, 'staged')) { args.push('--staged'); }
+    const messageArgs = withOptionalMessage(args, message);
+    const paths = optionalStringArrayField(options, 'paths');
+    return paths.length > 0 ? [...messageArgs, '--', ...paths] : messageArgs;
+}
+
+function booleanOption(input: unknown, field: string): boolean {
+    if (input === undefined) { return false; }
+    if (typeof input !== 'object' || input === null) {
+        throw new Error('options must be an object.');
+    }
+    const value = objectField(input, field);
+    if (value === undefined) { return false; }
+    if (typeof value === 'boolean') { return value; }
+    throw new Error(`options.${field} must be a boolean.`);
+}
+
 function checkoutNewBranchArgs(input: unknown): readonly string[] {
     const branch = requiredStringField(input, 'name');
     const startPoint = optionalStringField(input, 'startPoint');
@@ -325,6 +398,23 @@ function rebaseArgs(input: unknown): readonly string[] {
     const upstream = requiredStringField(input, 'upstream');
     const branch = optionalStringField(input, 'branch');
     return branch ? ['rebase', upstream, branch] : ['rebase', upstream];
+}
+
+function cherryPickArgs(input: unknown): readonly string[] {
+    const args = ['cherry-pick'];
+    const options = objectField(input, 'options');
+    if (booleanOption(options, 'noCommit')) { args.push('--no-commit'); }
+    args.push(requiredStringField(input, 'commit'));
+    return args;
+}
+
+function revertCommitArgs(input: unknown): readonly string[] {
+    const args = ['revert'];
+    const options = objectField(input, 'options');
+    if (booleanOption(options, 'noCommit')) { args.push('--no-commit'); }
+    if (booleanOption(options, 'noEdit')) { args.push('--no-edit'); }
+    args.push(requiredStringField(input, 'commit'));
+    return args;
 }
 
 function resetPathsArgs(input: unknown): readonly string[] {

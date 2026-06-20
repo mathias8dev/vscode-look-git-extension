@@ -12,10 +12,11 @@ export async function addWorktree(
     worktreePath: string,
     branch: string,
     createNew = false,
+    startPoint?: string,
     signal?: AbortSignal,
 ): Promise<void> {
     const args = createNew
-        ? ['worktree', 'add', '-b', branch, worktreePath]
+        ? ['worktree', 'add', '-b', branch, worktreePath, ...(startPoint ? [startPoint] : [])]
         : ['worktree', 'add', worktreePath, branch];
     await exec(args, signal);
 }

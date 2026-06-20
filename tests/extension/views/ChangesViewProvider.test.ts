@@ -5,9 +5,14 @@ import { ChangesViewProvider } from '../../../src/extension/views/ChangesViewPro
 import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
 import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
 import type { GitRepository } from '../../../src/application/ports/git-repository';
+import type { GitRepository as RuntimeRepository, Worktree } from '../../../src/application/ports/git-topology';
+import type { GitRuntime } from '../../../src/application/ports/git-runtime';
 import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../../src/application/ports/remote-command-backend';
 import { OperationStatus } from '../../../src/protocol/shared/operation';
 import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
+import { RepositoryRegistry } from '../../../src/extension/repositories/RepositoryRegistry';
+import { RepoKind, type RepoContext } from '../../../src/core/git/domain/RepoContext';
+import { Page } from '../../../src/core/git/domain/Page';
 import { GenerateCommitMessageUseCase } from '../../../src/application/usecases/changes/generate-commit-message';
 import { ExplainSelectedChangesUseCase } from '../../../src/application/usecases/changes/explain-selected-changes';
 import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
@@ -90,6 +95,17 @@ function makeAccessor(repo: GitRepository | undefined): ActiveRepositoryAccessor
     };
 }
 
+function makeAccessorWithContext(repo: GitRepository | undefined, context: RepoContext | undefined): ActiveRepositoryAccessor {
+    return {
+        currentRepository: repo,
+        currentContext: context,
+        requireRepository() {
+            if (!repo) { throw new Error('No active Git repository.'); }
+            return repo;
+        },
+    };
+}
+
 function makeProvider(
     repo: GitRepository | undefined,
     generateCommitMessage?: GenerateCommitMessageUseCase,
@@ -103,6 +119,58 @@ function makeRemoteCommands(): RemoteCommandBackend {
         runVscode: vi.fn(async () => {}),
         runCli: vi.fn(async () => {}),
     };
+}
+
+const runtime = {
+    supports: () => false,
+    execute: async () => undefined,
+} satisfies GitRuntime;
+
+function runtimeRepository(overrides: Partial<RuntimeRepository> = {}): RuntimeRepository {
+    return {
+        repoId: 'repo',
+        gitDir: '/workspace/.git',
+        kind: 'main',
+        label: 'workspace',
+        runtime,
+        listBranches: vi.fn(async () => []),
+        listRemoteBranches: vi.fn(async () => []),
+        listTags: vi.fn(async () => []),
+        listRemotes: vi.fn(async () => []),
+        resolveRef: vi.fn(async () => ''),
+        listSubmodules: vi.fn(async () => []),
+        getSubmoduleStatus: vi.fn(async () => ({ path: '', status: ' ' })),
+        initSubmodule: vi.fn(async () => {}),
+        updateSubmodule: vi.fn(async () => {}),
+        syncSubmodule: vi.fn(async () => {}),
+        fetchSubmodule: vi.fn(async () => {}),
+        deinitSubmodule: vi.fn(async () => {}),
+        openSubmoduleRepository: vi.fn(async () => ''),
+        ...overrides,
+    } as RuntimeRepository;
+}
+
+function runtimeWorktree(overrides: Partial<Worktree> = {}): Worktree {
+    return {
+        repoId: 'repo',
+        worktreeId: 'repo',
+        path: '/workspace',
+        isMain: true,
+        head: 'abc123',
+        dirty: false,
+        runtime,
+        getStatus: vi.fn(async () => ({ staged: [], unstaged: [], conflicts: [], conflictState: 'none' })),
+        getUntrackedFiles: vi.fn(async () => new Page([], false)),
+        getIgnoredFiles: vi.fn(async () => new Page([], false)),
+        listStashes: vi.fn(async () => new Page([], false)),
+        stash: vi.fn(async () => {}),
+        applyStash: vi.fn(async () => {}),
+        popStash: vi.fn(async () => {}),
+        dropStash: vi.fn(async () => {}),
+        clearStashes: vi.fn(async () => {}),
+        branchFromStash: vi.fn(async () => {}),
+        ...overrides,
+    } as Worktree;
 }
 
 function conflictStageExecRaw(expectedCwd?: string, conflictPaths: readonly string[] = ['src/conflict.ts']): GitRepository['execRaw'] {
@@ -257,6 +325,59 @@ describe('ChangesViewProvider', () => {
         const view = makeWebviewView();
         provider.resolveWebviewView(view);
         await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({ type: 'changes/statusData' })));
+    });
+
+    it('refresh uses runtime repository registry when current context is available', async () => {
+        const context = {
+            id: 'repo',
+            cwd: '/workspace',
+            kind: RepoKind.Main,
+            label: 'workspace',
+        } satisfies RepoContext;
+        const repo = makeRepo({
+            getStatus: vi.fn(async () => { throw new Error('legacy status should not run'); }),
+        });
+        const runtimeRegistry = new RepositoryRegistry();
+        runtimeRegistry.registerRepository(runtimeRepository({
+            listSubmodules: vi.fn(async () => [{ path: 'modules/runtime', status: '+' }]),
+            listBranches: vi.fn(async () => [
+                { name: 'runtime-branch', isRemote: false, isCurrent: true, hash: 'abc123', ahead: 0, behind: 0 },
+            ]),
+        }));
+        runtimeRegistry.registerWorktree(runtimeWorktree({
+            getStatus: vi.fn(async () => ({
+                staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'runtime.ts' }],
+                unstaged: [],
+                conflicts: [],
+                conflictState: 'none' as const,
+            })),
+            listStashes: vi.fn(async () => new Page([{ index: 0, message: 'runtime stash' }], false)),
+        }));
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/ext'),
+            makeAccessorWithContext(repo, context),
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry,
+        );
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+
+        await vi.waitFor(() => expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/statusData',
+            data: expect.objectContaining({
+                staged: [expect.objectContaining({ filePath: 'runtime.ts' })],
+                stashes: [expect.objectContaining({ message: 'runtime stash' })],
+                currentBranch: 'runtime-branch',
+            }),
+        })));
+        expect(repo.getStatus).not.toHaveBeenCalled();
     });
 
     it('posts refreshed status data while the retained webview is hidden', async () => {

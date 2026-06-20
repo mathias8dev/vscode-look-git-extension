@@ -106,6 +106,10 @@ export class RuntimeWorktree implements Worktree {
         return this.execute('unstageHunks', { hunks }, signal);
     }
 
+    getFileFromIndex(path: string, signal?: AbortSignal): Promise<string> {
+        return this.execute('getFileFromIndex', { path }, signal);
+    }
+
     discard(paths: readonly string[], signal?: AbortSignal): Promise<void> {
         return this.execute('discard', { paths }, signal);
     }
@@ -116,6 +120,18 @@ export class RuntimeWorktree implements Worktree {
 
     markResolved(paths: readonly string[], signal?: AbortSignal): Promise<void> {
         return this.execute('markResolved', { paths }, signal);
+    }
+
+    acceptOurs(paths: readonly string[], signal?: AbortSignal): Promise<void> {
+        return this.execute('acceptOurs', { paths }, signal);
+    }
+
+    acceptTheirs(paths: readonly string[], signal?: AbortSignal): Promise<void> {
+        return this.execute('acceptTheirs', { paths }, signal);
+    }
+
+    getFileAtRevision(path: string, revision: string, signal?: AbortSignal): Promise<string> {
+        return this.execute('getFileAtRevision', { path, revision }, signal);
     }
 
     getWorkingTreeDiff(paths: readonly string[], signal?: AbortSignal): Promise<string> {
@@ -172,6 +188,14 @@ export class RuntimeWorktree implements Worktree {
 
     listStashes(pageRequest: PageRequest, signal?: AbortSignal): Promise<Page<GitStash>> {
         return this.execute('listStashes', { pageRequest }, signal);
+    }
+
+    getStashFiles(stash: string, signal?: AbortSignal): Promise<readonly GitFileChange[]> {
+        return this.execute('getStashFiles', { stash }, signal);
+    }
+
+    getStashSummary(stash: string, signal?: AbortSignal): Promise<string> {
+        return this.execute('getStashSummary', { stash }, signal);
     }
 
     stash(message: string | undefined, options: StashOptions, signal?: AbortSignal): Promise<void> {

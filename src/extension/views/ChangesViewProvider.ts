@@ -11,10 +11,12 @@ import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backen
 import { ScopedGitRepository } from '../git/scoped-git-repository';
 import type { RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import type { GitRepository, GitStatus } from '../../application/ports/git-repository';
+import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
 import { OperationStatus } from '../../protocol/shared/operation';
 import { createErrorPayload, isAbortError } from '../messaging/errorSerialization';
 import { getWebviewHtml } from './webviewHtml';
 import { GetChangesStatusUseCase } from '../../application/usecases/changes/get-changes-status';
+import { GetRuntimeChangesStatusUseCase, type RuntimeChangesStatusResult } from '../../application/usecases/changes/get-runtime-changes-status';
 import { GenerateCommitMessageUseCase } from '../../application/usecases/changes/generate-commit-message';
 import { CreateChangesPatchResultKind, type CreateChangesPatchResult, type CreateChangesPatchUseCase } from '../../application/usecases/changes/create-changes-patch';
 import { ApplyPatchMode, ApplyPatchResultKind, ApplyPatchUseCase } from '../../application/usecases/changes/apply-patch';
@@ -22,7 +24,7 @@ import { ExplainSelectedChangesUseCase, type ExplainSelectedChangesInput } from 
 import { VscodeLanguageModelCommitMessageGenerator } from '../adapters/vscode/vscode-language-model-commit-message-generator';
 import { VscodeLanguageModelDiffExplainer } from '../adapters/vscode/vscode-language-model-diff-explainer';
 import { defaultCreateChangesPatch } from '../adapters/vscode/default-create-changes-patch';
-import { toSerializedRepoContext } from '../mapping/toProtocol';
+import { toRepositoryLocator, toSerializedRepoContext, toWorktreeLocator } from '../mapping/toProtocol';
 import { openDiffExplanationDocument, showDiffExplanationError } from '../utils/diff-explanation-document';
 import { notifyConflictsDetected } from '../utils/merge-editor';
 import { operationActionsForStatus } from '../utils/operation-feedback';
@@ -217,6 +219,8 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         private readonly createChangesPatch: CreateChangesPatchUseCase = defaultCreateChangesPatch,
         private readonly applyPatch = new ApplyPatchUseCase(),
         private readonly explainSelectedChanges = new ExplainSelectedChangesUseCase(new VscodeLanguageModelDiffExplainer()),
+        private readonly runtimeRepositories?: RepositoryRegistry,
+        private readonly getRuntimeChangesStatus = new GetRuntimeChangesStatusUseCase(),
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -230,7 +234,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
         this.router = new ChangesMessageRouter(this.repositories, (msg) => {
             webviewView.webview.postMessage(msg);
-        }, () => this.refresh(), this.onRepositoryUpdated, this.remoteCommands, this.generateCommitMessage);
+        }, () => this.refresh(), this.onRepositoryUpdated, this.remoteCommands, this.generateCommitMessage, this.runtimeRepositories);
 
         webviewView.webview.onDidReceiveMessage((msg: ChangesWebviewToExtensionMessage) => {
             if (msg.type === 'changes/contextTarget') {
@@ -675,7 +679,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     continue;
                 }
 
-                const { status, stashes, submodules, currentBranch } = await this.getChangesStatus.execute(repo, controller.signal);
+                const { status, stashes, submodules, currentBranch } = await this.loadChangesStatus(repo, controller.signal);
                 this.router?.setKnownSubmodulePaths(submodules.map((submodule) => submodule.path));
                 this.updateBadge(status.staged.length + status.unstaged.length + status.conflicts.length);
                 this.view.webview.postMessage(buildStatusData(status, stashes, submodules, currentBranch));
@@ -702,6 +706,22 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         if (this.view) {
             this.view.badge = { value: count, tooltip: `${count} change${count !== 1 ? 's' : ''}` };
         }
+    }
+
+    private async loadChangesStatus(repo: GitRepository, signal?: AbortSignal): Promise<RuntimeChangesStatusResult> {
+        const context = this.repositories.currentContext;
+        if (context && this.runtimeRepositories) {
+            try {
+                return await this.getRuntimeChangesStatus.execute(
+                    this.runtimeRepositories.resolveRepository(toRepositoryLocator(context)),
+                    this.runtimeRepositories.resolveWorktree(toWorktreeLocator(context)),
+                    signal,
+                );
+            } catch (error) {
+                signal?.throwIfAborted();
+            }
+        }
+        return await this.getChangesStatus.execute(repo, signal);
     }
 
     /** Called by RepoRegistry when the active repo changes. */
