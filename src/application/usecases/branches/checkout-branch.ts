@@ -1,32 +1,31 @@
-import type { GitRepository } from '../../ports/git-repository';
+import type { GitBranch } from '../../../core/git/domain/GitStatus';
 
 export interface CheckoutBranchInput {
     readonly branch: string;
     readonly isRemote: boolean;
 }
 
-export class CheckoutBranchUseCase {
-    async execute(repo: GitRepository, input: CheckoutBranchInput): Promise<void> {
-        if (!input.isRemote) {
-            await repo.checkout(input.branch);
-            return;
-        }
-
-        const trackingBranch = await localBranchTrackingRemote(repo, input.branch);
-        if (trackingBranch) {
-            await repo.checkout(trackingBranch);
-            return;
-        }
-
-        await repo.exec(['checkout', '--track', input.branch]);
-    }
+export interface CheckoutBranchDeps {
+    checkout(ref: string, options: { readonly detach?: boolean }): Promise<void>;
+    listBranches(): Promise<readonly GitBranch[]>;
 }
 
-async function localBranchTrackingRemote(repo: GitRepository, remoteBranch: string): Promise<string | undefined> {
-    const output = await repo.execRaw(['for-each-ref', '--format=%(refname:short)%00%(upstream:short)', 'refs/heads']);
-    for (const line of output.split('\n')) {
-        const [branch, upstream] = line.split('\0');
-        if (branch && upstream === remoteBranch) { return branch; }
+export class CheckoutBranchUseCase {
+    async execute(deps: CheckoutBranchDeps, input: CheckoutBranchInput): Promise<void> {
+        if (!input.isRemote) {
+            await deps.checkout(input.branch, {});
+            return;
+        }
+
+        const branches = await deps.listBranches();
+        const trackingBranch = branches.find(
+            (b) => !b.isRemote && b.upstream === input.branch,
+        );
+        if (trackingBranch) {
+            await deps.checkout(trackingBranch.name, {});
+            return;
+        }
+
+        await deps.checkout(input.branch, {});
     }
-    return undefined;
 }

@@ -42,9 +42,11 @@ export async function queryCommitLog(
     ref?: string,
     pathFilter?: string,
     signal?: AbortSignal,
+    extraArgs?: readonly string[],
 ): Promise<GitCommit[]> {
     const format = ['%H', '%h', '%s', '%an', '%ae', '%aI', '%P'].join(LOG_FIELD_SEP) + LOG_RECORD_SEP;
     const args = ['log', `--format=${format}`, `--max-count=${limit}`, `--skip=${skip}`];
+    if (extraArgs) { args.push(...extraArgs); }
     if (ref) { args.push(ref); }
     if (pathFilter) { args.push('--', pathFilter); }
     let output: string;

@@ -7,9 +7,7 @@ import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush, Chan
 import { CommitMode, type ChangesContextTarget } from '../../protocol/changes/types';
 import type { RepoContext } from '../../core/git/domain/RepoContext';
 import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '../messaging/ChangesMessageRouter';
-import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
 import { ScopedGitRepository } from '../git/scoped-git-repository';
-import type { RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import type { GitRepository, GitStatus } from '../../application/ports/git-repository';
 import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
 import { OperationStatus } from '../../protocol/shared/operation';
@@ -213,7 +211,6 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         private readonly extensionUri: vscode.Uri,
         private readonly repositories: ActiveRepositoryAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
-        private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
         private readonly getChangesStatus = new GetChangesStatusUseCase(),
         private readonly generateCommitMessage = new GenerateCommitMessageUseCase(new VscodeLanguageModelCommitMessageGenerator()),
         private readonly createChangesPatch: CreateChangesPatchUseCase = defaultCreateChangesPatch,
@@ -234,7 +231,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
         this.router = new ChangesMessageRouter(this.repositories, (msg) => {
             webviewView.webview.postMessage(msg);
-        }, () => this.refresh(), this.onRepositoryUpdated, this.remoteCommands, this.generateCommitMessage, this.runtimeRepositories);
+        }, () => this.refresh(), this.onRepositoryUpdated, this.generateCommitMessage, this.runtimeRepositories);
 
         webviewView.webview.onDidReceiveMessage((msg: ChangesWebviewToExtensionMessage) => {
             if (msg.type === 'changes/contextTarget') {
@@ -717,7 +714,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     this.runtimeRepositories.resolveWorktree(toWorktreeLocator(context)),
                     signal,
                 );
-            } catch (error) {
+            } catch {
                 signal?.throwIfAborted();
             }
         }

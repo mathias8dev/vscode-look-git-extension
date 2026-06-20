@@ -108,6 +108,8 @@ export interface GitHistoryOperations {
     searchCommits(query: CommitGraphQuery, pageRequest: PageRequest, signal?: AbortSignal): Promise<Page<GitCommit>>;
     getMergeBase(leftRef: string, rightRef: string, signal?: AbortSignal): Promise<string>;
     getAheadBehind(localRef: string, upstreamRef: string, signal?: AbortSignal): Promise<{ readonly ahead: number; readonly behind: number }>;
+    getReachableCommitHashes(hashes: readonly string[], signal?: AbortSignal): Promise<ReadonlySet<string>>;
+    orderCommits(hashes: readonly string[], direction: 'newestFirst' | 'oldestFirst', signal?: AbortSignal): Promise<readonly string[]>;
 }
 
 export interface GitFileHistoryOperations {
@@ -137,12 +139,15 @@ export interface GitReferenceOperations {
     listTags(signal?: AbortSignal): Promise<readonly GitTag[]>;
     listRemotes(signal?: AbortSignal): Promise<readonly string[]>;
     resolveRef(ref: string, signal?: AbortSignal): Promise<string>;
+    getUserName(signal?: AbortSignal): Promise<string>;
+    getUpstreamBranch(branch: string, signal?: AbortSignal): Promise<string | undefined>;
 }
 
 export interface GitBranchOperations {
     createBranch(name: string, startPoint: string | undefined, signal?: AbortSignal): Promise<void>;
     renameBranch(oldName: string, newName: string, signal?: AbortSignal): Promise<void>;
     deleteBranch(name: string, force: boolean, signal?: AbortSignal): Promise<void>;
+    deleteRemoteBranch(remote: string, branch: string, signal?: AbortSignal): Promise<void>;
     setUpstream(branch: string, upstream: string, signal?: AbortSignal): Promise<void>;
 }
 
@@ -164,9 +169,12 @@ export interface GitFetchOperations {
 export interface GitWorktreeTopologyOperations {
     listWorktrees(signal?: AbortSignal): Promise<readonly GitWorktree[]>;
     addWorktree(input: AddWorktreeInput, signal?: AbortSignal): Promise<void>;
+    addDetachedWorktree(path: string, ref: string, signal?: AbortSignal): Promise<void>;
     removeWorktree(worktree: string, force: boolean, signal?: AbortSignal): Promise<void>;
     pruneWorktrees(signal?: AbortSignal): Promise<void>;
     repairWorktree(worktree: string, signal?: AbortSignal): Promise<void>;
+    lockWorktree(worktree: string, signal?: AbortSignal): Promise<void>;
+    unlockWorktree(worktree: string, signal?: AbortSignal): Promise<void>;
 }
 
 export interface GitSubmoduleOperations {
@@ -283,6 +291,7 @@ export interface GitResetUndoOperations {
     resetSoft(ref: string, signal?: AbortSignal): Promise<void>;
     resetMixed(ref: string, signal?: AbortSignal): Promise<void>;
     resetHard(ref: string, signal?: AbortSignal): Promise<void>;
+    resetKeep(ref: string, signal?: AbortSignal): Promise<void>;
     resetPaths(paths: readonly string[], sourceRef: string | undefined, signal?: AbortSignal): Promise<void>;
     undoLastCommit(mode: ResetMode, signal?: AbortSignal): Promise<void>;
     undoAmend(previousHead: string, signal?: AbortSignal): Promise<void>;
@@ -301,6 +310,7 @@ export interface GitPullPushOperations {
     pull(options: PullOptions, signal?: AbortSignal): Promise<void>;
     push(remote: string | undefined, options: PushOptions, signal?: AbortSignal): Promise<void>;
     pushBranch(remote: string, branch: string, options: PushOptions, signal?: AbortSignal): Promise<void>;
+    pushRef(remote: string, sourceRef: string, destinationRef: string, options: PushOptions, signal?: AbortSignal): Promise<void>;
     pushTags(remote: string, options: PushOptions, signal?: AbortSignal): Promise<void>;
     forcePushWithLease(remote: string, branch: string, signal?: AbortSignal): Promise<void>;
 }

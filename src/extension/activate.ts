@@ -4,7 +4,6 @@ import { ActiveRepositoryRegistry } from './repositories/ActiveRepositoryRegistr
 import { ChangesViewProvider } from './views/ChangesViewProvider';
 import { CommitHistoryViewProvider } from './views/CommitHistoryViewProvider';
 import { GraphViewProvider } from './views/GraphViewProvider';
-import { defaultRemoteCommandBackend } from './git/hybrid-remote-command-backend';
 import { getBuiltInGitApi } from './utils/gitExtension';
 import { registerReadonlyDiffDocumentProvider } from './utils/readonly-diff-documents';
 import { registerGitBlobDocumentProvider } from './utils/git-blob-documents';
@@ -26,14 +25,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const repositories = new ActiveRepositoryRegistry();
     const runtimeRepositories = new RepositoryRegistry();
     const repositoryResolver = new GitRootRepositoryResolver(repositories);
-    const remoteCommands = defaultRemoteCommandBackend;
     const graphRepositoryRefreshers: Array<() => Promise<void>> = [];
     const graphProvider = new GraphViewProvider(context.extensionUri, repositories, async () => {
         await Promise.all(graphRepositoryRefreshers.map((refresh) => refresh()));
-    }, remoteCommands, context.globalStorageUri, runtimeRepositories);
+    }, context.globalStorageUri, runtimeRepositories);
     const refreshGraph = () => graphProvider.refresh();
-    const changesProvider = new ChangesViewProvider(context.extensionUri, repositories, refreshGraph, remoteCommands, undefined, undefined, undefined, undefined, undefined, runtimeRepositories);
-    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshGraph, remoteCommands, repositoryResolver, context.globalStorageUri, runtimeRepositories);
+    const changesProvider = new ChangesViewProvider(context.extensionUri, repositories, refreshGraph, undefined, undefined, undefined, undefined, undefined, runtimeRepositories);
+    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshGraph, repositoryResolver, context.globalStorageUri, runtimeRepositories);
     graphRepositoryRefreshers.push(() => changesProvider.refresh(), () => commitHistoryProvider.refresh());
 
     context.subscriptions.push(

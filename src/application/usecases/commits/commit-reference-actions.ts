@@ -1,4 +1,4 @@
-import type { GitRepository } from '../../ports/git-repository';
+import type { GitBranchOperations, GitTagOperations } from '../../ports/git-capabilities';
 import type { ClipboardPort } from '../../ports/clipboard';
 import { TextInputValidationSeverity, type TextInputPort, type TextInputValidationMessage } from '../../ports/text-input';
 import {
@@ -6,6 +6,8 @@ import {
     branchNameInputValidation,
     normalizeValidBranchNameInput,
 } from '../../../core/git/normalize-branch-name';
+
+type CommitReferenceRepository = Pick<GitBranchOperations, 'createBranch'> & Pick<GitTagOperations, 'createTag'>;
 
 export class CommitReferenceActions {
     constructor(
@@ -17,20 +19,20 @@ export class CommitReferenceActions {
         await this.clipboard.writeText(hash);
     }
 
-    async createBranchAtCommit(repo: GitRepository, hash: string): Promise<boolean> {
+    async createBranchAtCommit(repo: CommitReferenceRepository, hash: string): Promise<boolean> {
         const name = normalizeValidBranchNameInput(await this.textInput.showInput({
             prompt: 'New branch name:',
             validateInput: branchNameValidationMessage,
         }));
         if (!name) { return false; }
-        await repo.exec(['branch', name, hash]);
+        await repo.createBranch(name, hash);
         return true;
     }
 
-    async createTagAtCommit(repo: GitRepository, hash: string): Promise<boolean> {
+    async createTagAtCommit(repo: CommitReferenceRepository, hash: string): Promise<boolean> {
         const name = await this.textInput.showInput({ prompt: 'New tag name:' });
         if (!name?.trim()) { return false; }
-        await repo.exec(['tag', name, hash]);
+        await repo.createTag(name, hash, undefined);
         return true;
     }
 }

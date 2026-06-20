@@ -272,6 +272,48 @@ describe('CliGitRuntime', () => {
         ]);
     });
 
+    it('maps detached worktree, keep reset, and ref push operations to git invocation args', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(recordingProcess(calls));
+
+        await runtime.execute('addDetachedWorktree', context, { path: '/tmp/revision', ref: 'abc123' });
+        await runtime.execute('resetKeep', context, 'abc123');
+        await runtime.execute('pushRef', context, { remote: 'origin', sourceRef: 'abc123', destinationRef: 'refs/heads/main' });
+
+        expect(calls).toEqual([
+            ['worktree', 'add', '--detach', '/tmp/revision', 'abc123'],
+            ['reset', '--keep', 'abc123'],
+            ['push', 'origin', 'abc123:refs/heads/main'],
+        ]);
+    });
+
+    it('executes fixup commits as a semantic runtime operation with scoped editor environment', async () => {
+        const calls: { readonly args: readonly string[]; readonly env?: Readonly<Record<string, string>> }[] = [];
+        const runtime = new CliGitRuntime(async (args, _context, options) => {
+            calls.push({ args: [...args], env: options.env });
+            if (args.join(' ') === 'diff --cached --name-only') { return 'src/app.ts\n'; }
+            if (args.join(' ') === 'diff --name-only') { return ''; }
+            if (args.join(' ') === 'show -s --format=%P abc123') { return 'parent123\n'; }
+            if (args.join(' ') === 'rev-parse --abbrev-ref HEAD') { return 'main\n'; }
+            return '';
+        });
+
+        await runtime.execute('fixupCommits', context, { commits: ['abc123'] });
+
+        expect(calls.map((call) => call.args)).toEqual([
+            ['diff', '--cached', '--name-only'],
+            ['diff', '--name-only'],
+            ['show', '-s', '--format=%P', 'abc123'],
+            ['commit', '--fixup', 'abc123', '--no-edit'],
+            ['rev-parse', '--abbrev-ref', 'HEAD'],
+            ['rebase', '--autosquash', '--autostash', 'parent123', 'main'],
+        ]);
+        expect(calls.at(-1)?.env).toEqual({
+            GIT_SEQUENCE_EDITOR: 'true',
+            GIT_EDITOR: 'true',
+        });
+    });
+
     it('throws for unsupported semantic actions', async () => {
         const runtime = new CliGitRuntime(recordingProcess([]));
 

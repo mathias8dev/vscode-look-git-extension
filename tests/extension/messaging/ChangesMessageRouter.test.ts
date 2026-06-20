@@ -30,7 +30,6 @@ describe('ChangesMessageRouter', () => {
             refresh,
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
 
@@ -56,7 +55,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
 
@@ -80,7 +78,6 @@ describe('ChangesMessageRouter', () => {
             () => {},
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -116,7 +113,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
 
@@ -143,13 +139,13 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
 
         await router.handle({ type: 'changes/discardFiles', filePaths: ['a.ts', 'b.ts'] });
 
-        expect(runtimeWorktree.discard).toHaveBeenCalledWith(['a.ts', 'b.ts']);
+        expect(runtimeWorktree.discard).toHaveBeenCalledWith(['a.ts']);
+        expect(runtimeWorktree.discard).toHaveBeenCalledWith(['b.ts']);
         expect(legacyDiscardFile).not.toHaveBeenCalled();
     });
 
@@ -168,7 +164,6 @@ describe('ChangesMessageRouter', () => {
             (message) => { messages.push(message); },
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -195,7 +190,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
 
@@ -220,7 +214,6 @@ describe('ChangesMessageRouter', () => {
             (message) => { messages.push(message); },
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -251,7 +244,6 @@ describe('ChangesMessageRouter', () => {
             () => {},
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -285,7 +277,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
 
@@ -310,7 +301,6 @@ describe('ChangesMessageRouter', () => {
             () => {},
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -339,7 +329,6 @@ describe('ChangesMessageRouter', () => {
             () => {},
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -373,7 +362,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
 
@@ -404,7 +392,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
         router.setKnownSubmodulePaths(['modules/lib']);
@@ -428,7 +415,6 @@ describe('ChangesMessageRouter', () => {
             () => {},
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -456,7 +442,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
         router.setKnownSubmodulePaths(['modules/lib']);
@@ -481,7 +466,6 @@ describe('ChangesMessageRouter', () => {
             () => {},
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -520,7 +504,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
         router.setKnownSubmodulePaths(['modules/lib']);
@@ -554,7 +537,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
         router.setKnownSubmodulePaths(['modules/lib']);
@@ -582,6 +564,7 @@ describe('ChangesMessageRouter', () => {
         const repo = makeRepositoryMock({ exec: legacyExec, execRaw: legacyExecRaw });
         const runtimeRegistry = new RepositoryRegistry();
         const runtimeWorktree = submoduleWorktreeModel('modules/lib', {
+            branch: 'feature/submodule',
             getStatus: vi.fn(async () => ({
                 staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'src/staged.ts' }],
                 unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/unstaged.ts' }],
@@ -600,7 +583,6 @@ describe('ChangesMessageRouter', () => {
             (message) => { messages.push(message); },
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -648,7 +630,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
         router.setKnownSubmodulePaths(['modules/lib']);
@@ -685,7 +666,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
         router.setKnownSubmodulePaths(['modules/lib']);
@@ -712,7 +692,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
         router.setKnownSubmodulePaths(['modules/lib']);
@@ -738,7 +717,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
         router.setKnownSubmodulePaths(['modules/lib']);
@@ -761,6 +739,10 @@ describe('ChangesMessageRouter', () => {
         const runtimeWorktree = worktreeModel({
             checkout: vi.fn(async () => {}),
         });
+        const runtimeRepository = repositoryModel({
+            listBranches: vi.fn(async () => [{ name: 'feature/ui', isCurrent: false, hash: 'abc123', ahead: 0, behind: 0, isRemote: false }]),
+        });
+        runtimeRegistry.registerRepository(runtimeRepository);
         runtimeRegistry.registerWorktree(runtimeWorktree);
         const refresh = vi.fn(async () => {});
         const router = new ChangesMessageRouter(
@@ -768,7 +750,6 @@ describe('ChangesMessageRouter', () => {
             () => {},
             refresh,
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -799,7 +780,6 @@ describe('ChangesMessageRouter', () => {
             () => {},
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -836,7 +816,6 @@ describe('ChangesMessageRouter', () => {
             () => {},
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -876,7 +855,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
 
@@ -910,7 +888,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
 
@@ -940,7 +917,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
 
@@ -965,7 +941,6 @@ describe('ChangesMessageRouter', () => {
             () => {},
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -995,7 +970,6 @@ describe('ChangesMessageRouter', () => {
             () => {},
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -1028,7 +1002,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
 
@@ -1057,7 +1030,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
 
@@ -1085,7 +1057,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
 
@@ -1096,7 +1067,7 @@ describe('ChangesMessageRouter', () => {
         expect(legacyGetAllTags).not.toHaveBeenCalled();
     });
 
-    it('does not use the active runtime worktree for scoped submodule toolbar commands', async () => {
+    it('requires a scoped runtime worktree for scoped submodule toolbar commands', async () => {
         const exec = vi.fn(async () => '');
         const repo = makeRepositoryMock({ exec });
         const context = repoContext();
@@ -1105,12 +1076,12 @@ describe('ChangesMessageRouter', () => {
             stash: vi.fn(async () => {}),
         });
         runtimeRegistry.registerWorktree(runtimeWorktree);
+        const messages: ChangesExtensionToWebviewMessage[] = [];
         const router = new ChangesMessageRouter(
             makeAccessor(repo, context),
-            () => {},
+            (message) => { messages.push(message); },
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -1119,7 +1090,11 @@ describe('ChangesMessageRouter', () => {
         await router.handle({ type: 'changes/submoduleToolbarCommand', submodulePath: 'modules/lib', command: 'stash' });
 
         expect(runtimeWorktree.stash).not.toHaveBeenCalled();
-        expect(exec).toHaveBeenCalledWith(['-C', 'modules/lib', 'stash', 'push'], undefined);
+        expect(exec).not.toHaveBeenCalled();
+        expect(messages).toContainEqual(expect.objectContaining({
+            type: 'changes/error',
+            message: 'Runtime Worktree is required for this git operation.',
+        }));
     });
 
     it('uses runtime submodule worktree capabilities for submodule toolbar commands', async () => {
@@ -1135,7 +1110,6 @@ describe('ChangesMessageRouter', () => {
             () => {},
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -1161,7 +1135,6 @@ describe('ChangesMessageRouter', () => {
             () => {},
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -1192,7 +1165,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
         router.setKnownSubmodulePaths(['modules/lib']);
@@ -1218,7 +1190,6 @@ describe('ChangesMessageRouter', () => {
             (message) => { messages.push(message); },
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -1252,7 +1223,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
         router.setKnownSubmodulePaths(['modules/lib']);
@@ -1279,7 +1249,6 @@ describe('ChangesMessageRouter', () => {
             () => {},
             vi.fn(async () => {}),
             async () => {},
-            undefined,
             undefined,
             runtimeRegistry,
         );
@@ -1309,7 +1278,6 @@ describe('ChangesMessageRouter', () => {
             vi.fn(async () => {}),
             async () => {},
             undefined,
-            undefined,
             runtimeRegistry,
         );
         router.setKnownSubmodulePaths(['modules/lib']);
@@ -1329,15 +1297,22 @@ describe('ChangesMessageRouter', () => {
                 'Please commit your changes or stash them before you merge.',
             ].join('\n'),
         });
-        const repo = makeRepositoryMock({
-            stashPop: vi.fn(async () => { throw gitError; }),
+        const repo = makeRepositoryMock();
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeWorktree = worktreeModel({
+            popStash: vi.fn(async () => { throw gitError; }),
         });
+        runtimeRegistry.registerWorktree(runtimeWorktree);
         const messages: ChangesExtensionToWebviewMessage[] = [];
         const refresh = vi.fn(async () => {});
         const router = new ChangesMessageRouter(
-            makeRepositoryAccessor(repo),
+            makeAccessor(repo, context),
             (message) => { messages.push(message); },
             refresh,
+            async () => {},
+            undefined,
+            runtimeRegistry,
         );
 
         await router.handle({ type: 'changes/toolbarCommand', command: 'popLatestStash' });

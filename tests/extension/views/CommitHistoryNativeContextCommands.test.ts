@@ -9,7 +9,6 @@ import { CommitHistoryViewProvider } from '../../../src/extension/views/CommitHi
 import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
 import { registerGitBlobDocumentProvider } from '../../../src/extension/utils/git-blob-documents';
 import { createBareGitRepo, createSubmoduleFixture, createTempGitRepo, removeDirSyncWithRetry, type TempGitRepo } from '../../helpers/gitRepo';
-import { executingRemoteCommandBackend } from '../../helpers/executing-remote-command-backend';
 import { makeWebviewView, resetVscodeMock, type MockWebviewView } from '../../helpers/providerRuntime';
 import { makeRepositoryAccessor } from '../../helpers/repositoryMock';
 import { env, getCommandCalls, lm, setInputBoxValue, setInputBoxValues, setQuickPickValue, setWarningChoice, window, workspace } from '../../mocks/vscode';
@@ -279,7 +278,7 @@ describe('CommitHistoryViewProvider native context command semantics', () => {
 
     async function createHistoryHarness(cwd: string): Promise<{ readonly view: MockWebviewView }> {
         const repo = new GitProcessRepository(cwd);
-        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo), async () => {}, executingRemoteCommandBackend, undefined, vscode.Uri.file('/storage'));
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/ext'), makeRepositoryAccessor(repo), async () => {}, undefined, vscode.Uri.file('/storage'));
         const view = makeWebviewView();
 
         disposables.push(registerReadonlyDiffDocumentProvider());

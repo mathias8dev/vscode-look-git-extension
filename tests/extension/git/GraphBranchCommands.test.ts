@@ -7,7 +7,6 @@ import type { GraphExtensionToWebviewMessage } from '../../../src/protocol/graph
 import { OperationNoticeActionKind, OperationStatus } from '../../../src/protocol/shared/operation';
 import { makeRepositoryAccessor } from '../../helpers/repositoryMock';
 import { createBareGitRepo, createTempGitRepo, type TempGitRepo } from '../../helpers/gitRepo';
-import { executingRemoteCommandBackend } from '../../helpers/executing-remote-command-backend';
 import {
     InputBoxValidationSeverity,
     commands,
@@ -438,5 +437,5 @@ function routerFor(
     onRepositoryUpdated: () => Promise<void> = async () => {},
 ): GraphMessageRouter {
     const repo = new GitProcessRepository(cwd);
-    return new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); }, onRepositoryUpdated, executingRemoteCommandBackend);
+    return new GraphMessageRouter(makeRepositoryAccessor(repo), (message) => { messages.push(message); }, onRepositoryUpdated);
 }

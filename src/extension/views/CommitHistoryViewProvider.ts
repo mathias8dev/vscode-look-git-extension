@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import type { GitBranch, GitCommit, GitFileChange, GitRepository, GitTag } from '../../application/ports/git-repository';
-import type { GitRepository as RuntimeGitRepository } from '../../application/ports/git-topology';
+import type { GitRepository as LegacyGitRepository } from '../../application/ports/git-repository';
+import type { GitCommit, GitFileChange } from '../../core/git/domain/GitCommit';
+import type { GitBranch, GitTag } from '../../core/git/domain/GitStatus';
+import type { GitRepository, Worktree } from '../../application/ports/git-topology';
 import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
 import type { ErrorCode, Pagination, RequestId } from '../../protocol/shared/base';
 import { OperationStatus } from '../../protocol/shared/operation';
@@ -12,14 +14,12 @@ import type { HistoryCommitDetailsRequest, HistoryDataRequest, HistoryExtensionT
 import { runCommitCommand } from '../commands/commit-commands';
 import { createErrorPayload } from '../messaging/errorSerialization';
 import { appendErrorToOutput, showErrorOutput } from '../messaging/errorOutputChannel';
-import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
-import { VscodeRemoteCommand, type RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { getWebviewHtml } from './webviewHtml';
 import { toRepositoryLocator, toSerializedRepoContext, toWorktreeLocator } from '../mapping/toProtocol';
 import { webviewFontSizeMessage } from './webview-font';
 import { operationActionsForStatus } from '../utils/operation-feedback';
-import { ScopedGitRepository } from '../git/scoped-git-repository';
 import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
+import { stableRepoContextId } from '../repositories/repo-context-id';
 import { getReachableCommitHashes } from '../../application/usecases/commits/get-reachable-commit-hashes';
 import { openCommitGitlinkDiff } from '../utils/gitlink-diff';
 import { commitFileTempDiffUris } from '../utils/diff-uris';
@@ -72,7 +72,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private view?: vscode.WebviewView;
     private contextTarget?: HistoryContextTarget;
-    private contextRepository?: GitRepository;
+    private contextRepository?: LegacyGitRepository;
     private selectedHistoryRef: string | undefined;
     private selectedRepositoryScope: HistoryRepositoryScope | undefined;
     private refCache?: HistoryRefCache;
@@ -82,7 +82,6 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         private readonly extensionUri: vscode.Uri,
         private readonly repositories: ActiveRepositoryAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
-        private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
         private readonly repositoryResolver: GitRepositoryResolver = activeRepositoryOnlyResolver(repositories),
         private readonly storageUri?: vscode.Uri,
         private readonly runtimeRepositories?: RepositoryRegistry,
@@ -175,7 +174,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private async loadHistoryPage(page: Pagination): Promise<HistoryData> {
         const normalizedPage = normalizePage(page);
-        const repo = this.currentHistoryRepository();
+        const repo = this.currentRuntimeRepository();
         if (!repo) {
             return {
                 commits: [],
@@ -186,7 +185,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
         return loadHistoryPageFor(repo, normalizedPage, {
             selectedHistoryRef: this.selectedHistoryRef,
-            loadRefs: (historyRepo) => this.loadRefs(historyRepo),
+            loadRefs: () => this.loadRefs(repo),
         });
     }
 
@@ -202,21 +201,21 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 await this.goToCurrentHistoryItem();
                 return;
             case 'fetchAll':
-                await this.runVscodeGitToolbarOperation('fetchAll', VscodeRemoteCommand.FetchAll, uri);
+                await this.runRuntimeGitToolbarOperation('fetchAll', uri);
                 return;
             case 'pull':
-                await this.runVscodeGitToolbarOperation('pull', VscodeRemoteCommand.Pull, uri);
+                await this.runRuntimeGitToolbarOperation('pull', uri);
                 return;
             case 'push':
-                await this.runVscodeGitToolbarOperation('push', VscodeRemoteCommand.Push, uri);
+                await this.runRuntimeGitToolbarOperation('push', uri);
                 return;
         }
     }
 
     private async selectHistoryBranch(): Promise<void> {
         try {
-            const repo = this.requireHistoryRepository();
-            const branches = await this.listHistoryBranches(repo);
+            const repo = this.requireRuntimeRepository();
+            const branches = await repo.listBranches();
             const branchNames = branches.map((branch) => branch.name);
             const selected = await vscode.window.showQuickPick(['Current Branch', ...branchNames], {
                 placeHolder: 'Select history branch',
@@ -231,11 +230,8 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private async goToCurrentHistoryItem(): Promise<void> {
         try {
-            const repo = this.requireHistoryRepository();
-            const runtimeRepository = this.runtimeTargetsForHistoryScope().repository;
-            const hash = runtimeRepository
-                ? await runtimeRepository.resolveRef('HEAD')
-                : await repo.exec(['rev-parse', 'HEAD']);
+            const repo = this.requireRuntimeRepository();
+            const hash = await repo.resolveRef('HEAD');
             this.selectedHistoryRef = undefined;
             await this.refresh();
             this.postMessage({ type: 'history/selectCommit', hash });
@@ -244,21 +240,31 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async runVscodeGitToolbarOperation(operation: 'fetchAll' | 'pull' | 'push', command: VscodeRemoteCommand, uri?: vscode.Uri): Promise<void> {
+    private async runRuntimeGitToolbarOperation(operation: 'fetchAll' | 'pull' | 'push', uri?: vscode.Uri): Promise<void> {
         const operationId = this.nextOperationId();
         const nativeFileContext = uri !== undefined;
         try {
-            const repo = uri ? await this.repositoryForFileContext(uri) : this.requireHistoryRepository();
-            const existingConflicts = operation === 'pull' ? await conflictFileSet(repo) : undefined;
+            const legacyRepo = uri ? await this.repositoryForFileContext(uri) : this.requireLegacyRepository();
+            const runtimeRepository = this.requireRuntimeRepositoryForLegacyRepository(legacyRepo);
+            const existingConflicts = operation === 'pull' ? await conflictFileSet(legacyRepo) : undefined;
             if (!nativeFileContext) {
                 this.postHistoryOperation({ operationId, status: OperationStatus.Running, command: operation });
             }
-            await this.remoteCommands.runVscode(repo, command);
+            if (operation === 'fetchAll') {
+                await runtimeRepository.fetchAll({});
+            } else {
+                const runtimeWorktree = this.requireRuntimeWorktreeForLegacyRepository(legacyRepo);
+                if (operation === 'pull') {
+                    await runtimeWorktree.pull({});
+                } else {
+                    await runtimeWorktree.push(undefined, {});
+                }
+            }
             await Promise.all([
                 this.onRepositoryUpdated(),
                 this.refresh(),
             ]);
-            if (existingConflicts && await hasNewConflicts(repo, existingConflicts)) {
+            if (existingConflicts && await hasNewConflicts(legacyRepo, existingConflicts)) {
                 if (nativeFileContext) {
                     await vscode.window.showWarningMessage(`${historyOperationLabel(operation)} stopped with conflicts.`);
                 } else {
@@ -273,8 +279,8 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             if (operation === 'pull') {
                 try {
                     await Promise.all([this.onRepositoryUpdated(), this.refresh()]);
-                    const repo = uri ? await this.repositoryForFileContext(uri) : this.requireHistoryRepository();
-                    if (await hasAnyConflicts(repo)) {
+                    const legacyRepo = uri ? await this.repositoryForFileContext(uri) : this.requireLegacyRepository();
+                    if (await hasAnyConflicts(legacyRepo)) {
                         if (nativeFileContext) {
                             await vscode.window.showWarningMessage('Pull stopped with conflicts.');
                         } else {
@@ -308,18 +314,12 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private async loadRefs(repo: GitRepository): Promise<HistoryRefCache> {
         if (this.refCache) { return this.refCache; }
-        const runtimeRepository = this.runtimeTargetsForHistoryScope().repository;
         const [branches, tags] = await Promise.all([
-            runtimeRepository ? runtimeRepository.listBranches() : repo.getAllBranches(),
-            runtimeRepository ? runtimeRepository.listTags() : repo.getAllTags(),
+            repo.listBranches(),
+            repo.listTags(),
         ]);
         this.refCache = { branches, tags };
         return this.refCache;
-    }
-
-    private async listHistoryBranches(repo: GitRepository): Promise<readonly GitBranch[]> {
-        const runtimeRepository = this.runtimeTargetsForHistoryScope().repository;
-        return runtimeRepository ? runtimeRepository.listBranches() : repo.getAllBranches();
     }
 
     private applyFileViewMode(mode: 'list' | 'tree'): void {
@@ -342,14 +342,14 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async loadCommitDetails(hash: string): Promise<HistoryCommitDetails> {
-        const repo = this.currentHistoryRepository();
+        const repo = this.currentRuntimeRepository();
         if (!repo) { throw new Error('No active Git repository.'); }
         return loadCommitDetails(repo, hash);
     }
 
     private async handleOpenDiff(message: HistoryOpenDiffRequest): Promise<void> {
         try {
-            await openHistoryDiff(this.requireHistoryRepository(), message);
+            await openHistoryDiff(this.requireLegacyRepository(), message);
         } catch (error) {
             this.postHistoryError(error, 'history/openDiff', 'vscodeCommandFailed');
         }
@@ -361,9 +361,11 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             if (!targetUri) { throw new Error('No file is selected.'); }
             if (targetUri.scheme !== 'file') { throw new Error('File history is only available for local files.'); }
 
-            const repo = await this.repositoryForFileContext(targetUri);
-            const relativePath = repoRelativePath(repo.cwd, targetUri.fsPath);
-            await this.openFileHistoryPanel(repo, relativePath);
+            const legacyRepo = await this.repositoryForFileContext(targetUri);
+            const runtimeRepo = this.runtimeRepositoryForLegacyRepository(legacyRepo);
+            if (!runtimeRepo) { throw new Error('No runtime repository available.'); }
+            const relativePath = repoRelativePath(runtimeRepo.cwd, targetUri.fsPath);
+            await this.openFileHistoryPanel(legacyRepo, runtimeRepo, relativePath);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             await vscode.window.showErrorMessage(message);
@@ -380,9 +382,11 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             const selection = selectionLineRange(editor.selection);
             if (!selection) { throw new Error('Select one or more lines to show selection history.'); }
 
-            const repo = await this.repositoryForFileContext(targetUri);
-            const relativePath = repoRelativePath(repo.cwd, targetUri.fsPath);
-            await this.openFileHistoryPanel(repo, relativePath, selection);
+            const legacyRepo = await this.repositoryForFileContext(targetUri);
+            const runtimeRepo = this.runtimeRepositoryForLegacyRepository(legacyRepo);
+            if (!runtimeRepo) { throw new Error('No runtime repository available.'); }
+            const relativePath = repoRelativePath(runtimeRepo.cwd, targetUri.fsPath);
+            await this.openFileHistoryPanel(legacyRepo, runtimeRepo, relativePath, selection);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             await vscode.window.showErrorMessage(message);
@@ -390,7 +394,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async openFileHistoryPanel(repo: GitRepository, pathFilter: string, lineRange?: LineRange): Promise<void> {
+    private async openFileHistoryPanel(legacyRepo: LegacyGitRepository, runtimeRepo: GitRepository, pathFilter: string, lineRange?: LineRange): Promise<void> {
         const panel = vscode.window.createWebviewPanel(
             'lookGit.fileHistory',
             lineRange
@@ -405,13 +409,13 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         new FileHistoryPanelController(
             panel,
             this.extensionUri,
-            repo,
-            this.runtimeRepositoryForRepository(repo),
+            legacyRepo,
+            runtimeRepo,
             pathFilter,
             lineRange,
             (target) => {
                 this.contextTarget = target;
-                this.contextRepository = repo;
+                this.contextRepository = legacyRepo;
             },
         );
         await vscode.commands.executeCommand('workbench.action.moveEditorToNewWindow');
@@ -437,13 +441,12 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         }
 
         try {
-            const repo = this.contextRepository ?? this.requireHistoryRepository();
+            const repo = this.contextRepository ?? this.requireLegacyRepository();
             const shouldRefresh = await runCommitCommand(
                 repo,
                 command,
                 target.hash,
                 target.hashes,
-                this.remoteCommands,
                 undefined,
                 undefined,
                 undefined,
@@ -491,7 +494,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             isSubmodule: target.file.isSubmodule,
         } satisfies HistoryOpenDiffRequest;
         try {
-            await openHistoryDiff(this.contextRepository ?? this.requireHistoryRepository(), message);
+            await openHistoryDiff(this.contextRepository ?? this.requireLegacyRepository(), message);
         } catch (error) {
             this.postHistoryError(error, 'history/openFileDiff', 'vscodeCommandFailed');
         }
@@ -545,17 +548,34 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         webviewView.webview.html = getWebviewHtml(webviewView.webview, this.extensionUri, 'history');
     }
 
-    private currentHistoryRepository(): GitRepository | undefined {
-        const repo = this.repositories.currentRepository;
-        if (!repo) { return undefined; }
-        return this.repositoryForHistoryScope(repo);
+    private currentRuntimeRepository(): GitRepository | undefined {
+        const context = this.repositories.currentContext;
+        if (!context || !this.runtimeRepositories) { return undefined; }
+        try {
+            if (this.selectedRepositoryScope) {
+                return this.resolveSubmoduleRuntimeRepository(context, this.selectedRepositoryScope.path);
+            }
+            return this.runtimeRepositories.resolveRepository(toRepositoryLocator(context));
+        } catch {
+            return undefined;
+        }
     }
 
-    private requireHistoryRepository(): GitRepository {
-        return this.repositoryForHistoryScope(this.repositories.requireRepository());
+    private requireRuntimeRepository(): GitRepository {
+        const repo = this.currentRuntimeRepository();
+        if (!repo) { throw new Error('No active Git repository.'); }
+        return repo;
     }
 
-    private async repositoryForFileContext(uri: vscode.Uri): Promise<GitRepository> {
+    private currentHistoryRepository(): LegacyGitRepository | undefined {
+        return this.repositories.currentRepository;
+    }
+
+    private requireLegacyRepository(): LegacyGitRepository {
+        return this.repositories.requireRepository();
+    }
+
+    private async repositoryForFileContext(uri: vscode.Uri): Promise<LegacyGitRepository> {
         if (uri.scheme !== 'file') {
             throw new Error('Look Git file actions are only available for local files.');
         }
@@ -563,26 +583,72 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         return this.repositoryResolver.repositoryForUri(uri);
     }
 
-    private repositoryForHistoryScope(repo: GitRepository): GitRepository {
-        return this.selectedRepositoryScope
-            ? new ScopedGitRepository(repo, this.selectedRepositoryScope.path)
-            : repo;
-    }
-
-    private runtimeRepositoryForRepository(repo: GitRepository): RuntimeGitRepository | undefined {
+    private runtimeRepositoryForLegacyRepository(repo: LegacyGitRepository): GitRepository | undefined {
         const context = this.repositories.currentContext;
-        if (!context || !this.runtimeRepositories || path.normalize(repo.cwd) !== path.normalize(context.cwd)) { return undefined; }
+        if (!context || !this.runtimeRepositories) { return undefined; }
         try {
-            return this.runtimeRepositories.resolveRepository(toRepositoryLocator(context));
+            const normalizedRepoCwd = path.normalize(repo.cwd);
+            const normalizedContextCwd = path.normalize(context.cwd);
+            if (normalizedRepoCwd === normalizedContextCwd) {
+                return this.runtimeRepositories.resolveRepository(toRepositoryLocator(context));
+            }
+            const relativePath = path.relative(context.cwd, repo.cwd);
+            if (relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)) {
+                const subCwd = path.resolve(context.cwd, relativePath);
+                const subId = stableRepoContextId(subCwd);
+                return this.runtimeRepositories.resolveRepository({ repoId: subId, kind: 'submodule', path: subCwd, parentRepoId: context.id });
+            }
+            return undefined;
         } catch {
             return undefined;
         }
     }
 
+    private requireRuntimeRepositoryForLegacyRepository(repo: LegacyGitRepository): GitRepository {
+        const runtimeRepository = this.runtimeRepositoryForLegacyRepository(repo);
+        if (!runtimeRepository) { throw new Error('Runtime repository is required for this history operation.'); }
+        return runtimeRepository;
+    }
+
+    private runtimeWorktreeForLegacyRepository(repo: LegacyGitRepository): Worktree | undefined {
+        const context = this.repositories.currentContext;
+        if (!context || !this.runtimeRepositories) { return undefined; }
+        try {
+            const normalizedRepoCwd = path.normalize(repo.cwd);
+            const normalizedContextCwd = path.normalize(context.cwd);
+            if (normalizedRepoCwd === normalizedContextCwd) {
+                return this.runtimeRepositories.resolveWorktree(toWorktreeLocator(context));
+            }
+            const relativePath = path.relative(context.cwd, repo.cwd);
+            if (relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)) {
+                const subCwd = path.resolve(context.cwd, relativePath);
+                const subId = stableRepoContextId(subCwd);
+                return this.runtimeRepositories.resolveWorktree({ repoId: subId, worktreeId: subId, path: subCwd });
+            }
+            return undefined;
+        } catch {
+            return undefined;
+        }
+    }
+
+    private requireRuntimeWorktreeForLegacyRepository(repo: LegacyGitRepository): Worktree {
+        const runtimeWorktree = this.runtimeWorktreeForLegacyRepository(repo);
+        if (!runtimeWorktree) { throw new Error('Runtime worktree is required for this history operation.'); }
+        return runtimeWorktree;
+    }
+
     private runtimeTargetsForHistoryScope(): RuntimeCommandTargets {
         const context = this.repositories.currentContext;
-        if (!context || !this.runtimeRepositories || this.contextRepository || this.selectedRepositoryScope) { return {}; }
+        if (!context || !this.runtimeRepositories || this.contextRepository) { return {}; }
         try {
+            if (this.selectedRepositoryScope) {
+                const subCwd = path.resolve(context.cwd, this.selectedRepositoryScope.path);
+                const subId = stableRepoContextId(subCwd);
+                return {
+                    repository: this.runtimeRepositories.resolveRepository({ repoId: subId, kind: 'submodule', path: subCwd, parentRepoId: context.id }),
+                    worktree: this.runtimeRepositories.resolveWorktree({ repoId: subId, worktreeId: subId, path: subCwd }),
+                };
+            }
             return {
                 repository: this.runtimeRepositories.resolveRepository(toRepositoryLocator(context)),
                 worktree: this.runtimeRepositories.resolveWorktree(toWorktreeLocator(context)),
@@ -592,10 +658,15 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    private resolveSubmoduleRuntimeRepository(context: RepoContext, submodulePath: string): GitRepository {
+        const subCwd = path.resolve(context.cwd, submodulePath);
+        const subId = stableRepoContextId(subCwd);
+        return this.runtimeRepositories!.resolveRepository({ repoId: subId, kind: 'submodule', path: subCwd, parentRepoId: context.id });
+    }
+
     private async selectRepositoryScope(): Promise<void> {
         try {
-            const repo = this.repositories.requireRepository();
-            const submodules = await this.loadSubmodules(repo);
+            const submodules = await this.loadSubmodules();
             await this.applySubmoduleScopeContext(submodules);
             if (submodules.length === 0) {
                 await vscode.window.showInformationMessage('No submodules found in this repository.');
@@ -625,13 +696,12 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async syncSubmoduleScopeContext(): Promise<void> {
-        const repo = this.repositories.currentRepository;
-        if (!repo) {
+        if (!this.repositories.currentRepository) {
             this.selectedRepositoryScope = undefined;
             await vscode.commands.executeCommand('setContext', 'lookGit.historyHasSubmodules', false);
             return;
         }
-        const submodules = await this.loadSubmodules(repo);
+        const submodules = await this.loadSubmodules();
         await this.applySubmoduleScopeContext(submodules);
     }
 
@@ -646,9 +716,13 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         this.refCache = undefined;
     }
 
-    private async loadSubmodules(repo: GitRepository): Promise<readonly GitSubmodule[]> {
-        try { return await repo.getSubmoduleStatus(); }
-        catch (error) {
+    private async loadSubmodules(): Promise<readonly GitSubmodule[]> {
+        const context = this.repositories.currentContext;
+        if (!context || !this.runtimeRepositories) { return []; }
+        try {
+            const repo = this.runtimeRepositories.resolveRepository(toRepositoryLocator(context));
+            return await repo.listSubmodules();
+        } catch (error) {
             this.postHistoryError(error, 'history/listSubmodules', 'gitOperationFailed');
             return [];
         }
@@ -664,7 +738,7 @@ interface LoadHistoryPageOptions {
     readonly selectedHistoryRef?: string;
     readonly pathFilter?: string;
     readonly lineRange?: LineRange;
-    readonly loadRefs: (repo: GitRepository) => Promise<HistoryRefCache>;
+    readonly loadRefs: () => Promise<HistoryRefCache>;
 }
 
 interface HistoryRepositoryScope {
@@ -682,8 +756,8 @@ class FileHistoryPanelController {
     constructor(
         private readonly panel: vscode.WebviewPanel,
         private readonly extensionUri: vscode.Uri,
+        private readonly legacyRepo: LegacyGitRepository,
         private readonly repo: GitRepository,
-        private readonly runtimeRepository: RuntimeGitRepository | undefined,
         private readonly pathFilter: string,
         private readonly lineRange: LineRange | undefined,
         private readonly onContextTarget: (target: HistoryContextTarget) => void,
@@ -747,15 +821,15 @@ class FileHistoryPanelController {
         return loadHistoryPageFor(this.repo, normalizePage(page), {
             pathFilter: this.pathFilter,
             lineRange: this.lineRange,
-            loadRefs: (repo) => this.loadRefs(repo),
+            loadRefs: () => this.loadRefs(),
         });
     }
 
-    private async loadRefs(repo: GitRepository): Promise<HistoryRefCache> {
+    private async loadRefs(): Promise<HistoryRefCache> {
         if (this.refCache) { return this.refCache; }
         const [branches, tags] = await Promise.all([
-            this.runtimeRepository ? this.runtimeRepository.listBranches() : repo.getAllBranches(),
-            this.runtimeRepository ? this.runtimeRepository.listTags() : repo.getAllTags(),
+            this.repo.listBranches(),
+            this.repo.listTags(),
         ]);
         this.refCache = { branches, tags };
         return this.refCache;
@@ -776,7 +850,7 @@ class FileHistoryPanelController {
 
     private async handleOpenDiff(message: HistoryOpenDiffRequest): Promise<void> {
         try {
-            await openHistoryDiff(this.repo, message);
+            await openHistoryDiff(this.legacyRepo, message);
         } catch (error) {
             this.postHistoryError(error, 'history/openDiff', 'vscodeCommandFailed');
         }
@@ -815,7 +889,7 @@ async function loadHistoryPageFor(
     const pageLimit = page.limit + 1;
     const [commits, refs] = await Promise.all([
         loadHistoryCommits(repo, pageLimit, page.offset, options.selectedHistoryRef, options.pathFilter, options.lineRange),
-        options.loadRefs(repo),
+        options.loadRefs(),
     ]);
     const visibleCommits = commits.slice(0, page.limit);
     const currentBranchCommits = options.selectedHistoryRef
@@ -832,7 +906,7 @@ async function loadHistoryPageFor(
     };
 }
 
-function loadHistoryCommits(
+async function loadHistoryCommits(
     repo: GitRepository,
     limit: number,
     offset: number,
@@ -840,22 +914,28 @@ function loadHistoryCommits(
     pathFilter: string | undefined,
     lineRange: LineRange | undefined,
 ): Promise<readonly GitCommit[]> {
+    const pageRequest = { limit, encodedCursor: offset > 0 ? String(offset) : undefined };
     if (lineRange && selectedHistoryRef) {
         throw new Error('Selection history does not support branch filtering yet.');
     }
     if (lineRange && pathFilter) {
-        return repo.getLogForLineRange(pathFilter, lineRange.startLine, lineRange.endLine, limit, offset);
+        const page = await repo.getFileSelectionHistory(pathFilter, { startLine: lineRange.startLine, endLine: lineRange.endLine }, {}, pageRequest);
+        return page.items;
     }
     if (selectedHistoryRef && pathFilter) {
-        return repo.getLogForRefAndPath(selectedHistoryRef, pathFilter, limit, offset);
+        const page = await repo.getFileHistory(pathFilter, { branches: [selectedHistoryRef] }, pageRequest);
+        return page.items;
     }
     if (selectedHistoryRef) {
-        return repo.getLogForRef(selectedHistoryRef, limit, offset);
+        const page = await repo.getCommitGraph({ branches: [selectedHistoryRef] }, pageRequest);
+        return page.items;
     }
     if (pathFilter) {
-        return repo.getLogForPath(pathFilter, limit, offset);
+        const page = await repo.getFileHistory(pathFilter, {}, pageRequest);
+        return page.items;
     }
-    return repo.getLog(limit, offset);
+    const page = await repo.getCommitGraph({}, pageRequest);
+    return page.items;
 }
 
 async function loadCommitDetails(repo: GitRepository, hash: string): Promise<HistoryCommitDetails> {
@@ -870,7 +950,7 @@ async function loadCommitDetails(repo: GitRepository, hash: string): Promise<His
     };
 }
 
-async function openHistoryDiff(repo: GitRepository, message: HistoryOpenDiffRequest): Promise<void> {
+async function openHistoryDiff(repo: LegacyGitRepository, message: HistoryOpenDiffRequest): Promise<void> {
     if (message.isSubmodule) {
         await openCommitGitlinkDiff(repo, message);
         return;
@@ -987,23 +1067,23 @@ function activeRepositoryOnlyResolver(repositories: ActiveRepositoryAccessor): G
     };
 }
 
-async function conflictFileSet(repo: GitRepository): Promise<ReadonlySet<string>> {
+async function conflictFileSet(repo: LegacyGitRepository): Promise<ReadonlySet<string>> {
     try {
         const status = await repo.getStatus();
-        return new Set(status.conflicts.map((entry) => entry.filePath));
+        return new Set(status.conflicts.map((entry: { filePath: string }) => entry.filePath));
     } catch {
         return new Set();
     }
 }
 
-async function hasAnyConflicts(repo: GitRepository): Promise<boolean> {
+async function hasAnyConflicts(repo: LegacyGitRepository): Promise<boolean> {
     const status = await repo.getStatus();
     return status.conflicts.length > 0;
 }
 
-async function hasNewConflicts(repo: GitRepository, existingConflicts: ReadonlySet<string>): Promise<boolean> {
+async function hasNewConflicts(repo: LegacyGitRepository, existingConflicts: ReadonlySet<string>): Promise<boolean> {
     const status = await repo.getStatus();
-    return status.conflicts.some((entry) => !existingConflicts.has(entry.filePath));
+    return status.conflicts.some((entry: { filePath: string }) => !existingConflicts.has(entry.filePath));
 }
 
 async function currentBranchCommitHashSet(repo: GitRepository, commits: readonly GitCommit[]): Promise<ReadonlySet<string>> {

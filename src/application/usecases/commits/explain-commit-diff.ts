@@ -1,5 +1,5 @@
 import type { DiffExplainer } from '../../ports/diff-explainer';
-import type { GitRepository } from '../../ports/git-repository';
+import type { GitHistoryOperations } from '../../ports/git-capabilities';
 import { orderSelectedCommits } from './order-selected-commits';
 
 const MAX_COMMIT_DIFF_LENGTH = 64000;
@@ -10,10 +10,12 @@ export interface ExplainCommitDiffResult {
     readonly diffTruncated: boolean;
 }
 
+type ExplainRepository = Pick<GitHistoryOperations, 'orderCommits' | 'getCommitPatch' | 'getCommitMessage'>;
+
 export class ExplainCommitDiffUseCase {
     constructor(private readonly explainer: DiffExplainer) {}
 
-    async execute(repo: GitRepository, hashes: readonly string[], signal?: AbortSignal): Promise<ExplainCommitDiffResult> {
+    async execute(repo: ExplainRepository, hashes: readonly string[], signal?: AbortSignal): Promise<ExplainCommitDiffResult> {
         const orderedHashes = await orderSelectedCommits(repo, hashes, 'oldestFirst');
         if (orderedHashes.length === 0) {
             throw new Error('Select a commit before explaining its diff.');
@@ -49,21 +51,15 @@ export function normalizeDiffExplanation(rawExplanation: string): string {
     return normalized;
 }
 
-async function buildCommitDiff(repo: GitRepository, hashes: readonly string[], signal?: AbortSignal): Promise<string> {
-    const chunks = await Promise.all(hashes.map((hash) => repo.execRaw([
-        'show',
-        '--format=fuller',
-        '--find-renames',
-        '--find-copies',
-        '--unified=3',
-        '--stat',
-        '--patch',
-        hash,
-    ], signal)));
-    return chunks
-        .map((chunk, index) => chunk.trim() ? `### Commit ${hashes[index]}\n${chunk}` : '')
-        .filter((chunk) => chunk.length > 0)
-        .join('\n\n');
+async function buildCommitDiff(repo: ExplainRepository, hashes: readonly string[], signal?: AbortSignal): Promise<string> {
+    const chunks = await Promise.all(hashes.map(async (hash) => {
+        const [message, patch] = await Promise.all([
+            repo.getCommitMessage(hash, signal),
+            repo.getCommitPatch(hash, signal),
+        ]);
+        return patch.trim() ? `### Commit ${hash}\n${message}\n\n${patch}` : '';
+    }));
+    return chunks.filter((chunk) => chunk.length > 0).join('\n\n');
 }
 
 function truncateText(value: string, maxLength: number): { readonly text: string; readonly truncated: boolean } {
