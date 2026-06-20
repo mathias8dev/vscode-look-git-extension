@@ -9,6 +9,7 @@ import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backen
 import type { RemoteCommandBackend } from '../../application/ports/remote-command-backend';
 import { getWebviewHtml } from './webviewHtml';
 import { webviewFontSizeMessage } from './webview-font';
+import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
 
 const GRAPH_COMMIT_COMMANDS: readonly { readonly id: string; readonly command: CommitCommand }[] = [
     { id: 'lookGit.graph.commit.copyRevisionNumber', command: 'copyRevisionNumber' },
@@ -90,6 +91,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
         private readonly remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
         private readonly storageUri?: vscode.Uri,
+        private readonly runtimeRepositories?: RepositoryRegistry,
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -104,7 +106,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         this.router?.dispose();
         this.router = new GraphMessageRouter(this.repositories, (msg) => {
             webviewView.webview.postMessage(msg);
-        }, this.onRepositoryUpdated, this.remoteCommands, undefined, undefined, undefined, this.extensionUri, this.storageUri);
+        }, this.onRepositoryUpdated, this.remoteCommands, undefined, undefined, undefined, this.extensionUri, this.storageUri, this.runtimeRepositories);
 
         webviewView.webview.onDidReceiveMessage((msg: GraphWebviewToExtensionMessage) => {
             if (msg.type === 'graph/contextTarget') {

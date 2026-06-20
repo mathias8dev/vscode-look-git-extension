@@ -24,6 +24,7 @@ import { showBranchNameInput } from '../utils/branch-name-input';
 import { assertNoUnmergedFiles, compareRefWithPickedWorktree, openChangesWithWorkingTree, promptNewWorktreePath } from './git-command-helpers';
 import { promptForCommitMessage } from '../utils/commit-message-editor';
 import { openVisualRebasePanel } from '../utils/visual-rebase-panel';
+import type { RuntimeCommandTargets } from './runtime-command-targets';
 
 export interface CommitCommandDiffExplanationScope {
     readonly label: string;
@@ -45,6 +46,7 @@ export async function runCommitCommand(
     extensionUri?: vscode.Uri,
     storageUri?: vscode.Uri,
     generateRewordCommitMessage: GenerateRewordCommitMessageUseCase = defaultGenerateRewordCommitMessage,
+    runtimeTargets: RuntimeCommandTargets = {},
 ): Promise<boolean> {
     const selected = normalizeSelectedHashes(hash, hashes);
     switch (command) {
@@ -60,10 +62,15 @@ export async function runCommitCommand(
         case 'cherryPick':
             await assertNoUnmergedFiles(repo, 'cherry-picking commits');
             await assertCherryPickableCommits(repo, selected);
-            await repo.exec(['cherry-pick', ...(await orderSelectedCommits(repo, selected, 'oldestFirst'))]);
+            if (runtimeTargets.worktree && selected.length === 1) {
+                await runtimeTargets.worktree.cherryPick(selected[0]!, {});
+            } else {
+                await repo.exec(['cherry-pick', ...(await orderSelectedCommits(repo, selected, 'oldestFirst'))]);
+            }
             return true;
         case 'checkoutRevision':
-            await repo.checkout(hash);
+            if (runtimeTargets.worktree) { await runtimeTargets.worktree.checkout(hash, { detach: true }); }
+            else { await repo.checkout(hash); }
             return true;
         case 'showRepositoryAtRevision':
             await showRepositoryAtRevision(hash, repo.exec.bind(repo));
@@ -72,14 +79,18 @@ export async function runCommitCommand(
             await openChangesWithWorkingTree(repo, repo.cwd, hash, `Diff ${hash.substring(0, 7)}..local`);
             return false;
         case 'resetCurrentBranchToHere':
-            await resetCurrentBranchToHere(repo, hash);
+            await resetCurrentBranchToHere(repo, hash, runtimeTargets);
             return true;
         case 'revertCommit':
             await assertNoUnmergedFiles(repo, 'reverting commits');
-            await repo.exec(['revert', '--no-edit', ...(await orderSelectedCommits(repo, selected, 'newestFirst'))]);
+            if (runtimeTargets.worktree && selected.length === 1) {
+                await runtimeTargets.worktree.revertCommit(selected[0]!, { noEdit: true });
+            } else {
+                await repo.exec(['revert', '--no-edit', ...(await orderSelectedCommits(repo, selected, 'newestFirst'))]);
+            }
             return true;
         case 'undoCommit':
-            await undoHeadCommit(repo, hash);
+            await undoHeadCommit(repo, hash, runtimeTargets);
             return true;
         case 'editCommitMessage':
             await editCommitMessage(repo, hash, extensionUri, generateRewordCommitMessage);
@@ -110,7 +121,7 @@ export async function runCommitCommand(
         case 'newTag':
             return commitReferenceActions.createTagAtCommit(repo, hash);
         case 'newWorktreeFromCommit':
-            return createWorktreeFromCommit(repo, hash);
+            return createWorktreeFromCommit(repo, hash, runtimeTargets);
         case 'compareCommitWithWorktree':
             await compareRefWithPickedWorktree(repo, hash, `Diff ${hash.substring(0, 7)}`);
             return false;
@@ -184,40 +195,48 @@ async function showRepositoryAtRevision(
     await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(worktreePath), { forceNewWindow: true });
 }
 
-async function createWorktreeFromCommit(repo: GitRepository, hash: string): Promise<boolean> {
+async function createWorktreeFromCommit(repo: GitRepository, hash: string, runtimeTargets: RuntimeCommandTargets): Promise<boolean> {
     const worktreePath = await promptNewWorktreePath(repo, `Worktree path for ${hash.substring(0, 7)}:`);
     if (!worktreePath) { return false; }
     const branchName = await showBranchNameInput({
         prompt: `New branch name from ${hash.substring(0, 7)}:`,
     });
     if (!branchName) { return false; }
-    await repo.exec(['worktree', 'add', '-b', branchName, worktreePath, hash]);
+    if (runtimeTargets.repository) {
+        await runtimeTargets.repository.addWorktree({ path: worktreePath, branch: branchName, createNew: true, startPoint: hash });
+    } else {
+        await repo.exec(['worktree', 'add', '-b', branchName, worktreePath, hash]);
+    }
     return true;
 }
 
-async function resetCurrentBranchToHere(repo: GitRepository, hash: string): Promise<void> {
+async function resetCurrentBranchToHere(repo: GitRepository, hash: string, runtimeTargets: RuntimeCommandTargets): Promise<void> {
     const mode = await vscode.window.showQuickPick(['Soft reset', 'Mixed reset', 'Hard reset', 'Keep reset'], { placeHolder: 'Reset current branch to selected revision' });
     if (!mode) { return; }
     if (mode === 'Hard reset') {
         const choice = await showModalWarningMessage('Hard reset current branch and discard working tree changes?', 'Hard Reset');
         if (choice !== 'Hard Reset') { return; }
     }
-    const flag = mode === 'Soft reset'
-        ? '--soft'
-        : mode === 'Hard reset'
-            ? '--hard'
-            : mode === 'Keep reset'
-                ? '--keep'
-                : '--mixed';
+    if (runtimeTargets.worktree && mode !== 'Keep reset') {
+        if (mode === 'Soft reset') { await runtimeTargets.worktree.resetSoft(hash); }
+        else if (mode === 'Hard reset') { await runtimeTargets.worktree.resetHard(hash); }
+        else { await runtimeTargets.worktree.resetMixed(hash); }
+        return;
+    }
+
+    const flag = mode === 'Soft reset' ? '--soft' : mode === 'Hard reset' ? '--hard' : mode === 'Keep reset' ? '--keep' : '--mixed';
     await repo.exec(['reset', flag, hash]);
 }
 
-async function undoHeadCommit(repo: GitRepository, hash: string): Promise<void> {
-    const head = await repo.exec(['rev-parse', 'HEAD']);
+async function undoHeadCommit(repo: GitRepository, hash: string, runtimeTargets: RuntimeCommandTargets): Promise<void> {
+    const head = runtimeTargets.repository
+        ? await runtimeTargets.repository.resolveRef('HEAD')
+        : await repo.exec(['rev-parse', 'HEAD']);
     if (head !== hash) { throw new Error('Only the current HEAD commit can be undone.'); }
     const choice = await showModalWarningMessage('Undo the current HEAD commit and keep its changes staged?', 'Undo Commit');
     if (choice !== 'Undo Commit') { return; }
-    await repo.exec(['reset', '--soft', 'HEAD~1']);
+    if (runtimeTargets.worktree) { await runtimeTargets.worktree.undoLastCommit('soft'); }
+    else { await repo.exec(['reset', '--soft', 'HEAD~1']); }
 }
 
 async function editCommitMessage(

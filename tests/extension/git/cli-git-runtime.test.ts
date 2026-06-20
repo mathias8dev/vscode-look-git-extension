@@ -22,6 +22,30 @@ describe('CliGitRuntime', () => {
         expect(calls).toEqual([['add', '--', 'src/a.ts', 'src/b.ts']]);
     });
 
+    it('resolves conflicts by checking out one side and staging the paths', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(recordingProcess(calls));
+
+        await runtime.execute('acceptOurs', context, { paths: ['src/a.ts'] });
+        await runtime.execute('acceptTheirs', context, { paths: ['src/b.ts', 'src/c.ts'] });
+
+        expect(calls).toEqual([
+            ['checkout', '--ours', '--', 'src/a.ts'],
+            ['add', '--', 'src/a.ts'],
+            ['checkout', '--theirs', '--', 'src/b.ts', 'src/c.ts'],
+            ['add', '--', 'src/b.ts', 'src/c.ts'],
+        ]);
+    });
+
+    it('does not execute conflict side commands for an empty path selection', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(recordingProcess(calls));
+
+        await runtime.execute('acceptTheirs', context, { paths: [] });
+
+        expect(calls).toEqual([]);
+    });
+
     it('returns semantic output for listRemotes and previewClean', async () => {
         const runtime = new CliGitRuntime(async (args) => {
             if (args[0] === 'remote') { return 'origin\nupstream\n'; }
@@ -108,18 +132,143 @@ describe('CliGitRuntime', () => {
         });
     });
 
+    it('returns typed stash files from stash refs', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(async (args) => {
+            calls.push([...args]);
+            return 'M\0src/app.ts\0R100\0old.ts\0new.ts\0';
+        });
+
+        await expect(runtime.execute('getStashFiles', context, { stash: 'stash@{2}' })).resolves.toEqual([
+            { status: 'M', filePath: 'src/app.ts', origPath: undefined, parentHash: undefined },
+            { status: 'R', filePath: 'new.ts', origPath: 'old.ts', parentHash: undefined },
+        ]);
+        expect(calls).toEqual([
+            ['stash', 'show', '--include-untracked', '--name-status', '-M', '-z', 'stash@{2}'],
+        ]);
+    });
+
+    it('returns commit details semantic data', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(async (args) => {
+            calls.push([...args]);
+            if (args.join(' ') === 'log -1 --format=%B abc123') {
+                return 'feat: add details\n\nBody\n';
+            }
+            if (args.join(' ') === 'rev-list --parents -n 1 abc123') {
+                return 'abc123 parent';
+            }
+            if (args.join(' ') === 'diff-tree --no-commit-id -r -M --name-status -z parent abc123') {
+                return 'M\0src/app.ts\0';
+            }
+            if (args.join(' ') === 'diff-tree --no-commit-id -r --raw -z parent abc123') {
+                return '';
+            }
+            throw new Error(`Unexpected args: ${args.join(' ')}`);
+        });
+
+        await expect(runtime.execute('getCommitMessage', context, { commit: 'abc123' })).resolves.toBe('feat: add details\n\nBody');
+        await expect(runtime.execute('getCommitFiles', context, { commit: 'abc123' })).resolves.toEqual([
+            { status: 'M', filePath: 'src/app.ts', origPath: undefined, parentHash: 'parent' },
+        ]);
+        expect(calls).toEqual([
+            ['log', '-1', '--format=%B', 'abc123'],
+            ['rev-list', '--parents', '-n', '1', 'abc123'],
+            ['diff-tree', '--no-commit-id', '-r', '--raw', '-z', 'parent', 'abc123'],
+            ['diff-tree', '--no-commit-id', '-r', '-M', '--name-status', '-z', 'parent', 'abc123'],
+        ]);
+    });
+
     it('executes worktree and submodule topology mutations through existing query helpers', async () => {
         const calls: string[][] = [];
         const runtime = new CliGitRuntime(recordingProcess(calls));
 
-        await runtime.execute('addWorktree', context, { path: '/repo-feature', branch: 'feature/new', createNew: true });
+        await runtime.execute('addWorktree', context, { path: '/repo-feature', branch: 'feature/new', createNew: true, startPoint: 'origin/feature/new' });
         await runtime.execute('removeWorktree', context, { worktree: '/repo-feature', force: true });
         await runtime.execute('updateSubmodule', context, { path: 'libs/one' });
 
         expect(calls).toEqual([
-            ['worktree', 'add', '-b', 'feature/new', '/repo-feature'],
+            ['worktree', 'add', '-b', 'feature/new', '/repo-feature', 'origin/feature/new'],
             ['worktree', 'remove', '/repo-feature', '--force'],
             ['-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', 'libs/one'],
+        ]);
+    });
+
+    it('preserves semantic stash options in git invocation args', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(recordingProcess(calls));
+
+        await runtime.execute('stash', context, {
+            message: 'staged work',
+            options: { staged: true, includeUntracked: true, keepIndex: true, paths: ['src/a.ts', 'src/b.ts'] },
+        });
+
+        expect(calls).toEqual([
+            ['stash', 'push', '--include-untracked', '--keep-index', '--staged', '-m', 'staged work', '--', 'src/a.ts', 'src/b.ts'],
+        ]);
+    });
+
+    it('preserves semantic cherry-pick and revert options in git invocation args', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(recordingProcess(calls));
+
+        await runtime.execute('cherryPick', context, { commit: 'abc123', options: { noCommit: true } });
+        await runtime.execute('revertCommit', context, { commit: 'def456', options: { noCommit: true, noEdit: true } });
+
+        expect(calls).toEqual([
+            ['cherry-pick', '--no-commit', 'abc123'],
+            ['revert', '--no-commit', '--no-edit', 'def456'],
+        ]);
+    });
+
+    it('maps tag deletion input objects to git invocation args', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(recordingProcess(calls));
+
+        await runtime.execute('deleteTag', context, { name: 'v1.2.3' });
+
+        expect(calls).toEqual([
+            ['tag', '-d', 'v1.2.3'],
+        ]);
+    });
+
+    it('maps remote management input objects to git invocation args', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(recordingProcess(calls));
+
+        await runtime.execute('addRemote', context, { name: 'upstream', url: 'git@example.test:org/repo.git' });
+        await runtime.execute('removeRemote', context, 'upstream');
+
+        expect(calls).toEqual([
+            ['remote', 'add', 'upstream', 'git@example.test:org/repo.git'],
+            ['remote', 'remove', 'upstream'],
+        ]);
+    });
+
+    it('maps stash summary input objects to git invocation args', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(recordingProcess(calls));
+
+        await runtime.execute('getStashSummary', context, { stash: 'stash@{4}' });
+
+        expect(calls).toEqual([
+            ['stash', 'show', '--stat', 'stash@{4}'],
+        ]);
+    });
+
+    it('reads file content through semantic revision and index operations without trimming', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(async (args) => {
+            calls.push([...args]);
+            return 'content\n\n';
+        });
+
+        await expect(runtime.execute('getFileAtRevision', context, { path: 'src/app.ts', revision: 'HEAD' })).resolves.toBe('content\n\n');
+        await expect(runtime.execute('getFileFromIndex', context, { path: 'src/app.ts' })).resolves.toBe('content\n\n');
+
+        expect(calls).toEqual([
+            ['show', 'HEAD:src/app.ts'],
+            ['show', ':src/app.ts'],
         ]);
     });
 

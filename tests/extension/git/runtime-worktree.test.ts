@@ -46,13 +46,29 @@ describe('RuntimeWorktree', () => {
             isMain: true,
             head: 'abc123',
             dirty: false,
-        }, recordingRuntime(calls, ['resetHard', 'dropStash', 'pushTags']));
+        }, recordingRuntime(calls, ['resetHard', 'dropStash', 'pushTags', 'acceptOurs', 'acceptTheirs', 'getFileAtRevision', 'getFileFromIndex', 'getStashFiles', 'getStashSummary']));
 
         await worktree.resetHard('HEAD~1');
         await worktree.dropStash('stash@{0}');
         await worktree.pushTags('origin', {});
+        await worktree.acceptOurs(['src/conflict.ts']);
+        await worktree.acceptTheirs(['src/other.ts']);
+        await worktree.getFileAtRevision('src/head.ts', 'HEAD');
+        await worktree.getFileFromIndex('src/indexed.ts');
+        await worktree.getStashFiles('stash@{2}');
+        await worktree.getStashSummary('stash@{3}');
 
-        expect(calls.map((call) => call.input)).toEqual(['HEAD~1', 'stash@{0}', 'origin']);
+        expect(calls.map((call) => call.input)).toEqual([
+            'HEAD~1',
+            'stash@{0}',
+            'origin',
+            { paths: ['src/conflict.ts'] },
+            { paths: ['src/other.ts'] },
+            { path: 'src/head.ts', revision: 'HEAD' },
+            { path: 'src/indexed.ts' },
+            { stash: 'stash@{2}' },
+            { stash: 'stash@{3}' },
+        ]);
     });
 
     it('forwards abort signals', async () => {

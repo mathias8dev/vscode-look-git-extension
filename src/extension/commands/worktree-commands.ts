@@ -7,12 +7,14 @@ import { parsePorcelainStatus } from '../../core/parsing/parseStatus';
 import { showModalWarningMessage } from '../utils/confirmation';
 import { showBranchNameInput } from '../utils/branch-name-input';
 import { openChangesWithWorkingTree } from './git-command-helpers';
+import type { RuntimeCommandTargets } from './runtime-command-targets';
 
 export async function runWorktreeCommand(
     repo: GitRepository,
     command: WorktreeCommand,
     wtPath: string | undefined,
     remoteCommands: RemoteCommandBackend,
+    runtimeTargets: RuntimeCommandTargets = {},
 ): Promise<boolean> {
     switch (command) {
         case 'open': {
@@ -61,20 +63,25 @@ export async function runWorktreeCommand(
             });
             return true;
         case 'commit':
-            return commitWorktree(repo, requireWorktreePath(wtPath));
+            return commitWorktree(repo, requireWorktreePath(wtPath), runtimeTargets);
         case 'stash':
-            return stashWorktree(repo, requireWorktreePath(wtPath));
+            return stashWorktree(repo, requireWorktreePath(wtPath), runtimeTargets);
         case 'newBranch': {
             const branch = await showBranchNameInput({ prompt: 'New branch from worktree HEAD:' });
             if (!branch) { return false; }
-            await repo.exec(['-C', requireWorktreePath(wtPath), 'checkout', '-b', branch]);
+            if (runtimeTargets.worktree) { await runtimeTargets.worktree.checkoutNewBranch(branch, undefined); }
+            else { await repo.exec(['-C', requireWorktreePath(wtPath), 'checkout', '-b', branch]); }
             return true;
         }
         case 'checkoutBranch': {
-            const branches = (await repo.getAllBranches()).filter((branch) => !branch.isRemote).map((branch) => branch.name);
+            const branchList = runtimeTargets.repository
+                ? await runtimeTargets.repository.listBranches()
+                : await repo.getAllBranches();
+            const branches = branchList.filter((branch) => !branch.isRemote).map((branch) => branch.name);
             const branch = await vscode.window.showQuickPick(branches, { placeHolder: 'Checkout branch in worktree' });
             if (!branch) { return false; }
-            await repo.exec(['-C', requireWorktreePath(wtPath), 'checkout', branch]);
+            if (runtimeTargets.worktree) { await runtimeTargets.worktree.checkout(branch, {}); }
+            else { await repo.exec(['-C', requireWorktreePath(wtPath), 'checkout', branch]); }
             return true;
         }
         case 'lock':
@@ -92,7 +99,11 @@ export async function runWorktreeCommand(
             if (!b) { return false; }
             const branches = await repo.getAllBranches();
             const createNew = !branches.some((br) => br.name === b);
-            await repo.addWorktree(p, b, createNew);
+            if (runtimeTargets.repository) {
+                await runtimeTargets.repository.addWorktree({ path: p, branch: b, createNew });
+            } else {
+                await repo.addWorktree(p, b, createNew);
+            }
             return true;
         }
         case 'remove':
@@ -109,7 +120,11 @@ export async function runWorktreeCommand(
                 const choice = await showModalWarningMessage(`Remove worktree at "${pathValue}"?`, 'Remove');
                 if (choice !== 'Remove') { return false; }
             }
-            await repo.removeWorktree(pathValue, force);
+            if (runtimeTargets.repository) {
+                await runtimeTargets.repository.removeWorktree(pathValue, force);
+            } else {
+                await repo.removeWorktree(pathValue, force);
+            }
             return true;
         }
     }
@@ -135,33 +150,41 @@ async function showDiffWithMainWorktree(repo: GitRepository, wtPath: string): Pr
     await openChangesWithWorkingTree(repo, wtPath, main.head, `Diff ${path.basename(wtPath)} with ${path.basename(main.path)}`);
 }
 
-async function commitWorktree(repo: GitRepository, wtPath: string): Promise<boolean> {
-    const raw = await repo.execRaw(['-C', wtPath, 'status', '--porcelain=v1', '-z', '-u']);
-    const status = parsePorcelainStatus(raw);
+async function commitWorktree(repo: GitRepository, wtPath: string, runtimeTargets: RuntimeCommandTargets): Promise<boolean> {
+    const status = runtimeTargets.worktree
+        ? await runtimeTargets.worktree.getStatus()
+        : parsePorcelainStatus(await repo.execRaw(['-C', wtPath, 'status', '--porcelain=v1', '-z', '-u']));
     if (status.conflicts.length > 0) { throw new Error('Resolve conflicts before committing this worktree.'); }
     if (status.staged.length === 0 && status.unstaged.length === 0) { throw new Error('No changes to commit in this worktree.'); }
 
     if (status.staged.length === 0) {
         const choice = await showModalWarningMessage('No staged changes in this worktree. Stage all changes and commit?', 'Stage All and Commit');
         if (choice !== 'Stage All and Commit') { return false; }
-        await repo.exec(['-C', wtPath, 'add', '-A']);
+        if (runtimeTargets.worktree) { await runtimeTargets.worktree.stageAll(); }
+        else { await repo.exec(['-C', wtPath, 'add', '-A']); }
     } else if (status.unstaged.length > 0) {
         const choice = await vscode.window.showQuickPick(['Commit Staged Changes', 'Stage All and Commit'], { placeHolder: 'This worktree also has unstaged changes.' });
         if (!choice) { return false; }
         if (choice === 'Stage All and Commit') {
-            await repo.exec(['-C', wtPath, 'add', '-A']);
+            if (runtimeTargets.worktree) { await runtimeTargets.worktree.stageAll(); }
+            else { await repo.exec(['-C', wtPath, 'add', '-A']); }
         }
     }
 
     const message = await vscode.window.showInputBox({ prompt: 'Commit message:' });
     if (!message?.trim()) { return false; }
-    await repo.exec(['-C', wtPath, 'commit', '-m', message]);
+    if (runtimeTargets.worktree) { await runtimeTargets.worktree.commit(message, {}); }
+    else { await repo.exec(['-C', wtPath, 'commit', '-m', message]); }
     return true;
 }
 
-async function stashWorktree(repo: GitRepository, wtPath: string): Promise<boolean> {
+async function stashWorktree(repo: GitRepository, wtPath: string, runtimeTargets: RuntimeCommandTargets): Promise<boolean> {
     const message = await vscode.window.showInputBox({ prompt: 'Stash message:', placeHolder: 'Optional' });
     if (message === undefined) { return false; }
+    if (runtimeTargets.worktree) {
+        await runtimeTargets.worktree.stash(message.trim() || undefined, { includeUntracked: true });
+        return true;
+    }
     const args = ['-C', wtPath, 'stash', 'push', '-u'];
     if (message.trim()) { args.push('-m', message.trim()); }
     await repo.exec(args);

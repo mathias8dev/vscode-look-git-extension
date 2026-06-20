@@ -5,10 +5,15 @@ import type { Uri as VscodeUri } from 'vscode';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { GitGraphCommit } from '../../../src/core/git/domain/GitCommit';
 import type { GitSubmodule, GitWorktree } from '../../../src/core/git/domain/GitWorktree';
+import { RepoKind, type RepoContext } from '../../../src/core/git/domain/RepoContext';
 import { LOG_FIELD_SEP, LOG_RECORD_SEP } from '../../../src/core/parsing/parseLog';
 import type { GitRepository } from '../../../src/application/ports/git-repository';
+import type { GitRuntime } from '../../../src/application/ports/git-runtime';
+import type { GitRepository as RuntimeRepository, Worktree } from '../../../src/application/ports/git-topology';
 import { GetGraphDataUseCase, type GraphDataResult } from '../../../src/application/usecases/graph/get-graph-data';
 import { GraphMessageRouter } from '../../../src/extension/messaging/GraphMessageRouter';
+import { RepositoryRegistry } from '../../../src/extension/repositories/RepositoryRegistry';
+import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
 import { registerReadonlyDiffDocumentProvider } from '../../../src/extension/utils/readonly-diff-documents';
 import { GraphOperationCategory, GraphOperationStatus, type GraphDataResponse, type GraphExtensionToWebviewMessage, type GraphSubmodulesPush, type WorktreeDetailsResponse } from '../../../src/protocol/graph/messages';
 import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
@@ -458,6 +463,64 @@ describe('GraphMessageRouter graph data', () => {
         expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'status', '--porcelain=v1', '-z', '-u']);
     });
 
+    it('loads worktree detail files through the runtime worktree when registered', async () => {
+        const legacyExecRaw = vi.fn(async () => { throw new Error('legacy execRaw should not run'); });
+        const repo = makeRepositoryMock({ execRaw: legacyExecRaw });
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeWorktree = runtimeWorktreeModel({
+            worktreeId: 'linked',
+            path: '/repo/.worktrees/a',
+            head: '1234567890abcdef',
+            branch: 'feature/a',
+            getStatus: vi.fn(async () => ({
+                staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'staged.ts' }],
+                unstaged: [
+                    { indexStatus: ' ', workTreeStatus: 'M', filePath: 'dirty.ts' },
+                    { indexStatus: '?', workTreeStatus: '?', filePath: 'new.ts' },
+                ],
+                conflicts: [{ indexStatus: 'U', workTreeStatus: 'U', filePath: 'conflict.ts' }],
+                conflictState: 'none',
+            })),
+        });
+        runtimeRegistry.registerRepository(runtimeRepositoryModel({}));
+        runtimeRegistry.registerWorktree(runtimeWorktree);
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(
+            makeAccessorWithContext(repo, context),
+            (message) => { messages.push(message); },
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry,
+        );
+
+        await router.handle({
+            type: 'graph/worktreeDetailsRequest',
+            requestId: 'runtime-worktree-details',
+            path: '/repo/.worktrees/a',
+        });
+
+        const response = worktreeDetailsResponse(messages, 'runtime-worktree-details');
+        expect(response).toMatchObject({
+            path: '/repo/.worktrees/a',
+            head: '1234567890abcdef',
+            branch: 'feature/a',
+        });
+        expect(response.files).toEqual([
+            { status: 'U', filePath: 'conflict.ts', origPath: undefined },
+            { status: 'M', filePath: 'dirty.ts', origPath: undefined },
+            { status: '?', filePath: 'new.ts', origPath: undefined },
+            { status: 'M', filePath: 'staged.ts', origPath: undefined },
+        ]);
+        expect(runtimeWorktree.getStatus).toHaveBeenCalledOnce();
+        expect(legacyExecRaw).not.toHaveBeenCalled();
+    });
+
     it('opens worktree file diffs against HEAD', async () => {
         const repo = makeRepositoryMock({
             execRaw: vi.fn(async () => 'head content\n'),
@@ -478,6 +541,44 @@ describe('GraphMessageRouter graph data', () => {
         expect(String(call?.args[1])).toBe('file:/repo/.worktrees/a/src/dirty.ts');
         expect(call?.args[2]).toBe('dirty.ts (a)');
         expect(vi.mocked(repo.execRaw)).toHaveBeenCalledWith(['-C', '/repo/.worktrees/a', 'show', 'HEAD:src/dirty.ts']);
+    });
+
+    it('opens worktree file diffs through the runtime worktree matching the diff path', async () => {
+        const legacyExecRaw = vi.fn(async () => { throw new Error('legacy execRaw should not run'); });
+        const repo = makeRepositoryMock({ execRaw: legacyExecRaw });
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeWorktree = runtimeWorktreeModel({
+            worktreeId: 'linked',
+            path: '/repo/.worktrees/a',
+            getFileAtRevision: vi.fn(async () => 'runtime head content\n'),
+        });
+        runtimeRegistry.registerRepository(runtimeRepositoryModel({}));
+        runtimeRegistry.registerWorktree(runtimeWorktree);
+        const router = new GraphMessageRouter(
+            makeAccessorWithContext(repo, context),
+            () => undefined,
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry,
+        );
+
+        await router.handle({
+            type: 'graph/openWorktreeDiff',
+            worktreePath: '/repo/.worktrees/a',
+            filePath: 'src/dirty.ts',
+            status: 'M',
+        });
+
+        expect(runtimeWorktree.getFileAtRevision).toHaveBeenCalledWith('src/dirty.ts', 'HEAD');
+        expect(commands.calls).toHaveLength(1);
+        expect(commands.calls[0]?.command).toBe('vscode.diff');
+        expect(legacyExecRaw).not.toHaveBeenCalled();
     });
 
     it('marks worktree detail files that are submodule gitlinks', async () => {
@@ -703,6 +804,152 @@ describe('GraphMessageRouter graph data', () => {
         expect(vi.mocked(repo.removeWorktree)).toHaveBeenCalledWith('/repo/.worktrees/a', true);
     });
 
+    it('uses runtime repository capabilities for worktree add and remove commands', async () => {
+        const repo = makeRepositoryMock({
+            listWorktrees: vi.fn(async () => [
+                { ...worktree('/repo', 'main-head', 'main'), isMain: true },
+                worktree('/repo/.worktrees/a', 'topic-head', 'feature/a'),
+            ]),
+            getAllBranches: vi.fn(async () => [
+                { name: 'main', isRemote: false, isCurrent: true, hash: 'main-head', ahead: 0, behind: 0 },
+            ]),
+        });
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeRepository = runtimeRepositoryModel({
+            addWorktree: vi.fn(async () => {}),
+            removeWorktree: vi.fn(async () => {}),
+        });
+        runtimeRegistry.registerRepository(runtimeRepository);
+        runtimeRegistry.registerWorktree(runtimeWorktreeModel({ path: '/repo/.worktrees/a', worktreeId: 'a' }));
+        const router = new GraphMessageRouter(
+            makeAccessorWithContext(repo, context),
+            () => undefined,
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry,
+        );
+        const worktreePath = missingPath('look-git-add-runtime-wt-');
+
+        setInputBoxValues([worktreePath, 'feature/new']);
+        await router.handle({ type: 'graph/worktreeCommand', command: 'add' });
+        setWarningChoice('Remove');
+        await router.handle({ type: 'graph/worktreeCommand', command: 'remove', path: '/repo/.worktrees/a' });
+
+        expect(runtimeRepository.addWorktree).toHaveBeenCalledWith({
+            path: worktreePath,
+            branch: 'feature/new',
+            createNew: true,
+        });
+        expect(runtimeRepository.removeWorktree).toHaveBeenCalledWith('/repo/.worktrees/a', false);
+        expect(vi.mocked(repo.addWorktree)).not.toHaveBeenCalled();
+        expect(vi.mocked(repo.removeWorktree)).not.toHaveBeenCalled();
+    });
+
+    it('uses runtime capabilities for selected worktree branch checkout commands', async () => {
+        const legacyExec = vi.fn(async () => { throw new Error('legacy exec should not run'); });
+        const legacyGetAllBranches = vi.fn(async () => { throw new Error('legacy getAllBranches should not run'); });
+        const repo = makeRepositoryMock({
+            exec: legacyExec,
+            getAllBranches: legacyGetAllBranches,
+        });
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeRepository = runtimeRepositoryModel({
+            listBranches: vi.fn(async () => [
+                { name: 'feature/a', isCurrent: false, hash: 'abc123', ahead: 0, behind: 0, isRemote: false },
+                { name: 'origin/feature/a', isCurrent: false, hash: 'def456', ahead: 0, behind: 0, isRemote: true },
+            ]),
+        });
+        const runtimeWorktree = runtimeWorktreeModel({
+            path: '/repo/.worktrees/a',
+            worktreeId: 'a',
+            checkout: vi.fn(async () => {}),
+            checkoutNewBranch: vi.fn(async () => {}),
+        });
+        runtimeRegistry.registerRepository(runtimeRepository);
+        runtimeRegistry.registerWorktree(runtimeWorktree);
+        const router = new GraphMessageRouter(
+            makeAccessorWithContext(repo, context),
+            () => undefined,
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry,
+        );
+
+        setInputBoxValue('feature/new');
+        await router.handle({ type: 'graph/worktreeCommand', command: 'newBranch', path: '/repo/.worktrees/a' });
+        setQuickPickValue('feature/a');
+        await router.handle({ type: 'graph/worktreeCommand', command: 'checkoutBranch', path: '/repo/.worktrees/a' });
+
+        expect(runtimeWorktree.checkoutNewBranch).toHaveBeenCalledWith('feature/new', undefined);
+        expect(runtimeRepository.listBranches).toHaveBeenCalled();
+        expect(runtimeWorktree.checkout).toHaveBeenCalledWith('feature/a', {});
+        expect(legacyExec).not.toHaveBeenCalled();
+        expect(legacyGetAllBranches).not.toHaveBeenCalled();
+    });
+
+    it('uses runtime capabilities for selected worktree commit and stash commands', async () => {
+        const legacyExec = vi.fn(async () => { throw new Error('legacy exec should not run'); });
+        const legacyExecRaw = vi.fn(async () => { throw new Error('legacy execRaw should not run'); });
+        const repo = makeRepositoryMock({
+            exec: legacyExec,
+            execRaw: legacyExecRaw,
+        });
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeWorktree = runtimeWorktreeModel({
+            path: '/repo/.worktrees/a',
+            worktreeId: 'a',
+            getStatus: vi.fn(async () => ({
+                staged: [],
+                unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/dirty.ts' }],
+                conflicts: [],
+                conflictState: 'none',
+            })),
+            stageAll: vi.fn(async () => {}),
+            commit: vi.fn(async () => {}),
+            stash: vi.fn(async () => {}),
+        });
+        runtimeRegistry.registerRepository(runtimeRepositoryModel({}));
+        runtimeRegistry.registerWorktree(runtimeWorktree);
+        const router = new GraphMessageRouter(
+            makeAccessorWithContext(repo, context),
+            () => undefined,
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry,
+        );
+
+        setWarningChoice('Stage All and Commit');
+        setInputBoxValue('feat: runtime worktree commit');
+        await router.handle({ type: 'graph/worktreeCommand', command: 'commit', path: '/repo/.worktrees/a' });
+        setInputBoxValue('wip: runtime worktree stash');
+        await router.handle({ type: 'graph/worktreeCommand', command: 'stash', path: '/repo/.worktrees/a' });
+
+        expect(runtimeWorktree.getStatus).toHaveBeenCalled();
+        expect(runtimeWorktree.stageAll).toHaveBeenCalled();
+        expect(runtimeWorktree.commit).toHaveBeenCalledWith('feat: runtime worktree commit', {});
+        expect(runtimeWorktree.stash).toHaveBeenCalledWith('wip: runtime worktree stash', { includeUntracked: true });
+        expect(legacyExec).not.toHaveBeenCalled();
+        expect(legacyExecRaw).not.toHaveBeenCalled();
+    });
+
     it('blocks locking and unlocking the main worktree', async () => {
         const repo = makeRepositoryMock({
             listWorktrees: vi.fn(async () => [
@@ -797,6 +1044,41 @@ describe('GraphMessageRouter commit commands', () => {
         await router.handle({ type: 'graph/commitCommand', command: 'newWorktreeFromCommit', hash: 'abc123', hashes: ['abc123'] });
 
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['worktree', 'add', '-b', 'feature/from-commit', worktreePath, 'abc123']);
+    });
+
+    it('uses runtime repository capabilities for worktrees created from commits', async () => {
+        const repo = makeRepositoryMock();
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeRepository = runtimeRepositoryModel({
+            addWorktree: vi.fn(async () => {}),
+        });
+        runtimeRegistry.registerRepository(runtimeRepository);
+        runtimeRegistry.registerWorktree(runtimeWorktreeModel({}));
+        const router = new GraphMessageRouter(
+            makeAccessorWithContext(repo, context),
+            () => undefined,
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry,
+        );
+        const worktreePath = missingPath('look-git-commit-runtime-wt-');
+
+        setInputBoxValues([worktreePath, 'feature/from-commit']);
+        await router.handle({ type: 'graph/commitCommand', command: 'newWorktreeFromCommit', hash: 'abc123', hashes: ['abc123'] });
+
+        expect(runtimeRepository.addWorktree).toHaveBeenCalledWith({
+            path: worktreePath,
+            branch: 'feature/from-commit',
+            createNew: true,
+            startPoint: 'abc123',
+        });
+        expect(vi.mocked(repo.exec)).not.toHaveBeenCalledWith(['worktree', 'add', '-b', 'feature/from-commit', worktreePath, 'abc123']);
     });
 
     it('compares a selected commit with a chosen worktree', async () => {
@@ -898,6 +1180,63 @@ describe('GraphMessageRouter commit commands', () => {
         await router.handle({ type: 'graph/commitCommand', command: 'resetCurrentBranchToHere', hash: 'abc123', hashes: ['abc123'] });
 
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['reset', '--keep', 'abc123']);
+    });
+
+    it('uses runtime worktree capabilities for active main commit reset commands', async () => {
+        const repo = makeRepositoryMock();
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeWorktree = runtimeWorktreeModel({
+            resetSoft: vi.fn(async () => {}),
+        });
+        runtimeRegistry.registerRepository(runtimeRepositoryModel({}));
+        runtimeRegistry.registerWorktree(runtimeWorktree);
+        const router = new GraphMessageRouter(
+            makeAccessorWithContext(repo, context),
+            () => undefined,
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry,
+        );
+
+        setQuickPickValue('Soft reset');
+        await router.handle({ type: 'graph/commitCommand', command: 'resetCurrentBranchToHere', hash: 'abc123', hashes: ['abc123'] });
+
+        expect(runtimeWorktree.resetSoft).toHaveBeenCalledWith('abc123');
+        expect(vi.mocked(repo.exec)).not.toHaveBeenCalledWith(['reset', '--soft', 'abc123']);
+    });
+
+    it('uses runtime worktree capabilities for active main single commit revert commands', async () => {
+        const repo = makeRepositoryMock();
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeWorktree = runtimeWorktreeModel({
+            revertCommit: vi.fn(async () => {}),
+        });
+        runtimeRegistry.registerRepository(runtimeRepositoryModel({}));
+        runtimeRegistry.registerWorktree(runtimeWorktree);
+        const router = new GraphMessageRouter(
+            makeAccessorWithContext(repo, context),
+            () => undefined,
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry,
+        );
+
+        await router.handle({ type: 'graph/commitCommand', command: 'revertCommit', hash: 'abc123', hashes: ['abc123'] });
+
+        expect(runtimeWorktree.revertCommit).toHaveBeenCalledWith('abc123', { noEdit: true });
+        expect(vi.mocked(repo.exec)).not.toHaveBeenCalledWith(['revert', '--no-edit', 'abc123']);
     });
 
     it('writes a patch file for the selected commits', async () => {
@@ -1044,6 +1383,40 @@ describe('GraphMessageRouter commit commands', () => {
 
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['reset', '--soft', 'HEAD~1']);
         expect(commands.calls).toEqual([]);
+    });
+
+    it('uses runtime capabilities for active main undo commit commands', async () => {
+        const legacyExec = vi.fn(async () => { throw new Error('legacy exec should not run'); });
+        const repo = makeRepositoryMock({ exec: legacyExec });
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeRepository = runtimeRepositoryModel({
+            resolveRef: vi.fn(async () => 'abc123'),
+        });
+        const runtimeWorktree = runtimeWorktreeModel({
+            undoLastCommit: vi.fn(async () => {}),
+        });
+        runtimeRegistry.registerRepository(runtimeRepository);
+        runtimeRegistry.registerWorktree(runtimeWorktree);
+        const router = new GraphMessageRouter(
+            makeAccessorWithContext(repo, context),
+            () => undefined,
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry,
+        );
+
+        setWarningChoice('Undo Commit');
+        await router.handle({ type: 'graph/commitCommand', command: 'undoCommit', hash: 'abc123', hashes: ['abc123'] });
+
+        expect(runtimeRepository.resolveRef).toHaveBeenCalledWith('HEAD');
+        expect(runtimeWorktree.undoLastCommit).toHaveBeenCalledWith('soft');
+        expect(legacyExec).not.toHaveBeenCalled();
     });
 
     it('runs commit commands inside the selected submodule scope', async () => {
@@ -1248,6 +1621,35 @@ describe('GraphMessageRouter branch commands', () => {
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['rebase', 'main']);
     });
 
+    it('uses runtime worktree capabilities for active main branch mutations', async () => {
+        const legacyMerge = vi.fn(async () => { throw new Error('legacy merge should not run'); });
+        const repo = makeRepositoryMock({ merge: legacyMerge });
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeWorktree = runtimeWorktreeModel({
+            merge: vi.fn(async () => {}),
+        });
+        runtimeRegistry.registerRepository(runtimeRepositoryModel({}));
+        runtimeRegistry.registerWorktree(runtimeWorktree);
+        const router = new GraphMessageRouter(
+            makeAccessorWithContext(repo, context),
+            () => undefined,
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry,
+        );
+
+        await router.handle({ type: 'graph/branchCommand', command: 'mergeInto', branch: 'feature/runtime', isRemote: false });
+
+        expect(runtimeWorktree.merge).toHaveBeenCalledWith('feature/runtime', {});
+        expect(legacyMerge).not.toHaveBeenCalled();
+    });
+
     it('runs branch commands inside the selected submodule scope', async () => {
         const repo = makeRepositoryMock({
             getSubmoduleStatus: vi.fn(async () => [submodule('modules/auth-kit', ' ')]),
@@ -1399,6 +1801,43 @@ describe('GraphMessageRouter branch commands', () => {
         expect(vi.mocked(repo.exec)).toHaveBeenCalledWith(['worktree', 'add', worktreePath, 'feature/a']);
     });
 
+    it('uses runtime repository capabilities for worktrees created from branches', async () => {
+        const repo = makeRepositoryMock({
+            listWorktrees: vi.fn(async () => [
+                { ...worktree('/repo', 'main-head', 'main'), isMain: true, branch: 'refs/heads/main' },
+            ]),
+        });
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeRepository = runtimeRepositoryModel({
+            addWorktree: vi.fn(async () => {}),
+        });
+        runtimeRegistry.registerRepository(runtimeRepository);
+        runtimeRegistry.registerWorktree(runtimeWorktreeModel({}));
+        const router = new GraphMessageRouter(
+            makeAccessorWithContext(repo, context),
+            () => undefined,
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry,
+        );
+        const worktreePath = missingPath('look-git-feature-runtime-wt-');
+
+        setInputBoxValue(worktreePath);
+        await router.handle({ type: 'graph/branchCommand', command: 'newWorktreeFromBranch', branch: 'feature/a', isRemote: false });
+
+        expect(runtimeRepository.addWorktree).toHaveBeenCalledWith({
+            path: worktreePath,
+            branch: 'feature/a',
+        });
+        expect(vi.mocked(repo.exec)).not.toHaveBeenCalledWith(['worktree', 'add', worktreePath, 'feature/a']);
+    });
+
     it('creates a new branch when adding a worktree from an already checked out branch', async () => {
         const repo = makeRepositoryMock({
             listWorktrees: vi.fn(async () => [
@@ -1490,6 +1929,39 @@ describe('GraphMessageRouter branch commands', () => {
         expect(vi.mocked(repo.removeWorktree)).toHaveBeenCalledWith('/repo/.worktrees/a', false);
     });
 
+    it('uses runtime repository capabilities for branch worktree removal', async () => {
+        const repo = makeRepositoryMock({
+            listWorktrees: vi.fn(async () => [
+                { ...worktree('/repo/.worktrees/a', 'topic-head', 'feature/a'), branch: 'refs/heads/feature/a' },
+            ]),
+        });
+        const context = repoContext();
+        const runtimeRegistry = new RepositoryRegistry();
+        const runtimeRepository = runtimeRepositoryModel({
+            removeWorktree: vi.fn(async () => {}),
+        });
+        runtimeRegistry.registerRepository(runtimeRepository);
+        runtimeRegistry.registerWorktree(runtimeWorktreeModel({}));
+        const router = new GraphMessageRouter(
+            makeAccessorWithContext(repo, context),
+            () => undefined,
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry,
+        );
+
+        setWarningChoice('Remove');
+        await router.handle({ type: 'graph/branchCommand', command: 'removeBranchWorktree', branch: 'feature/a', isRemote: false });
+
+        expect(runtimeRepository.removeWorktree).toHaveBeenCalledWith('/repo/.worktrees/a', false);
+        expect(vi.mocked(repo.removeWorktree)).not.toHaveBeenCalled();
+    });
+
     it('pushes branch worktrees to their configured upstream branch', async () => {
         const repo = makeRepositoryMock({
             listWorktrees: vi.fn(async () => [
@@ -1543,4 +2015,73 @@ function changesResourcesAt(callIndex: number): readonly unknown[] {
         }
     }
     return resources;
+}
+
+function repoContext(): RepoContext {
+    return {
+        id: 'repo',
+        cwd: '/workspace',
+        kind: RepoKind.Main,
+        label: 'workspace',
+    };
+}
+
+function makeAccessorWithContext(repo: GitRepository, context: RepoContext): ActiveRepositoryAccessor {
+    return {
+        currentRepository: repo,
+        currentContext: context,
+        requireRepository() {
+            return repo;
+        },
+    };
+}
+
+const runtime = {
+    supports: () => false,
+    execute: async () => undefined,
+} satisfies GitRuntime;
+
+function runtimeRepositoryModel(overrides: Partial<RuntimeRepository>): RuntimeRepository {
+    return {
+        repoId: 'repo',
+        gitDir: '/workspace/.git',
+        kind: 'main',
+        label: 'workspace',
+        runtime,
+        addWorktree: vi.fn(async () => {}),
+        removeWorktree: vi.fn(async () => {}),
+        resolveRef: vi.fn(async () => 'abc123'),
+        listBranches: vi.fn(async () => []),
+        deleteBranch: vi.fn(async () => {}),
+        renameBranch: vi.fn(async () => {}),
+        ...overrides,
+    } as RuntimeRepository;
+}
+
+function runtimeWorktreeModel(overrides: Partial<Worktree>): Worktree {
+    return {
+        repoId: 'repo',
+        worktreeId: 'repo',
+        path: '/workspace',
+        isMain: true,
+        head: 'abc123',
+        dirty: false,
+        runtime,
+        checkout: vi.fn(async () => {}),
+        checkoutNewBranch: vi.fn(async () => {}),
+        merge: vi.fn(async () => {}),
+        rebase: vi.fn(async () => {}),
+        cherryPick: vi.fn(async () => {}),
+        revertCommit: vi.fn(async () => {}),
+        getStatus: vi.fn(async () => ({ staged: [], unstaged: [], conflicts: [], conflictState: 'none' })),
+        stageAll: vi.fn(async () => {}),
+        commit: vi.fn(async () => {}),
+        stash: vi.fn(async () => {}),
+        getFileAtRevision: vi.fn(async () => ''),
+        resetSoft: vi.fn(async () => {}),
+        resetMixed: vi.fn(async () => {}),
+        resetHard: vi.fn(async () => {}),
+        undoLastCommit: vi.fn(async () => {}),
+        ...overrides,
+    } as Worktree;
 }

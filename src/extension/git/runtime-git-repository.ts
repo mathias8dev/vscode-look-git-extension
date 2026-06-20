@@ -59,6 +59,14 @@ export class RuntimeGitRepository implements GitRepository {
         return this.execute('getCommitDetails', { commit }, signal);
     }
 
+    getCommitFiles(commit: string, signal?: AbortSignal): Promise<readonly GitFileChange[]> {
+        return this.execute('getCommitFiles', { commit }, signal);
+    }
+
+    getCommitMessage(commit: string, signal?: AbortSignal): Promise<string> {
+        return this.execute('getCommitMessage', { commit }, signal);
+    }
+
     getCommitPatch(commit: string, signal?: AbortSignal): Promise<string> {
         return this.execute('getCommitPatch', { commit }, signal);
     }
@@ -193,6 +201,14 @@ export class RuntimeGitRepository implements GitRepository {
 
     setRemoteUrl(remote: string, url: string, signal?: AbortSignal): Promise<void> {
         return this.execute('setRemoteUrl', { remote, url }, signal);
+    }
+
+    addRemote(name: string, url: string, signal?: AbortSignal): Promise<void> {
+        return this.execute('addRemote', { name, url }, signal);
+    }
+
+    removeRemote(remote: string, signal?: AbortSignal): Promise<void> {
+        return this.execute('removeRemote', remote, signal);
     }
 
     listWorktrees(signal?: AbortSignal): Promise<readonly GitWorktree[]> {

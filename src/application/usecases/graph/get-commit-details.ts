@@ -1,5 +1,9 @@
-import type { GitRepository } from '../../ports/git-repository';
 import type { GitFileChange } from '../../../core/git/domain/GitCommit';
+
+export interface CommitDetailsRepository {
+    getCommitFiles(commit: string, signal?: AbortSignal): Promise<readonly GitFileChange[]>;
+    getCommitMessage(commit: string, signal?: AbortSignal): Promise<string>;
+}
 
 export interface CommitDetailsResult {
     readonly hash: string;
@@ -8,7 +12,7 @@ export interface CommitDetailsResult {
 }
 
 export class GetCommitDetailsUseCase {
-    async execute(repo: GitRepository, hash: string, signal?: AbortSignal): Promise<CommitDetailsResult> {
+    async execute(repo: CommitDetailsRepository, hash: string, signal?: AbortSignal): Promise<CommitDetailsResult> {
         const [files, fullMessage] = await Promise.all([
             repo.getCommitFiles(hash, signal),
             repo.getCommitMessage(hash, signal),
