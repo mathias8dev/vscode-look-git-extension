@@ -10,6 +10,8 @@ import { registerReadonlyDiffDocumentProvider } from './utils/readonly-diff-docu
 import { registerGitBlobDocumentProvider } from './utils/git-blob-documents';
 import { registerWebviewFontSizeSync } from './views/webview-font';
 import { GitRootRepositoryResolver } from './repositories/GitRepositoryResolver';
+import { RepositoryRegistry } from './repositories/RepositoryRegistry';
+import { appendErrorToOutput } from './messaging/errorOutputChannel';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const gitApi = await getBuiltInGitApi();
@@ -22,6 +24,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         gitApi.repositories.find((r) => r.ui.selected) ?? gitApi.repositories[0];
 
     const repositories = new ActiveRepositoryRegistry();
+    const runtimeRepositories = new RepositoryRegistry();
     const repositoryResolver = new GitRootRepositoryResolver(repositories);
     const remoteCommands = defaultRemoteCommandBackend;
     const graphRepositoryRefreshers: Array<() => Promise<void>> = [];
@@ -47,6 +50,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         repositories.onDidChange(({ context: repoContext }) => {
             void vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', Boolean(repoContext));
             if (repoContext) {
+                void repositories.registerCurrentRuntimeContext(runtimeRepositories).catch((error) => {
+                    appendErrorToOutput({
+                        code: 'gitOperationFailed',
+                        message: error instanceof Error ? error.message : String(error),
+                        operation: 'runtimeRepositoryRegistration',
+                        recoverable: true,
+                    }, 'runtimeRepositoryRegistration');
+                });
                 void changesProvider.notifyRepoChanged(repoContext);
                 void commitHistoryProvider.notifyRepoChanged(repoContext);
                 void graphProvider.notifyRepoChanged(repoContext);
