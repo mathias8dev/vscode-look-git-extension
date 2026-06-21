@@ -941,14 +941,22 @@ export class ChangesMessageRouter {
                 return;
             case 'pushTo':
                 await this.runTrackedToolbarOperation(command, async () => {
-                    await pushCurrentBranchToPickedRemote(requireRuntimeRepository(), requireRuntimeWorktree(), false);
+                    const branch = await currentLocalBranchName(requireRuntimeRepository());
+                    if (!branch || branch === 'HEAD') { throw new Error('No local branch is checked out.'); }
+                    const remote = await pickRemote('Push branch to remote', requireRuntimeRepository());
+                    if (!remote) { return undefined; }
+                    await requireRuntimeWorktree().pushBranch(remote, branch, {});
                     await this.refreshAfterRepositoryUpdate();
                     return undefined;
                 });
                 return;
             case 'pushToForce':
                 await this.runTrackedToolbarOperation(command, async () => {
-                    await pushCurrentBranchToPickedRemote(requireRuntimeRepository(), requireRuntimeWorktree(), true);
+                    const branch = await currentLocalBranchName(requireRuntimeRepository());
+                    if (!branch || branch === 'HEAD') { throw new Error('No local branch is checked out.'); }
+                    const remote = await pickRemote('Force push branch to remote', requireRuntimeRepository());
+                    if (!remote) { return undefined; }
+                    await requireRuntimeWorktree().pushBranch(remote, branch, { forceWithLease: true });
                     await this.refreshAfterRepositoryUpdate();
                     return undefined;
                 });
@@ -1048,11 +1056,7 @@ export class ChangesMessageRouter {
             }
             case 'publishBranch': {
                 await this.runTrackedToolbarOperation(command, async () => {
-                    const branch = await currentLocalBranchName(requireRuntimeRepository());
-                    if (!branch || branch === 'HEAD') { throw new Error('No local branch is checked out.'); }
-                    const remote = await pickRemote('Publish branch to remote', requireRuntimeRepository());
-                    if (!remote) { return undefined; }
-                    await requireRuntimeWorktree().pushBranch(remote, branch, { setUpstream: true });
+                    await requireRuntimeWorktree().push(undefined, {});
                     await this.refreshAfterRepositoryUpdate();
                     return undefined;
                 });
@@ -1395,18 +1399,6 @@ async function conflictFileSet(worktree: Worktree): Promise<ReadonlySet<string>>
 
 function hasNewConflicts(conflictPaths: readonly string[], existingConflicts: ReadonlySet<string>): boolean {
     return conflictPaths.some((filePath) => !existingConflicts.has(filePath));
-}
-
-async function pushCurrentBranchToPickedRemote(
-    runtimeRepository: RuntimeGitRepository,
-    worktree: Worktree,
-    forceWithLease: boolean,
-): Promise<void> {
-    const branch = await currentLocalBranchName(runtimeRepository);
-    if (!branch || branch === 'HEAD') { throw new Error('No local branch is checked out.'); }
-    const remote = await pickRemote('Push branch to remote', runtimeRepository);
-    if (!remote) { return; }
-    await worktree.pushBranch(remote, branch, { forceWithLease });
 }
 
 async function popRuntimeStashWithLocalChangesHint(worktree: Worktree, stash: string): Promise<void> {

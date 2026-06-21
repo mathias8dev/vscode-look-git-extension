@@ -44,6 +44,15 @@ describe('HybridGitRuntime', () => {
 
         await expect(runtime.execute('push', context, {})).rejects.toBeInstanceOf(UnsupportedGitOperationError);
     });
+
+    it('falls back to the next runtime when a supported runtime cannot execute the operation for this context', async () => {
+        const runtime = new HybridGitRuntime([
+            unsupportedRuntime(),
+            fakeRuntime(true, 'cli'),
+        ]);
+
+        await expect(runtime.execute('push', context, {})).resolves.toBe('cli:push');
+    });
 });
 
 function fakeRuntime(supported: boolean, label: string): GitRuntime {
@@ -53,6 +62,17 @@ function fakeRuntime(supported: boolean, label: string): GitRuntime {
         },
         async execute<_TInput = unknown, TResult = unknown>(_operation: SemanticGitOperation): Promise<TResult> {
             return `${label}:${_operation}` as TResult; // Test runtime only returns the string result asserted by this spec.
+        },
+    };
+}
+
+function unsupportedRuntime(): GitRuntime {
+    return {
+        supports(): boolean {
+            return true;
+        },
+        async execute(operation: SemanticGitOperation, runtimeContext: GitExecutionContext): Promise<never> {
+            throw new UnsupportedGitOperationError(operation, runtimeContext);
         },
     };
 }

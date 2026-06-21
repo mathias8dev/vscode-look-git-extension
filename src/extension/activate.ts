@@ -4,6 +4,7 @@ import { CliGitRuntime } from '@extension/git/cli-git-runtime';
 import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { HybridGitRuntime } from '@extension/git/hybrid-git-runtime';
 import { RuntimeRepositoryFactory } from '@extension/git/runtime-repository-factory';
+import { VscodeGitRemoteRuntime } from '@extension/git/vscode-git-remote-runtime';
 import { RepositoryRuntimeRegistrar } from '@extension/repositories/repository-runtime-registrar';
 import { RepositorySelectionStore } from '@extension/repositories/repository-selection-store';
 import { discoverRepositoryContexts } from '@extension/repositories/repository-discovery';
@@ -22,7 +23,20 @@ import type { RepoContext } from '@core/git/domain/repo-context';
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     await migrateLookGitStorage(context);
 
+    /*
+     * Ce qui change :
+     * - HybridGitRuntime essaie maintenant le runtime suivant si un backend lève UnsupportedGitOperationError.
+     * - VscodeGitRemoteRuntime est ajouté avant le CLI dans activate.ts.
+     * - Les remote ops publiques VS Code Git passent par vscode.git, donc bénéficient de son auth/askpass UI :
+     *   - fetch
+     *   - fetchAll
+     *   - pull simple
+     *   - push
+     *   - pushBranch
+     *   - forcePushWithLease
+     */
     const gitRuntime = new HybridGitRuntime([
+        new VscodeGitRemoteRuntime(),
         new CliGitRuntime((args, runtimeContext, options) =>
             new GitCliBackend(runtimeContext.cwd).run(args, options)),
     ]);

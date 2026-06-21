@@ -14,8 +14,7 @@ import {
 } from '@extension/commands/git-command-helpers';
 import { requireRuntimeRepository, requireRuntimeWorktree, requireRuntimeWorktreePath, requireRuntimeWorktrees, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
 import { currentBranchName } from '@extension/git/current-branch';
-import { defaultRemote, localBranchNameForRemote, localNameForRemoteBranch, requireRemoteBranchName, resolveRemoteBranch } from '@extension/git/remote-branch';
-
+import { localBranchNameForRemote, localNameForRemoteBranch, resolveRemoteBranch } from '@extension/git/remote-branch';
 
 export async function runBranchCommand(
     repo: GitRepository,
@@ -226,10 +225,7 @@ async function pushBranchWorktree(
     runtimeTargets: RuntimeCommandTargets,
 ): Promise<void> {
     const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
-    const runtimeRepository = requireRuntimeRepository(runtimeTargets);
-    const upstream = await runtimeRepository.getUpstreamBranch(branch);
-    const remote = upstream ? requireRemoteBranchName(upstream).remote : await defaultRemote(runtimeRepository);
-    await requireRuntimeWorktreePath(runtimeTargets, worktree.path).pushBranch(remote, branch, { setUpstream: !upstream });
+    await requireRuntimeWorktreePath(runtimeTargets, worktree.path).pushBranch(undefined, branch, {});
 }
 
 async function lockBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean, runtimeRepository: GitRepository): Promise<void> {
@@ -269,10 +265,7 @@ function worktreeForBranch(worktrees: readonly GitWorktree[], branch: string): G
 }
 
 async function pushBranch(runtimeTargets: RuntimeCommandTargets, branch: string): Promise<void> {
-    const runtimeRepository = requireRuntimeRepository(runtimeTargets);
-    const upstream = await runtimeRepository.getUpstreamBranch(branch);
-    const remote = upstream ? requireRemoteBranchName(upstream).remote : await defaultRemote(runtimeRepository);
-    await requireRuntimeWorktree(runtimeTargets).pushBranch(remote, branch, { setUpstream: !upstream });
+    await requireRuntimeWorktree(runtimeTargets).pushBranch(undefined, branch, {});
 }
 
 async function updateSelectedLocalBranch(
