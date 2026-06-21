@@ -18,6 +18,7 @@ import { registerWebviewFontSizeSync } from '@extension/views/webview-font';
 import { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import { appendErrorToOutput } from '@extension/messaging/error-output-channel';
 import { migrateLookGitStorage } from '@extension/storage/look-git-storage';
+import { RepositoryWorkingTreeWatcher } from '@extension/watchers/repository-working-tree-watcher';
 import type { RepoContext } from '@core/git/domain/repo-context';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -60,14 +61,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         ]);
     }
 
+    const DEBOUNCE_MS = 150;
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+    function debouncedRefreshAll(): void {
+        if (debounceTimer) { clearTimeout(debounceTimer); }
+        debounceTimer = setTimeout(() => {
+            void refreshAll();
+        }, DEBOUNCE_MS);
+    }
+
+    const workingTreeWatcher = new RepositoryWorkingTreeWatcher(debouncedRefreshAll);
+
     function syncActiveRepo(): void {
         repositories.selectContextForResource(vscode.window.activeTextEditor?.document.uri.fsPath);
     }
 
     async function syncDiscoveredRepositories(): Promise<void> {
-        repositories.setContexts(await discoverRepositoryContexts({
+        const contexts = await discoverRepositoryContexts({
             workspaceFolders: vscode.workspace.workspaceFolders,
-        }));
+        });
+        repositories.setContexts(contexts);
+        workingTreeWatcher.setContexts(contexts);
     }
 
     async function handleRepositoryChanged(repoContext: RepoContext | undefined): Promise<void> {
@@ -108,6 +123,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         repositories,
         registerReadonlyDiffDocumentProvider(),
         registerGitBlobDocumentProvider(),
+        workingTreeWatcher,
         ...changesProvider.registerNativeContextCommands(),
         ...commitHistoryProvider.registerNativeContextCommands(),
         ...graphProvider.registerNativeContextCommands(),
@@ -123,16 +139,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             refreshAll,
         }),
     );
-
-    const DEBOUNCE_MS = 150;
-    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-
-    function debouncedRefreshAll(): void {
-        if (debounceTimer) { clearTimeout(debounceTimer); }
-        debounceTimer = setTimeout(() => {
-            void refreshAll();
-        }, DEBOUNCE_MS);
-    }
 
     context.subscriptions.push(
         vscode.workspace.onDidChangeWorkspaceFolders(() => {

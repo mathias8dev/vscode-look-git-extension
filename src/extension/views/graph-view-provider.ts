@@ -111,7 +111,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         });
 
         webviewView.onDidChangeVisibility(() => {
-            if (webviewView.visible) { this.router?.requestGraphRefresh(); }
+            if (webviewView.visible) { void this.router?.refreshGraphData(); }
         });
     }
 
@@ -132,6 +132,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
 
     /** Called by RepoRegistry when the active repo changes. */
     async notifyRepoChanged(context: RepoContext): Promise<void> {
+        this.router?.resetRefreshCache();
         this.view?.webview.postMessage({ type: 'repo/contextChanged', context: toSerializedRepoContext(context) });
     }
 
@@ -141,7 +142,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
 
     async refresh(): Promise<void> {
         if (!this.view?.visible) { return; }
-        this.router?.requestGraphRefresh();
+        await this.router?.refreshGraphData();
     }
 
     private async runCommitContextCommand(command: CommitCommand): Promise<void> {

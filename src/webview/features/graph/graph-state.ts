@@ -2,6 +2,7 @@ import { GraphOperationStatus, type GraphExtensionToWebviewMessage, type GraphOp
 import type { BranchInfo, CommitFileChange, GraphCommit, GraphData, GraphFilters, GraphSubmoduleInfo, TagInfo, WorktreeInfo, WorktreeWip } from '@protocol/graph/types';
 import type { ProtocolError } from '@protocol/shared/base';
 import type { RepositoryLocator } from '@protocol/shared/repo';
+import { branchesEqual, graphCommitsEqual, graphSubmodulesEqual, tagsEqual, worktreesEqual, worktreeWipsEqual as protocolWorktreeWipsEqual } from '@protocol/shared/protocol-data-equality';
 import { mainGraphRepositorySelection, sameRepositoryLocator, submoduleGraphRepositorySelection, type GraphRepositorySelection } from '@webview/features/graph/graph-repository-selection';
 import type { GraphRow, LaneData, LineDef } from '@webview/features/graph/layout/graph-lane-model';
 import { layoutGraphRowsV4, type GraphLayoutStateV4 } from '@webview/features/graph/layout/layout-graph-rows-v4';
@@ -526,7 +527,7 @@ function graphDataMatchesState(state: GraphState, data: GraphData, submodules: r
         && tagsEqual(state.tags, data.tags)
         && worktreesEqual(state.worktrees, data.worktrees)
         && worktreeWipsEqual(state.displayRows, data.worktreeWips)
-        && submodulesEqual(state.submodules, submodules);
+        && graphSubmodulesEqual(state.submodules, submodules);
 }
 
 function graphDataMatchesSelectedRepository(data: GraphData, state: GraphState): boolean {
@@ -553,94 +554,9 @@ function mergeSubmoduleSummaries(
     });
 }
 
-function graphCommitsEqual(a: readonly GraphCommit[], b: readonly GraphCommit[]): boolean {
-    return arraysEqual(a, b, graphCommitEqual);
-}
-
-function graphCommitEqual(a: GraphCommit, b: GraphCommit): boolean {
-    return a.hash === b.hash
-        && a.shortHash === b.shortHash
-        && a.message === b.message
-        && a.authorName === b.authorName
-        && a.authorEmail === b.authorEmail
-        && a.authorDate === b.authorDate
-        && a.matchesFilter === b.matchesFilter
-        && a.canCherryPick === b.canCherryPick
-        && stringArraysEqual(a.parentHashes, b.parentHashes)
-        && stringArraysEqual(a.refs, b.refs);
-}
-
-function branchesEqual(a: readonly BranchInfo[], b: readonly BranchInfo[]): boolean {
-    return arraysEqual(a, b, branchEqual);
-}
-
-function branchEqual(a: BranchInfo, b: BranchInfo): boolean {
-    return a.name === b.name
-        && a.isRemote === b.isRemote
-        && a.isCurrent === b.isCurrent
-        && a.hash === b.hash
-        && a.upstream === b.upstream
-        && a.ahead === b.ahead
-        && a.behind === b.behind;
-}
-
-function tagsEqual(a: readonly TagInfo[], b: readonly TagInfo[]): boolean {
-    return arraysEqual(a, b, (left, right) => left.name === right.name && left.hash === right.hash);
-}
-
-function worktreesEqual(a: readonly WorktreeInfo[], b: readonly WorktreeInfo[]): boolean {
-    return arraysEqual(a, b, worktreeEqual);
-}
-
-function worktreeEqual(a: WorktreeInfo, b: WorktreeInfo): boolean {
-    return a.path === b.path
-        && a.head === b.head
-        && a.branch === b.branch
-        && a.isMain === b.isMain
-        && a.isDetached === b.isDetached
-        && a.isLocked === b.isLocked
-        && a.lockReason === b.lockReason;
-}
-
 function worktreeWipsEqual(displayRows: readonly DisplayRow[], wips: readonly WorktreeWip[]): boolean {
     const currentWips = displayRows
         .filter((displayRow): displayRow is Extract<DisplayRow, { readonly kind: 'wip' }> => displayRow.kind === 'wip')
         .map((displayRow) => displayRow.wip);
-    return arraysEqual(currentWips, wips, worktreeWipEqual);
-}
-
-function worktreeWipEqual(a: WorktreeWip, b: WorktreeWip): boolean {
-    return a.path === b.path
-        && a.head === b.head
-        && a.branch === b.branch
-        && a.staged === b.staged
-        && a.unstaged === b.unstaged
-        && a.untracked === b.untracked
-        && a.conflicts === b.conflicts;
-}
-
-function submodulesEqual(a: readonly GraphSubmoduleInfo[], b: readonly GraphSubmoduleInfo[]): boolean {
-    return arraysEqual(a, b, submoduleEqual);
-}
-
-function submoduleEqual(a: GraphSubmoduleInfo, b: GraphSubmoduleInfo): boolean {
-    return a.path === b.path
-        && a.name === b.name
-        && a.status === b.status
-        && branchesEqual(a.branches, b.branches)
-        && worktreesEqual(a.worktrees, b.worktrees);
-}
-
-function stringArraysEqual(a: readonly string[], b: readonly string[]): boolean {
-    return arraysEqual(a, b, (left, right) => left === right);
-}
-
-function arraysEqual<T>(a: readonly T[], b: readonly T[], itemEqual: (left: T, right: T) => boolean): boolean {
-    if (a.length !== b.length) { return false; }
-    for (let index = 0; index < a.length; index += 1) {
-        const left = a[index];
-        const right = b[index];
-        if (left === undefined || right === undefined || !itemEqual(left, right)) { return false; }
-    }
-    return true;
+    return protocolWorktreeWipsEqual(currentWips, wips);
 }

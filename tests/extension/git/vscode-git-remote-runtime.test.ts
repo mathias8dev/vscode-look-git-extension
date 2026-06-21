@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import * as vscode from 'vscode';
 import { UnsupportedGitOperationError, type GitExecutionContext } from '@application/ports/git-runtime';
-import { VscodeGitRemoteRuntime, type VscodeGitApi, type VscodeGitRepository } from '@extension/git/vscode-git-remote-runtime';
+import type { VscodeGitApi, VscodeGitRepository } from '@extension/git/vscode-git-api';
+import { VscodeGitRemoteRuntime } from '@extension/git/vscode-git-remote-runtime';
 
 const context = {
     cwd: '/repo',

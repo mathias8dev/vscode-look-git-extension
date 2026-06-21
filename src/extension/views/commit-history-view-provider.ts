@@ -24,10 +24,14 @@ import { commitFileTempDiffUris } from '@extension/utils/diff-uris';
 import type { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import type { RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
 import { requireRuntimeLocator } from '@extension/repositories/runtime-repository-locator';
+import { historyDataEqual } from '@protocol/shared/protocol-data-equality';
+import { DISTINCT_MESSAGE_LAST_VALUE_ONLY, DistinctMessagePoster } from '@extension/messaging/distinct-message-poster';
 
 const DEFAULT_PAGE: Pagination = { offset: 0, limit: 50 };
 const MAX_PAGE_LIMIT = 300;
 const MAIN_REPOSITORY_SCOPE_LABEL = 'Main Repository';
+const HISTORY_DATA_KEY_SEPARATOR = ':';
+const FILE_HISTORY_DATA_KEY = 'file-history';
 const HISTORY_COMMIT_COMMANDS: readonly { readonly id: string; readonly command: CommitCommand }[] = [
     { id: 'lookGit.history.copyRevisionNumber', command: 'copyRevisionNumber' },
     { id: 'lookGit.history.createPatch', command: 'createPatch' },
@@ -74,6 +78,11 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     private selectedRepositoryScope: HistoryRepositoryScope | undefined;
     private refCache?: HistoryRefCache;
     private operationSequence = 0;
+    private readonly historyDataPoster = new DistinctMessagePoster<HistoryExtensionToWebviewMessage, HistoryData>(
+        (message) => { this.postMessage(message); },
+        historyDataEqual,
+        DISTINCT_MESSAGE_LAST_VALUE_ONLY,
+    );
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -120,7 +129,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             this.refCache = undefined;
             await this.syncSubmoduleScopeContext();
             const data = await this.loadHistoryPage(DEFAULT_PAGE);
-            this.postMessage({ type: 'history/data', data });
+            this.postHistoryDataIfChanged(data);
         } catch (error) {
             this.postHistoryError(error, 'history/refresh', 'refreshFailed');
         }
@@ -520,6 +529,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         this.selectedRepositoryScope = undefined;
         this.contextRepository = undefined;
         this.refCache = undefined;
+        this.historyDataPoster.clear();
         this.view?.webview.postMessage({ type: 'repo/contextChanged', context: toSerializedRepoContext(context) });
         await this.refresh();
     }
@@ -530,6 +540,18 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private postMessage(message: HistoryExtensionToWebviewMessage): void {
         void this.view?.webview.postMessage(message);
+    }
+
+    private postHistoryDataIfChanged(data: HistoryData): void {
+        this.historyDataPoster.postIfChanged(this.historyDataKey(), data, { type: 'history/data', data });
+    }
+
+    private historyDataKey(): string {
+        return [
+            this.repositories.currentContext?.id ?? '',
+            this.selectedRepositoryScope?.path ?? '',
+            this.selectedHistoryRef ?? '',
+        ].join(HISTORY_DATA_KEY_SEPARATOR);
     }
 
     private renderWebviewHtml(webviewView: vscode.WebviewView): void {
@@ -659,6 +681,11 @@ interface LineRange {
 
 class FileHistoryPanelController {
     private refCache?: HistoryRefCache;
+    private readonly historyDataPoster = new DistinctMessagePoster<HistoryExtensionToWebviewMessage, HistoryData>(
+        (message) => { this.postMessage(message); },
+        historyDataEqual,
+        DISTINCT_MESSAGE_LAST_VALUE_ONLY,
+    );
 
     constructor(
         private readonly panel: vscode.WebviewPanel,
@@ -708,7 +735,7 @@ class FileHistoryPanelController {
         try {
             this.refCache = undefined;
             const data = await this.loadHistoryPage(DEFAULT_PAGE);
-            this.postMessage({ type: 'history/data', data });
+            this.historyDataPoster.postIfChanged(FILE_HISTORY_DATA_KEY, data, { type: 'history/data', data });
         } catch (error) {
             this.postHistoryError(error, 'history/refresh', 'refreshFailed');
         }

@@ -6,6 +6,7 @@ import {
     type GraphWebviewToExtensionMessage,
     type GraphExtensionToWebviewMessage,
     type GraphDataResponse,
+    type GraphDataRequest,
     type CommitDetailsResponse,
     type WorktreeDetailsResponse,
     type OpenWorktreeDiffRequest,
@@ -34,16 +35,26 @@ import { appendErrorToOutput, showErrorOutput } from '@extension/messaging/error
 import type { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import { requireRuntimeLocator } from '@extension/repositories/runtime-repository-locator';
 import { stableRepoContextId } from '@extension/repositories/repo-context-id';
+import { graphDataEqual } from '@protocol/shared/protocol-data-equality';
+import { DISTINCT_MESSAGE_LAST_VALUE_ONLY, DistinctMessagePoster } from '@extension/messaging/distinct-message-poster';
 
 type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
+const ACTIVE_REPOSITORY_KEY = 'active';
+const NO_REPOSITORY_ID = '';
+const GRAPH_REFRESH_OFFSET = 0;
+const GRAPH_REFRESH_LIMIT = 300;
 
 interface BranchFilterInvalidation {
     readonly branch: string;
     readonly repository?: RepositoryLocator;
 }
 
+type LastGraphDataRequest = Pick<GraphDataRequest, 'repoId' | 'repository' | 'filters' | 'page'>;
+
 export class GraphMessageRouter {
     private readonly pending = new Map<string, AbortController>();
+    private readonly graphDataPoster: DistinctMessagePoster<GraphExtensionToWebviewMessage, GraphData>;
+    private lastGraphDataRequest: LastGraphDataRequest | undefined;
     private operationSequence = 0;
 
     constructor(
@@ -55,7 +66,9 @@ export class GraphMessageRouter {
         private readonly getWorktreeDetails = new GetWorktreeDetailsUseCase(),
         private readonly extensionUri?: vscode.Uri,
         private readonly runtimeRepositories?: RepositoryRegistry,
-    ) {}
+    ) {
+        this.graphDataPoster = new DistinctMessagePoster(postMessage, graphDataEqual, DISTINCT_MESSAGE_LAST_VALUE_ONLY);
+    }
 
     dispose(): void {
         for (const ctrl of this.pending.values()) { ctrl.abort(); }
@@ -148,6 +161,8 @@ export class GraphMessageRouter {
                 this.pending.set(key, ctrl);
                 try {
                     const data = await this.buildGraphData(msg.filters, msg.page.offset, msg.page.limit, ctrl.signal, msg.repository, false);
+                    this.lastGraphDataRequest = graphDataRequestSnapshot(msg);
+                    this.graphDataPoster.remember(key, data);
                     const response: GraphDataResponse = { type: 'graph/dataResponse', requestId: msg.requestId, data };
                     this.postMessage(response);
                     this.requestGraphSubmoduleHydration(repoId, msg.repository, data);
@@ -254,16 +269,51 @@ export class GraphMessageRouter {
         try {
             const context = this.repositories.currentContext;
             if (!context) {
-                this.postMessage({ type: 'graph/dataPush', repoId: '', data: emptyGraphData() });
+                this.postEmptyGraphDataIfChanged();
                 return;
             }
-            const data = await this.buildGraphData(filters ?? {}, 0, 300, signal, undefined, false);
-            this.postMessage({ type: 'graph/dataPush', repoId: context.id, data });
-            this.requestGraphSubmoduleHydration(context.id, undefined, data);
+            const data = await this.buildGraphData(filters ?? {}, GRAPH_REFRESH_OFFSET, GRAPH_REFRESH_LIMIT, signal, undefined, false);
+            this.postGraphDataPushIfChanged(context.id, undefined, data);
         } catch (error) {
             if (isAbortError(error)) { return; }
             this.postGraphError(error, { operation: 'graph/refresh', code: 'refreshFailed' });
         }
+    }
+
+    async refreshGraphData(): Promise<void> {
+        if (!this.lastGraphDataRequest) {
+            this.requestGraphRefresh();
+            return;
+        }
+
+        const repoId = this.repoIdForRequest(this.lastGraphDataRequest.repoId);
+        const key = graphRequestKey(repoId, this.lastGraphDataRequest.repository, 'replace');
+        if (this.pending.has(key)) { return; }
+
+        const ctrl = new AbortController();
+        this.pending.set(key, ctrl);
+        try {
+            const request = this.lastGraphDataRequest;
+            const data = await this.buildGraphData(
+                request.filters,
+                request.page.offset,
+                request.page.limit,
+                ctrl.signal,
+                request.repository,
+                false,
+            );
+            this.postGraphDataPushIfChanged(repoId, request.repository, data);
+        } catch (error) {
+            if (isAbortError(error)) { return; }
+            this.postGraphError(error, { operation: 'graph/refresh', code: 'refreshFailed' });
+        } finally {
+            if (this.pending.get(key) === ctrl) { this.pending.delete(key); }
+        }
+    }
+
+    resetRefreshCache(): void {
+        this.graphDataPoster.clear();
+        this.lastGraphDataRequest = undefined;
     }
 
     private async buildGraphData(
@@ -286,7 +336,7 @@ export class GraphMessageRouter {
     }
 
     private repoIdForRequest(repoId: string | undefined): string {
-        return repoId ?? this.repositories.currentContext?.id ?? '';
+        return repoId ?? this.repositories.currentContext?.id ?? NO_REPOSITORY_ID;
     }
 
     private abortPendingGraphSubmodules(repoId: string, repository: RepositoryLocator | undefined): void {
@@ -322,6 +372,17 @@ export class GraphMessageRouter {
             .finally(() => {
                 if (this.pending.get(key) === ctrl) { this.pending.delete(key); }
             });
+    }
+
+    private postGraphDataPushIfChanged(repoId: string, repository: RepositoryLocator | undefined, data: GraphData): void {
+        const key = graphRequestKey(repoId, repository, 'replace');
+        if (this.graphDataPoster.postIfChanged(key, data, { type: 'graph/dataPush', repoId, data })) {
+            this.requestGraphSubmoduleHydration(repoId, repository, data);
+        }
+    }
+
+    private postEmptyGraphDataIfChanged(): void {
+        this.postGraphDataPushIfChanged(NO_REPOSITORY_ID, undefined, emptyGraphData());
     }
 
     private async buildGraphSubmodules(repository: RepositoryLocator | undefined, signal?: AbortSignal): Promise<readonly GraphSubmoduleInfo[]> {
@@ -534,7 +595,16 @@ function toProtocolGraphData(result: GraphDataResult, repository: RepositoryLoca
 }
 
 function graphRequestKey(repoId: string, repository: RepositoryLocator | undefined, kind: 'replace' | 'more' | 'submodules'): string {
-    return `${repoId}:${repository?.repoId ?? 'active'}:${kind}`;
+    return `${repoId}:${repository?.repoId ?? ACTIVE_REPOSITORY_KEY}:${kind}`;
+}
+
+function graphDataRequestSnapshot(request: GraphDataRequest): LastGraphDataRequest {
+    return {
+        repoId: request.repoId,
+        repository: request.repository,
+        filters: request.filters,
+        page: request.page,
+    };
 }
 
 function requestIdOf(msg: GraphWebviewToExtensionMessage): RequestId | undefined {
