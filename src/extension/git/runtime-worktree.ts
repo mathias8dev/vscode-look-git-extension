@@ -415,7 +415,7 @@ export class RuntimeWorktree implements Worktree {
     }
 
     pushTags(remote: string, options: PushOptions, signal?: AbortSignal): Promise<void> {
-        return this.execute('pushTags', remote, signal);
+        return this.execute('pushTags', { remote, options }, signal);
     }
 
     forcePushWithLease(remote: string, branch: string, signal?: AbortSignal): Promise<void> {

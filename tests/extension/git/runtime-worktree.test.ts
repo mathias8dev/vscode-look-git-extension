@@ -62,7 +62,7 @@ describe('RuntimeWorktree', () => {
         expect(calls.map((call) => call.input)).toEqual([
             'HEAD~1',
             'stash@{0}',
-            'origin',
+            { remote: 'origin', options: {} },
             { paths: ['src/conflict.ts'] },
             { paths: ['src/other.ts'] },
             { path: 'src/head.ts', revision: 'HEAD' },
@@ -71,6 +71,57 @@ describe('RuntimeWorktree', () => {
             { stash: 'stash@{2}' },
             { stash: 'stash@{3}' },
         ]);
+    });
+
+    it('preserves guarded rewrite, reset, clean, and remote action inputs', async () => {
+        const calls: RuntimeCall[] = [];
+        const signal = new AbortController().signal;
+        const worktree = new RuntimeWorktree({
+            repoId: 'repo',
+            worktreeId: 'main',
+            path: '/repo',
+            gitDir: '/repo/.git',
+            repositoryKind: 'main',
+            isMain: true,
+            head: 'abc123',
+            dirty: true,
+        }, recordingRuntime(calls, [
+            'squashCommits',
+            'fixupCommits',
+            'dropCommit',
+            'cherryPick',
+            'revertCommit',
+            'resetPaths',
+            'restoreFromReflog',
+            'cleanIgnored',
+            'pushRef',
+            'forcePushWithLease',
+        ]));
+
+        await worktree.squashCommits(['a1', 'b2'], 'feat: squashed');
+        await worktree.fixupCommits(['c3']);
+        await worktree.dropCommit('d4');
+        await worktree.cherryPick('e5', { noCommit: true });
+        await worktree.revertCommit('f6', { noCommit: true, noEdit: true });
+        await worktree.resetPaths(['src/a.ts'], 'HEAD~1');
+        await worktree.restoreFromReflog('HEAD@{1}', 'mixed');
+        await worktree.cleanIgnored(['dist'], { directories: true, force: true });
+        await worktree.pushRef('upstream', 'HEAD', 'refs/heads/main', { forceWithLease: true });
+        await worktree.forcePushWithLease('upstream', 'main', signal);
+
+        expect(calls.map((call) => call.input)).toEqual([
+            { commits: ['a1', 'b2'], message: 'feat: squashed' },
+            { commits: ['c3'] },
+            { commit: 'd4' },
+            { commit: 'e5', options: { noCommit: true } },
+            { commit: 'f6', options: { noCommit: true, noEdit: true } },
+            { paths: ['src/a.ts'], sourceRef: 'HEAD~1' },
+            { entry: 'HEAD@{1}', mode: 'mixed' },
+            { paths: ['dist'], options: { directories: true, force: true } },
+            { remote: 'upstream', sourceRef: 'HEAD', destinationRef: 'refs/heads/main', options: { forceWithLease: true } },
+            { remote: 'upstream', branch: 'main' },
+        ]);
+        expect(calls.at(-1)?.signal).toBe(signal);
     });
 
     it('forwards abort signals', async () => {

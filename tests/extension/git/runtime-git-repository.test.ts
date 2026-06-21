@@ -33,7 +33,7 @@ describe('RuntimeGitRepository', () => {
 
     it('forwards input and signal for topology actions', async () => {
         const calls: RuntimeCall[] = [];
-        const runtime = recordingRuntime(calls, ['addWorktree']);
+        const runtime = recordingRuntime(calls, ['addWorktree', 'addDetachedWorktree', 'removeWorktree', 'deleteRemoteBranch', 'setRemoteUrl']);
         const signal = new AbortController().signal;
         const repository = new RuntimeGitRepository({
             repoId: 'repo',
@@ -44,11 +44,40 @@ describe('RuntimeGitRepository', () => {
         }, runtime);
 
         await repository.addWorktree({ path: '/repo-feature', branch: 'feature/new', createNew: true }, signal);
+        await repository.addDetachedWorktree('/repo-detached', 'abc123');
+        await repository.removeWorktree('/repo-feature', true);
+        await repository.deleteRemoteBranch('upstream', 'feature/old');
+        await repository.setRemoteUrl('upstream', 'git@example.com:team/repo.git');
 
-        expect(calls[0]).toMatchObject({
-            operation: 'addWorktree',
-            input: { path: '/repo-feature', branch: 'feature/new', createNew: true },
-            signal,
+        expect(calls.map((call) => call.input)).toEqual([
+            { path: '/repo-feature', branch: 'feature/new', createNew: true },
+            { path: '/repo-detached', ref: 'abc123' },
+            { worktree: '/repo-feature', force: true },
+            { remote: 'upstream', branch: 'feature/old' },
+            { remote: 'upstream', url: 'git@example.com:team/repo.git' },
+        ]);
+        expect(calls[0]?.signal).toBe(signal);
+    });
+
+    it('preserves submodule repository context for semantic actions', async () => {
+        const calls: RuntimeCall[] = [];
+        const repository = new RuntimeGitRepository({
+            repoId: 'submodule',
+            cwd: '/repo/libs/auth',
+            gitDir: '/repo/.git/modules/libs/auth',
+            kind: 'submodule',
+            label: 'auth',
+            parentRepositoryId: 'repo',
+        }, recordingRuntime(calls, ['listBranches']));
+
+        await repository.listBranches();
+
+        expect(calls[0]?.context).toEqual({
+            cwd: '/repo/libs/auth',
+            gitDir: '/repo/.git/modules/libs/auth',
+            repositoryId: 'submodule',
+            kind: 'submodule',
+            parentRepositoryId: 'repo',
         });
     });
 

@@ -2475,8 +2475,8 @@
     "vsix": "node scripts/package-vsix.ts",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "test:integration": "npm run compile && npm run compile:tests && node ./out/tests/integration/runTest.js",
-    "test:e2e": "npm run compile && npm run compile:tests && node ./out/tests/e2e/runE2e.js",
+    "test:integration": "npm run compile && npm run compile:tests && node ./out/tests/integration/run-test.js",
+    "test:e2e": "npm run compile && npm run compile:tests && node ./out/tests/e2e/run-e2e.js",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\" \"*.js\" \"*.mjs\" --max-warnings=0",
     "check:duplication": "jscpd src/ --min-lines 5 --min-tokens 50 --threshold 3",
     "publish:ext": "npx @vscode/vsce publish"

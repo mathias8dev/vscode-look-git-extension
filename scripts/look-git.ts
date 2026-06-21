@@ -55,6 +55,8 @@ const scenarios = new Map<string, ScenarioSetup>([
     ['remote-only', setupRemoteOnly],
     ['remote-unavailable', setupRemoteUnavailable],
     ['remotes', setupRemote],
+    ['semantic-actions', setupSemanticActions],
+    ['semantic-git-actions', setupSemanticActions],
     ['stash-pop-blocked', setupStashPopBlocked],
     ['stash-pop-local-changes', setupStashPopBlocked],
     ['submodules', setupSubmodules],
@@ -142,6 +144,7 @@ function printHelp(): void {
         '  ./lookGit setup remote-only',
         '  ./lookGit setup unpublished-branch',
         '  ./lookGit setup remote-unavailable',
+        '  ./lookGit setup semantic-actions',
         '  ./lookGit setup stash-pop-blocked',
         '  ./lookGit setup rebase-conflicts --output /tmp/look-git-fixtures',
         '  ./lookGit setup worktrees',
@@ -186,6 +189,7 @@ function uniqueScenarios(): readonly string[] {
         'remote',
         'remote-only',
         'remote-unavailable',
+        'semantic-actions',
         'stash-pop-blocked',
         'submodules',
         'unpublished-branch',
@@ -201,6 +205,7 @@ function canonicalScenarioName(name: string): string {
     if (name === 'heavy-graph') { return 'graph-heavy'; }
     if (name === 'interactive-rebase-multiple-conflicts') { return 'interactive-rebase-conflicts'; }
     if (name === 'remote-failure' || name === 'remote-offline') { return 'remote-unavailable'; }
+    if (name === 'semantic-git-actions') { return 'semantic-actions'; }
     if (name === 'unpublished') { return 'unpublished-branch'; }
     if (name === 'stash-pop-local-changes') { return 'stash-pop-blocked'; }
     return name === 'merge-conflics' ? 'merge-conflicts' : name;
@@ -355,6 +360,76 @@ function setupBasics(target: string): void {
     write(target, 'notes/local.md', 'Untracked local note.\n');
     write(target, 'stash/wip.txt', 'stashed idea\n');
     git(target, ['stash', 'push', '-u', '-m', 'wip(core): stash fixture idea', '--', 'stash/wip.txt']);
+}
+
+function setupSemanticActions(target: string, outputRoot: string): void {
+    const remoteRoot = path.join(outputRoot, '.semantic-actions-remotes');
+    const worktreeRoot = path.join(outputRoot, '.semantic-actions-worktrees');
+    fs.rmSync(remoteRoot, { recursive: true, force: true });
+    fs.rmSync(worktreeRoot, { recursive: true, force: true });
+    fs.mkdirSync(remoteRoot, { recursive: true });
+    fs.mkdirSync(worktreeRoot, { recursive: true });
+
+    const origin = path.join(remoteRoot, 'origin.git');
+    initBareRepo(origin);
+    initRepo(target);
+    git(target, ['remote', 'add', 'origin', origin]);
+    write(target, '.gitignore', 'build/\n');
+    write(target, 'README.md', '# Semantic actions fixture\n\nReal git states for guarded semantic commands.\n');
+    commit(target, 'docs(core): add semantic actions overview', { author: nextAuthor() });
+    write(target, 'src/app.ts', 'export const app = "base";\n');
+    write(target, 'src/conflict.ts', 'export const conflictSide = "base";\n');
+    const sharedBase = commit(target, 'feat(core): add semantic action baseline', { author: nextAuthor() });
+
+    git(target, ['checkout', '-q', '-b', 'feature/cherry-pick-source', sharedBase]);
+    write(target, 'src/conflict.ts', 'export const conflictSide = "incoming";\n');
+    const conflictCommit = commit(target, 'feat(core): add incoming conflict side', { author: nextAuthor() });
+    git(target, ['tag', 'semantic-conflict-pick', conflictCommit]);
+    write(target, 'src/cherry-only.ts', 'export const cherryOnly = true;\n');
+    commit(target, 'feat(core): add clean cherry pick source', { author: nextAuthor() });
+
+    git(target, ['checkout', '-q', 'main']);
+    write(target, 'src/conflict.ts', 'export const conflictSide = "current";\n');
+    const resetBase = commit(target, 'feat(core): add current conflict side', { author: nextAuthor() });
+    git(target, ['tag', 'semantic-reset-base', resetBase]);
+    git(target, ['push', '-q', '-u', 'origin', 'main']);
+    git(target, ['push', '-q', 'origin', '--tags']);
+
+    git(target, ['checkout', '-q', '-b', 'feature/lease-preview', resetBase]);
+    write(target, 'src/lease/remote-base.ts', 'export const leaseRemoteBase = true;\n');
+    commit(target, 'feat(core): add force-with-lease remote base', { author: nextAuthor() });
+    git(target, ['push', '-q', '-u', 'origin', 'feature/lease-preview']);
+    write(target, 'src/lease/local-ahead.ts', 'export const leaseLocalAhead = true;\n');
+    commit(target, 'feat(core): add force-with-lease local ahead', { author: nextAuthor() });
+
+    git(target, ['checkout', '-q', '-b', 'feature/rewrite-stack', resetBase]);
+    write(target, 'src/rewrite/one.ts', 'export const rewriteOne = "reword";\n');
+    commit(target, 'feat(core): add rewrite reword target', { author: nextAuthor() });
+    write(target, 'src/rewrite/two.ts', 'export const rewriteTwo = "squash";\n');
+    commit(target, 'fixup! feat(core): add rewrite reword target', { author: nextAuthor() });
+    write(target, 'src/rewrite/three.ts', 'export const rewriteThree = "drop";\n');
+    commit(target, 'feat(core): add rewrite drop candidate', { author: nextAuthor() });
+
+    git(target, ['checkout', '-q', 'main']);
+    const reviewWorktree = addBranchWorktree(target, worktreeRoot, 'semantic-review', 'feature/semantic-worktree', resetBase);
+    write(reviewWorktree, 'src/worktree/review.ts', 'export const reviewWorktree = true;\n');
+    commit(reviewWorktree, 'feat(worktrees): add semantic review worktree', { author: nextAuthor() });
+    const detachedWorktree = addDetachedWorktree(target, worktreeRoot, 'semantic-detached', resetBase);
+    write(detachedWorktree, 'audit/detached-staged.md', '# Detached staged audit\n');
+    git(detachedWorktree, ['add', 'audit/detached-staged.md']);
+    write(detachedWorktree, 'audit/detached-local.md', '# Detached local audit\n');
+
+    write(target, 'src/reset/local-head.ts', 'export const localHead = true;\n');
+    commit(target, 'feat(core): add local reset candidate', { author: nextAuthor() });
+    git(target, ['tag', 'semantic-local-tag']);
+
+    write(target, 'stash/semantic-wip.txt', 'semantic stash payload\n');
+    git(target, ['stash', 'push', '-u', '-m', 'wip(semantic): stash action fixture', '--', 'stash/semantic-wip.txt']);
+    write(target, 'src/semantic-staged.ts', 'export const stagedSemantic = true;\n');
+    git(target, ['add', 'src/semantic-staged.ts']);
+    write(target, 'README.md', '# Semantic actions fixture\n\nUnstaged README change for restore/reset path tests.\n');
+    write(target, 'notes/semantic-untracked.md', 'Untracked semantic action note.\n');
+    write(target, 'build/cache.log', 'ignored semantic action cache\n');
 }
 
 function setupEmptyRepo(target: string): void {

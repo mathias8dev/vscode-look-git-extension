@@ -3,27 +3,30 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { runTests } from '@vscode/test-electron';
-import { fixtureRepoLaunchArgs } from '@tests/helpers/fixture-repo';
+import { createLookGitScenarioFixture } from '@tests/helpers/look-git-scenario';
 import { sanitizeVsCodeTestEnvironment } from '@tests/helpers/vscode-test-environment';
 
 async function main(): Promise<void> {
     const extensionDevelopmentPath = path.resolve(__dirname, '../../..');
     const extensionTestsPath = path.resolve(__dirname, 'suite');
     const diffFixturePath = createDiffFixtureRepo();
+    const semanticFixture = createLookGitScenarioFixture('semantic-actions', 'look-git-e2e-semantic-');
     const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-e2e-user-data-'));
 
     sanitizeVsCodeTestEnvironment();
     process.env.LOOK_GIT_DIFF_FIXTURE_REPO = diffFixturePath;
+    process.env.LOOK_GIT_SEMANTIC_FIXTURE_REPO = semanticFixture.repo;
 
     try {
         await runTests({
             extensionDevelopmentPath,
             extensionTestsPath,
-            launchArgs: [...workspaceArgs(diffFixturePath), `--user-data-dir=${userDataDir}`, '--disable-workspace-trust'],
+            launchArgs: [semanticFixture.repo, diffFixturePath, `--user-data-dir=${userDataDir}`, '--disable-workspace-trust'],
             version: '1.85.2',
         });
     } finally {
         fs.rmSync(diffFixturePath, { recursive: true, force: true });
+        semanticFixture.cleanup();
         fs.rmSync(userDataDir, { recursive: true, force: true });
     }
 }
@@ -33,13 +36,10 @@ main().catch((error) => {
     process.exit(1);
 });
 
-function workspaceArgs(diffFixturePath: string): readonly string[] {
-    return [...fixtureRepoLaunchArgs().filter((arg) => !arg.startsWith('--')), diffFixturePath];
-}
-
 function createDiffFixtureRepo(): string {
     const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-diff-e2e-'));
     git(repoPath, ['init']);
+    git(repoPath, ['checkout', '-q', '-b', 'main']);
     git(repoPath, ['config', 'user.email', 'e2e@example.com']);
     git(repoPath, ['config', 'user.name', 'Look Git E2E']);
     // Keep fixture file content byte-identical across OSes (Windows git defaults to autocrlf=true).

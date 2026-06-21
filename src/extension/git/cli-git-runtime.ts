@@ -134,7 +134,7 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     push: (input) => ({ args: pushArgs(input) }),
     pushBranch: (input) => ({ args: pushBranchArgs(input) }),
     pushRef: (input) => ({ args: ['push', requiredStringField(input, 'remote'), `${stringField(input, 'sourceRef')}:${requiredStringField(input, 'destinationRef')}`] }),
-    pushTags: (input) => ({ args: ['push', requiredString(input, 'remote'), '--tags'] }),
+    pushTags: (input) => ({ args: ['push', requiredStringField(input, 'remote'), '--tags'] }),
     forcePushWithLease: (input) => ({ args: ['push', '--force-with-lease', requiredStringField(input, 'remote'), requiredStringField(input, 'branch')] }),
     getMergeBase: (input) => ({ args: ['merge-base', requiredStringField(input, 'leftRef'), requiredStringField(input, 'rightRef')] }),
     getUserName: () => ({ args: ['config', 'user.name'] }),
