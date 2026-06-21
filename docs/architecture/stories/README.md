@@ -14,4 +14,5 @@ These stories describe target behavior for the current Look Git webviews and sha
 - [Changes](changes/README.md)
 - [Commit History](commit-history/README.md)
 - [Look Graph](look-graph/README.md)
+- [Semantic Git Actions](semantic-git-actions/README.md)
 - [Shared Runtime and Context](shared/README.md)

@@ -20,6 +20,25 @@ describe('HybridGitRuntime', () => {
         await expect(runtime.execute('push', context, {})).resolves.toBe('second:push');
     });
 
+    it('forwards context, input, and abort signal only to the selected runtime', async () => {
+        const calls: RuntimeCall[] = [];
+        const input = { remote: 'upstream', branch: 'main' };
+        const signal = new AbortController().signal;
+        const runtime = new HybridGitRuntime([
+            recordingRuntime({ label: 'cli', supported: false, calls }),
+            recordingRuntime({ label: 'vscode', supported: true, calls }),
+            recordingRuntime({ label: 'native', supported: true, calls }),
+        ]);
+
+        await expect(runtime.execute('forcePushWithLease', context, input, signal)).resolves.toBe('vscode:forcePushWithLease');
+
+        expect(calls).toEqual([
+            { label: 'cli', phase: 'supports', operation: 'forcePushWithLease', context, input: undefined, signal: undefined },
+            { label: 'vscode', phase: 'supports', operation: 'forcePushWithLease', context, input: undefined, signal: undefined },
+            { label: 'vscode', phase: 'execute', operation: 'forcePushWithLease', context, input, signal },
+        ]);
+    });
+
     it('throws when no runtime supports an operation', async () => {
         const runtime = new HybridGitRuntime([fakeRuntime(false, 'first')]);
 
@@ -34,6 +53,51 @@ function fakeRuntime(supported: boolean, label: string): GitRuntime {
         },
         async execute<_TInput = unknown, TResult = unknown>(_operation: SemanticGitOperation): Promise<TResult> {
             return `${label}:${_operation}` as TResult; // Test runtime only returns the string result asserted by this spec.
+        },
+    };
+}
+
+interface RuntimeCall {
+    readonly label: string;
+    readonly phase: 'supports' | 'execute';
+    readonly operation: SemanticGitOperation;
+    readonly context: GitExecutionContext;
+    readonly input: unknown;
+    readonly signal: AbortSignal | undefined;
+}
+
+function recordingRuntime(input: {
+    readonly label: string;
+    readonly supported: boolean;
+    readonly calls: RuntimeCall[];
+}): GitRuntime {
+    return {
+        supports(operation, runtimeContext): boolean {
+            input.calls.push({
+                label: input.label,
+                phase: 'supports',
+                operation,
+                context: runtimeContext,
+                input: undefined,
+                signal: undefined,
+            });
+            return input.supported;
+        },
+        async execute<TInput = unknown, TResult = unknown>(
+            operation: SemanticGitOperation,
+            runtimeContext: GitExecutionContext,
+            runtimeInput: TInput,
+            signal?: AbortSignal,
+        ): Promise<TResult> {
+            input.calls.push({
+                label: input.label,
+                phase: 'execute',
+                operation,
+                context: runtimeContext,
+                input: runtimeInput,
+                signal,
+            });
+            return `${input.label}:${operation}` as TResult;
         },
     };
 }

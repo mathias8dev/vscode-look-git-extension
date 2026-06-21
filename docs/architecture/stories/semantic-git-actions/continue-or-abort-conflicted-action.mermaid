@@ -1,0 +1,41 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as History or Changes Webview
+participant Router as Feature Message Router
+participant Registry as RepositoryRegistry
+participant UseCase as ConflictedActionUseCase
+participant Worktree as Worktree
+
+User->>App: Cherry-pick or revert commit
+App->>Router: action request(worktreeLocator, commit)
+Router->>Registry: resolveWorktree(worktreeLocator)
+Registry-->>Router: Worktree
+Router->>UseCase: execute action
+alt Cherry-pick selected
+  UseCase->>Worktree: cherryPick(commit, options)
+else Revert selected
+  UseCase->>Worktree: revertCommit(commit, options)
+end
+alt Git reports conflicts
+  UseCase->>Worktree: getStatus()
+  UseCase-->>Router: conflict state
+  Router-->>App: conflict push with paths
+  User->>App: Resolve files and continue
+  App->>Router: continue request(worktreeLocator, actionKind)
+  Router->>UseCase: continue action
+  alt Continue cherry-pick
+    UseCase->>Worktree: continueCherryPick()
+  else Continue revert
+    UseCase->>Worktree: continueRevert()
+  end
+  Router-->>App: operation success and refresh requested
+else User aborts
+  App->>Router: abort request(worktreeLocator, actionKind)
+  alt Abort cherry-pick
+    Router->>Worktree: abortCherryPick()
+  else Abort revert
+    Router->>Worktree: abortRevert()
+  end
+  Router-->>App: operation aborted and refresh requested
+end

@@ -330,11 +330,13 @@ describe('CliGitRuntime', () => {
         await runtime.execute('addDetachedWorktree', context, { path: '/tmp/revision', ref: 'abc123' });
         await runtime.execute('resetKeep', context, 'abc123');
         await runtime.execute('pushRef', context, { remote: 'origin', sourceRef: 'abc123', destinationRef: 'refs/heads/main' });
+        await runtime.execute('pushTags', context, { remote: 'origin', options: {} });
 
         expect(calls).toEqual([
             ['worktree', 'add', '--detach', '/tmp/revision', 'abc123'],
             ['reset', '--keep', 'abc123'],
             ['push', 'origin', 'abc123:refs/heads/main'],
+            ['push', 'origin', '--tags'],
         ]);
     });
 
