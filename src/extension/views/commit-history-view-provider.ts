@@ -3,7 +3,7 @@ import * as path from 'path';
 import type { GitCommit, GitFileChange } from '@core/git/domain/git-commit';
 import type { GitBranch, GitTag } from '@core/git/domain/git-status';
 import type { GitRepository, Worktree } from '@application/ports/git-topology';
-import type { ActiveRepositoryAccessor } from '@extension/repositories/active-repository-registry';
+import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
 import type { ErrorCode, Pagination, RequestId } from '@protocol/shared/base';
 import { OperationStatus } from '@protocol/shared/operation';
 import type { RepoContext } from '@core/git/domain/repo-context';
@@ -77,7 +77,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     constructor(
         private readonly extensionUri: vscode.Uri,
-        private readonly repositories: ActiveRepositoryAccessor,
+        private readonly repositories: RepositorySelectionAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
         _repositoryResolver?: unknown,
         private readonly runtimeRepositories?: RepositoryRegistry,

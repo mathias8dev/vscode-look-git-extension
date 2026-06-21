@@ -22,6 +22,8 @@ import {
 } from '@webview/features/changes/changes-state';
 import { changesStateToPersisted, readChangesStatePreferences } from '@webview/features/changes/changes-persistence';
 import { messageForOperationAction, type ActiveConflictState, type OperationAction } from '@webview/features/changes/operation-commands';
+import { changesSelectionTarget } from '@webview/features/changes/change-selection-model';
+import { messageForSelectionAction, ChangeSelectionAction } from '@webview/features/changes/selection-commands';
 import {
     messageForCreateStash,
     messageForStashAction,
@@ -178,6 +180,15 @@ export function ChangesWebview() {
             onBulkAction={(action: ChangeBulkAction) => postToExtension(messageForBulkAction(action))}
             onExplainSelection={(target) => postToExtension(messageForExplainSelection(target))}
             onSelectionContextTarget={(target) => postToExtension(messageForChangesContextTarget(target))}
+            onSelectionAction={(items, action) => {
+                if (action === ChangeSelectionAction.CreatePatch) {
+                    postToExtension({ type: 'changes/createPatchFromSelection', target: changesSelectionTarget(items) });
+                    return;
+                }
+                const message = messageForSelectionAction(items, action);
+                if (message) { postToExtension(message); }
+            }}
+            onClearSelection={() => dispatch({ type: 'clearSelection' })}
             onCommit={(message: string, mode: CommitMode) => {
                 dispatch({ type: 'rememberCommitMessage', message });
                 postToExtension({ type: 'changes/commit', message, mode });

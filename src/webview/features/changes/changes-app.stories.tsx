@@ -128,6 +128,8 @@ function appArgs(state: ChangesState) {
         onBulkAction: noop,
         onExplainSelection: noop,
         onSelectionContextTarget: noop,
+        onSelectionAction: noop,
+        onClearSelection: noop,
         onCommit: noop,
         onCommitComposerContextTarget: noop,
         onGenerateCommitMessage: noop,

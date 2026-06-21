@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ChangeSelectionAction, messageForSelectionAction, selectionActionsFor } from '@webview/features/changes/selection-commands';
+import { changesSelectionTarget } from '@webview/features/changes/change-selection-model';
 import { ChangeSectionId, type ChangeListItem } from '@webview/features/changes/change-tree';
 
 function item(section: ChangeSectionId, filePath: string): ChangeListItem {
@@ -33,6 +34,7 @@ describe('selectionCommands', () => {
             ChangeSelectionAction.Open,
             ChangeSelectionAction.Stage,
             ChangeSelectionAction.Discard,
+            ChangeSelectionAction.CreatePatch,
         ]);
         expect(actions.find((action) => action.action === ChangeSelectionAction.Diff)?.icon).toBe('diff');
         expect(actions.find((action) => action.action === ChangeSelectionAction.Discard)?.icon).toBe('discard');
@@ -42,6 +44,7 @@ describe('selectionCommands', () => {
             ChangeSelectionAction.AcceptOurs,
             ChangeSelectionAction.AcceptTheirs,
             ChangeSelectionAction.MarkResolved,
+            ChangeSelectionAction.CreatePatch,
         ]);
     });
 
@@ -69,15 +72,17 @@ describe('selectionCommands', () => {
         }));
     });
 
-    it('excludes submodules from unsafe selection actions', () => {
+    it('excludes submodules from unsafe selection payloads', () => {
         const selected = [submodule(ChangeSectionId.Unstaged, 'modules/lib'), item(ChangeSectionId.Unstaged, 'src/app.ts')];
         expect(selectionActionsFor(selected).map((action) => action.action)).toEqual([
             ChangeSelectionAction.Stage,
             ChangeSelectionAction.Discard,
+            ChangeSelectionAction.CreatePatch,
         ]);
         expect(messageForSelectionAction(selected, ChangeSelectionAction.Discard)).toEqual({
             type: 'changes/discardFiles',
             filePaths: ['src/app.ts'],
         });
+        expect(changesSelectionTarget(selected).patchUnstagedFilePaths).toEqual(['src/app.ts']);
     });
 });

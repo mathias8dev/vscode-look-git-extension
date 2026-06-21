@@ -61,6 +61,15 @@ describe('parseWorktreeList', () => {
         expect(locked.lockReason).toBe('needs review');
     });
 
+    it('parses prunable worktrees with a reason', () => {
+        const output = MAIN_STANZA + '\n\nworktree /tmp/missing\nHEAD def456\nbranch refs/heads/missing\nprunable gitdir file points to non-existent location\n\n';
+        const result = parseWorktreeList(output);
+        const prunable = expectItem(result, 1);
+
+        expect(prunable.isPrunable).toBe(true);
+        expect(prunable.pruneReason).toBe('gitdir file points to non-existent location');
+    });
+
     it('skips empty stanzas', () => {
         const output = '\n\n' + MAIN_STANZA + '\n\n\n\n';
         const result = parseWorktreeList(output);

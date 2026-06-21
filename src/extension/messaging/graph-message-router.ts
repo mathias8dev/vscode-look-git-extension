@@ -19,7 +19,7 @@ import type { GitRepository } from '@application/ports/git-topology';
 import { GetGraphDataUseCase, type GraphDataResult } from '@application/usecases/graph/get-graph-data';
 import { GetCommitDetailsUseCase } from '@application/usecases/graph/get-commit-details';
 import { GetWorktreeDetailsUseCase } from '@application/usecases/graph/get-worktree-details';
-import type { ActiveRepositoryAccessor } from '@extension/repositories/active-repository-registry';
+import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
 import { toProtocolBranch, toProtocolGraphCommit, toProtocolGraphSubmodule, toProtocolWorktree } from '@extension/mapping/to-protocol';
 import { runCommitCommand } from '@extension/commands/commit-commands';
 import { runBranchCommand } from '@extension/commands/branch-commands';
@@ -47,7 +47,7 @@ export class GraphMessageRouter {
     private operationSequence = 0;
 
     constructor(
-        private readonly repositories: ActiveRepositoryAccessor,
+        private readonly repositories: RepositorySelectionAccessor,
         private readonly postMessage: PostMessage,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
         private readonly getGraphData = new GetGraphDataUseCase(),

@@ -115,6 +115,32 @@ describe('RuntimeRepositoryFactory', () => {
         });
     });
 
+    it('skips prunable linked worktrees during runtime registration', async () => {
+        const runtime = runtimeWith({
+            worktrees: [
+                gitWorktree('/repo', 'abc123', 'refs/heads/main', true),
+                { ...gitWorktree('/tmp/missing', 'def456', 'refs/heads/missing', false), isPrunable: true },
+            ],
+            statusByCwd: {
+                '/tmp/missing': {
+                    staged: [],
+                    unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'missing.ts' }],
+                    conflicts: [],
+                    conflictState: 'none',
+                },
+            },
+        });
+        const factory = new RuntimeRepositoryFactory(runtime);
+        const worktrees = await factory.createWorktrees({
+            id: 'repo',
+            cwd: '/repo',
+            kind: RepoKind.Main,
+            label: 'repo',
+        });
+
+        expect(worktrees.map((worktree) => worktree.path)).toEqual(['/repo']);
+    });
+
     it('maps submodule contexts to submodule repositories', async () => {
         const runtime = runtimeWith();
         const factory = new RuntimeRepositoryFactory(runtime);

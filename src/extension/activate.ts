@@ -1,27 +1,33 @@
 import * as vscode from 'vscode';
-import type { Repository } from '@extension/adapters/vscode/git-api';
-import { ActiveRepositoryRegistry } from '@extension/repositories/active-repository-registry';
+import { registerResetExtensionStateCommand } from '@extension/commands/reset-extension-state-command';
+import { CliGitRuntime } from '@extension/git/cli-git-runtime';
+import { GitCliBackend } from '@extension/git/git-cli-backend';
+import { HybridGitRuntime } from '@extension/git/hybrid-git-runtime';
+import { RuntimeRepositoryFactory } from '@extension/git/runtime-repository-factory';
+import { RepositoryRuntimeRegistrar } from '@extension/repositories/repository-runtime-registrar';
+import { RepositorySelectionStore } from '@extension/repositories/repository-selection-store';
+import { discoverRepositoryContexts } from '@extension/repositories/repository-discovery';
+import { registerRuntimeContextWithRecovery } from '@extension/repositories/runtime-registration-recovery';
 import { ChangesViewProvider } from '@extension/views/changes-view-provider';
 import { CommitHistoryViewProvider } from '@extension/views/commit-history-view-provider';
 import { GraphViewProvider } from '@extension/views/graph-view-provider';
-import { getBuiltInGitApi } from '@extension/utils/git-extension';
 import { registerReadonlyDiffDocumentProvider } from '@extension/utils/readonly-diff-documents';
 import { registerGitBlobDocumentProvider } from '@extension/utils/git-blob-documents';
 import { registerWebviewFontSizeSync } from '@extension/views/webview-font';
 import { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import { appendErrorToOutput } from '@extension/messaging/error-output-channel';
+import { migrateLookGitStorage } from '@extension/storage/look-git-storage';
+import type { RepoContext } from '@core/git/domain/repo-context';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    const gitApi = await getBuiltInGitApi();
-    if (!gitApi) { return; }
+    await migrateLookGitStorage(context);
 
-    // Track per-repo disposables
-    const repoDisposables = new Map<string, vscode.Disposable[]>();
-
-    const getActiveVsRepo = (): Repository | undefined =>
-        gitApi.repositories.find((r) => r.ui.selected) ?? gitApi.repositories[0];
-
-    const repositories = new ActiveRepositoryRegistry();
+    const gitRuntime = new HybridGitRuntime([
+        new CliGitRuntime((args, runtimeContext, options) =>
+            new GitCliBackend(runtimeContext.cwd).run(args, options)),
+    ]);
+    const repositories = new RepositorySelectionStore();
+    const runtimeRegistrar = new RepositoryRuntimeRegistrar(new RuntimeRepositoryFactory(gitRuntime));
     const runtimeRepositories = new RepositoryRegistry();
     const graphRepositoryRefreshers: Array<() => Promise<void>> = [];
     const graphProvider = new GraphViewProvider(context.extensionUri, repositories, async () => {
@@ -31,6 +37,58 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const changesProvider = new ChangesViewProvider(context.extensionUri, repositories, refreshGraph, undefined, undefined, undefined, undefined, runtimeRepositories);
     const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshGraph, undefined, runtimeRepositories);
     graphRepositoryRefreshers.push(() => changesProvider.refresh(), () => commitHistoryProvider.refresh());
+
+    async function refreshAll(): Promise<void> {
+        await Promise.all([
+            changesProvider.refresh(),
+            commitHistoryProvider.refresh(),
+            graphProvider.refresh(),
+        ]);
+    }
+
+    function syncActiveRepo(): void {
+        repositories.selectContextForResource(vscode.window.activeTextEditor?.document.uri.fsPath);
+    }
+
+    async function syncDiscoveredRepositories(): Promise<void> {
+        repositories.setContexts(await discoverRepositoryContexts({
+            workspaceFolders: vscode.workspace.workspaceFolders,
+        }));
+    }
+
+    async function handleRepositoryChanged(repoContext: RepoContext | undefined): Promise<void> {
+        await vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', Boolean(repoContext));
+        if (!repoContext) {
+            runtimeRepositories.clear();
+            await refreshAll();
+            return;
+        }
+
+        try {
+            await registerRuntimeContextWithRecovery({
+                repositories,
+                runtimeRegistrar,
+                runtimeRepositories,
+                repoContext,
+                syncActiveRepository: syncActiveRepo,
+            });
+        } catch (error) {
+            appendErrorToOutput({
+                code: 'gitOperationFailed',
+                message: error instanceof Error ? error.message : String(error),
+                operation: 'runtimeRepositoryRegistration',
+                recoverable: true,
+            }, 'runtimeRepositoryRegistration');
+            return;
+        }
+
+        if (repositories.currentContext?.id !== repoContext.id) { return; }
+        await Promise.all([
+            changesProvider.notifyRepoChanged(repoContext),
+            commitHistoryProvider.notifyRepoChanged(repoContext),
+            graphProvider.notifyRepoChanged(repoContext),
+        ]);
+    }
 
     context.subscriptions.push(
         repositories,
@@ -43,69 +101,34 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.window.registerWebviewViewProvider(CommitHistoryViewProvider.viewType, commitHistoryProvider, { webviewOptions: { retainContextWhenHidden: true } }),
         vscode.window.registerWebviewViewProvider(GraphViewProvider.viewType, graphProvider, { webviewOptions: { retainContextWhenHidden: true } }),
         registerWebviewFontSizeSync([changesProvider, commitHistoryProvider, graphProvider]),
-        repositories.onDidChange(({ context: repoContext }) => {
-            void vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', Boolean(repoContext));
-            if (repoContext) {
-                void repositories.registerCurrentRuntimeContext(runtimeRepositories).catch((error) => {
-                    appendErrorToOutput({
-                        code: 'gitOperationFailed',
-                        message: error instanceof Error ? error.message : String(error),
-                        operation: 'runtimeRepositoryRegistration',
-                        recoverable: true,
-                    }, 'runtimeRepositoryRegistration');
-                });
-                void changesProvider.notifyRepoChanged(repoContext);
-                void commitHistoryProvider.notifyRepoChanged(repoContext);
-                void graphProvider.notifyRepoChanged(repoContext);
-            } else {
-                void changesProvider.refresh();
-                void commitHistoryProvider.refresh();
-                void graphProvider.refresh();
-            }
+        registerResetExtensionStateCommand({
+            context,
+            repositories,
+            runtimeRepositories,
+            syncActiveRepository: syncActiveRepo,
+            refreshAll,
         }),
     );
 
-    // Update active repo and notify providers
     const DEBOUNCE_MS = 150;
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
     function debouncedRefreshAll(): void {
         if (debounceTimer) { clearTimeout(debounceTimer); }
         debounceTimer = setTimeout(() => {
-            void changesProvider.refresh();
-            void commitHistoryProvider.refresh();
-            void graphProvider.refresh();
+            void refreshAll();
         }, DEBOUNCE_MS);
     }
 
-    function syncActiveRepo(): void {
-        const vsRepo = getActiveVsRepo();
-        repositories.setActiveRepository(vsRepo?.rootUri.fsPath);
-    }
-
-    // Wire per-repo state watchers
-    function watchRepo(repo: Repository): void {
-        const key = repo.rootUri.fsPath;
-            const disposables: vscode.Disposable[] = [
-                repo.state.onDidChange(() => debouncedRefreshAll()),
-                repo.ui.onDidChange(() => syncActiveRepo()),
-            ];
-        repoDisposables.set(key, disposables);
-    }
-
-    for (const repo of gitApi.repositories) { watchRepo(repo); }
-
     context.subscriptions.push(
-        gitApi.onDidOpenRepository((repo) => { watchRepo(repo); syncActiveRepo(); }),
-        gitApi.onDidCloseRepository((repo) => {
-            const key = repo.rootUri.fsPath;
-            repoDisposables.get(key)?.forEach((d) => d.dispose());
-            repoDisposables.delete(key);
+        vscode.workspace.onDidChangeWorkspaceFolders(() => {
+            void syncDiscoveredRepositories().then(syncActiveRepo);
+        }),
+        vscode.window.onDidChangeActiveTextEditor(() => {
             syncActiveRepo();
         }),
     );
 
-    // File watchers for git metadata (including worktrees)
     const gitMetadataPatterns = [
         '**/.git/HEAD', '**/.git/index',
         '**/.git/MERGE_HEAD', '**/.git/REBASE_HEAD',
@@ -123,7 +146,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         );
     }
 
+    await syncDiscoveredRepositories();
     syncActiveRepo();
+    await handleRepositoryChanged(repositories.currentContext);
+    context.subscriptions.push(
+        repositories.onDidChange(({ context: repoContext }) => {
+            void handleRepositoryChanged(repoContext);
+        }),
+    );
 }
 
 export function deactivate(): void {}

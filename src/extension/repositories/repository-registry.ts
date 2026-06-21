@@ -77,6 +77,12 @@ export class RepositoryRegistry {
         }
         this.unregisterRepository(repositoryId);
     }
+
+    clear(): void {
+        this.repositoriesById.clear();
+        this.worktreesById.clear();
+        this.worktreeIdsByRepositoryId.clear();
+    }
 }
 
 export class RepositoryResolutionError extends Error {

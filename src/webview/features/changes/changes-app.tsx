@@ -8,12 +8,14 @@ import { OperationNotice } from '@webview/shared/operation-notice';
 import { operationNoticeActions } from '@webview/shared/operation-notice-actions';
 import type { ChangeBulkAction, ChangeRowAction } from '@webview/features/changes/change-commands';
 import { ChangeSectionView } from '@webview/features/changes/change-section-view';
-import { changesSelectionTarget, isChangeListItem } from '@webview/features/changes/change-selection-model';
+import { changesSelectionTarget, hasPatchableSelectionTarget, isChangeListItem } from '@webview/features/changes/change-selection-model';
 import { CommitComposer } from '@webview/features/changes/commit-composer';
 import { EmptyState } from '@webview/features/changes/empty-state';
 import { OperationBanner } from '@webview/features/changes/operation-banner';
 import { StashList } from '@webview/features/changes/stash-list';
 import { SubmoduleSection } from '@webview/features/changes/submodule-section';
+import { SelectionToolbar } from '@webview/features/changes/selection-toolbar';
+import type { ChangeSelectionAction } from '@webview/features/changes/selection-commands';
 import { buildChangeSections, ChangeSectionId, type ChangeListItem, type ChangeSection } from '@webview/features/changes/change-tree';
 import {
     ChangeSelectionMode,
@@ -34,6 +36,8 @@ interface ChangesAppProps {
     readonly onBulkAction: (action: ChangeBulkAction) => void;
     readonly onExplainSelection: (target: ChangesSelectionContextTarget) => void;
     readonly onSelectionContextTarget: (target: ChangesSelectionContextTarget) => void;
+    readonly onSelectionAction: (items: readonly ChangeListItem[], action: ChangeSelectionAction) => void;
+    readonly onClearSelection: () => void;
     readonly onCommit: (message: string, mode: CommitMode) => void;
     readonly onCommitComposerContextTarget: (message: string) => void;
     readonly onGenerateCommitMessage: () => void;
@@ -74,6 +78,8 @@ export function ChangesApp({
     onBulkAction,
     onExplainSelection,
     onSelectionContextTarget,
+    onSelectionAction,
+    onClearSelection,
     onCommit,
     onCommitComposerContextTarget,
     onGenerateCommitMessage,
@@ -120,6 +126,10 @@ export function ChangesApp({
     const visibleItemIds = useMemo(() => visibleItems.map((item) => item.id), [visibleItems]);
     const visibleItemsById = useMemo(() => new Map(visibleItems.map((item) => [item.id, item])), [visibleItems]);
     const selectedItemIds = useMemo(() => new Set(state.selectedItemIds), [state.selectedItemIds]);
+    const selectedItems = useMemo(
+        () => state.selectedItemIds.map((id) => visibleItemsById.get(id)).filter(isChangeListItem),
+        [state.selectedItemIds, visibleItemsById],
+    );
     const changeCount = getChangeCount(state.status);
     const visibleChangeCount = visibleItemIds.length;
     const hasRepository = state.status.repositoryState !== RepositoryState.Missing;
@@ -135,8 +145,8 @@ export function ChangesApp({
             canStage: target.stageFilePaths.length > 0,
             canUnstage: target.unstageFilePaths.length > 0,
             canStash: target.stashFilePaths.length > 0,
-            canExplainDiff: hasPatchableSelection(target),
-            canCreatePatch: hasPatchableSelection(target),
+            canExplainDiff: hasPatchableSelectionTarget(target),
+            canCreatePatch: hasPatchableSelectionTarget(target),
             canDiscard: target.discardFilePaths.length > 0,
         });
     };
@@ -196,6 +206,12 @@ export function ChangesApp({
                     onOpenNativeMenu={(message) => onCommitComposerContextTarget(message)}
                 />
             ) : null}
+
+            <SelectionToolbar
+                selectedItems={selectedItems}
+                onAction={(action) => onSelectionAction(selectedItems, action)}
+                onClear={onClearSelection}
+            />
 
             <section className="changes-content" aria-label="Repository changes">
                 {state.loading ? <EmptyState title="Loading" subtitle="Reading repository state…" icon="loading" iconSpin /> : null}
@@ -276,12 +292,6 @@ export function ChangesApp({
     );
 }
 
-function hasPatchableSelection(target: ReturnType<typeof changesSelectionTarget>): boolean {
-    return target.patchStagedFilePaths.length > 0
-        || target.patchUnstagedFilePaths.length > 0
-        || target.patchUntrackedFilePaths.length > 0;
-}
-
 function isPersistentOperationNotice(status: OperationStatus): boolean {
     return status === OperationStatus.Failed || status === OperationStatus.Conflict;
 }
@@ -291,7 +301,7 @@ function reviewHandlerFor(
     onExplainSelection: (target: ChangesSelectionContextTarget) => void,
 ): ((section: ChangeSection) => void) | undefined {
     const target = changesSelectionTarget(section.items);
-    return hasPatchableSelection(target)
+    return hasPatchableSelectionTarget(target)
         ? () => onExplainSelection(target)
         : undefined;
 }

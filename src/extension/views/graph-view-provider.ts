@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { ActiveRepositoryAccessor } from '@extension/repositories/active-repository-registry';
+import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
 import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, WorktreeCommand } from '@protocol/graph/messages';
 import type { GraphContextTarget } from '@protocol/graph/types';
 import type { RepoContext } from '@core/git/domain/repo-context';
@@ -83,7 +83,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
 
     constructor(
         private readonly extensionUri: vscode.Uri,
-        private readonly repositories: ActiveRepositoryAccessor,
+        private readonly repositories: RepositorySelectionAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
         private readonly runtimeRepositories?: RepositoryRegistry,
     ) {}

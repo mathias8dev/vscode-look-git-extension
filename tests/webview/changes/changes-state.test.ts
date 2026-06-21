@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialChangesState, getChangeCount, reduceChangesState, ChangesViewMode, ChangesSortMode, ChangeSelectionMode, submoduleStashKey } from '@webview/features/changes/changes-state';
 import { ChangeSectionId } from '@webview/features/changes/change-tree';
-import { ConflictState } from '@protocol/changes/types';
+import { ConflictState, type StatusEntry } from '@protocol/changes/types';
+import type { StatusDataPush } from '@protocol/changes/messages';
 import { OperationStatus } from '@protocol/shared/operation';
 import { SubmoduleStatus } from '@protocol/shared/repo';
 
@@ -376,6 +377,48 @@ describe('changesState', () => {
         expect(cleared.selectionAnchorId).toBeUndefined();
     });
 
+    it('keeps selected changes across status refreshes while the item still exists', () => {
+        const itemId = `${ChangeSectionId.Unstaged}:README.md:`;
+        const withStatus = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: statusDataMessage({
+                unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'README.md' }],
+            }),
+        });
+        const selected = reduceChangesState(withStatus, {
+            type: 'selectChange',
+            selection: { itemId, visibleItemIds: [itemId], mode: ChangeSelectionMode.Replace },
+        });
+
+        const refreshed = reduceChangesState(selected, {
+            type: 'message',
+            message: statusDataMessage({
+                unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'README.md' }],
+            }),
+        });
+
+        expect(refreshed.selectedItemIds).toEqual([itemId]);
+        expect(refreshed.selectionAnchorId).toBe(itemId);
+    });
+
+    it('drops selected changes across status refreshes when the item disappeared', () => {
+        const itemId = `${ChangeSectionId.Unstaged}:README.md:`;
+        const selected = reduceChangesState(createInitialChangesState(), {
+            type: 'selectChange',
+            selection: { itemId, visibleItemIds: [itemId], mode: ChangeSelectionMode.Replace },
+        });
+
+        const refreshed = reduceChangesState(selected, {
+            type: 'message',
+            message: statusDataMessage({
+                unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/app.ts' }],
+            }),
+        });
+
+        expect(refreshed.selectedItemIds).toEqual([]);
+        expect(refreshed.selectionAnchorId).toBeUndefined();
+    });
+
     it('toggles expanded stashes locally', () => {
         const expanded = reduceChangesState(createInitialChangesState(), { type: 'toggleStash', index: 1 });
         const collapsed = reduceChangesState(expanded, { type: 'toggleStash', index: 1 });
@@ -657,22 +700,26 @@ describe('changesState', () => {
     });
 });
 
-function statusDataMessage(overrides: Partial<Parameters<typeof createStatusData>[0]> = {}) {
+type StatusDataOverrides = {
+    readonly staged?: readonly StatusEntry[];
+    readonly unstaged?: readonly StatusEntry[];
+    readonly stashes?: readonly { readonly index: number; readonly message: string }[];
+    readonly submodules?: readonly { readonly path: string; readonly name: string; readonly status: SubmoduleStatus }[];
+    readonly conflicts?: readonly StatusEntry[];
+    readonly conflictState?: ConflictState;
+};
+
+function statusDataMessage(overrides: StatusDataOverrides = {}): StatusDataPush {
     return {
-        type: 'changes/statusData' as const,
+        type: 'changes/statusData',
         data: createStatusData(overrides),
     };
 }
 
-function createStatusData(overrides: {
-    readonly stashes?: readonly { readonly index: number; readonly message: string }[];
-    readonly submodules?: readonly { readonly path: string; readonly name: string; readonly status: SubmoduleStatus }[];
-    readonly conflicts?: readonly { readonly indexStatus: string; readonly workTreeStatus: string; readonly filePath: string }[];
-    readonly conflictState?: ConflictState;
-} = {}) {
+function createStatusData(overrides: StatusDataOverrides = {}) {
     return {
-        staged: [],
-        unstaged: [],
+        staged: overrides.staged ?? [],
+        unstaged: overrides.unstaged ?? [],
         conflicts: overrides.conflicts ?? [],
         conflictState: overrides.conflictState ?? ConflictState.None,
         stashes: overrides.stashes ?? [],

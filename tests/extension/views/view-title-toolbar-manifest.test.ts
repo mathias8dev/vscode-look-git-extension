@@ -37,6 +37,14 @@ interface PackageJson {
 }
 
 describe('native view title toolbar manifest', () => {
+    it('contributes the reset extension state command', () => {
+        const pkg = packageJson();
+
+        expect(commandById(pkg, 'lookGit.resetExtensionState')).toEqual(expect.objectContaining({
+            title: 'Reset Extension State',
+        }));
+    });
+
     it('contributes commit history toolbar actions to the native VS Code view title', () => {
         const pkg = packageJson();
         const commands = new Set((pkg.contributes?.commands ?? []).map((entry) => entry.command));
