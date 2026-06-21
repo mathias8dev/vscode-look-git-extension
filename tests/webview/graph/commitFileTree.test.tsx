@@ -1,10 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { CommitFileTree } from '../../../src/webview/features/graph/CommitFileTree';
-import { FileTreeNodeView } from '../../../src/webview/features/graph/FileTreeNode';
-import { buildFileTree } from '../../../src/webview/features/graph/commitFileTreeModel';
-import { ViewMode } from '../../../src/webview/shared/viewMode';
-import { expectItem } from '../../helpers/assertions';
+import { CommitFileTree } from '@webview/features/graph/CommitFileTree';
+import { FileTreeNodeView } from '@webview/features/graph/FileTreeNode';
+import { buildFileTree } from '@webview/features/graph/commitFileTreeModel';
+import { ViewMode } from '@webview/shared/viewMode';
+import { expectItem } from '@tests/helpers/assertions';
 
 describe('commitFileTree', () => {
     it('builds nested folders for commit file paths', () => {

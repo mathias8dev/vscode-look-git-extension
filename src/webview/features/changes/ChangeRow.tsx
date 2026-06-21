@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import type { StatusEntry } from '../../../protocol/changes/types';
-import { IconButton } from '../../shared/IconButton';
-import { ChangeRowAction, primaryRowActionFor, rowActionsFor, type ChangeActionDescriptor } from './changeCommands';
-import type { ChangeListItem } from './changeTree';
-import { ChangeSelectionMode } from './changesState';
-import { FileTypeIcon } from './FileTypeIcon';
-import { iconKindForStatusEntry } from './fileIconModel';
-import { depthStyle } from './viewStyles';
+import type { StatusEntry } from '@protocol/changes/types';
+import { IconButton } from '@webview/shared/IconButton';
+import { ChangeRowAction, primaryRowActionFor, rowActionsFor, type ChangeActionDescriptor } from '@webview/features/changes/changeCommands';
+import type { ChangeListItem } from '@webview/features/changes/changeTree';
+import { ChangeSelectionMode } from '@webview/features/changes/changesState';
+import { FileTypeIcon } from '@webview/features/changes/FileTypeIcon';
+import { iconKindForStatusEntry } from '@webview/features/changes/fileIconModel';
+import { depthStyle } from '@webview/features/changes/viewStyles';
 
 interface ChangeRowProps {
     readonly item: ChangeListItem;

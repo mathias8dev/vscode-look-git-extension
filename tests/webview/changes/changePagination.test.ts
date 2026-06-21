@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CHANGE_SECTION_PAGE_SIZE, visibleChangeItems } from '../../../src/webview/features/changes/changePagination';
-import { ChangeSectionId, type ChangeListItem } from '../../../src/webview/features/changes/changeTree';
+import { CHANGE_SECTION_PAGE_SIZE, visibleChangeItems } from '@webview/features/changes/changePagination';
+import { ChangeSectionId, type ChangeListItem } from '@webview/features/changes/changeTree';
 
 function items(count: number): readonly ChangeListItem[] {
     return Array.from({ length: count }, (_, index) => ({

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseCommitLog, parseGraphLog, LOG_FIELD_SEP, LOG_RECORD_SEP } from '../../../src/core/parsing/parseLog';
-import { expectItem } from '../../helpers/assertions';
+import { parseCommitLog, parseGraphLog, LOG_FIELD_SEP, LOG_RECORD_SEP } from '@core/parsing/parseLog';
+import { expectItem } from '@tests/helpers/assertions';
 
 function makeLogRecord(fields: string[]): string {
     return fields.join(LOG_FIELD_SEP);

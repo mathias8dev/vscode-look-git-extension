@@ -40,8 +40,8 @@ import fileTypeVue from '@iconify/icons-vscode-icons/file-type-vue';
 import fileTypeXml from '@iconify/icons-vscode-icons/file-type-xml';
 import fileTypeXcode from '@iconify/icons-vscode-icons/file-type-xcode';
 import fileTypeYaml from '@iconify/icons-vscode-icons/file-type-yaml';
-import type { IconifySvgData } from './IconifySvg';
-import type { WebviewFileIconKind } from './fileIconModel';
+import type { IconifySvgData } from '@webview/shared/IconifySvg';
+import type { WebviewFileIconKind } from '@webview/shared/fileIconModel';
 
 export function iconForFileKind(kind: WebviewFileIconKind): IconifySvgData {
     switch (kind) {

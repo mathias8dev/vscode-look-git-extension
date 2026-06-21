@@ -22,8 +22,8 @@ import type {
     GitSubmoduleOperations,
     GitTagOperations,
     GitWorktreeTopologyOperations,
-} from './git-capabilities';
-import type { GitRuntime, RepositoryKind } from './git-runtime';
+} from '@application/ports/git-capabilities';
+import type { GitRuntime, RepositoryKind } from '@application/ports/git-runtime';
 
 export interface GitRepository
     extends GitHistoryOperations,
@@ -41,6 +41,7 @@ export interface GitRepository
     readonly gitDir: string;
     readonly kind: RepositoryKind;
     readonly label: string;
+    readonly parentRepositoryId?: string;
     readonly runtime: GitRuntime;
 }
 

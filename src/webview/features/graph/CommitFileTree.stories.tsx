@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { commitFiles, noop } from '../../storybookFixtures';
-import { ViewMode } from '../../shared/viewMode';
-import { CommitFileTree } from './CommitFileTree';
+import { commitFiles, noop } from '@webview/storybookFixtures';
+import { ViewMode } from '@webview/shared/viewMode';
+import { CommitFileTree } from '@webview/features/graph/CommitFileTree';
 
 const meta = {
     title: 'Graph/CommitFileTree',

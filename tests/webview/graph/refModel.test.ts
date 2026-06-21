@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { BranchInfo } from '../../../src/protocol/graph/types';
-import { parseRefs } from '../../../src/webview/features/graph/refModel';
+import type { BranchInfo } from '@protocol/graph/types';
+import { parseRefs } from '@webview/features/graph/refModel';
 
 function branch(name: string, isRemote: boolean): BranchInfo {
     return {

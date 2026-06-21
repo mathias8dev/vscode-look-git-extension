@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { UnsupportedGitOperationError } from '../../../src/application/ports/git-runtime';
-import type { GitExecutionContext } from '../../../src/application/ports/git-runtime';
+import { UnsupportedGitOperationError } from '@application/ports/git-runtime';
+import type { GitExecutionContext } from '@application/ports/git-runtime';
 
 describe('UnsupportedGitOperationError', () => {
     it('carries operation and execution context', () => {

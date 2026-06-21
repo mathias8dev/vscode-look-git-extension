@@ -6,7 +6,7 @@ import {
     stashFilesRequestId,
     CreateStashKind,
     StashEntryAction,
-} from '../../../src/webview/features/changes/stashCommands';
+} from '@webview/features/changes/stashCommands';
 
 describe('stashCommands', () => {
     it('creates stash commands with normalized optional messages', () => {

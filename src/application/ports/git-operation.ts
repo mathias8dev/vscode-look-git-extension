@@ -71,6 +71,7 @@ export const SEMANTIC_GIT_OPERATIONS = [
     'unstageAll',
     'unstageHunks',
     'getFileFromIndex',
+    'getConflictStages',
     'discard',
     'discardHunks',
     'markResolved',

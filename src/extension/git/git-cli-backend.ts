@@ -1,6 +1,6 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import type { GitBackend, GitRunOptions } from '../../application/ports/git-backend';
+import type { GitBackend, GitRunOptions } from '@application/ports/git-backend';
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024;

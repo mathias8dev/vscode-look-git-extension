@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { historyCommit, noop } from '../../storybookFixtures';
-import { CommitHistoryRow } from './CommitHistoryRow';
+import { historyCommit, noop } from '@webview/storybookFixtures';
+import { CommitHistoryRow } from '@webview/features/history/CommitHistoryRow';
 
 const meta = {
     title: 'History/CommitHistoryRow',

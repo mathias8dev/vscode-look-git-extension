@@ -1,7 +1,7 @@
-import type { GraphCommit } from '../../../../protocol/graph/types';
-import type { GraphRow, LaneData, LineDef } from './graph-lane-model';
-export { getMaxLane, getLaneDataMaxLane } from './graph-lane-model';
-export type { GraphRow, LaneData, LineDef } from './graph-lane-model';
+import type { GraphCommit } from '@protocol/graph/types';
+import type { GraphRow, LaneData, LineDef } from '@webview/features/graph/layout/graph-lane-model';
+export { getMaxLane, getLaneDataMaxLane } from '@webview/features/graph/layout/graph-lane-model';
+export type { GraphRow, LaneData, LineDef } from '@webview/features/graph/layout/graph-lane-model';
 
 const LANE_COLORS = [
     '#f97583', '#79b8ff', '#85e89d', '#ffab70', '#b392f0',

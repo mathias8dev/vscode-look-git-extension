@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Codicon } from '../shared/Codicon';
+import { Codicon } from '@webview/shared/Codicon';
 
 interface CommitMessageEditorProps {
     readonly title: string;

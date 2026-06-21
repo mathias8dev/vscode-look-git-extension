@@ -1,20 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { RuntimeRepositoryFactory } from '../../../src/extension/git/runtime-repository-factory';
-import { RepoKind, type RepoContext } from '../../../src/core/git/domain/RepoContext';
-import type { GitRuntime } from '../../../src/application/ports/git-runtime';
-import type { GitRepository } from '../../../src/application/ports/git-repository';
-import type { GitWorktree } from '../../../src/core/git/domain/GitWorktree';
-import { stableRepoContextId } from '../../../src/extension/repositories/repo-context-id';
-
-const runtime = {
-    supports: () => false,
-    execute: async () => undefined,
-} satisfies GitRuntime;
+import { RuntimeRepositoryFactory } from '@extension/git/runtime-repository-factory';
+import { RepoKind, type RepoContext } from '@core/git/domain/RepoContext';
+import type { GitExecutionContext, GitRuntime } from '@application/ports/git-runtime';
+import type { SemanticGitOperation } from '@application/ports/git-operation';
+import type { GitStatus } from '@core/git/domain/GitStatus';
+import type { GitWorktree } from '@core/git/domain/GitWorktree';
+import { stableRepoContextId } from '@extension/repositories/repo-context-id';
 
 describe('RuntimeRepositoryFactory', () => {
-    it('creates runtime repositories from existing repository contexts', async () => {
+    it('creates runtime repositories from repository contexts', async () => {
+        const runtime = runtimeWith();
         const factory = new RuntimeRepositoryFactory(runtime);
-        const repository = await factory.createRepository(legacyRepository(), {
+        const repository = factory.createRepository({
             id: 'repo',
             cwd: '/repo',
             kind: RepoKind.Main,
@@ -32,15 +29,18 @@ describe('RuntimeRepositoryFactory', () => {
     });
 
     it('creates runtime worktrees with head, branch, and dirty facts', async () => {
-        const factory = new RuntimeRepositoryFactory(runtime);
-        const worktree = await factory.createMainWorktree(legacyRepository({
-            status: {
-                staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'a.ts' }],
-                unstaged: [],
-                conflicts: [],
-                conflictState: 'none',
+        const runtime = runtimeWith({
+            statusByCwd: {
+                '/repo': {
+                    staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'a.ts' }],
+                    unstaged: [],
+                    conflicts: [],
+                    conflictState: 'none',
+                },
             },
-        }), {
+        });
+        const factory = new RuntimeRepositoryFactory(runtime);
+        const worktree = await factory.createMainWorktree({
             id: 'repo',
             cwd: '/repo',
             kind: RepoKind.Main,
@@ -60,6 +60,7 @@ describe('RuntimeRepositoryFactory', () => {
     });
 
     it('uses parent repository id for linked worktree contexts', async () => {
+        const runtime = runtimeWith();
         const factory = new RuntimeRepositoryFactory(runtime);
         const context = {
             id: 'worktree',
@@ -69,8 +70,8 @@ describe('RuntimeRepositoryFactory', () => {
             label: 'repo-linked',
         } satisfies RepoContext;
 
-        const repository = await factory.createRepository(legacyRepository({ cwd: '/repo-linked' }), context);
-        const worktree = await factory.createMainWorktree(legacyRepository({ cwd: '/repo-linked' }), context);
+        const repository = factory.createRepository(context);
+        const worktree = await factory.createMainWorktree(context);
 
         expect(repository.repoId).toBe('repo');
         expect(worktree.repoId).toBe('repo');
@@ -79,16 +80,22 @@ describe('RuntimeRepositoryFactory', () => {
     });
 
     it('creates runtime worktrees for linked worktrees discovered from the repository', async () => {
-        const factory = new RuntimeRepositoryFactory(runtime);
-        const worktrees = await factory.createWorktrees(legacyRepository({
+        const runtime = runtimeWith({
             worktrees: [
                 gitWorktree('/repo', 'abc123', 'refs/heads/main', true),
                 gitWorktree('/repo-linked', 'def456', 'refs/heads/feature/linked', false),
             ],
-            rawStatusByCwd: {
-                '/repo-linked': ' M linked.ts\0',
+            statusByCwd: {
+                '/repo-linked': {
+                    staged: [],
+                    unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'linked.ts' }],
+                    conflicts: [],
+                    conflictState: 'none',
+                },
             },
-        }), {
+        });
+        const factory = new RuntimeRepositoryFactory(runtime);
+        const worktrees = await factory.createWorktrees({
             id: 'repo',
             cwd: '/repo',
             kind: RepoKind.Main,
@@ -109,8 +116,9 @@ describe('RuntimeRepositoryFactory', () => {
     });
 
     it('maps submodule contexts to submodule repositories', async () => {
+        const runtime = runtimeWith();
         const factory = new RuntimeRepositoryFactory(runtime);
-        const repository = await factory.createRepository(legacyRepository({ cwd: '/repo/sub' }), {
+        const repository = factory.createRepository({
             id: 'sub',
             cwd: '/repo/sub',
             kind: RepoKind.Submodule,
@@ -125,40 +133,45 @@ describe('RuntimeRepositoryFactory', () => {
     });
 });
 
-function legacyRepository(overrides: Partial<{
-    readonly cwd: string;
-    readonly currentBranch: string;
-    readonly status: Awaited<ReturnType<GitRepository['getStatus']>>;
+function runtimeWith(overrides: Partial<{
+    readonly headByCwd: Readonly<Record<string, string>>;
+    readonly currentBranchByCwd: Readonly<Record<string, string>>;
+    readonly statusByCwd: Readonly<Record<string, GitStatus>>;
     readonly worktrees: readonly GitWorktree[];
-    readonly rawStatusByCwd: Readonly<Record<string, string>>;
-}> = {}): GitRepository {
-    const status = overrides.status ?? {
+}> = {}): GitRuntime {
+    return {
+        supports: () => true,
+        execute: async <TInput, TResult>(operation: SemanticGitOperation, context: GitExecutionContext, _input: TInput): Promise<TResult> => {
+            switch (operation) {
+                case 'resolveRef':
+                    return (overrides.headByCwd?.[context.cwd] ?? 'abc123') as TResult;
+                case 'listBranches':
+                    return [{
+                        name: overrides.currentBranchByCwd?.[context.cwd] ?? 'main',
+                        isRemote: false,
+                        isCurrent: true,
+                        hash: overrides.headByCwd?.[context.cwd] ?? 'abc123',
+                        ahead: 0,
+                        behind: 0,
+                    }] as TResult;
+                case 'getStatus':
+                    return (overrides.statusByCwd?.[context.cwd] ?? cleanStatus()) as TResult;
+                case 'listWorktrees':
+                    return (overrides.worktrees ?? []) as TResult;
+                default:
+                    throw new Error(`Unexpected operation: ${operation}`);
+            }
+        },
+    };
+}
+
+function cleanStatus(): GitStatus {
+    return {
         staged: [],
         unstaged: [],
         conflicts: [],
         conflictState: 'none',
     };
-
-    return {
-        cwd: overrides.cwd ?? '/repo',
-        getGitDir: async () => `${overrides.cwd ?? '/repo'}/.git`,
-        exec: async (args) => {
-            if (args.join(' ') === 'rev-parse HEAD') { return 'abc123'; }
-            if (args[0] === '--no-optional-locks' && args[1] === '-C' && args[3] === 'rev-parse' && args[4] === '--git-dir') {
-                return `${args[2]}/.git`;
-            }
-            throw new Error(`Unexpected args: ${args.join(' ')}`);
-        },
-        execRaw: async (args) => {
-            if (args[0] === '--no-optional-locks' && args[1] === '-C' && args[3] === 'status') {
-                return overrides.rawStatusByCwd?.[args[2] ?? ''] ?? '';
-            }
-            throw new Error(`Unexpected raw args: ${args.join(' ')}`);
-        },
-        getCurrentBranch: async () => overrides.currentBranch ?? 'main',
-        getStatus: async () => status,
-        listWorktrees: async () => overrides.worktrees ?? [],
-    } as GitRepository;
 }
 
 function gitWorktree(path: string, head: string, branch: string | undefined, isMain: boolean): GitWorktree {

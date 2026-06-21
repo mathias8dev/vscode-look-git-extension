@@ -1,7 +1,7 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
-import type { HistoryCommit, HistoryCommitRef } from '../../../protocol/history/types';
-import { formatHistoryDate, formatRelativeDate } from './historyModel';
-import { HistoryCommitSelectionMode } from './historyState';
+import type { HistoryCommit, HistoryCommitRef } from '@protocol/history/types';
+import { formatHistoryDate, formatRelativeDate } from '@webview/features/history/historyModel';
+import { HistoryCommitSelectionMode } from '@webview/features/history/historyState';
 
 interface CommitHistoryRowProps {
     readonly commit: HistoryCommit;

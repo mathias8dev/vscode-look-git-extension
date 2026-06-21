@@ -5,6 +5,15 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   base: './',
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@application': resolve(__dirname, 'src/application'),
+      '@core': resolve(__dirname, 'src/core'),
+      '@extension': resolve(__dirname, 'src/extension'),
+      '@protocol': resolve(__dirname, 'src/protocol'),
+      '@webview': resolve(__dirname, 'src/webview'),
+    },
+  },
   build: {
     emptyOutDir: true,
     outDir: 'dist/webview',
@@ -16,7 +25,6 @@ export default defineConfig({
         fileHistory: resolve(__dirname, 'src/webview/file-history/main.tsx'),
         graph: resolve(__dirname, 'src/webview/graph/main.tsx'),
         history: resolve(__dirname, 'src/webview/history/main.tsx'),
-        visualRebase: resolve(__dirname, 'src/webview/visual-rebase/main.tsx'),
       },
       output: {
         assetFileNames: '[name][extname]',

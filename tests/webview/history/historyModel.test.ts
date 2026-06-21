@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { HistoryCommit } from '../../../src/protocol/history/types';
-import { filterHistoryCommits, historyEmptyLabel, selectedHistoryCommit } from '../../../src/webview/features/history/historyModel';
+import type { HistoryCommit } from '@protocol/history/types';
+import { filterHistoryCommits, historyEmptyLabel, selectedHistoryCommit } from '@webview/features/history/historyModel';
 
 describe('historyModel', () => {
     it('filters commits by message, hash and author', () => {

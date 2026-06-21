@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseWorktreeList } from '../../../src/core/parsing/parseWorktreeList';
-import { expectItem } from '../../helpers/assertions';
+import { parseWorktreeList } from '@core/parsing/parseWorktreeList';
+import { expectItem } from '@tests/helpers/assertions';
 
 const MAIN_STANZA = `worktree /repo
 HEAD abc1234567890abcdef

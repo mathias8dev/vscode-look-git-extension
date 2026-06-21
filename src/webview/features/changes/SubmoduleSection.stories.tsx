@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { noop, stashFiles, submoduleStatusData, submodules } from '../../storybookFixtures';
-import { submoduleStashKey } from './changesState';
-import { SubmoduleSection } from './SubmoduleSection';
+import { noop, stashFiles, submoduleStatusData, submodules } from '@webview/storybookFixtures';
+import { submoduleStashKey } from '@webview/features/changes/changesState';
+import { SubmoduleSection } from '@webview/features/changes/SubmoduleSection';
 
 const meta = {
     title: 'Changes/SubmoduleSection',

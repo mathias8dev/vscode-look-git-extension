@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { SemanticGitOperation } from '../../../src/application/ports/git-operation';
-import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '../../../src/application/ports/git-runtime';
-import { RuntimeWorktree } from '../../../src/extension/git/runtime-worktree';
+import type { SemanticGitOperation } from '@application/ports/git-operation';
+import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '@application/ports/git-runtime';
+import { RuntimeWorktree } from '@extension/git/runtime-worktree';
 
 describe('RuntimeWorktree', () => {
     it('delegates worktree semantic actions through GitRuntime', async () => {
@@ -46,7 +46,7 @@ describe('RuntimeWorktree', () => {
             isMain: true,
             head: 'abc123',
             dirty: false,
-        }, recordingRuntime(calls, ['resetHard', 'dropStash', 'pushTags', 'acceptOurs', 'acceptTheirs', 'getFileAtRevision', 'getFileFromIndex', 'getStashFiles', 'getStashSummary']));
+        }, recordingRuntime(calls, ['resetHard', 'dropStash', 'pushTags', 'acceptOurs', 'acceptTheirs', 'getFileAtRevision', 'getFileFromIndex', 'getConflictStages', 'getStashFiles', 'getStashSummary']));
 
         await worktree.resetHard('HEAD~1');
         await worktree.dropStash('stash@{0}');
@@ -55,6 +55,7 @@ describe('RuntimeWorktree', () => {
         await worktree.acceptTheirs(['src/other.ts']);
         await worktree.getFileAtRevision('src/head.ts', 'HEAD');
         await worktree.getFileFromIndex('src/indexed.ts');
+        await worktree.getConflictStages('src/conflict.ts');
         await worktree.getStashFiles('stash@{2}');
         await worktree.getStashSummary('stash@{3}');
 
@@ -66,6 +67,7 @@ describe('RuntimeWorktree', () => {
             { paths: ['src/other.ts'] },
             { path: 'src/head.ts', revision: 'HEAD' },
             { path: 'src/indexed.ts' },
+            { path: 'src/conflict.ts' },
             { stash: 'stash@{2}' },
             { stash: 'stash@{3}' },
         ]);

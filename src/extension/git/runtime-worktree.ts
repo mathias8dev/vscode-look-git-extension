@@ -1,6 +1,6 @@
-import type { GitFileChange } from '../../core/git/domain/GitCommit';
-import type { Page, PageRequest } from '../../core/git/domain/Page';
-import type { GitStash, GitStatus } from '../../core/git/domain/GitStatus';
+import type { GitFileChange } from '@core/git/domain/GitCommit';
+import type { Page, PageRequest } from '@core/git/domain/Page';
+import type { GitStash, GitStatus } from '@core/git/domain/GitStatus';
 import type {
     CheckoutOptions,
     CherryPickOptions,
@@ -15,11 +15,11 @@ import type {
     ResetMode,
     RevertOptions,
     StashOptions,
-} from '../../application/ports/git-capabilities';
-import type { Worktree } from '../../application/ports/git-topology';
-import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime, type RepositoryKind } from '../../application/ports/git-runtime';
-import type { SemanticGitOperation } from '../../application/ports/git-operation';
-import { HybridGitRuntime } from './hybrid-git-runtime';
+} from '@application/ports/git-capabilities';
+import type { Worktree } from '@application/ports/git-topology';
+import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime, type RepositoryKind } from '@application/ports/git-runtime';
+import type { SemanticGitOperation } from '@application/ports/git-operation';
+import { HybridGitRuntime } from '@extension/git/hybrid-git-runtime';
 
 export interface RuntimeWorktreeInput {
     readonly repoId: string;
@@ -108,6 +108,10 @@ export class RuntimeWorktree implements Worktree {
 
     getFileFromIndex(path: string, signal?: AbortSignal): Promise<string> {
         return this.execute('getFileFromIndex', { path }, signal);
+    }
+
+    getConflictStages(path: string, signal?: AbortSignal): Promise<{ readonly base: string; readonly ours: string; readonly theirs: string }> {
+        return this.execute('getConflictStages', { path }, signal);
     }
 
     discard(paths: readonly string[], signal?: AbortSignal): Promise<void> {

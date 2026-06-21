@@ -1,9 +1,9 @@
 import type { CSSProperties } from 'react';
-import type { BranchInfo, GraphCommit } from '../../../protocol/graph/types';
-import { getLaneDataMaxLane, type GraphRow } from './layout/graph-lane-model';
-import { GraphLaneCell, LANE_WIDTH } from './GraphLaneCell';
-import { RefBadge } from './RefBadge';
-import { parseRefs } from './refModel';
+import type { BranchInfo, GraphCommit } from '@protocol/graph/types';
+import { getLaneDataMaxLane, type GraphRow } from '@webview/features/graph/layout/graph-lane-model';
+import { GraphLaneCell, LANE_WIDTH } from '@webview/features/graph/GraphLaneCell';
+import { RefBadge } from '@webview/features/graph/RefBadge';
+import { parseRefs } from '@webview/features/graph/refModel';
 
 export type CommitSelectMode = 'replace' | 'toggle' | 'range';
 

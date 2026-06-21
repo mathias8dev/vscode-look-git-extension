@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildChangeSections, buildChangeTree, statusLabel } from '../../../src/webview/features/changes/changeTree';
-import { ConflictState } from '../../../src/protocol/changes/types';
-import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
+import { buildChangeSections, buildChangeTree, statusLabel } from '@webview/features/changes/changeTree';
+import { ConflictState } from '@protocol/changes/types';
+import { SubmoduleStatus } from '@protocol/shared/repo';
 
 describe('changeTree', () => {
     it('builds semantic sections in display order', () => {

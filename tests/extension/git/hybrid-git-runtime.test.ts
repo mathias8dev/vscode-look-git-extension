@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '../../../src/application/ports/git-runtime';
-import type { SemanticGitOperation } from '../../../src/application/ports/git-operation';
-import { HybridGitRuntime } from '../../../src/extension/git/hybrid-git-runtime';
+import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '@application/ports/git-runtime';
+import type { SemanticGitOperation } from '@application/ports/git-operation';
+import { HybridGitRuntime } from '@extension/git/hybrid-git-runtime';
 
 const context = {
     cwd: '/repo',
@@ -32,8 +32,8 @@ function fakeRuntime(supported: boolean, label: string): GitRuntime {
         supports(): boolean {
             return supported;
         },
-        async execute(_operation: SemanticGitOperation): Promise<string> {
-            return `${label}:${_operation}`;
+        async execute<_TInput = unknown, TResult = unknown>(_operation: SemanticGitOperation): Promise<TResult> {
+            return `${label}:${_operation}` as TResult; // Test runtime only returns the string result asserted by this spec.
         },
     };
 }

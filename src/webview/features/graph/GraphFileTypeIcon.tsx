@@ -1,6 +1,6 @@
-import { iconForFileKind } from '../../shared/fileIconAssets';
-import { IconifySvg } from '../../shared/IconifySvg';
-import type { GraphFileIconKind } from './graphFileIconModel';
+import { iconForFileKind } from '@webview/shared/fileIconAssets';
+import { IconifySvg } from '@webview/shared/IconifySvg';
+import type { GraphFileIconKind } from '@webview/features/graph/graphFileIconModel';
 
 interface GraphFileTypeIconProps {
     readonly kind: GraphFileIconKind;

@@ -1,5 +1,5 @@
-import { OperationStatus } from '../../protocol/shared/operation';
-import { Codicon, type CodiconName } from './Codicon';
+import { OperationStatus } from '@protocol/shared/operation';
+import { Codicon, type CodiconName } from '@webview/shared/Codicon';
 
 export interface OperationNoticeAction {
     readonly label: string;

@@ -1,5 +1,5 @@
-import { selectionActionsFor, type ChangeSelectionAction } from './selectionCommands';
-import type { ChangeListItem } from './changeTree';
+import { selectionActionsFor, type ChangeSelectionAction } from '@webview/features/changes/selectionCommands';
+import type { ChangeListItem } from '@webview/features/changes/changeTree';
 
 interface SelectionToolbarProps {
     readonly selectedItems: readonly ChangeListItem[];

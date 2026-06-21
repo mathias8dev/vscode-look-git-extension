@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseNameStatusZ } from '../../../src/core/parsing/parseNameStatus';
-import { expectItem } from '../../helpers/assertions';
+import { parseNameStatusZ } from '@core/parsing/parseNameStatus';
+import { expectItem } from '@tests/helpers/assertions';
 
 describe('parseNameStatusZ', () => {
     it('returns empty array for empty output', () => {

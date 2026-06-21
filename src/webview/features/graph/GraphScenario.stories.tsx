@@ -8,12 +8,12 @@ import {
     noop,
     worktrees,
     worktreeWip,
-} from '../../storybookFixtures';
-import { BranchPanel } from './BranchPanel';
-import { CommitDetailsPanel } from './CommitDetailsPanel';
-import { GraphOperationNotice } from './GraphOperationNotice';
-import { GraphTable } from './GraphTable';
-import { buildDisplayRows } from './graphState';
+} from '@webview/storybookFixtures';
+import { BranchPanel } from '@webview/features/graph/BranchPanel';
+import { CommitDetailsPanel } from '@webview/features/graph/CommitDetailsPanel';
+import { GraphOperationNotice } from '@webview/features/graph/GraphOperationNotice';
+import { GraphTable } from '@webview/features/graph/GraphTable';
+import { buildDisplayRows } from '@webview/features/graph/graphState';
 
 function GraphScenario({ loadingMore = false }: { readonly loadingMore?: boolean }) {
     return (

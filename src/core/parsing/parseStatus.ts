@@ -1,4 +1,4 @@
-import type { GitStatusEntry, ConflictState } from '../git/domain/GitStatus';
+import type { GitStatusEntry, ConflictState } from '@core/git/domain/GitStatus';
 
 const CONFLICT_CODES = new Set(['U', 'A', 'D']);
 

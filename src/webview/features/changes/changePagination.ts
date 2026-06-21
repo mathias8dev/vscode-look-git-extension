@@ -1,4 +1,4 @@
-import type { ChangeListItem } from './changeTree';
+import type { ChangeListItem } from '@webview/features/changes/changeTree';
 
 export const CHANGE_SECTION_PAGE_SIZE = 250;
 

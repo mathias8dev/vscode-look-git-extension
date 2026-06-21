@@ -1,8 +1,8 @@
-import type { ErrorMessage, Pagination, ProtocolError, RequestId } from '../shared/base';
-import type { OperationNoticeActionKind, OperationStatus } from '../shared/operation';
-import type { SerializedRepoContext } from '../shared/repo';
-import type { WebviewFontSizeChangedPush } from '../shared/ui';
-import type { HistoryCommitDetails, HistoryContextTarget, HistoryData } from './types';
+import type { ErrorMessage, Pagination, ProtocolError, RequestId } from '@protocol/shared/base';
+import type { OperationNoticeActionKind, OperationStatus } from '@protocol/shared/operation';
+import type { SerializedRepoContext } from '@protocol/shared/repo';
+import type { WebviewFontSizeChangedPush } from '@protocol/shared/ui';
+import type { HistoryCommitDetails, HistoryContextTarget, HistoryData } from '@protocol/history/types';
 
 export interface RepoContextChangedPush {
     readonly type: 'repo/contextChanged';

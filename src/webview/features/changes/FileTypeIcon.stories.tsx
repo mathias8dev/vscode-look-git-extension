@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { FileIconKind } from './fileIconModel';
-import { FileTypeIcon } from './FileTypeIcon';
+import type { FileIconKind } from '@webview/features/changes/fileIconModel';
+import { FileTypeIcon } from '@webview/features/changes/FileTypeIcon';
 
 const fileKinds = [
     'typescript',

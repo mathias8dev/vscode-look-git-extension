@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as vscode from 'vscode';
-import { getWebviewHtml } from '../../../src/extension/views/webviewHtml';
-import { makeWebviewView, resetVscodeMock } from '../../helpers/providerRuntime';
-import { workspace } from '../../mocks/vscode';
+import { getWebviewHtml } from '@extension/views/webviewHtml';
+import { makeWebviewView, resetVscodeMock } from '@tests/helpers/providerRuntime';
+import { workspace } from '@tests/mocks/vscode';
 
 describe('getWebviewHtml', () => {
     beforeEach(() => {
         resetVscodeMock();
     });
 
-    it.each(['changes', 'graph', 'history', 'visualRebase'] as const)('disables default context menu items for %s webview', (scriptName) => {
+    it.each(['changes', 'graph', 'history'] as const)('disables default context menu items for %s webview', (scriptName) => {
         const view = makeWebviewView();
         const html = getWebviewHtml(view.webview, vscode.Uri.file('/ext'), scriptName);
         const context = bodyContext(html);

@@ -1,5 +1,5 @@
-import type { ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
-import type { StashFileEntry } from '../../../protocol/changes/types';
+import type { ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
+import type { StashFileEntry } from '@protocol/changes/types';
 
 export enum CreateStashKind {
     All = 'all',

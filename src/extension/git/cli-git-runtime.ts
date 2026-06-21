@@ -1,19 +1,16 @@
-import { execFile } from 'child_process';
-import { promisify } from 'util';
-import { Page } from '../../core/git/domain/Page';
-import type { GitExec } from '../../core/git/git-exec';
-import { queryAllBranches, queryAllTags, queryCommitFiles, queryCommitLineRangeLog, queryCommitLog, queryCommitMessage, queryCurrentBranch, queryGraphLog } from '../../core/queries/queryGraph';
-import { queryStatus, queryStashList } from '../../core/queries/queryStatus';
-import { parseNameStatusZ } from '../../core/parsing/parseNameStatus';
-import { querySubmoduleStatus, updateSubmodule } from '../../core/queries/querySubmodules';
-import { addWorktree, queryWorktrees, removeWorktree } from '../../core/queries/queryWorktrees';
-import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '../../application/ports/git-runtime';
-import type { SemanticGitOperation } from '../../application/ports/git-operation';
-import type { CommitGraphQuery } from '../../application/ports/git-capabilities';
-
-const execFileAsync = promisify(execFile);
-const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024;
-const DEFAULT_MAX_LOCK_RETRIES = 5;
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
+import { Page } from '@core/git/domain/Page';
+import type { GitExec } from '@extension/git/git-exec';
+import { queryAllBranches, queryAllTags, queryCommitFiles, queryCommitLineRangeLog, queryCommitLog, queryCommitMessage, queryCurrentBranch, queryGraphLog } from '@extension/git/queries/queryGraph';
+import { queryStatus, queryStashList } from '@extension/git/queries/queryStatus';
+import { parseNameStatusZ } from '@core/parsing/parseNameStatus';
+import { querySubmoduleStatus, updateSubmodule } from '@extension/git/queries/querySubmodules';
+import { addWorktree, queryWorktrees, removeWorktree } from '@extension/git/queries/queryWorktrees';
+import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '@application/ports/git-runtime';
+import type { SemanticGitOperation } from '@application/ports/git-operation';
+import type { CommitGraphQuery } from '@application/ports/git-capabilities';
 
 interface CliInvocation {
     readonly args: readonly string[];
@@ -33,7 +30,7 @@ export type CliGitRuntimeProcess = (
 
 export class CliGitRuntime implements GitRuntime {
     constructor(
-        private readonly runProcess: CliGitRuntimeProcess = defaultRunProcess,
+        private readonly runProcess: CliGitRuntimeProcess,
     ) {}
 
     supports(operation: SemanticGitOperation): boolean {
@@ -151,6 +148,9 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
     getStatus: async (_input, runProcess, context, signal) => {
         return await queryStatus(readonlyRawExec(runProcess, context), signal);
     },
+    getConflictStages: async (input, runProcess, context, signal) => {
+        return await readConflictStages(runProcess, context, requiredStringField(input, 'path'), signal);
+    },
     listBranches: async (_input, runProcess, context, signal) => {
         const roRaw = readonlyRawExec(runProcess, context);
         return await queryAllBranches(roRaw, (s) => queryCurrentBranch(readonlyTrimmedExec(runProcess, context), s), signal);
@@ -214,6 +214,36 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
             signal,
         );
         return output ? parseNameStatusZ(output) : [];
+    },
+    getWorkingTreeDiff: async (input, runProcess, context, signal) => {
+        return readonlyRawExec(runProcess, context)(['diff', '--binary', '--', ...requiredStringArrayField(input, 'paths')], signal);
+    },
+    getIndexDiff: async (input, runProcess, context, signal) => {
+        return readonlyRawExec(runProcess, context)(['diff', '--cached', '--binary', '--', ...requiredStringArrayField(input, 'paths')], signal);
+    },
+    getCombinedDiff: async (input, runProcess, context, signal) => {
+        return readonlyRawExec(runProcess, context)(['diff', 'HEAD', '--binary', '--', ...requiredStringArrayField(input, 'paths')], signal);
+    },
+    getPatch: async (input, runProcess, context, signal) => {
+        return getPatch(input, runProcess, context, signal);
+    },
+    checkPatch: async (input, runProcess, context, signal) => {
+        try {
+            await applyPatchContent(runProcess, context, requiredStringField(input, 'patch'), patchApplyArgs(input, true), signal);
+            return true;
+        } catch (error) {
+            if (isAbortError(error)) { throw error; }
+            return false;
+        }
+    },
+    applyPatch: async (input, runProcess, context, signal) => {
+        await applyPatchContent(runProcess, context, requiredStringField(input, 'patch'), patchApplyArgs(input, false), signal);
+    },
+    applyPatchToIndex: async (input, runProcess, context, signal) => {
+        await applyPatchContent(runProcess, context, requiredStringField(input, 'patch'), patchApplyArgs(input, false, true), signal);
+    },
+    reverseApplyPatch: async (input, runProcess, context, signal) => {
+        await applyPatchContent(runProcess, context, requiredStringField(input, 'patch'), [...patchApplyArgs(input, false), '--reverse'], signal);
     },
     getCommitGraph: handleCommitGraph,
     getCommitDetails: async (input, runProcess, context, signal) => {
@@ -635,6 +665,53 @@ async function acceptConflictSide(
     await exec(['add', '--', ...paths], signal);
 }
 
+enum ConflictStage {
+    Base = 1,
+    Ours = 2,
+    Theirs = 3,
+}
+
+async function readConflictStages(
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    filePath: string,
+    signal?: AbortSignal,
+): Promise<{ readonly base: string; readonly ours: string; readonly theirs: string }> {
+    const hashes = await readConflictStageHashes(runProcess, context, filePath, signal);
+    const [base, ours, theirs] = await Promise.all([
+        readObject(runProcess, context, hashes.get(ConflictStage.Base), signal),
+        readObject(runProcess, context, hashes.get(ConflictStage.Ours), signal),
+        readObject(runProcess, context, hashes.get(ConflictStage.Theirs), signal),
+    ]);
+    return { base, ours, theirs };
+}
+
+async function readConflictStageHashes(
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    filePath: string,
+    signal?: AbortSignal,
+): Promise<ReadonlyMap<ConflictStage, string>> {
+    const raw = await runRaw(runProcess, context, ['ls-files', '-u', '-z', '--', filePath], signal);
+    const hashes = new Map<ConflictStage, string>();
+    for (const entry of raw.split('\0')) {
+        if (!entry) { continue; }
+        const match = entry.match(/^\d+\s+([0-9a-fA-F]+)\s+([123])\t/);
+        if (!match?.[1] || !match[2]) { continue; }
+        hashes.set(Number(match[2]) as ConflictStage, match[1]);
+    }
+    return hashes;
+}
+
+async function readObject(
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    hash: string | undefined,
+    signal?: AbortSignal,
+): Promise<string> {
+    return hash ? runRaw(runProcess, context, ['cat-file', '-p', hash], signal) : '';
+}
+
 async function handleCommitGraph(
     input: unknown,
     runProcess: CliGitRuntimeProcess,
@@ -677,6 +754,79 @@ async function diffNameStatus(
     return output ? parseNameStatusZ(output) : [];
 }
 
+async function getPatch(
+    input: unknown,
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    signal?: AbortSignal,
+): Promise<string> {
+    const scope = requiredStringField(input, 'scope');
+    const paths = requiredStringArrayField(input, 'paths');
+    switch (scope) {
+        case 'index':
+        case 'staged':
+            return readonlyRawExec(runProcess, context)(['diff', '--cached', '--binary', '--', ...paths], signal);
+        case 'workingTree':
+        case 'unstaged':
+            return readonlyRawExec(runProcess, context)(['diff', '--binary', '--', ...paths], signal);
+        case 'combined':
+            return readonlyRawExec(runProcess, context)(['diff', 'HEAD', '--binary', '--', ...paths], signal);
+        case 'untracked':
+            return diffUntrackedFile(runProcess, context, singlePath(paths, 'untracked patch'), signal);
+        default:
+            throw new Error(`Unsupported patch scope "${scope}".`);
+    }
+}
+
+async function diffUntrackedFile(
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    filePath: string,
+    signal?: AbortSignal,
+): Promise<string> {
+    try {
+        return await runRaw(runProcess, context, ['diff', '--binary', '--no-index', '--', '/dev/null', filePath], signal);
+    } catch (error) {
+        const stdout = stdoutFromExecError(error);
+        if (stdout !== undefined) { return stdout; }
+        throw error;
+    }
+}
+
+async function applyPatchContent(
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    patch: string,
+    args: readonly string[],
+    signal?: AbortSignal,
+): Promise<void> {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'look-git-apply-patch-'));
+    const filePath = path.join(dir, 'patch.diff');
+    try {
+        await fs.writeFile(filePath, patch, 'utf8');
+        await runTrimmed(runProcess, context, [...args, filePath], signal);
+    } finally {
+        await fs.rm(dir, { recursive: true, force: true });
+    }
+}
+
+function patchApplyArgs(input: unknown, check: boolean, index = false): readonly string[] {
+    const options = objectField(input, 'options');
+    return [
+        'apply',
+        ...(check ? ['--check'] : []),
+        ...(booleanOption(options, 'threeWay') ? ['--3way'] : []),
+        ...(booleanOption(options, 'reject') ? ['--reject'] : []),
+        ...(index ? ['--index'] : []),
+    ];
+}
+
+function singlePath(paths: readonly string[], label: string): string {
+    const [filePath, ...rest] = paths;
+    if (!filePath || rest.length > 0) { throw new Error(`Exactly one path is required for ${label}.`); }
+    return filePath;
+}
+
 function resultFor(operation: SemanticGitOperation, output: string): unknown {
     switch (operation) {
         case 'listRemotes':
@@ -685,30 +835,6 @@ function resultFor(operation: SemanticGitOperation, output: string): unknown {
             return output ? output.split('\n').map(cleanPreviewPath).filter(Boolean) : [];
         default:
             return output;
-    }
-}
-
-async function defaultRunProcess(
-    args: readonly string[],
-    context: GitExecutionContext,
-    options: CliGitRuntimeProcessOptions,
-): Promise<string> {
-    let delayMs = 80;
-    for (let attempt = 0; ; attempt++) {
-        options.signal?.throwIfAborted();
-        try {
-            const { stdout } = await execFileAsync('git', [...args], {
-                cwd: context.cwd,
-                maxBuffer: DEFAULT_MAX_BUFFER,
-                env: options.env ? { ...process.env, ...options.env } : process.env,
-                signal: options.signal,
-            });
-            return stdout;
-        } catch (error) {
-            if (attempt >= DEFAULT_MAX_LOCK_RETRIES || !isIndexLockError(error)) { throw error; }
-            await sleep(delayMs);
-            delayMs *= 2;
-        }
     }
 }
 
@@ -759,6 +885,19 @@ function optionalStringArrayField(input: unknown, field: string): readonly strin
 function objectField(input: unknown, field: string): unknown {
     if (typeof input !== 'object' || input === null) { return undefined; }
     return (input as Readonly<Record<string, unknown>>)[field];
+}
+
+function stdoutFromExecError(error: unknown): string | undefined {
+    if (typeof error !== 'object' || error === null || !('stdout' in error)) { return undefined; }
+    const stdout = (error as { readonly stdout?: unknown }).stdout;
+    return typeof stdout === 'string' ? stdout : undefined;
+}
+
+function isAbortError(error: unknown): boolean {
+    return typeof error === 'object'
+        && error !== null
+        && 'name' in error
+        && (error as { readonly name?: unknown }).name === 'AbortError';
 }
 
 async function runRaw(
@@ -959,18 +1098,4 @@ function pageFromOffset<T>(items: readonly T[], limit: number, offset: number): 
     const pageItems = items.slice(0, limit);
     const hasMore = items.length > limit;
     return new Page(pageItems, hasMore, hasMore ? String(offset + limit) : undefined);
-}
-
-function isIndexLockError(error: unknown): boolean {
-    const msg = error instanceof Error ? error.message : String(error);
-    const stderr = typeof error === 'object' && error !== null
-        && typeof (error as { stderr?: unknown }).stderr === 'string'
-        ? (error as { stderr: string }).stderr : '';
-    const combined = `${msg}\n${stderr}`;
-    return combined.includes('index.lock')
-        || (combined.includes('Unable to create') && combined.includes('File exists'));
-}
-
-async function sleep(ms: number): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, ms));
 }

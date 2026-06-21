@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseDiffNameStatus } from '../../../src/core/parsing/parse-diff-name-status';
+import { parseDiffNameStatus } from '@core/parsing/parse-diff-name-status';
 
 describe('parseDiffNameStatus', () => {
     it('returns an empty array for empty output', () => {

@@ -1,11 +1,11 @@
-import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush } from '../../../protocol/changes/messages';
-import { ConflictState, RepositoryState } from '../../../protocol/changes/types';
-import type { StashFileEntry, StatusData, SubmoduleStatusData } from '../../../protocol/changes/types';
-import type { ProtocolError } from '../../../protocol/shared/base';
-import { OperationStatus } from '../../../protocol/shared/operation';
-import { readProtocolError } from '../../shared/useProtocolError';
-import { ChangeSectionId } from './changeTree';
-import { rememberCommitMessage } from './commitComposerModel';
+import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush } from '@protocol/changes/messages';
+import { ConflictState, RepositoryState } from '@protocol/changes/types';
+import type { StashFileEntry, StatusData, SubmoduleStatusData } from '@protocol/changes/types';
+import type { ProtocolError } from '@protocol/shared/base';
+import { OperationStatus } from '@protocol/shared/operation';
+import { readProtocolError } from '@webview/shared/useProtocolError';
+import { ChangeSectionId } from '@webview/features/changes/changeTree';
+import { rememberCommitMessage } from '@webview/features/changes/commitComposerModel';
 
 export enum ChangesViewMode {
     Tree = 'tree',

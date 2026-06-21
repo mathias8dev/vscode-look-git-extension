@@ -1,4 +1,4 @@
-import { CommitMode, ConflictState } from '../../../protocol/changes/types';
+import { CommitMode, ConflictState } from '@protocol/changes/types';
 
 export type ConventionalCommitType =
     | ''

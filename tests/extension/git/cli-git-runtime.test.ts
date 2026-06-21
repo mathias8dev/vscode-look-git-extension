@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { UnsupportedGitOperationError } from '../../../src/application/ports/git-runtime';
-import { CliGitRuntime } from '../../../src/extension/git/cli-git-runtime';
-import type { GitExecutionContext } from '../../../src/application/ports/git-runtime';
-import type { CliGitRuntimeProcess } from '../../../src/extension/git/cli-git-runtime';
+import { UnsupportedGitOperationError } from '@application/ports/git-runtime';
+import { CliGitRuntime } from '@extension/git/cli-git-runtime';
+import type { GitExecutionContext } from '@application/ports/git-runtime';
+import type { CliGitRuntimeProcess } from '@extension/git/cli-git-runtime';
 
 const context = {
     cwd: '/repo',
@@ -14,7 +14,7 @@ const context = {
 
 describe('CliGitRuntime', () => {
     it('executes supported semantic actions as git invocations', async () => {
-        const calls: readonly string[][] = [];
+        const calls: string[][] = [];
         const runtime = new CliGitRuntime(recordingProcess(calls));
 
         await runtime.execute('stage', context, { paths: ['src/a.ts', 'src/b.ts'] });
@@ -270,6 +270,57 @@ describe('CliGitRuntime', () => {
             ['show', 'HEAD:src/app.ts'],
             ['show', ':src/app.ts'],
         ]);
+    });
+
+    it('reads conflict stage contents through one semantic runtime operation', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(async (args) => {
+            calls.push([...args]);
+            if (args[0] === 'ls-files') {
+                return [
+                    `100644 ${'1'.repeat(40)} 1\tsrc/conflict.ts`,
+                    `100644 ${'2'.repeat(40)} 2\tsrc/conflict.ts`,
+                    `100644 ${'3'.repeat(40)} 3\tsrc/conflict.ts`,
+                    '',
+                ].join('\0');
+            }
+            return `${args.at(-1)}\n\n`;
+        });
+
+        await expect(runtime.execute('getConflictStages', context, { path: 'src/conflict.ts' })).resolves.toEqual({
+            base: `${'1'.repeat(40)}\n\n`,
+            ours: `${'2'.repeat(40)}\n\n`,
+            theirs: `${'3'.repeat(40)}\n\n`,
+        });
+
+        expect(calls).toEqual([
+            ['ls-files', '-u', '-z', '--', 'src/conflict.ts'],
+            ['cat-file', '-p', '1'.repeat(40)],
+            ['cat-file', '-p', '2'.repeat(40)],
+            ['cat-file', '-p', '3'.repeat(40)],
+        ]);
+    });
+
+    it('maps patch and diff operations to git invocations inside the CLI runtime', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(async (args) => {
+            calls.push([...args]);
+            return args.includes('--no-index') ? 'untracked patch\n' : 'patch\n';
+        });
+
+        await expect(runtime.execute('getIndexDiff', context, { paths: ['src/staged.ts'] })).resolves.toBe('patch\n');
+        await expect(runtime.execute('getWorkingTreeDiff', context, { paths: ['src/app.ts'] })).resolves.toBe('patch\n');
+        await expect(runtime.execute('getPatch', context, { scope: 'untracked', paths: ['src/new.ts'] })).resolves.toBe('untracked patch\n');
+        await expect(runtime.execute('checkPatch', context, { patch: 'diff --git\n', options: { threeWay: true } })).resolves.toBe(true);
+        await runtime.execute('applyPatchToIndex', context, { patch: 'diff --git\n', options: { threeWay: true } });
+
+        expect(calls[0]).toEqual(['diff', '--cached', '--binary', '--', 'src/staged.ts']);
+        expect(calls[1]).toEqual(['diff', '--binary', '--', 'src/app.ts']);
+        expect(calls[2]).toEqual(['diff', '--binary', '--no-index', '--', '/dev/null', 'src/new.ts']);
+        expect(calls[3]?.slice(0, -1)).toEqual(['apply', '--check', '--3way']);
+        expect(calls[4]?.slice(0, -1)).toEqual(['apply', '--3way', '--index']);
+        expect(calls[3]?.at(-1)).toMatch(/patch\.diff$/);
+        expect(calls[4]?.at(-1)).toMatch(/patch\.diff$/);
     });
 
     it('maps detached worktree, keep reset, and ref push operations to git invocation args', async () => {

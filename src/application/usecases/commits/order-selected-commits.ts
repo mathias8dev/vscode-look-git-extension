@@ -1,7 +1,7 @@
-import type { GitHistoryOperations } from '../../ports/git-capabilities';
+import type { GitRepository } from '@application/ports/git-topology';
 
 export async function orderSelectedCommits(
-    repo: Pick<GitHistoryOperations, 'orderCommits'>,
+    repo: GitRepository,
     hashes: readonly string[],
     direction: 'newestFirst' | 'oldestFirst',
 ): Promise<readonly string[]> {

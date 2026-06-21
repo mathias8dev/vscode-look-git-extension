@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { changesStateToPersisted, readChangesStatePreferences } from '../../../src/webview/features/changes/changesPersistence';
-import { createInitialChangesState, ChangesViewMode, ChangesSortMode } from '../../../src/webview/features/changes/changesState';
-import { ChangeSectionId } from '../../../src/webview/features/changes/changeTree';
+import { changesStateToPersisted, readChangesStatePreferences } from '@webview/features/changes/changesPersistence';
+import { createInitialChangesState, ChangesViewMode, ChangesSortMode } from '@webview/features/changes/changesState';
+import { ChangeSectionId } from '@webview/features/changes/changeTree';
 
 describe('changesPersistence', () => {
     it('reads only valid persisted preferences', () => {

@@ -1,4 +1,4 @@
-import { ViewMode } from './viewMode';
+import { ViewMode } from '@webview/shared/viewMode';
 
 export function readViewMode(storageKey: string, fallback: ViewMode): ViewMode {
     try {

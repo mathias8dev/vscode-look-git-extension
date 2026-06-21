@@ -21,6 +21,12 @@ export default defineConfig({
     },
     resolve: {
         alias: {
+            '@application': resolve(root, 'src/application'),
+            '@core': resolve(root, 'src/core'),
+            '@extension': resolve(root, 'src/extension'),
+            '@protocol': resolve(root, 'src/protocol'),
+            '@tests': resolve(root, 'tests'),
+            '@webview': resolve(root, 'src/webview'),
             vscode: resolve(root, 'tests/mocks/vscode.ts'),
         },
     },

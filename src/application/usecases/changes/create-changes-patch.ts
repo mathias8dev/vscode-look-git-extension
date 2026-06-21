@@ -1,8 +1,8 @@
-import type { ClipboardPort } from '../../ports/clipboard';
-import { CommitPatchDestination, type CommitPatchDestinationPickerPort } from '../../ports/commit-patch-destination';
-import type { GitRepository } from '../../ports/git-repository';
-import type { SaveFilePort } from '../../ports/save-file';
-import type { TextFileWriterPort } from '../../ports/text-file-writer';
+import type { ClipboardPort } from '@application/ports/clipboard';
+import { CommitPatchDestination, type CommitPatchDestinationPickerPort } from '@application/ports/commit-patch-destination';
+import type { Worktree } from '@application/ports/git-topology';
+import type { SaveFilePort } from '@application/ports/save-file';
+import type { TextFileWriterPort } from '@application/ports/text-file-writer';
 
 export enum CreateChangesPatchResultKind {
     Cancelled,
@@ -29,17 +29,17 @@ export class CreateChangesPatchUseCase {
         private readonly clipboard: ClipboardPort,
     ) {}
 
-    async execute(repo: GitRepository, input: CreateChangesPatchInput): Promise<CreateChangesPatchResult> {
+    async execute(worktree: Worktree, input: CreateChangesPatchInput): Promise<CreateChangesPatchResult> {
         const destination = await this.destinationPicker.pickCommitPatchDestination();
         if (destination === undefined) { return { kind: CreateChangesPatchResultKind.Cancelled }; }
-        const patch = await this.createPatch(repo, input);
+        const patch = await this.createPatch(worktree, input);
         if (!patch.trim()) { throw new Error('No selected changes can be exported as a patch.'); }
         if (destination === CommitPatchDestination.Clipboard) {
             await this.clipboard.writeText(patch);
             return { kind: CreateChangesPatchResultKind.CopiedToClipboard };
         }
         const filePath = await this.saveFile.showSaveFile({
-            defaultDirectory: repo.cwd,
+            defaultDirectory: worktree.path,
             defaultFileName: 'selected-changes.patch',
             filters: { Patches: ['patch', 'diff'] },
         });
@@ -48,33 +48,17 @@ export class CreateChangesPatchUseCase {
         return { kind: CreateChangesPatchResultKind.SavedToFile, filePath };
     }
 
-    private async createPatch(repo: GitRepository, input: CreateChangesPatchInput): Promise<string> {
+    private async createPatch(worktree: Worktree, input: CreateChangesPatchInput): Promise<string> {
         const chunks: string[] = [];
         if (input.stagedFilePaths.length > 0) {
-            chunks.push(await repo.execRaw(['diff', '--cached', '--binary', '--', ...input.stagedFilePaths]));
+            chunks.push(await worktree.getIndexDiff(input.stagedFilePaths));
         }
         if (input.unstagedFilePaths.length > 0) {
-            chunks.push(await repo.execRaw(['diff', '--binary', '--', ...input.unstagedFilePaths]));
+            chunks.push(await worktree.getWorkingTreeDiff(input.unstagedFilePaths));
         }
         for (const filePath of input.untrackedFilePaths) {
-            chunks.push(await diffUntrackedFile(repo, filePath));
+            chunks.push(await worktree.getPatch('untracked', [filePath]));
         }
         return chunks.filter((chunk) => chunk.trim()).join('\n');
     }
-}
-
-async function diffUntrackedFile(repo: GitRepository, filePath: string): Promise<string> {
-    try {
-        return await repo.execRaw(['diff', '--binary', '--no-index', '--', '/dev/null', filePath]);
-    } catch (error) {
-        const stdout = stdoutFromExecError(error);
-        if (stdout !== undefined) { return stdout; }
-        throw error;
-    }
-}
-
-function stdoutFromExecError(error: unknown): string | undefined {
-    if (typeof error !== 'object' || error === null || !('stdout' in error)) { return undefined; }
-    const stdout = (error as { readonly stdout?: unknown }).stdout;
-    return typeof stdout === 'string' ? stdout : undefined;
 }

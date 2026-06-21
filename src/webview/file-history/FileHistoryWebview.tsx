@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useReducer, useState } from 'react';
-import type { HistoryExtensionToWebviewMessage } from '../../protocol/history/messages';
-import type { HistoryCommitFile, HistoryContextTarget } from '../../protocol/history/types';
-import { CommitHistoryApp } from '../features/history/CommitHistoryApp';
-import { createInitialHistoryState, reduceHistoryState } from '../features/history/historyState';
+import type { HistoryExtensionToWebviewMessage } from '@protocol/history/messages';
+import type { HistoryCommitFile, HistoryContextTarget } from '@protocol/history/types';
+import { CommitHistoryApp } from '@webview/features/history/CommitHistoryApp';
+import { createInitialHistoryState, reduceHistoryState } from '@webview/features/history/historyState';
 import {
     messageForHistoryCommitDetails,
     messageForHistoryContextTarget,
@@ -10,9 +10,9 @@ import {
     messageForHistoryOpenDiff,
     messageForHistoryReady,
     messageForHistoryShowOutput,
-} from '../features/history/historyCommands';
-import { applyWebviewFontSize, isWebviewFontSizeMessage } from '../platform/font-size';
-import { vscodeApi } from '../platform/vscodeHost';
+} from '@webview/features/history/historyCommands';
+import { applyWebviewFontSize, isWebviewFontSizeMessage } from '@webview/platform/font-size';
+import { vscodeApi } from '@webview/platform/vscodeHost';
 
 const PAGE_LIMIT = 50;
 const ERROR_NOTICE_TIMEOUT_MS = 8000;

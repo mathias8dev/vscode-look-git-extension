@@ -2,7 +2,7 @@
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { Dropdown } from '../../../src/webview/shared/Dropdown';
+import { Dropdown } from '@webview/shared/Dropdown';
 
 describe('Dropdown', () => {
     it('renders options and emits typed selected values', () => {

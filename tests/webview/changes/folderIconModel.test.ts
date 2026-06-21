@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { folderIconKindForName } from '../../../src/webview/features/changes/folderIconModel';
+import { folderIconKindForName } from '@webview/features/changes/folderIconModel';
 
 describe('folderIconModel', () => {
     it('resolves known folder icon kinds from folder names', () => {

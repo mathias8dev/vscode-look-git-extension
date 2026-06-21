@@ -1,6 +1,6 @@
 import * as path from 'path';
-import type { GitRepository } from '../../application/ports/git-repository';
-import { openReadonlyDiffDocument } from './readonly-diff-documents';
+import type { GitRepository, Worktree } from '@application/ports/git-topology';
+import { openReadonlyDiffDocument } from '@extension/utils/readonly-diff-documents';
 
 export interface StatusGitlinkDiffInput {
     readonly filePath: string;
@@ -19,14 +19,10 @@ export interface WorktreeGitlinkDiffInput {
     readonly filePath: string;
 }
 
-export async function openStatusGitlinkDiff(repo: GitRepository, input: StatusGitlinkDiffInput): Promise<void> {
-    const diff = await repo.execRaw([
-        'diff',
-        '--submodule=short',
-        ...(input.isStaged ? ['--cached'] : []),
-        '--',
-        input.filePath,
-    ]);
+export async function openStatusGitlinkDiff(worktree: Worktree, input: StatusGitlinkDiffInput): Promise<void> {
+    const diff = input.isStaged
+        ? await worktree.getIndexDiff([input.filePath])
+        : await worktree.getWorkingTreeDiff([input.filePath]);
     await openGitlinkDiffDocument(input.filePath, diff);
 }
 
@@ -35,17 +31,17 @@ export async function openCommitGitlinkDiff(repo: GitRepository, input: CommitGi
     await openGitlinkDiffDocument(input.filePath, diff);
 }
 
-export async function openWorktreeGitlinkDiff(repo: GitRepository, input: WorktreeGitlinkDiffInput): Promise<void> {
-    const diff = await repo.execRaw(['-C', input.worktreePath, 'diff', '--submodule=short', 'HEAD', '--', input.filePath]);
+export async function openWorktreeGitlinkDiff(worktree: Worktree, input: WorktreeGitlinkDiffInput): Promise<void> {
+    const diff = await worktree.getWorkingTreeDiff([input.filePath]);
     await openGitlinkDiffDocument(input.filePath, diff);
 }
 
 async function commitGitlinkDiff(repo: GitRepository, input: CommitGitlinkDiffInput): Promise<string> {
     if (input.parentHash || input.status.charAt(0) !== 'A') {
         const parentRef = input.parentHash ?? `${input.commitHash}~1`;
-        return repo.execRaw(['diff', '--submodule=short', parentRef, input.commitHash, '--', input.filePath]);
+        return repo.compareFiles(parentRef, input.commitHash, input.filePath);
     }
-    return repo.execRaw(['show', '--format=', '--submodule=short', '--find-renames', input.commitHash, '--', input.filePath]);
+    return repo.getCommitFileDiff(input.commitHash, input.filePath);
 }
 
 async function openGitlinkDiffDocument(filePath: string, diff: string): Promise<void> {

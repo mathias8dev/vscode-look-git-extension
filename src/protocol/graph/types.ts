@@ -1,5 +1,5 @@
-import type { Pagination } from '../shared/base';
-import type { SubmoduleStatus } from '../shared/repo';
+import type { Pagination } from '@protocol/shared/base';
+import type { RepositoryLocator, SubmoduleStatus, WorktreeLocator } from '@protocol/shared/repo';
 
 export interface GraphFilters {
     readonly search?: string;
@@ -11,12 +11,6 @@ export interface GraphFilters {
 }
 
 export type GraphPage = Pagination;
-
-export interface GraphRepositoryScope {
-    readonly kind: 'main' | 'submodule';
-    readonly path?: string;
-    readonly label?: string;
-}
 
 export interface GraphCommit {
     readonly hash: string;
@@ -47,6 +41,7 @@ export interface TagInfo {
 }
 
 export interface WorktreeInfo {
+    readonly locator?: WorktreeLocator;
     readonly path: string;
     readonly head: string;
     readonly branch: string | undefined;
@@ -67,6 +62,7 @@ export interface WorktreeWip {
 }
 
 export interface GraphSubmoduleInfo {
+    readonly repository?: RepositoryLocator;
     readonly path: string;
     readonly name: string;
     readonly status: SubmoduleStatus;
@@ -75,7 +71,7 @@ export interface GraphSubmoduleInfo {
 }
 
 export interface GraphData {
-    readonly repositoryScope?: GraphRepositoryScope;
+    readonly repository?: RepositoryLocator;
     readonly branches: readonly BranchInfo[];
     readonly tags: readonly TagInfo[];
     readonly commits: readonly GraphCommit[];
@@ -103,7 +99,7 @@ export interface GraphCommitContextTarget {
     readonly kind: 'commit';
     readonly hash: string;
     readonly hashes: readonly string[];
-    readonly repositoryScope?: GraphRepositoryScope;
+    readonly repository?: RepositoryLocator;
     readonly childHash?: string;
     readonly parentHash?: string;
     readonly canUndoCommit: boolean;
@@ -120,13 +116,14 @@ export interface GraphBranchContextTarget {
     readonly canPush?: boolean;
     readonly canPublish?: boolean;
     readonly canDelete?: boolean;
-    readonly repositoryScope?: GraphRepositoryScope;
+    readonly repository?: RepositoryLocator;
 }
 
 export interface GraphWorktreeContextTarget {
     readonly kind: 'worktree';
     readonly path: string;
-    readonly repositoryScope?: GraphRepositoryScope;
+    readonly repository?: RepositoryLocator;
+    readonly worktree?: WorktreeLocator;
 }
 
 export type GraphContextTarget =

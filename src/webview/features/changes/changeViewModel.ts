@@ -1,7 +1,7 @@
-import type { StatusEntry } from '../../../protocol/changes/types';
-import type { ChangeSection, ChangeListItem } from './changeTree';
-import { statusCode, statusLabel } from './changeTree';
-import { ChangesSortMode } from './changesState';
+import type { StatusEntry } from '@protocol/changes/types';
+import type { ChangeSection, ChangeListItem } from '@webview/features/changes/changeTree';
+import { statusCode, statusLabel } from '@webview/features/changes/changeTree';
+import { ChangesSortMode } from '@webview/features/changes/changesState';
 
 export function filterAndSortSections(
     sections: readonly ChangeSection[],

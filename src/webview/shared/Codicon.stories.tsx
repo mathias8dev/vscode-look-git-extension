@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Codicon, type CodiconName } from './Codicon';
+import { Codicon, type CodiconName } from '@webview/shared/Codicon';
 
 const icons = [
     'add',

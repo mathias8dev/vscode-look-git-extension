@@ -1,4 +1,4 @@
-import type { ErrorCode, ProtocolError } from '../../protocol/shared/base';
+import type { ErrorCode, ProtocolError } from '@protocol/shared/base';
 
 export interface ErrorSerializationOptions {
     readonly code?: ErrorCode;

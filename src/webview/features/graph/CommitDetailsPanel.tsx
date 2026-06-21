@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
-import type { CommitFileChange } from '../../../protocol/graph/types';
-import type { CommitDetails } from './graphState';
-import { CommitDetailsContent } from './CommitDetailsContent';
+import type { CommitFileChange } from '@protocol/graph/types';
+import type { CommitDetails } from '@webview/features/graph/graphState';
+import { CommitDetailsContent } from '@webview/features/graph/CommitDetailsContent';
 
 interface CommitDetailsPanelProps {
     readonly style?: CSSProperties;

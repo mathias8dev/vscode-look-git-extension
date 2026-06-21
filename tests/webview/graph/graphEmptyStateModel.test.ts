@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { graphEmptyStateModel, hasActiveGraphFilters } from '../../../src/webview/features/graph/graphEmptyStateModel';
+import { graphEmptyStateModel, hasActiveGraphFilters } from '@webview/features/graph/graphEmptyStateModel';
 
 describe('graphEmptyStateModel', () => {
     it('shows a first-commit empty state for an unfiltered main repository', () => {
         expect(graphEmptyStateModel({
             filters: {},
             selectedBranchFilter: undefined,
-            repositoryScope: { kind: 'main' },
+            selectedRepository: { kind: 'main' },
         })).toEqual({
             title: 'No commits yet',
             subtitle: 'Create the initial commit from the Changes panel.',
@@ -17,7 +17,7 @@ describe('graphEmptyStateModel', () => {
         expect(graphEmptyStateModel({
             filters: { search: 'oauth' },
             selectedBranchFilter: undefined,
-            repositoryScope: { kind: 'main' },
+            selectedRepository: { kind: 'main' },
         })).toEqual({
             title: 'No matching commits',
             subtitle: 'Try clearing one or more active filters.',
@@ -30,7 +30,7 @@ describe('graphEmptyStateModel', () => {
         expect(graphEmptyStateModel({
             filters: {},
             selectedBranchFilter: undefined,
-            repositoryScope: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
+            selectedRepository: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
         }).title).toBe('No commits in this submodule yet');
     });
 });

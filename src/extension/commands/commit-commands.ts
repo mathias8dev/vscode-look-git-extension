@@ -2,33 +2,27 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
-import type { GitRepository } from '../../application/ports/git-repository';
-import type {
-    GitHistoryOperations,
-    GitReferenceOperations,
-    GitStatusOperations,
-    GitWorktreeTopologyOperations,
-} from '../../application/ports/git-capabilities';
-import type { CommitCommand } from '../../protocol/graph/messages';
-import type { CommitReferenceActions } from '../../application/usecases/commits/commit-reference-actions';
-import { defaultCommitReferenceActions } from '../adapters/vscode/default-commit-reference-actions';
-import { CreateCommitPatchResultKind, type CreateCommitPatchUseCase, type CreateCommitPatchResult } from '../../application/usecases/commits/create-commit-patch';
-import { defaultCreateCommitPatch } from '../adapters/vscode/default-create-commit-patch';
-import { type ExplainCommitDiffUseCase } from '../../application/usecases/commits/explain-commit-diff';
-import { defaultExplainCommitDiff } from '../adapters/vscode/default-explain-commit-diff';
-import { GenerateRewordCommitMessageUseCase } from '../../application/usecases/commits/generate-reword-commit-message';
-import { orderSelectedCommits } from '../../application/usecases/commits/order-selected-commits';
-import { getReachableCommitHashes } from '../../application/usecases/commits/get-reachable-commit-hashes';
-import { VscodeLanguageModelRewordCommitMessageGenerator } from '../adapters/vscode/vscode-language-model-reword-commit-message-generator';
-import { showModalWarningMessage } from '../utils/confirmation';
-import { openDiffExplanationDocument, showDiffExplanationError } from '../utils/diff-explanation-document';
-import { isAbortError } from '../messaging/errorSerialization';
-import { withCancellationSignal } from '../utils/vscode-cancellation';
-import { showBranchNameInput } from '../utils/branch-name-input';
-import { compareRefWithPickedWorktree, openChangesWithWorkingTree, promptNewWorktreePath } from './git-command-helpers';
-import { promptForCommitMessage } from '../utils/commit-message-editor';
-import { openVisualRebasePanel } from '../utils/visual-rebase-panel';
-import { requireRuntimeRepository, requireRuntimeTargets, requireRuntimeWorktree, type RuntimeCommandTargets } from './runtime-command-targets';
+import type { GitRepository, Worktree } from '@application/ports/git-topology';
+import type { CommitCommand } from '@protocol/graph/messages';
+import type { CommitReferenceActions } from '@application/usecases/commits/commit-reference-actions';
+import { defaultCommitReferenceActions } from '@extension/adapters/vscode/default-commit-reference-actions';
+import { CreateCommitPatchResultKind, type CreateCommitPatchUseCase, type CreateCommitPatchResult } from '@application/usecases/commits/create-commit-patch';
+import { defaultCreateCommitPatch } from '@extension/adapters/vscode/default-create-commit-patch';
+import { type ExplainCommitDiffUseCase } from '@application/usecases/commits/explain-commit-diff';
+import { defaultExplainCommitDiff } from '@extension/adapters/vscode/default-explain-commit-diff';
+import { GenerateRewordCommitMessageUseCase } from '@application/usecases/commits/generate-reword-commit-message';
+import { orderSelectedCommits } from '@application/usecases/commits/order-selected-commits';
+import { getReachableCommitHashes } from '@application/usecases/commits/get-reachable-commit-hashes';
+import { VscodeLanguageModelRewordCommitMessageGenerator } from '@extension/adapters/vscode/vscode-language-model-reword-commit-message-generator';
+import { showModalWarningMessage } from '@extension/utils/confirmation';
+import { openDiffExplanationDocument, showDiffExplanationError } from '@extension/utils/diff-explanation-document';
+import { isAbortError } from '@extension/messaging/errorSerialization';
+import { withCancellationSignal } from '@extension/utils/vscode-cancellation';
+import { showBranchNameInput } from '@extension/utils/branch-name-input';
+import { compareRefWithPickedWorktree, openChangesWithWorkingTree, promptNewWorktreePath } from '@extension/commands/git-command-helpers';
+import { promptForCommitMessage } from '@extension/utils/commit-message-editor';
+import { requireRuntimeRepository, requireRuntimeTargets, requireRuntimeWorktree, requireRuntimeWorktrees, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
+import { currentBranchName } from '@extension/git/current-branch';
 
 export interface CommitCommandDiffExplanationScope {
     readonly label: string;
@@ -37,12 +31,6 @@ export interface CommitCommandDiffExplanationScope {
 
 const defaultGenerateRewordCommitMessage = new GenerateRewordCommitMessageUseCase(new VscodeLanguageModelRewordCommitMessageGenerator());
 
-type CommitDiffReader = Pick<GitHistoryOperations, 'orderCommits' | 'getCommitPatch' | 'getCommitMessage'>;
-type CommitReachabilityReader = Pick<GitHistoryOperations, 'getReachableCommitHashes'>;
-type CommitSquashReader = Pick<GitHistoryOperations, 'getCommitDetails' | 'getCommitMessage'>;
-type CommitStatusReader = Pick<GitStatusOperations, 'getStatus'>;
-type CommitReferenceReader = Pick<GitReferenceOperations, 'listBranches' | 'listRemotes'>;
-type CommitWorktreeCreator = Pick<GitWorktreeTopologyOperations, 'addDetachedWorktree'>;
 
 export async function runCommitCommand(
     repo: GitRepository,
@@ -54,7 +42,6 @@ export async function runCommitCommand(
     explainCommitDiffUseCase: ExplainCommitDiffUseCase = defaultExplainCommitDiff,
     diffExplanationScope?: CommitCommandDiffExplanationScope,
     extensionUri?: vscode.Uri,
-    storageUri?: vscode.Uri,
     generateRewordCommitMessage: GenerateRewordCommitMessageUseCase = defaultGenerateRewordCommitMessage,
     runtimeTargets: RuntimeCommandTargets = {},
 ): Promise<boolean> {
@@ -113,15 +100,6 @@ export async function runCommitCommand(
         case 'dropCommit':
             await dropCommits(await orderSelectedCommits(requireRuntimeRepository(runtimeTargets), selected, 'newestFirst'), runtimeTargets);
             return true;
-        case 'interactiveRebaseFromHere':
-            if (!extensionUri) { throw new Error('Visual Rebase requires the extension URI.'); }
-            if (!storageUri) { throw new Error('Visual Rebase requires extension storage.'); }
-            await openVisualRebasePanel(repo, extensionUri, storageUri, {
-                upstream: hash,
-                onto: hash,
-                title: `Visual Rebase from ${hash.substring(0, 7)}`,
-            });
-            return false;
         case 'pushAllUpToHere':
             await pushAllUpToHere(hash, runtimeTargets);
             return true;
@@ -132,13 +110,13 @@ export async function runCommitCommand(
         case 'newWorktreeFromCommit':
             return createWorktreeFromCommit(repo, hash, runtimeTargets);
         case 'compareCommitWithWorktree':
-            await compareRefWithPickedWorktree(repo, hash, `Diff ${hash.substring(0, 7)}`);
+            await compareRefWithPickedWorktree(repo, requireRuntimeWorktrees(runtimeTargets), hash, `Diff ${hash.substring(0, 7)}`);
             return false;
     }
 }
 
 async function explainCommitDiff(
-    repo: CommitDiffReader,
+    repo: GitRepository,
     hashes: readonly string[],
     useCase: ExplainCommitDiffUseCase,
     scope: CommitCommandDiffExplanationScope | undefined,
@@ -166,7 +144,7 @@ async function explainCommitDiff(
     }
 }
 
-async function assertCherryPickableCommits(repo: CommitReachabilityReader, hashes: readonly string[]): Promise<void> {
+async function assertCherryPickableCommits(repo: GitRepository, hashes: readonly string[]): Promise<void> {
     const reachable = await getReachableCommitHashes(repo, hashes).catch(() => new Set<string>());
     const alreadyInCurrentHistory = hashes
         .filter((hash) => reachable.has(hash))
@@ -196,7 +174,7 @@ function normalizeSelectedHashes(hash: string, hashes: readonly string[]): strin
 
 async function showRepositoryAtRevision(
     hash: string,
-    repo: CommitWorktreeCreator,
+    repo: GitRepository,
 ): Promise<void> {
     const parentPath = await fs.mkdtemp(path.join(os.tmpdir(), 'look-git-revision-'));
     const worktreePath = path.join(parentPath, hash.substring(0, 7));
@@ -205,7 +183,7 @@ async function showRepositoryAtRevision(
 }
 
 async function createWorktreeFromCommit(repo: GitRepository, hash: string, runtimeTargets: RuntimeCommandTargets): Promise<boolean> {
-    const worktreePath = await promptNewWorktreePath(repo, `Worktree path for ${hash.substring(0, 7)}:`);
+    const worktreePath = await promptNewWorktreePath(repo.cwd, `Worktree path for ${hash.substring(0, 7)}:`);
     if (!worktreePath) { return false; }
     const branchName = await showBranchNameInput({
         prompt: `New branch name from ${hash.substring(0, 7)}:`,
@@ -306,7 +284,7 @@ async function pushAllUpToHere(hash: string, runtimeTargets: RuntimeCommandTarge
     await worktree.pushRef(remote, hash, `refs/heads/${branch}`, {});
 }
 
-async function validateSquashCommitRange(repository: CommitSquashReader, hashes: readonly string[]): Promise<void> {
+async function validateSquashCommitRange(repository: GitRepository, hashes: readonly string[]): Promise<void> {
     let previousHash: string | undefined;
     for (const [index, hash] of hashes.entries()) {
         const commit = await repository.getCommitDetails(hash);
@@ -318,11 +296,7 @@ async function validateSquashCommitRange(repository: CommitSquashReader, hashes:
     }
 }
 
-async function currentBranchName(repository: CommitReferenceReader): Promise<string> {
-    return (await repository.listBranches()).find((branch) => branch.isCurrent)?.name ?? 'HEAD';
-}
-
-async function assertRuntimeNoUnmergedFiles(worktree: CommitStatusReader, operation: string): Promise<void> {
+async function assertRuntimeNoUnmergedFiles(worktree: Worktree, operation: string): Promise<void> {
     const status = await worktree.getStatus();
     if (status.conflicts.length > 0) {
         throw new Error(`Resolve existing merge/rebase conflicts before ${operation}.`);

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { WebviewFontSizeChangedPush } from '../../protocol/shared/ui';
+import type { WebviewFontSizeChangedPush } from '@protocol/shared/ui';
 
 const DEFAULT_WEBVIEW_FONT_SIZE = 13;
 

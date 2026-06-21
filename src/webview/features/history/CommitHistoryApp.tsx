@@ -1,14 +1,14 @@
-import { HistoryCommitSelectionMode, type HistoryState } from './historyState';
-import type { HistoryToolbarCommand } from '../../../protocol/history/messages';
-import { OperationStatus } from '../../../protocol/shared/operation';
-import type { HistoryCommit, HistoryCommitFile, HistoryContextTarget } from '../../../protocol/history/types';
-import { CommitHistoryFileList } from './CommitHistoryFileList';
-import { CommitHistoryRow } from './CommitHistoryRow';
-import { filterHistoryCommits, formatHistoryDate, historyEmptyLabel, parseCommitMessage, formatRelativeDate } from './historyModel';
-import { ErrorNotice } from '../../shared/ErrorNotice';
-import { OperationNotice } from '../../shared/OperationNotice';
-import { operationNoticeActions } from '../../shared/operationNoticeActions';
-import { SearchInput } from '../../shared/SearchInput';
+import { HistoryCommitSelectionMode, type HistoryState } from '@webview/features/history/historyState';
+import type { HistoryToolbarCommand } from '@protocol/history/messages';
+import { OperationStatus } from '@protocol/shared/operation';
+import type { HistoryCommit, HistoryCommitFile, HistoryContextTarget } from '@protocol/history/types';
+import { CommitHistoryFileList } from '@webview/features/history/CommitHistoryFileList';
+import { CommitHistoryRow } from '@webview/features/history/CommitHistoryRow';
+import { filterHistoryCommits, formatHistoryDate, historyEmptyLabel, parseCommitMessage, formatRelativeDate } from '@webview/features/history/historyModel';
+import { ErrorNotice } from '@webview/shared/ErrorNotice';
+import { OperationNotice } from '@webview/shared/OperationNotice';
+import { operationNoticeActions } from '@webview/shared/operationNoticeActions';
+import { SearchInput } from '@webview/shared/SearchInput';
 
 interface CommitHistoryAppProps {
     readonly state: HistoryState;

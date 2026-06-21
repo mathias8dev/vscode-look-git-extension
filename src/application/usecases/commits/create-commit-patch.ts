@@ -1,9 +1,9 @@
-import type { ClipboardPort } from '../../ports/clipboard';
-import { CommitPatchDestination, type CommitPatchDestinationPickerPort } from '../../ports/commit-patch-destination';
-import type { GitHistoryOperations } from '../../ports/git-capabilities';
-import type { SaveFilePort } from '../../ports/save-file';
-import type { TextFileWriterPort } from '../../ports/text-file-writer';
-import { orderSelectedCommits } from './order-selected-commits';
+import type { ClipboardPort } from '@application/ports/clipboard';
+import { CommitPatchDestination, type CommitPatchDestinationPickerPort } from '@application/ports/commit-patch-destination';
+import type { GitRepository } from '@application/ports/git-topology';
+import type { SaveFilePort } from '@application/ports/save-file';
+import type { TextFileWriterPort } from '@application/ports/text-file-writer';
+import { orderSelectedCommits } from '@application/usecases/commits/order-selected-commits';
 
 export enum CreateCommitPatchResultKind {
     Cancelled,
@@ -16,7 +16,6 @@ export interface CreateCommitPatchResult {
     readonly filePath?: string;
 }
 
-type PatchRepository = Pick<GitHistoryOperations, 'orderCommits' | 'getCommitPatch'> & { readonly cwd: string };
 
 export class CreateCommitPatchUseCase {
     constructor(
@@ -26,7 +25,7 @@ export class CreateCommitPatchUseCase {
         private readonly clipboard: ClipboardPort,
     ) {}
 
-    async execute(repo: PatchRepository, hashes: readonly string[]): Promise<CreateCommitPatchResult> {
+    async execute(repo: GitRepository, hashes: readonly string[]): Promise<CreateCommitPatchResult> {
         const destination = await this.destinationPicker.pickCommitPatchDestination();
         if (destination === undefined) { return { kind: CreateCommitPatchResultKind.Cancelled }; }
         const orderedHashes = await orderSelectedCommits(repo, hashes, 'oldestFirst');

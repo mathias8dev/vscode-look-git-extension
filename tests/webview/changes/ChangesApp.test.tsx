@@ -3,10 +3,10 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { ConflictState, RepositoryState } from '../../../src/protocol/changes/types';
-import { ChangesApp } from '../../../src/webview/features/changes/ChangesApp';
-import { createInitialChangesState } from '../../../src/webview/features/changes/changesState';
-import { CreateStashKind } from '../../../src/webview/features/changes/stashCommands';
+import { ConflictState, RepositoryState } from '@protocol/changes/types';
+import { ChangesApp } from '@webview/features/changes/ChangesApp';
+import { createInitialChangesState } from '@webview/features/changes/changesState';
+import { CreateStashKind } from '@webview/features/changes/stashCommands';
 
 describe('ChangesApp', () => {
     it('renders continue and abort controls while a merge is in progress', () => {

@@ -1,6 +1,7 @@
-import type { RewordCommitMessageGenerator } from '../../ports/commit-message-generator';
-import type { GitHistoryOperations } from '../../ports/git-capabilities';
-import { normalizeGeneratedCommitMessage } from '../commit-message-normalization';
+import type { RewordCommitMessageGenerator } from '@application/ports/commit-message-generator';
+import type { GitRepository } from '@application/ports/git-topology';
+import { truncateText } from '@core/shared/text';
+import { normalizeGeneratedCommitMessage } from '@application/usecases/commit-message-normalization';
 
 const MAX_COMMIT_DIFF_LENGTH = 32000;
 const RECENT_COMMIT_COUNT = 20;
@@ -9,12 +10,11 @@ export interface GenerateRewordCommitMessageResult {
     readonly message: string;
 }
 
-type RewordRepository = Pick<GitHistoryOperations, 'getCommitFiles' | 'getCommitPatch' | 'getCommitGraph'>;
 
 export class GenerateRewordCommitMessageUseCase {
     constructor(private readonly generator: RewordCommitMessageGenerator) {}
 
-    async execute(repo: RewordRepository, commitHash: string, currentMessage: string, signal?: AbortSignal): Promise<GenerateRewordCommitMessageResult> {
+    async execute(repo: GitRepository, commitHash: string, currentMessage: string, signal?: AbortSignal): Promise<GenerateRewordCommitMessageResult> {
         const [files, commitDiff, recentCommits] = await Promise.all([
             repo.getCommitFiles(commitHash, signal),
             repo.getCommitPatch(commitHash, signal),
@@ -43,7 +43,7 @@ export class GenerateRewordCommitMessageUseCase {
     }
 }
 
-async function readRecentCommitSubjects(repo: RewordRepository, signal?: AbortSignal): Promise<readonly string[]> {
+async function readRecentCommitSubjects(repo: GitRepository, signal?: AbortSignal): Promise<readonly string[]> {
     try {
         const page = await repo.getCommitGraph({}, { limit: RECENT_COMMIT_COUNT }, signal);
         return page.items.map((c) => c.message.split('\n')[0] ?? '');
@@ -51,9 +51,4 @@ async function readRecentCommitSubjects(repo: RewordRepository, signal?: AbortSi
         if (error instanceof Error && error.name === 'AbortError') { throw error; }
         return [];
     }
-}
-
-function truncateText(value: string, maxLength: number): { readonly text: string; readonly truncated: boolean } {
-    if (value.length <= maxLength) { return { text: value, truncated: false }; }
-    return { text: value.slice(0, maxLength), truncated: true };
 }

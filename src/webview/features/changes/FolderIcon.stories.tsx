@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { FolderIcon } from './FolderIcon';
+import { FolderIcon } from '@webview/features/changes/FolderIcon';
 
 const folderNames = [
     'src',

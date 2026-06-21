@@ -1,4 +1,4 @@
-import type { GitCommit, GitGraphCommit } from '../git/domain/GitCommit';
+import type { GitCommit, GitGraphCommit } from '@core/git/domain/GitCommit';
 
 export const LOG_FIELD_SEP = '\x1f';
 export const LOG_RECORD_SEP = '\x1e';

@@ -1,4 +1,4 @@
-import { ROW_HEIGHT } from './graphRowSizing';
+import { ROW_HEIGHT } from '@webview/features/graph/graphRowSizing';
 
 const OVERSCAN = 8;
 

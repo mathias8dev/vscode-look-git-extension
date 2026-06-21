@@ -2,9 +2,9 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ResizablePanel } from '../../../src/webview/shared/ResizablePanel';
-import { ResizeAxis } from '../../../src/webview/shared/resizeAxis';
-import { ResizeHandleSide } from '../../../src/webview/shared/resizeHandleSide';
+import { ResizablePanel } from '@webview/shared/ResizablePanel';
+import { ResizeAxis } from '@webview/shared/resizeAxis';
+import { ResizeHandleSide } from '@webview/shared/resizeHandleSide';
 
 describe('ResizablePanel', () => {
     beforeEach(() => {

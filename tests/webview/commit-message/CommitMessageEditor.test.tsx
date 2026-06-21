@@ -2,7 +2,7 @@
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { CommitMessageEditor } from '../../../src/webview/commit-message/CommitMessageEditor';
+import { CommitMessageEditor } from '@webview/commit-message/CommitMessageEditor';
 
 describe('CommitMessageEditor', () => {
     it('renders generation errors below the action bar', () => {

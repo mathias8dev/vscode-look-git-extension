@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { CommitFileChange } from '../../../src/protocol/graph/types';
-import { iconKindForCommitFile } from '../../../src/webview/features/graph/graphFileIconModel';
+import type { CommitFileChange } from '@protocol/graph/types';
+import { iconKindForCommitFile } from '@webview/features/graph/graphFileIconModel';
 
 describe('graphFileIconModel', () => {
     it('resolves richer commit file icon kinds from paths', () => {

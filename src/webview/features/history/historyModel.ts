@@ -1,4 +1,4 @@
-import type { HistoryCommit } from '../../../protocol/history/types';
+import type { HistoryCommit } from '@protocol/history/types';
 
 export function filterHistoryCommits(commits: readonly HistoryCommit[], query: string): readonly HistoryCommit[] {
     const normalized = query.trim().toLowerCase();

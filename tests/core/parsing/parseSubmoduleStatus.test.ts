@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseSubmoduleStatus, parseSubmodulePaths } from '../../../src/core/parsing/parseSubmoduleStatus';
-import { expectItem } from '../../helpers/assertions';
+import { parseSubmoduleStatus, parseSubmodulePaths } from '@core/parsing/parseSubmoduleStatus';
+import { expectItem } from '@tests/helpers/assertions';
 
 describe('parseSubmoduleStatus', () => {
     it('returns empty array for empty output', () => {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { SearchInput } from './SearchInput';
+import { SearchInput } from '@webview/shared/SearchInput';
 
 const meta = {
     title: 'Shared/SearchInput',

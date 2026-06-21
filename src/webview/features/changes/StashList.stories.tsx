@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { noop, stashEntries, stashFiles } from '../../storybookFixtures';
-import { StashList } from './StashList';
+import { noop, stashEntries, stashFiles } from '@webview/storybookFixtures';
+import { StashList } from '@webview/features/changes/StashList';
 
 const meta = {
     title: 'Changes/StashList',

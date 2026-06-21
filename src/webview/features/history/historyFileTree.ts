@@ -1,4 +1,4 @@
-import type { HistoryCommitFile } from '../../../protocol/history/types';
+import type { HistoryCommitFile } from '@protocol/history/types';
 
 export interface HistoryFileTreeNode {
     readonly id: string;

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { branches, graphRows, noop } from '../../storybookFixtures';
-import { GraphCommitRow } from './GraphRow';
+import { branches, graphRows, noop } from '@webview/storybookFixtures';
+import { GraphCommitRow } from '@webview/features/graph/GraphRow';
 
 const meta = {
     title: 'Graph/GraphCommitRow',

@@ -3,7 +3,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { RenderResult } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { GraphTable } from '../../../src/webview/features/graph/GraphTable';
+import { GraphTable } from '@webview/features/graph/GraphTable';
 
 class TestResizeObserver {
     observe(): void {}

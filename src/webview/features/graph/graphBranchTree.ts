@@ -1,4 +1,4 @@
-import type { BranchInfo } from '../../../protocol/graph/types';
+import type { BranchInfo } from '@protocol/graph/types';
 
 export interface BranchNode {
     readonly id: string;

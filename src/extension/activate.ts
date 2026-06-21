@@ -1,16 +1,15 @@
 import * as vscode from 'vscode';
-import type { Repository } from '../types/git';
-import { ActiveRepositoryRegistry } from './repositories/ActiveRepositoryRegistry';
-import { ChangesViewProvider } from './views/ChangesViewProvider';
-import { CommitHistoryViewProvider } from './views/CommitHistoryViewProvider';
-import { GraphViewProvider } from './views/GraphViewProvider';
-import { getBuiltInGitApi } from './utils/gitExtension';
-import { registerReadonlyDiffDocumentProvider } from './utils/readonly-diff-documents';
-import { registerGitBlobDocumentProvider } from './utils/git-blob-documents';
-import { registerWebviewFontSizeSync } from './views/webview-font';
-import { GitRootRepositoryResolver } from './repositories/GitRepositoryResolver';
-import { RepositoryRegistry } from './repositories/RepositoryRegistry';
-import { appendErrorToOutput } from './messaging/errorOutputChannel';
+import type { Repository } from '@extension/adapters/vscode/git-api';
+import { ActiveRepositoryRegistry } from '@extension/repositories/ActiveRepositoryRegistry';
+import { ChangesViewProvider } from '@extension/views/ChangesViewProvider';
+import { CommitHistoryViewProvider } from '@extension/views/CommitHistoryViewProvider';
+import { GraphViewProvider } from '@extension/views/GraphViewProvider';
+import { getBuiltInGitApi } from '@extension/utils/gitExtension';
+import { registerReadonlyDiffDocumentProvider } from '@extension/utils/readonly-diff-documents';
+import { registerGitBlobDocumentProvider } from '@extension/utils/git-blob-documents';
+import { registerWebviewFontSizeSync } from '@extension/views/webview-font';
+import { RepositoryRegistry } from '@extension/repositories/RepositoryRegistry';
+import { appendErrorToOutput } from '@extension/messaging/errorOutputChannel';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const gitApi = await getBuiltInGitApi();
@@ -24,14 +23,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const repositories = new ActiveRepositoryRegistry();
     const runtimeRepositories = new RepositoryRegistry();
-    const repositoryResolver = new GitRootRepositoryResolver(repositories);
     const graphRepositoryRefreshers: Array<() => Promise<void>> = [];
     const graphProvider = new GraphViewProvider(context.extensionUri, repositories, async () => {
         await Promise.all(graphRepositoryRefreshers.map((refresh) => refresh()));
-    }, context.globalStorageUri, runtimeRepositories);
+    }, runtimeRepositories);
     const refreshGraph = () => graphProvider.refresh();
-    const changesProvider = new ChangesViewProvider(context.extensionUri, repositories, refreshGraph, undefined, undefined, undefined, undefined, undefined, runtimeRepositories);
-    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshGraph, repositoryResolver, context.globalStorageUri, runtimeRepositories);
+    const changesProvider = new ChangesViewProvider(context.extensionUri, repositories, refreshGraph, undefined, undefined, undefined, undefined, runtimeRepositories);
+    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshGraph, undefined, runtimeRepositories);
     graphRepositoryRefreshers.push(() => changesProvider.refresh(), () => commitHistoryProvider.refresh());
 
     context.subscriptions.push(

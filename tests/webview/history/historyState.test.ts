@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { HistoryCommit } from '../../../src/protocol/history/types';
-import { OperationStatus } from '../../../src/protocol/shared/operation';
-import { createInitialHistoryState, HistoryCommitSelectionMode, reduceHistoryState } from '../../../src/webview/features/history/historyState';
+import type { HistoryCommit } from '@protocol/history/types';
+import { OperationStatus } from '@protocol/shared/operation';
+import { createInitialHistoryState, HistoryCommitSelectionMode, reduceHistoryState } from '@webview/features/history/historyState';
 
 describe('historyState', () => {
     it('replaces commits for the first page', () => {

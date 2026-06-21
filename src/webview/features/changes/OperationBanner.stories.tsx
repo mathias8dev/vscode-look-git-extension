@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ConflictState } from '../../../protocol/changes/types';
-import { OperationAction } from './operationCommands';
-import { OperationBanner } from './OperationBanner';
+import { ConflictState } from '@protocol/changes/types';
+import { OperationAction } from '@webview/features/changes/operationCommands';
+import { OperationBanner } from '@webview/features/changes/OperationBanner';
 
 const noop = () => undefined;
 const onAction = (_action: OperationAction) => undefined;

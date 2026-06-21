@@ -2,9 +2,9 @@
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { ConflictState } from '../../../src/protocol/changes/types';
-import { OperationBanner } from '../../../src/webview/features/changes/OperationBanner';
-import { OperationAction } from '../../../src/webview/features/changes/operationCommands';
+import { ConflictState } from '@protocol/changes/types';
+import { OperationBanner } from '@webview/features/changes/OperationBanner';
+import { OperationAction } from '@webview/features/changes/operationCommands';
 
 describe('OperationBanner', () => {
     it('guides conflict resolution before enabling continue', () => {

@@ -2,10 +2,10 @@
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ConflictState, RepositoryState } from '../../../src/protocol/changes/types';
-import { OperationNoticeActionKind, OperationStatus } from '../../../src/protocol/shared/operation';
-import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
-import { createMockVsCodeApi, sendToWebview } from '../../helpers/webviewRuntime';
+import { ConflictState, RepositoryState } from '@protocol/changes/types';
+import { OperationNoticeActionKind, OperationStatus } from '@protocol/shared/operation';
+import { SubmoduleStatus } from '@protocol/shared/repo';
+import { createMockVsCodeApi, sendToWebview } from '@tests/helpers/webviewRuntime';
 
 describe('ChangesWebview', () => {
     beforeEach(() => {
@@ -17,7 +17,7 @@ describe('ChangesWebview', () => {
 
     it('announces readiness without rendering a duplicate toolbar', async () => {
         const api = createMockVsCodeApi();
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendStatusData();
@@ -34,7 +34,7 @@ describe('ChangesWebview', () => {
 
     it('applies live Look Git font-size changes', async () => {
         createMockVsCodeApi();
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendToWebview({ type: 'ui/fontSizeChanged', fontSize: 21 });
@@ -47,7 +47,7 @@ describe('ChangesWebview', () => {
 
     it('shows output and dismiss actions for failed operations', async () => {
         const api = createMockVsCodeApi();
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         act(() => sendToWebview({
@@ -69,7 +69,7 @@ describe('ChangesWebview', () => {
 
     it('shows output and dismiss actions for persistent protocol errors with details', async () => {
         const api = createMockVsCodeApi();
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         act(() => sendToWebview({
@@ -94,7 +94,7 @@ describe('ChangesWebview', () => {
     });
 
     it('starts as list and applies native view-title mode and commit-focus messages', async () => {
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendStatusData();
@@ -118,7 +118,7 @@ describe('ChangesWebview', () => {
 
     it('restores and persists the changes view mode preference', async () => {
         const api = createMockVsCodeApi({ viewMode: 'tree', sortMode: 'status' });
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendStatusData();
@@ -139,7 +139,7 @@ describe('ChangesWebview', () => {
 
     it('shows the current branch in the compact commit composer placeholder', async () => {
         const api = createMockVsCodeApi();
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendStatusDataWithStagedChange();
@@ -163,7 +163,7 @@ describe('ChangesWebview', () => {
 
     it('commits the compact composer message with Ctrl+Enter', async () => {
         const api = createMockVsCodeApi();
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendStatusDataWithStagedChange();
@@ -183,7 +183,7 @@ describe('ChangesWebview', () => {
         vi.useFakeTimers();
         try {
             createMockVsCodeApi();
-            const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+            const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
             render(<ChangesWebview />);
             act(() => sendStatusDataWithStagedChange());
@@ -208,7 +208,7 @@ describe('ChangesWebview', () => {
 
     it('posts selected changes as a native context menu target', async () => {
         const api = createMockVsCodeApi();
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendStatusDataWithMultipleChanges();
@@ -245,7 +245,7 @@ describe('ChangesWebview', () => {
 
     it('posts review requests from changes and staged section bars only', async () => {
         const api = createMockVsCodeApi();
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendStatusDataWithReviewSections();
@@ -290,7 +290,7 @@ describe('ChangesWebview', () => {
 
     it('keeps expanded submodules open after parent status refreshes and reloads their details', async () => {
         const api = createMockVsCodeApi();
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendStatusDataWithSubmodule();
@@ -321,7 +321,7 @@ describe('ChangesWebview', () => {
 
     it('does not duplicate submodule status requests while a previous one is still loading', async () => {
         const api = createMockVsCodeApi();
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendStatusDataWithSubmodule();
@@ -339,7 +339,7 @@ describe('ChangesWebview', () => {
 
     it('keeps expanded stashes open after status refreshes and reloads missing files', async () => {
         const api = createMockVsCodeApi();
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendStatusData();
@@ -356,7 +356,7 @@ describe('ChangesWebview', () => {
 
     it('opens a stash file diff when clicking a loaded stash file row', async () => {
         const api = createMockVsCodeApi();
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendStatusData();
@@ -385,7 +385,7 @@ describe('ChangesWebview', () => {
 
     it('requests and applies a generated commit message for staged changes', async () => {
         const api = createMockVsCodeApi();
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendStatusDataWithStagedChange();
@@ -409,7 +409,7 @@ describe('ChangesWebview', () => {
 
     it('requests and applies a generated commit message inside a submodule composer', async () => {
         const api = createMockVsCodeApi();
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendStatusDataWithSubmodule();
@@ -462,7 +462,7 @@ describe('ChangesWebview', () => {
 
     it('posts targeted submodule toolbar messages and native context targets from submodule header actions', async () => {
         const api = createMockVsCodeApi();
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendStatusDataWithSubmodule();
@@ -508,7 +508,7 @@ describe('ChangesWebview', () => {
 
     it('clears the path filter from the no matches empty state', async () => {
         const api = createMockVsCodeApi({ pathFilter: 'missing', viewMode: 'list', sortMode: 'path' });
-        const { ChangesWebview } = await import('../../../src/webview/changes/ChangesWebview');
+        const { ChangesWebview } = await import('@webview/changes/ChangesWebview');
 
         render(<ChangesWebview />);
         sendStatusDataWithMultipleChanges();

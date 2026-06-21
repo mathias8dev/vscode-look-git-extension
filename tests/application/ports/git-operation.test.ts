@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SEMANTIC_GIT_OPERATIONS, isSemanticGitOperation } from '../../../src/application/ports/git-operation';
+import { SEMANTIC_GIT_OPERATIONS, isSemanticGitOperation } from '@application/ports/git-operation';
 
 describe('semantic git operations', () => {
     it('does not contain duplicate operation names', () => {

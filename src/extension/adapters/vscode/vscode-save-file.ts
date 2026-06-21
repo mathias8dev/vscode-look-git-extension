@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-import type { SaveFileOptions, SaveFilePort } from '../../../application/ports/save-file';
+import type { SaveFileOptions, SaveFilePort } from '@application/ports/save-file';
 
 export class VscodeSaveFile implements SaveFilePort {
     async showSaveFile(options: SaveFileOptions): Promise<string | undefined> {

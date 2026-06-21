@@ -1,8 +1,10 @@
-import { GraphOperationStatus, type GraphExtensionToWebviewMessage, type GraphOperationStatusPush } from '../../../protocol/graph/messages';
-import type { BranchInfo, CommitFileChange, GraphCommit, GraphData, GraphFilters, GraphRepositoryScope, GraphSubmoduleInfo, TagInfo, WorktreeInfo, WorktreeWip } from '../../../protocol/graph/types';
-import type { ProtocolError } from '../../../protocol/shared/base';
-import type { GraphRow, LaneData, LineDef } from './layout/graph-lane-model';
-import { layoutGraphRowsV4, type GraphLayoutStateV4 } from './layout/layout-graph-rows-v4';
+import { GraphOperationStatus, type GraphExtensionToWebviewMessage, type GraphOperationStatusPush } from '@protocol/graph/messages';
+import type { BranchInfo, CommitFileChange, GraphCommit, GraphData, GraphFilters, GraphSubmoduleInfo, TagInfo, WorktreeInfo, WorktreeWip } from '@protocol/graph/types';
+import type { ProtocolError } from '@protocol/shared/base';
+import type { RepositoryLocator } from '@protocol/shared/repo';
+import { mainGraphRepositorySelection, sameRepositoryLocator, submoduleGraphRepositorySelection, type GraphRepositorySelection } from '@webview/features/graph/graphRepositorySelection';
+import type { GraphRow, LaneData, LineDef } from '@webview/features/graph/layout/graph-lane-model';
+import { layoutGraphRowsV4, type GraphLayoutStateV4 } from '@webview/features/graph/layout/layout-graph-rows-v4';
 
 export type DisplayRow =
     | { readonly kind: 'commit'; readonly row: GraphRow }
@@ -77,7 +79,8 @@ export interface CommitDetails {
 }
 
 export interface GraphState {
-    readonly repositoryScope: GraphRepositoryScope;
+    readonly selectedRepository: GraphRepositorySelection;
+    readonly repository: RepositoryLocator | undefined;
     readonly rows: readonly GraphRow[];
     readonly layoutState: GraphLayoutStateV4 | undefined;
     readonly displayRows: readonly DisplayRow[];
@@ -112,7 +115,7 @@ export type GraphAction =
     | { readonly type: 'setFilters'; readonly filters: Partial<GraphFilters> }
     | { readonly type: 'setBranchFilter'; readonly branch: string | undefined }
     | { readonly type: 'selectMainRepository' }
-    | { readonly type: 'selectSubmodule'; readonly submodulePath: string; readonly submoduleLabel: string }
+    | { readonly type: 'selectSubmodule'; readonly submodulePath: string; readonly submoduleLabel: string; readonly repository?: RepositoryLocator }
     | { readonly type: 'selectCommit'; readonly hash: string }
     | { readonly type: 'selectWorktree'; readonly path: string }
     | { readonly type: 'toggleCommitSelection'; readonly hash: string }
@@ -126,7 +129,8 @@ export type GraphAction =
 
 export function createInitialGraphState(): GraphState {
     return {
-        repositoryScope: mainRepositoryScope(),
+        selectedRepository: mainGraphRepositorySelection(),
+        repository: undefined,
         rows: [],
         layoutState: undefined,
         displayRows: [],
@@ -180,7 +184,8 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
         case 'selectMainRepository':
             return startGraphReload(clearGraphContent({
                 ...state,
-                repositoryScope: mainRepositoryScope(),
+                selectedRepository: mainGraphRepositorySelection(),
+                repository: undefined,
                 selectedBranchFilter: undefined,
                 filters: { ...state.filters, branches: undefined },
                 selectedHash: undefined,
@@ -193,11 +198,8 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
         case 'selectSubmodule':
             return startGraphReload(clearGraphContent({
                 ...state,
-                repositoryScope: {
-                    kind: 'submodule',
-                    path: action.submodulePath,
-                    label: action.submoduleLabel,
-                },
+                selectedRepository: submoduleGraphRepositorySelection(action.submodulePath, action.submoduleLabel),
+                repository: action.repository,
                 selectedBranchFilter: undefined,
                 filters: { ...state.filters, branches: undefined },
                 selectedHash: undefined,
@@ -284,13 +286,13 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
         case 'graph/dataPush':
             return reduceGraphDataPush(state, message.data, message.repoId);
         case 'graph/submodulesPush':
-            return reduceGraphSubmodulesPush(state, message.repositoryScope, message.submodules, message.repoId);
+            return reduceGraphSubmodulesPush(state, message.repository, message.submodules, message.repoId);
         case 'graph/branchFilterInvalidated':
-            return reduceGraphBranchFilterInvalidated(state, message.branch, message.repositoryScope);
+            return reduceGraphBranchFilterInvalidated(state, message.branch, message.repository);
         case 'graph/refreshRequested':
             return startGraphReload(state, state.refreshVersion + 1);
         case 'graph/dataResponse':
-            if (!isExpectedGraphResponse(state, message.requestId, message.data.repositoryScope)) { return state; }
+            if (!isExpectedGraphResponse(state, message.requestId)) { return state; }
             return applyGraphData(state, message.data, state.repoId);
         case 'graph/commitDetailsResponse':
             if (message.hash !== state.selectedHash) { return state; }
@@ -339,7 +341,7 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
 }
 
 function reduceGraphOperationStatus(state: GraphState, message: GraphOperationStatusPush): GraphState {
-    if (!sameRepositoryScope(message.repositoryScope, state.repositoryScope)) { return state; }
+    if (!matchesSelectedRuntimeRepository(message.repository, state.repository)) { return state; }
     if (message.status !== GraphOperationStatus.Running && state.operationStatus?.operationId && state.operationStatus.operationId !== message.operationId) {
         return state;
     }
@@ -348,7 +350,7 @@ function reduceGraphOperationStatus(state: GraphState, message: GraphOperationSt
 
 function reduceGraphDataPush(state: GraphState, data: GraphData, repoId: string | undefined): GraphState {
     if (state.activeGraphRequestId) { return state; }
-    if (!sameRepositoryScope(data.repositoryScope, state.repositoryScope)) {
+    if (!graphDataMatchesSelectedRepository(data, state)) {
         return startGraphReload(state, state.refreshVersion + 1);
     }
     return applyGraphData(state, data, repoId);
@@ -356,12 +358,12 @@ function reduceGraphDataPush(state: GraphState, data: GraphData, repoId: string 
 
 function reduceGraphSubmodulesPush(
     state: GraphState,
-    repositoryScope: GraphRepositoryScope,
+    repository: RepositoryLocator | undefined,
     submodules: readonly GraphSubmoduleInfo[],
     repoId: string | undefined,
 ): GraphState {
     if (state.activeGraphRequestId) { return state; }
-    if (!sameRepositoryScope(repositoryScope, state.repositoryScope)) { return state; }
+    if (!matchesSelectedRuntimeRepository(repository, state.repository)) { return state; }
     return {
         ...state,
         submodules,
@@ -372,9 +374,9 @@ function reduceGraphSubmodulesPush(
 function reduceGraphBranchFilterInvalidated(
     state: GraphState,
     branch: string,
-    repositoryScope: GraphRepositoryScope | undefined,
+    repository: RepositoryLocator | undefined,
 ): GraphState {
-    if (!sameRepositoryScope(repositoryScope, state.repositoryScope)) { return state; }
+    if (!matchesSelectedRuntimeRepository(repository, state.repository)) { return state; }
     const nextState = state.selectedBranchFilter === branch
         ? {
             ...state,
@@ -385,9 +387,8 @@ function reduceGraphBranchFilterInvalidated(
     return startGraphReload(nextState, nextState.refreshVersion + 1);
 }
 
-function isExpectedGraphResponse(state: GraphState, requestId: string, responseScope: GraphRepositoryScope | undefined): boolean {
-    if (state.activeGraphRequestId !== requestId) { return false; }
-    return sameRepositoryScope(responseScope, state.repositoryScope);
+function isExpectedGraphResponse(state: GraphState, requestId: string): boolean {
+    return state.activeGraphRequestId === requestId;
 }
 
 function isExpectedGraphError(state: GraphState, requestId: string | undefined): boolean {
@@ -397,7 +398,7 @@ function isExpectedGraphError(state: GraphState, requestId: string | undefined):
 
 function applyGraphData(state: GraphState, data: GraphData, repoId: string | undefined): GraphState {
     const currentBranch = data.currentBranch;
-    const appending = state.loadingMore && sameRepositoryScope(data.repositoryScope, state.repositoryScope);
+    const appending = state.loadingMore && graphDataMatchesSelectedRepository(data, state);
     const submodules = appending
         ? state.submodules
         : mergeSubmoduleSummaries(state.submodules, data.submodules);
@@ -408,6 +409,7 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
             loadingMore: false,
             error: undefined,
             repoId: repoId ?? state.repoId,
+            repository: data.repository ?? state.repository,
             activeGraphRequestId: undefined,
         };
     }
@@ -437,7 +439,7 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
         tags: data.tags,
         worktrees: data.worktrees,
         submodules,
-        repositoryScope: data.repositoryScope ?? state.repositoryScope,
+        repository: data.repository ?? state.repository,
         currentBranch,
         currentUser: data.currentUser,
         hasRemotes: data.hasRemotes,
@@ -449,10 +451,6 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
         repoId: repoId ?? state.repoId,
         activeGraphRequestId: undefined,
     };
-}
-
-function mainRepositoryScope(): GraphRepositoryScope {
-    return { kind: 'main' };
 }
 
 function startGraphReload(state: GraphState, refreshVersion: number): GraphState {
@@ -486,23 +484,6 @@ export function graphRequestId(refreshVersion: number, kind: 'replace' | 'more',
     return `graph:${kind}:${refreshVersion}:${offset}`;
 }
 
-function sameRepositoryScope(a: GraphRepositoryScope | undefined, b: GraphRepositoryScope | undefined): boolean {
-    return repositoryScopeKey(a) === repositoryScopeKey(b);
-}
-
-function repositoryScopeKey(scope: GraphRepositoryScope | undefined): string {
-    if (!scope || scope.kind === 'main') { return 'main'; }
-    return `submodule:${scope.path ?? ''}`;
-}
-
-function repositoryScopesEqual(a: GraphRepositoryScope | undefined, b: GraphRepositoryScope | undefined): boolean {
-    const left = a ?? { kind: 'main' };
-    const right = b ?? { kind: 'main' };
-    return left.kind === right.kind
-        && left.path === right.path
-        && left.label === right.label;
-}
-
 function currentBranchHash(branches: readonly BranchInfo[]): string | undefined {
     return branches.find((branch) => branch.isCurrent && !branch.isRemote)?.hash;
 }
@@ -534,7 +515,7 @@ function newGraphCommits(rows: readonly GraphRow[], commits: readonly GraphCommi
 }
 
 function graphDataMatchesState(state: GraphState, data: GraphData, submodules: readonly GraphSubmoduleInfo[]): boolean {
-    return repositoryScopesEqual(data.repositoryScope, state.repositoryScope)
+    return graphDataMatchesSelectedRepository(data, state)
         && state.currentBranch === data.currentBranch
         && state.currentUser === data.currentUser
         && state.hasRemotes === data.hasRemotes
@@ -546,6 +527,17 @@ function graphDataMatchesState(state: GraphState, data: GraphData, submodules: r
         && worktreesEqual(state.worktrees, data.worktrees)
         && worktreeWipsEqual(state.displayRows, data.worktreeWips)
         && submodulesEqual(state.submodules, submodules);
+}
+
+function graphDataMatchesSelectedRepository(data: GraphData, state: GraphState): boolean {
+    if (!data.repository) { return state.selectedRepository.kind === 'main' && !state.repository; }
+    if (state.repository) { return sameRepositoryLocator(data.repository, state.repository); }
+    return state.selectedRepository.kind === 'main' && data.repository.kind === 'main';
+}
+
+function matchesSelectedRuntimeRepository(repository: RepositoryLocator | undefined, selected: RepositoryLocator | undefined): boolean {
+    if (!repository || !selected) { return true; }
+    return sameRepositoryLocator(repository, selected);
 }
 
 function mergeSubmoduleSummaries(

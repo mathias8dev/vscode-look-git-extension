@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import { runTests } from '@vscode/test-electron';
-import { fixtureRepoLaunchArgs } from '../helpers/fixtureRepo';
-import { sanitizeVsCodeTestEnvironment } from '../helpers/vscodeTestEnvironment';
+import { fixtureRepoLaunchArgs } from '@tests/helpers/fixtureRepo';
+import { sanitizeVsCodeTestEnvironment } from '@tests/helpers/vscodeTestEnvironment';
 
 async function main(): Promise<void> {
     const extensionDevelopmentPath = path.resolve(__dirname, '../../..');

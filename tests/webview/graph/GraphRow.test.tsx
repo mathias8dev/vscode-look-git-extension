@@ -3,8 +3,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { GraphCommitRow } from '../../../src/webview/features/graph/GraphRow';
-import type { GraphRow } from '../../../src/webview/features/graph/layout/graph-lane-model';
+import { GraphCommitRow } from '@webview/features/graph/GraphRow';
+import type { GraphRow } from '@webview/features/graph/layout/graph-lane-model';
 
 describe('GraphCommitRow', () => {
     it('offsets the commit message from the lanes used by that row', () => {

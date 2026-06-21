@@ -2,9 +2,9 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HistoryCommit } from '../../../src/protocol/history/types';
-import { OperationNoticeActionKind, OperationStatus } from '../../../src/protocol/shared/operation';
-import { createMockVsCodeApi, sendToWebview } from '../../helpers/webviewRuntime';
+import type { HistoryCommit } from '@protocol/history/types';
+import { OperationNoticeActionKind, OperationStatus } from '@protocol/shared/operation';
+import { createMockVsCodeApi, sendToWebview } from '@tests/helpers/webviewRuntime';
 
 describe('HistoryWebview', () => {
     beforeEach(() => {
@@ -16,7 +16,7 @@ describe('HistoryWebview', () => {
 
     it('announces readiness and renders pushed commits', async () => {
         const api = createMockVsCodeApi();
-        const { HistoryWebview } = await import('../../../src/webview/history/HistoryWebview');
+        const { HistoryWebview } = await import('@webview/history/HistoryWebview');
 
         render(<HistoryWebview />);
         sendToWebview({
@@ -34,7 +34,7 @@ describe('HistoryWebview', () => {
 
     it('applies live Look Git font-size changes', async () => {
         createMockVsCodeApi();
-        const { HistoryWebview } = await import('../../../src/webview/history/HistoryWebview');
+        const { HistoryWebview } = await import('@webview/history/HistoryWebview');
 
         render(<HistoryWebview />);
         sendToWebview({ type: 'ui/fontSizeChanged', fontSize: 22 });
@@ -47,7 +47,7 @@ describe('HistoryWebview', () => {
 
     it('shows output and dismiss actions for failed operations', async () => {
         const api = createMockVsCodeApi();
-        const { HistoryWebview } = await import('../../../src/webview/history/HistoryWebview');
+        const { HistoryWebview } = await import('@webview/history/HistoryWebview');
 
         render(<HistoryWebview />);
         sendToWebview({
@@ -69,7 +69,7 @@ describe('HistoryWebview', () => {
 
     it('requests the next page when loading more commits', async () => {
         const api = createMockVsCodeApi();
-        const { HistoryWebview } = await import('../../../src/webview/history/HistoryWebview');
+        const { HistoryWebview } = await import('@webview/history/HistoryWebview');
 
         render(<HistoryWebview />);
         sendToWebview({
@@ -92,7 +92,7 @@ describe('HistoryWebview', () => {
 
     it('requests commit details on click and expands files from the response', async () => {
         const api = createMockVsCodeApi();
-        const { HistoryWebview } = await import('../../../src/webview/history/HistoryWebview');
+        const { HistoryWebview } = await import('@webview/history/HistoryWebview');
 
         render(<HistoryWebview />);
         sendToWebview({
@@ -145,7 +145,7 @@ describe('HistoryWebview', () => {
     });
 
     it('does not render a duplicate webview toolbar', async () => {
-        const { HistoryWebview } = await import('../../../src/webview/history/HistoryWebview');
+        const { HistoryWebview } = await import('@webview/history/HistoryWebview');
 
         render(<HistoryWebview />);
         sendToWebview({
@@ -164,7 +164,7 @@ describe('HistoryWebview', () => {
     });
 
     it('switches opened commit files from tree to list through a native view title message', async () => {
-        const { HistoryWebview } = await import('../../../src/webview/history/HistoryWebview');
+        const { HistoryWebview } = await import('@webview/history/HistoryWebview');
 
         render(<HistoryWebview />);
         sendToWebview({

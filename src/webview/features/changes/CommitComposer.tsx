@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
-import { CommitMode, ConflictState } from '../../../protocol/changes/types';
-import type { ProtocolError } from '../../../protocol/shared/base';
-import type { CommitFeedback, GeneratedCommitMessage } from './changesState';
-import { canSubmitCommit, commitBlockReason } from './commitComposerModel';
-import { changesCommitComposerContext } from './context-menu-model';
+import { CommitMode, ConflictState } from '@protocol/changes/types';
+import type { ProtocolError } from '@protocol/shared/base';
+import type { CommitFeedback, GeneratedCommitMessage } from '@webview/features/changes/changesState';
+import { canSubmitCommit, commitBlockReason } from '@webview/features/changes/commitComposerModel';
+import { changesCommitComposerContext } from '@webview/features/changes/context-menu-model';
 
 interface CommitComposerProps {
     readonly stagedCount: number;

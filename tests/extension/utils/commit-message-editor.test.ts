@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as vscode from 'vscode';
-import { promptForCommitMessage } from '../../../src/extension/utils/commit-message-editor';
-import { commands, resetMockVscode, Uri, window, workspace } from '../../mocks/vscode';
+import { promptForCommitMessage } from '@extension/utils/commit-message-editor';
+import { commands, resetMockVscode, Uri, window, workspace } from '@tests/mocks/vscode';
 
 describe('promptForCommitMessage', () => {
     const extensionUri = Uri.file('/extension') as unknown as vscode.Uri; // TestUri provides the Uri surface used by this helper.

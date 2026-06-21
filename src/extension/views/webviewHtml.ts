@@ -1,13 +1,13 @@
 import * as crypto from 'crypto';
 import * as vscode from 'vscode';
-import { getConfiguredWebviewFontSize, webviewFontSizeStyle } from './webview-font';
+import { getConfiguredWebviewFontSize, webviewFontSizeStyle } from '@extension/views/webview-font';
 
 const WEBVIEW_CONTEXT = JSON.stringify({ preventDefaultContextMenuItems: true });
 
 export function getWebviewHtml(
     webview: vscode.Webview,
     extensionUri: vscode.Uri,
-    scriptName: 'changes' | 'commitMessage' | 'fileHistory' | 'graph' | 'history' | 'visualRebase',
+    scriptName: 'changes' | 'commitMessage' | 'fileHistory' | 'graph' | 'history',
 ): string {
     const nonce = crypto.randomBytes(16).toString('hex');
     const scriptUri = webview.asWebviewUri(

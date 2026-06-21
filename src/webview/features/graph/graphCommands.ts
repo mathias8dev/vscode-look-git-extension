@@ -1,5 +1,6 @@
-import type { GraphContextTarget, GraphFilters, GraphPage, GraphRepositoryScope } from '../../../protocol/graph/types';
-import type { BranchCommand, CommitCommand, GraphDataRequest, GraphRepositoryCommand, GraphWebviewToExtensionMessage, LoadMoreGraphRequest, WorktreeCommand } from '../../../protocol/graph/messages';
+import type { GraphContextTarget, GraphFilters, GraphPage } from '@protocol/graph/types';
+import type { BranchCommand, CommitCommand, GraphDataRequest, GraphRepositoryCommand, GraphWebviewToExtensionMessage, LoadMoreGraphRequest, WorktreeCommand } from '@protocol/graph/messages';
+import type { RepositoryLocator, WorktreeLocator } from '@protocol/shared/repo';
 
 let requestCounter = 0;
 function nextRequestId(): string {
@@ -7,87 +8,89 @@ function nextRequestId(): string {
 }
 
 export function messageForGraphDataRequest(
-    repoId: string,
+    repoId: string | undefined,
     filters: GraphFilters,
     page: GraphPage,
-    repositoryScope?: GraphRepositoryScope,
+    repository?: RepositoryLocator,
     requestId: string = nextRequestId(),
 ): GraphDataRequest {
     return {
         type: 'graph/dataRequest',
         requestId,
-        repoId,
+        ...repoIdProperty(repoId),
         filters,
         page,
-        ...scopeProperty(repositoryScope),
+        ...repositoryProperty(repository),
     };
 }
 
 export function messageForLoadMore(
-    repoId: string,
+    repoId: string | undefined,
     filters: GraphFilters,
     page: GraphPage,
-    repositoryScope?: GraphRepositoryScope,
+    repository?: RepositoryLocator,
     requestId: string = nextRequestId(),
 ): LoadMoreGraphRequest {
     return {
         type: 'graph/loadMore',
         requestId,
-        repoId,
+        ...repoIdProperty(repoId),
         filters,
         page,
-        ...scopeProperty(repositoryScope),
+        ...repositoryProperty(repository),
     };
 }
 
-export function messageForCommitDetails(hash: string, repositoryScope?: GraphRepositoryScope): GraphWebviewToExtensionMessage {
+export function messageForCommitDetails(hash: string, repository?: RepositoryLocator): GraphWebviewToExtensionMessage {
     return {
         type: 'graph/commitDetailsRequest',
         requestId: nextRequestId(),
         hash,
-        ...scopeProperty(repositoryScope),
+        ...repositoryProperty(repository),
     };
 }
 
-export function messageForWorktreeDetails(path: string, repositoryScope?: GraphRepositoryScope): GraphWebviewToExtensionMessage {
+export function messageForWorktreeDetails(path: string, repository?: RepositoryLocator, worktree?: WorktreeLocator): GraphWebviewToExtensionMessage {
     return {
         type: 'graph/worktreeDetailsRequest',
         requestId: nextRequestId(),
         path,
-        ...scopeProperty(repositoryScope),
+        ...repositoryProperty(repository),
+        ...worktreeProperty(worktree),
     };
 }
 
-export function messageForBranchCheckout(branch: string, isRemote: boolean, repositoryScope?: GraphRepositoryScope): GraphWebviewToExtensionMessage {
-    return messageForBranchCommand('checkout', branch, isRemote, repositoryScope);
+export function messageForBranchCheckout(branch: string, isRemote: boolean, repository?: RepositoryLocator): GraphWebviewToExtensionMessage {
+    return messageForBranchCommand('checkout', branch, isRemote, repository);
 }
 
-export function messageForBranchCommand(command: BranchCommand, branch: string, isRemote: boolean, repositoryScope?: GraphRepositoryScope): GraphWebviewToExtensionMessage {
+export function messageForBranchCommand(command: BranchCommand, branch: string, isRemote: boolean, repository?: RepositoryLocator): GraphWebviewToExtensionMessage {
     return {
         type: 'graph/branchCommand',
         command,
         branch,
         isRemote,
-        ...scopeProperty(repositoryScope),
+        ...repositoryProperty(repository),
     };
 }
 
-export function messageForWorktreeCommand(command: WorktreeCommand, path?: string, repositoryScope?: GraphRepositoryScope): GraphWebviewToExtensionMessage {
+export function messageForWorktreeCommand(command: WorktreeCommand, path?: string, repository?: RepositoryLocator, worktree?: WorktreeLocator): GraphWebviewToExtensionMessage {
     return {
         type: 'graph/worktreeCommand',
         command,
         path,
-        ...scopeProperty(repositoryScope),
+        ...repositoryProperty(repository),
+        ...worktreeProperty(worktree),
     };
 }
 
-export function messageForCommitCommand(command: CommitCommand, hash: string, hashes: readonly string[] = [hash], repositoryScope?: GraphRepositoryScope): GraphWebviewToExtensionMessage {
+export function messageForCommitCommand(command: CommitCommand, hash: string, hashes: readonly string[] = [hash], repository?: RepositoryLocator): GraphWebviewToExtensionMessage {
     return {
         type: 'graph/commitCommand',
         command,
         hash,
         hashes,
-        ...scopeProperty(repositoryScope),
+        ...repositoryProperty(repository),
     };
 }
 
@@ -98,11 +101,11 @@ export function messageForGraphContextTarget(target: GraphContextTarget): GraphW
     };
 }
 
-export function messageForGraphRepositoryCommand(command: GraphRepositoryCommand, repositoryScope?: GraphRepositoryScope): GraphWebviewToExtensionMessage {
+export function messageForGraphRepositoryCommand(command: GraphRepositoryCommand, repository?: RepositoryLocator): GraphWebviewToExtensionMessage {
     return {
         type: 'graph/repositoryCommand',
         command,
-        ...scopeProperty(repositoryScope),
+        ...repositoryProperty(repository),
     };
 }
 
@@ -113,7 +116,7 @@ export function messageForOpenDiff(
     origPath?: string,
     parentHash?: string,
     isSubmodule?: boolean,
-    repositoryScope?: GraphRepositoryScope,
+    repository?: RepositoryLocator,
 ): GraphWebviewToExtensionMessage {
     return {
         type: 'graph/openDiff',
@@ -123,7 +126,7 @@ export function messageForOpenDiff(
         origPath,
         parentHash,
         isSubmodule,
-        ...scopeProperty(repositoryScope),
+        ...repositoryProperty(repository),
     };
 }
 
@@ -133,7 +136,8 @@ export function messageForOpenWorktreeDiff(
     status: string,
     origPath?: string,
     isSubmodule?: boolean,
-    repositoryScope?: GraphRepositoryScope,
+    repository?: RepositoryLocator,
+    worktree?: WorktreeLocator,
 ): GraphWebviewToExtensionMessage {
     return {
         type: 'graph/openWorktreeDiff',
@@ -142,10 +146,19 @@ export function messageForOpenWorktreeDiff(
         status,
         origPath,
         isSubmodule,
-        ...scopeProperty(repositoryScope),
+        ...repositoryProperty(repository),
+        ...worktreeProperty(worktree),
     };
 }
 
-function scopeProperty(repositoryScope: GraphRepositoryScope | undefined): { readonly repositoryScope: GraphRepositoryScope } | Record<string, never> {
-    return repositoryScope ? { repositoryScope } : {};
+function repoIdProperty(repoId: string | undefined): { readonly repoId: string } | Record<string, never> {
+    return repoId ? { repoId } : {};
+}
+
+function repositoryProperty(repository: RepositoryLocator | undefined): { readonly repository: RepositoryLocator } | Record<string, never> {
+    return repository ? { repository } : {};
+}
+
+function worktreeProperty(worktree: WorktreeLocator | undefined): { readonly worktree: WorktreeLocator } | Record<string, never> {
+    return worktree ? { worktree } : {};
 }

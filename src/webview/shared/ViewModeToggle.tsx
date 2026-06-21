@@ -1,5 +1,5 @@
-import { IconButton } from './IconButton';
-import { ViewMode } from './viewMode';
+import { IconButton } from '@webview/shared/IconButton';
+import { ViewMode } from '@webview/shared/viewMode';
 
 interface ViewModeToggleProps {
     readonly viewMode: ViewMode;

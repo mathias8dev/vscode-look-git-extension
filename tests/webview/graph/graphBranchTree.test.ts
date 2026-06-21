@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { BranchInfo } from '../../../src/protocol/graph/types';
-import { buildRemoteBranchTree } from '../../../src/webview/features/graph/graphBranchTree';
-import { expectItem } from '../../helpers/assertions';
+import type { BranchInfo } from '@protocol/graph/types';
+import { buildRemoteBranchTree } from '@webview/features/graph/graphBranchTree';
+import { expectItem } from '@tests/helpers/assertions';
 
 function branch(name: string, isRemote: boolean): BranchInfo {
     return {

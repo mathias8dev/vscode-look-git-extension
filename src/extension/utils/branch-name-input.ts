@@ -3,7 +3,7 @@ import {
     BranchNameInputValidationKind,
     branchNameInputValidation,
     normalizeValidBranchNameInput,
-} from '../../core/git/normalize-branch-name';
+} from '@core/git/normalize-branch-name';
 
 interface BranchNameInputOptions {
     readonly prompt?: string;

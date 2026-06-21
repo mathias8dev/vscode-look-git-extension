@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import type { GraphCommit } from '../../../src/protocol/graph/types';
-import { getMaxLane } from '../../../src/webview/features/graph/layout/graph-lane-model';
-import { layoutGraphRowsV4 } from '../../../src/webview/features/graph/layout/layout-graph-rows-v4';
+import type { GraphCommit } from '@protocol/graph/types';
+import { getMaxLane } from '@webview/features/graph/layout/graph-lane-model';
+import { layoutGraphRowsV4 } from '@webview/features/graph/layout/layout-graph-rows-v4';
 import {
     findAdjacentDisconnectedSameLaneIssues,
     findCommitLanePassThroughIssues,
     findFloatingNodeIssues,
     findLaneContinuityIssues,
     findNonVisibleLineTargetIssues,
-} from '../../helpers/graphLayoutAssertions';
+} from '@tests/helpers/graphLayoutAssertions';
 
 function commit(hash: string, parents: readonly string[] = [], refs: readonly string[] = []): GraphCommit {
     return {

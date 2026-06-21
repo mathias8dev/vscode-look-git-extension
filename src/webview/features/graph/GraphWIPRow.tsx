@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
-import type { WorktreeWip } from '../../../protocol/graph/types';
-import { getLaneDataMaxLane, type LaneData } from './layout/graph-lane-model';
-import { GraphLaneCell, LANE_WIDTH } from './GraphLaneCell';
+import type { WorktreeWip } from '@protocol/graph/types';
+import { getLaneDataMaxLane, type LaneData } from '@webview/features/graph/layout/graph-lane-model';
+import { GraphLaneCell, LANE_WIDTH } from '@webview/features/graph/GraphLaneCell';
 
 interface GraphWIPRowProps {
     readonly wip: WorktreeWip;

@@ -2,11 +2,11 @@
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BranchInfo, GraphCommit, GraphContextTarget, WorktreeInfo } from '../../../src/protocol/graph/types';
-import { BranchPanel } from '../../../src/webview/features/graph/BranchPanel';
-import { GraphTable } from '../../../src/webview/features/graph/GraphTable';
-import { layoutGraphRowsV4 } from '../../../src/webview/features/graph/layout/layout-graph-rows-v4';
-import type { DisplayRow } from '../../../src/webview/features/graph/graphState';
+import type { BranchInfo, GraphCommit, GraphContextTarget, WorktreeInfo } from '@protocol/graph/types';
+import { BranchPanel } from '@webview/features/graph/BranchPanel';
+import { GraphTable } from '@webview/features/graph/GraphTable';
+import { layoutGraphRowsV4 } from '@webview/features/graph/layout/layout-graph-rows-v4';
+import type { DisplayRow } from '@webview/features/graph/graphState';
 
 class TestResizeObserver {
     observe(): void {}

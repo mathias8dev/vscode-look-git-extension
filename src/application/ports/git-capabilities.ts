@@ -1,7 +1,7 @@
-import type { GitCommit, GitFileChange } from '../../core/git/domain/GitCommit';
-import type { Page, PageRequest } from '../../core/git/domain/Page';
-import type { GitBranch, GitStash, GitStatus, GitTag } from '../../core/git/domain/GitStatus';
-import type { GitSubmodule, GitWorktree } from '../../core/git/domain/GitWorktree';
+import type { GitCommit, GitFileChange } from '@core/git/domain/GitCommit';
+import type { Page, PageRequest } from '@core/git/domain/Page';
+import type { GitBranch, GitStash, GitStatus, GitTag } from '@core/git/domain/GitStatus';
+import type { GitSubmodule, GitWorktree } from '@core/git/domain/GitWorktree';
 
 export interface CommitGraphQuery {
     readonly search?: string;
@@ -15,6 +15,12 @@ export interface CommitGraphQuery {
 export interface FileSelection {
     readonly startLine: number;
     readonly endLine: number;
+}
+
+export interface ConflictStageContents {
+    readonly base: string;
+    readonly ours: string;
+    readonly theirs: string;
 }
 
 export interface RefCompareOptions {
@@ -196,6 +202,7 @@ export interface GitStatusOperations {
 
 export interface GitIndexOperations {
     getFileFromIndex(path: string, signal?: AbortSignal): Promise<string>;
+    getConflictStages(path: string, signal?: AbortSignal): Promise<ConflictStageContents>;
     stage(paths: readonly string[], signal?: AbortSignal): Promise<void>;
     stageAll(signal?: AbortSignal): Promise<void>;
     stageHunks(hunks: readonly string[], signal?: AbortSignal): Promise<void>;

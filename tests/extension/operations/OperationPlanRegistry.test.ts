@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { OperationPlanRegistry } from '../../../src/extension/operations/OperationPlanRegistry';
-import type { OperationPlan } from '../../../src/application/ports/operation-guard';
+import { OperationPlanRegistry } from '@extension/operations/OperationPlanRegistry';
+import type { OperationPlan } from '@application/ports/operation-guard';
 
 describe('OperationPlanRegistry', () => {
     it('stores, returns, and expires operation plans by id', () => {

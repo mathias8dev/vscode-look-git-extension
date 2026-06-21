@@ -1,7 +1,8 @@
-import type { CommitMessageGenerator } from '../../ports/commit-message-generator';
-import type { GitRepository } from '../../ports/git-repository';
-import { parseNameStatusZ } from '../../../core/parsing/parseNameStatus';
-import { normalizeGeneratedCommitMessage } from '../commit-message-normalization';
+import type { CommitMessageGenerator } from '@application/ports/commit-message-generator';
+import type { GitRepository, Worktree } from '@application/ports/git-topology';
+import { truncateText } from '@core/shared/text';
+import { isAbortError } from '@core/shared/type-guards';
+import { normalizeGeneratedCommitMessage } from '@application/usecases/commit-message-normalization';
 
 const MAX_STAGED_DIFF_LENGTH = 32000;
 const RECENT_COMMIT_COUNT = 20;
@@ -10,63 +11,44 @@ export interface GenerateCommitMessageResult {
     readonly message: string;
 }
 
+
 export class GenerateCommitMessageUseCase {
     constructor(private readonly generator: CommitMessageGenerator) {}
 
-    async execute(repo: GitRepository, signal?: AbortSignal): Promise<GenerateCommitMessageResult> {
-        const [nameStatusRaw, diffStat, stagedDiff, recentCommitSubjectsRaw] = await Promise.all([
-            repo.execRaw(['diff', '--cached', '--name-status', '-z', '--'], signal),
-            repo.exec(['diff', '--cached', '--stat', '--'], signal),
-            repo.execRaw(['diff', '--cached', '--find-renames', '--find-copies', '--unified=3', '--'], signal),
-            readRecentCommitSubjects(repo, signal),
+    async execute(repository: GitRepository, worktree: Worktree, signal?: AbortSignal): Promise<GenerateCommitMessageResult> {
+        const [status, stagedDiff, recentCommitSubjects] = await Promise.all([
+            worktree.getStatus(signal),
+            worktree.getIndexDiff([], signal),
+            readRecentCommitSubjects(repository, signal),
         ]);
 
-        const changedFiles = parseNameStatusZ(nameStatusRaw).map((file) => {
-            const status = file.origPath ? `${file.status} ${file.origPath} -> ${file.filePath}` : `${file.status} ${file.filePath}`;
-            return status.trim();
+        const changedFiles = status.staged.map((file) => {
+            const statusLabel = file.origPath ? `${file.indexStatus} ${file.origPath} -> ${file.filePath}` : `${file.indexStatus} ${file.filePath}`;
+            return statusLabel.trim();
         });
-        if (changedFiles.length === 0 && !diffStat.trim() && !stagedDiff.trim()) {
+        if (changedFiles.length === 0 && !stagedDiff.trim()) {
             throw new Error('Stage changes before generating a commit message.');
         }
 
         const truncatedDiff = truncateText(stagedDiff, MAX_STAGED_DIFF_LENGTH);
         const rawMessage = await this.generator.generateCommitMessage({
             changedFiles,
-            diffStat,
+            diffStat: '',
             stagedDiff: truncatedDiff.text,
             stagedDiffTruncated: truncatedDiff.truncated,
-            recentCommitSubjects: splitLines(recentCommitSubjectsRaw),
+            recentCommitSubjects,
         }, signal);
 
         return { message: normalizeGeneratedCommitMessage(rawMessage) };
     }
 }
 
-function splitLines(value: string): readonly string[] {
-    return value
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
-}
-
-async function readRecentCommitSubjects(repo: GitRepository, signal?: AbortSignal): Promise<string> {
+async function readRecentCommitSubjects(repo: GitRepository, signal?: AbortSignal): Promise<readonly string[]> {
     try {
-        return await repo.exec(['log', '-n', String(RECENT_COMMIT_COUNT), '--pretty=format:%s'], signal);
+        const page = await repo.getCommitGraph({}, { limit: RECENT_COMMIT_COUNT }, signal);
+        return page.items.map((commit) => commit.message.split('\n')[0]?.trim() ?? '').filter((line) => line.length > 0);
     } catch (error) {
         if (isAbortError(error)) { throw error; }
-        return '';
+        return [];
     }
-}
-
-function truncateText(value: string, maxLength: number): { readonly text: string; readonly truncated: boolean } {
-    if (value.length <= maxLength) { return { text: value, truncated: false }; }
-    return { text: value.slice(0, maxLength), truncated: true };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
-}
-
-function isAbortError(error: unknown): boolean {
-    return isRecord(error) && error.name === 'AbortError';
 }

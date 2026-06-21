@@ -1,5 +1,5 @@
-import { OperationAction, type ActiveConflictState } from './operationCommands';
-import { ConflictState } from '../../../protocol/changes/types';
+import { OperationAction, type ActiveConflictState } from '@webview/features/changes/operationCommands';
+import { ConflictState } from '@protocol/changes/types';
 
 interface OperationBannerProps {
     readonly conflictState: ActiveConflictState;

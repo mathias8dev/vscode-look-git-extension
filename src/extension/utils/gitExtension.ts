@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { API, GitExtension } from '../../types/git';
+import type { API, GitExtension } from '@extension/adapters/vscode/git-api';
 
 export async function getBuiltInGitApi(): Promise<API | undefined> {
     const gitExtension = vscode.extensions.getExtension<GitExtension>('vscode.git');

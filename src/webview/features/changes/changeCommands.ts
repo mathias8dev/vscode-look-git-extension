@@ -1,7 +1,7 @@
-import type { ChangesToolbarCommand, ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
-import type { ChangesSelectionContextTarget } from '../../../protocol/changes/types';
-import type { CodiconName } from '../../shared/Codicon';
-import { ChangeSectionId, type ChangeListItem, type ChangeSection } from './changeTree';
+import type { ChangesToolbarCommand, ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
+import type { ChangesSelectionContextTarget } from '@protocol/changes/types';
+import type { CodiconName } from '@webview/shared/Codicon';
+import { ChangeSectionId, type ChangeListItem, type ChangeSection } from '@webview/features/changes/changeTree';
 
 export enum ChangeRowAction {
     Open = 'open',

@@ -1,4 +1,4 @@
-import type { GitWorktree } from '../git/domain/GitWorktree';
+import type { GitWorktree } from '@core/git/domain/GitWorktree';
 
 export function parseWorktreeList(output: string): GitWorktree[] {
     if (!output) { return []; }

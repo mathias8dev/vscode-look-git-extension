@@ -3,10 +3,10 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { BranchCommand } from '../../../src/protocol/graph/messages';
-import type { BranchInfo, GraphSubmoduleInfo } from '../../../src/protocol/graph/types';
-import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
-import { BranchPanel } from '../../../src/webview/features/graph/BranchPanel';
+import type { BranchCommand } from '@protocol/graph/messages';
+import type { BranchInfo, GraphSubmoduleInfo } from '@protocol/graph/types';
+import { SubmoduleStatus } from '@protocol/shared/repo';
+import { BranchPanel } from '@webview/features/graph/BranchPanel';
 
 describe('BranchPanel', () => {
     it('renders unpushed commit counts on local branches', () => {
@@ -254,7 +254,7 @@ describe('BranchPanel', () => {
     });
 
     it('navigates from submodule rows without rendering nested submodule branches', () => {
-        const onSelectSubmodule = vi.fn<(submodulePath: string, submoduleLabel: string) => void>();
+        const onSelectSubmodule = vi.fn<(submodule: GraphSubmoduleInfo) => void>();
 
         render(
             <BranchPanel
@@ -282,7 +282,10 @@ describe('BranchPanel', () => {
         expect(screen.getByTitle('1 worktrees')).toHaveTextContent('1w');
 
         fireEvent.click(screen.getByTitle('modules/auth-kit'));
-        expect(onSelectSubmodule).toHaveBeenCalledWith('modules/auth-kit', 'auth-kit');
+        expect(onSelectSubmodule).toHaveBeenCalledWith(expect.objectContaining({
+            path: 'modules/auth-kit',
+            name: 'auth-kit',
+        }));
 
         expect(screen.getAllByText('Local')).toHaveLength(1);
         expect(screen.queryByTitle('feature/oauth')).not.toBeInTheDocument();
@@ -300,7 +303,7 @@ describe('BranchPanel', () => {
                 branches={[branch('feature/oauth', { isCurrent: true })]}
                 worktrees={[]}
                 submodules={[]}
-                repositoryScope={{ kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' }}
+                selectedRepository={{ kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' }}
                 currentBranch="feature/oauth"
                 selectedBranchFilter="feature/oauth"
                 selectedWorktreePath={undefined}

@@ -5,6 +5,13 @@ import { describe, expect, it } from 'vitest';
 const SRC_ROOT = path.resolve(process.cwd(), 'src');
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx']);
 const IMPORT_PATTERN = /(?:import|export)\s+(?:type\s+)?(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]/g;
+const LAYER_ALIASES = new Map<string, string>([
+    ['@application', 'application'],
+    ['@core', 'core'],
+    ['@extension', 'extension'],
+    ['@protocol', 'protocol'],
+    ['@webview', 'webview'],
+]);
 
 interface BoundaryRule {
     readonly layer: string;
@@ -102,6 +109,9 @@ function layerOf(filePath: string): string | undefined {
 }
 
 function targetLayerOf(filePath: string, specifier: string): string | undefined {
+    for (const [alias, layer] of LAYER_ALIASES) {
+        if (specifier === alias || specifier.startsWith(`${alias}/`)) { return layer; }
+    }
     if (!specifier.startsWith('.')) { return undefined; }
     const resolved = path.resolve(path.dirname(filePath), specifier);
     const relativeTarget = path.relative(SRC_ROOT, resolved);

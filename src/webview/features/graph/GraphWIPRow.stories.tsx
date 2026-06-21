@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { graphRows, noop, worktreeWip } from '../../storybookFixtures';
-import { GraphWIPRow } from './GraphWIPRow';
+import { graphRows, noop, worktreeWip } from '@webview/storybookFixtures';
+import { GraphWIPRow } from '@webview/features/graph/GraphWIPRow';
 
 const meta = {
     title: 'Graph/GraphWIPRow',

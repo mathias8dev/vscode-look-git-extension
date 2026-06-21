@@ -1,4 +1,4 @@
-import type { GitRepository, Worktree } from '../../application/ports/git-topology';
+import type { GitRepository, Worktree } from '@application/ports/git-topology';
 
 export interface RuntimeCommandTargets {
     readonly repository?: GitRepository;
@@ -25,6 +25,13 @@ export function requireRuntimeTargets(targets: RuntimeCommandTargets): { readonl
         repository: requireRuntimeRepository(targets),
         worktree: requireRuntimeWorktree(targets),
     };
+}
+
+export function requireRuntimeWorktrees(targets: RuntimeCommandTargets): readonly Worktree[] {
+    if (!targets.worktrees) {
+        throw new Error('Runtime worktrees are required for this git operation.');
+    }
+    return targets.worktrees;
 }
 
 export function requireRuntimeWorktreePath(targets: RuntimeCommandTargets, worktreePath: string): Worktree {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { ProtocolError } from '../../protocol/shared/base';
+import type { ProtocolError } from '@protocol/shared/base';
+import { isRecord } from '@webview/shared/typeGuards';
 
 export function useProtocolError(): ProtocolError | undefined {
     const [error, setError] = useState<ProtocolError>();
@@ -22,10 +23,7 @@ export function readProtocolError(message: unknown): ProtocolError | undefined {
     if (typeof type !== 'string' || (type !== 'error' && !type.endsWith('/error'))) {
         return undefined;
     }
-    if (isProtocolError(message.error)) { return message.error; }
-    return typeof message.message === 'string'
-        ? { code: 'unknown', message: message.message, operation: type, recoverable: true }
-        : undefined;
+    return isProtocolError(message.error) ? message.error : undefined;
 }
 
 function isProtocolError(value: unknown): value is ProtocolError {
@@ -35,8 +33,4 @@ function isProtocolError(value: unknown): value is ProtocolError {
         && typeof value.recoverable === 'boolean'
         && (value.operation === undefined || typeof value.operation === 'string')
         && (value.details === undefined || typeof value.details === 'string');
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
 }

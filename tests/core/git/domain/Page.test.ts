@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Page } from '../../../../src/core/git/domain/Page';
-import type { PageCursor, PageRequest } from '../../../../src/core/git/domain/Page';
+import { Page } from '@core/git/domain/Page';
+import type { PageCursor, PageRequest } from '@core/git/domain/Page';
 
 describe('Page', () => {
     it('represents a bounded page with an optional next cursor', () => {

@@ -2,10 +2,10 @@
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { ChangeRow } from '../../../src/webview/features/changes/ChangeRow';
-import { ChangeRowAction, primaryRowActionFor } from '../../../src/webview/features/changes/changeCommands';
-import { ChangeSectionId, type ChangeListItem } from '../../../src/webview/features/changes/changeTree';
-import { ChangeSelectionMode } from '../../../src/webview/features/changes/changesState';
+import { ChangeRow } from '@webview/features/changes/ChangeRow';
+import { ChangeRowAction, primaryRowActionFor } from '@webview/features/changes/changeCommands';
+import { ChangeSectionId, type ChangeListItem } from '@webview/features/changes/changeTree';
+import { ChangeSelectionMode } from '@webview/features/changes/changesState';
 
 describe('ChangeRow', () => {
     it('opens the merge editor when clicking a conflict file', () => {

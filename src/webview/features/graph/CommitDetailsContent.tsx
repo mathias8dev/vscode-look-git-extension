@@ -1,15 +1,15 @@
 import { useState } from 'react';
-import type { CommitFileChange } from '../../../protocol/graph/types';
-import { ResizablePanel } from '../../shared/ResizablePanel';
-import { ResizeAxis } from '../../shared/resizeAxis';
-import { ResizeHandleSide } from '../../shared/resizeHandleSide';
-import { SearchInput } from '../../shared/SearchInput';
-import { ViewModeToggle } from '../../shared/ViewModeToggle';
-import { ViewMode } from '../../shared/viewMode';
-import { readViewMode, writeViewMode } from '../../shared/viewModeStorage';
-import { CommitFileTree } from './CommitFileTree';
-import { filterCommitDetailFiles } from './commitDetailsModel';
-import type { CommitDetails } from './graphState';
+import type { CommitFileChange } from '@protocol/graph/types';
+import { ResizablePanel } from '@webview/shared/ResizablePanel';
+import { ResizeAxis } from '@webview/shared/resizeAxis';
+import { ResizeHandleSide } from '@webview/shared/resizeHandleSide';
+import { SearchInput } from '@webview/shared/SearchInput';
+import { ViewModeToggle } from '@webview/shared/ViewModeToggle';
+import { ViewMode } from '@webview/shared/viewMode';
+import { readViewMode, writeViewMode } from '@webview/shared/viewModeStorage';
+import { CommitFileTree } from '@webview/features/graph/CommitFileTree';
+import { filterCommitDetailFiles } from '@webview/features/graph/commitDetailsModel';
+import type { CommitDetails } from '@webview/features/graph/graphState';
 
 const COMMIT_MESSAGE_PANEL_MIN = 72;
 const COMMIT_MESSAGE_PANEL_MAX = 420;

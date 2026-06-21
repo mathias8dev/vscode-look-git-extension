@@ -1,9 +1,9 @@
-import type { StashEntry, StashFileEntry } from '../../../protocol/changes/types';
-import { Codicon } from '../../shared/Codicon';
-import { IconButton } from '../../shared/IconButton';
-import { changesItemContext } from './context-menu-model';
-import { StashEntryAction } from './stashCommands';
-import { StashFileRow } from './StashFileRow';
+import type { StashEntry, StashFileEntry } from '@protocol/changes/types';
+import { Codicon } from '@webview/shared/Codicon';
+import { IconButton } from '@webview/shared/IconButton';
+import { changesItemContext } from '@webview/features/changes/context-menu-model';
+import { StashEntryAction } from '@webview/features/changes/stashCommands';
+import { StashFileRow } from '@webview/features/changes/StashFileRow';
 
 interface StashItemProps {
     readonly stash: StashEntry;

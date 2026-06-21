@@ -69,7 +69,11 @@
         },
         "lookGit.commitMessageEditor": {
           "type": "string",
-          "enum": ["window", "editor", "input"],
+          "enum": [
+            "window",
+            "editor",
+            "input"
+          ],
           "enumDescriptions": [
             "Edit in a separate floating window.",
             "Edit in an editor tab.",
@@ -169,11 +173,6 @@
       {
         "command": "lookGit.history.dropCommit",
         "title": "Drop Commit",
-        "category": "Look Git"
-      },
-      {
-        "command": "lookGit.history.interactiveRebaseFromHere",
-        "title": "Interactively Rebase from Here...",
         "category": "Look Git"
       },
       {
@@ -353,11 +352,6 @@
       {
         "command": "lookGit.changes.push",
         "title": "Push",
-        "category": "Look Git"
-      },
-      {
-        "command": "lookGit.changes.clone",
-        "title": "Clone",
         "category": "Look Git"
       },
       {
@@ -651,11 +645,6 @@
       {
         "command": "lookGit.changes.submodule.push",
         "title": "Push",
-        "category": "Look Git"
-      },
-      {
-        "command": "lookGit.changes.submodule.clone",
-        "title": "Clone",
         "category": "Look Git"
       },
       {
@@ -979,11 +968,6 @@
         "category": "Look Git"
       },
       {
-        "command": "lookGit.graph.commit.interactiveRebaseFromHere",
-        "title": "Interactively Rebase from Here...",
-        "category": "Look Git"
-      },
-      {
         "command": "lookGit.graph.commit.pushAllUpToHere",
         "title": "Push All up to Here...",
         "category": "Look Git"
@@ -1072,11 +1056,6 @@
       {
         "command": "lookGit.graph.branch.rebaseOnto",
         "title": "Rebase Current Branch onto This Branch",
-        "category": "Look Git"
-      },
-      {
-        "command": "lookGit.graph.branch.planInteractiveRebaseOnto",
-        "title": "Plan Interactive Rebase onto This Branch...",
         "category": "Look Git"
       },
       {
@@ -1447,11 +1426,6 @@
           "command": "lookGit.changes.push",
           "when": "view == lookGit.changesView",
           "group": "3_changes_root@2"
-        },
-        {
-          "command": "lookGit.changes.clone",
-          "when": "view == lookGit.changesView",
-          "group": "3_changes_root@3"
         },
         {
           "command": "lookGit.changes.checkout",
@@ -2024,11 +1998,6 @@
           "group": "1_changes_submodule_root@2"
         },
         {
-          "command": "lookGit.changes.submodule.clone",
-          "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
-          "group": "1_changes_submodule_root@3"
-        },
-        {
           "command": "lookGit.changes.submodule.checkout",
           "when": "webviewId == 'lookGit.changesView' && webviewSection == 'changesSubmoduleToolbar'",
           "group": "1_changes_submodule_root@4"
@@ -2159,11 +2128,6 @@
           "group": "4_history_rewrite@4"
         },
         {
-          "command": "lookGit.history.interactiveRebaseFromHere",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
-          "group": "4_history_rewrite@5"
-        },
-        {
           "command": "lookGit.history.pushAllUpToHere",
           "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
           "group": "4_history_rewrite@6"
@@ -2274,11 +2238,6 @@
           "group": "4_graph_commit_rewrite@4"
         },
         {
-          "command": "lookGit.graph.commit.interactiveRebaseFromHere",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
-          "group": "4_graph_commit_rewrite@5"
-        },
-        {
           "command": "lookGit.graph.commit.pushAllUpToHere",
           "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
           "group": "4_graph_commit_rewrite@6"
@@ -2357,11 +2316,6 @@
           "command": "lookGit.graph.branch.rebaseOnto",
           "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent",
           "group": "3_graph_branch_history@1"
-        },
-        {
-          "command": "lookGit.graph.branch.planInteractiveRebaseOnto",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent",
-          "group": "3_graph_branch_history@2"
         },
         {
           "command": "lookGit.graph.branch.mergeInto",
@@ -2506,12 +2460,13 @@
     "check-types": "tsc --noEmit",
     "build:extension": "node esbuild.js",
     "build:webview": "vite build",
-    "compile:tests": "tsc -p tsconfig.test.json",
+    "compile:tests": "tsc -p tsconfig.test.json && tsc-alias -p tsconfig.test.json",
     "compile": "npm run check-types && npm run build:webview && npm run build:extension",
     "dev:webview": "vite",
     "watch": "npm-run-all -p watch:*",
     "watch:extension": "node esbuild.js --watch",
     "watch:webview": "vite build --watch",
+    "fix:imports": "node scripts/fix-import-aliases.mjs",
     "icons:html": "node scripts/generate-icon-gallery.js",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build -o artifacts/storybook",
@@ -2522,6 +2477,7 @@
     "test:integration": "npm run compile && npm run compile:tests && node ./out/tests/integration/runTest.js",
     "test:e2e": "npm run compile && npm run compile:tests && node ./out/tests/e2e/runE2e.js",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\" \"*.js\" \"*.mjs\" --max-warnings=0",
+    "check:duplication": "jscpd src/ --min-lines 5 --min-tokens 50 --threshold 3",
     "publish:ext": "npx @vscode/vsce publish"
   },
   "dependencies": {
@@ -2549,10 +2505,12 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "jscpd": "^5.0.11",
     "jsdom": "^29.1.1",
     "nanoid": "^5.1.11",
     "npm-run-all": "^4.1.5",
     "storybook": "^10.4.6",
+    "tsc-alias": "^1.8.17",
     "typescript": "^5.3.0",
     "typescript-eslint": "^8.60.0",
     "vite": "^7.2.4",

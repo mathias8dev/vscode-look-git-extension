@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { GraphApp } from './GraphApp';
-import '../styles.css';
+import { GraphWebview } from '@webview/graph/GraphWebview';
+import '@webview/styles.css';
 
 const root = document.getElementById('root');
-if (root) { createRoot(root).render(<StrictMode><GraphApp /></StrictMode>); }
+if (root) { createRoot(root).render(<StrictMode><GraphWebview /></StrictMode>); }

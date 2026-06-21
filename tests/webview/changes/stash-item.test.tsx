@@ -2,7 +2,7 @@
 
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { StashItem } from '../../../src/webview/features/changes/StashItem';
+import { StashItem } from '@webview/features/changes/StashItem';
 
 describe('StashItem', () => {
     it('uses distinct icons for apply and pop stash actions', () => {

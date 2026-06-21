@@ -1,5 +1,5 @@
-import { getLaneDataMaxLane, type LaneData, type LineDef } from './layout/graph-lane-model';
-import { ROW_HEIGHT } from './graphRowSizing';
+import { getLaneDataMaxLane, type LaneData, type LineDef } from '@webview/features/graph/layout/graph-lane-model';
+import { ROW_HEIGHT } from '@webview/features/graph/graphRowSizing';
 
 export const LANE_WIDTH = 16;
 const DOT_RADIUS = 4;
