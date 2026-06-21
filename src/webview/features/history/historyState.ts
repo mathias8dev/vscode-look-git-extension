@@ -1,7 +1,7 @@
-import { OperationStatus } from '../../../protocol/shared/operation';
-import type { HistoryExtensionToWebviewMessage, HistoryOperationStatusPush } from '../../../protocol/history/messages';
-import type { HistoryCommit, HistoryCommitDetails, HistoryData } from '../../../protocol/history/types';
-import type { ProtocolError } from '../../../protocol/shared/base';
+import { OperationStatus } from '@protocol/shared/operation';
+import type { HistoryExtensionToWebviewMessage, HistoryOperationStatusPush } from '@protocol/history/messages';
+import type { HistoryCommit, HistoryCommitDetails, HistoryData } from '@protocol/history/types';
+import type { ProtocolError } from '@protocol/shared/base';
 
 export interface HistoryState {
     readonly commits: readonly HistoryCommit[];

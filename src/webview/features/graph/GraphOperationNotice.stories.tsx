@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { graphOperation, noop } from '../../storybookFixtures';
-import { OperationStatus } from '../../../protocol/shared/operation';
-import { GraphOperationNotice } from './GraphOperationNotice';
+import { graphOperation, noop } from '@webview/storybookFixtures';
+import { OperationStatus } from '@protocol/shared/operation';
+import { GraphOperationNotice } from '@webview/features/graph/GraphOperationNotice';
 
 const meta = {
     title: 'Graph/GraphOperationNotice',

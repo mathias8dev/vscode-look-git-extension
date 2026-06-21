@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { RefBadge } from './RefBadge';
+import { RefBadge } from '@webview/features/graph/RefBadge';
 
 const meta = {
     title: 'Graph/RefBadge',

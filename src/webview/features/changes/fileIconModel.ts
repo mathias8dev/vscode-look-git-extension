@@ -1,5 +1,5 @@
-import type { StatusEntry, StashFileEntry } from '../../../protocol/changes/types';
-import { iconKindForPath as iconKindForSharedPath, type WebviewFileIconKind } from '../../shared/fileIconModel';
+import type { StatusEntry, StashFileEntry } from '@protocol/changes/types';
+import { iconKindForPath as iconKindForSharedPath, type WebviewFileIconKind } from '@webview/shared/fileIconModel';
 
 export type FileIconKind = WebviewFileIconKind;
 

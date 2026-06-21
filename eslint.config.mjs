@@ -53,6 +53,7 @@ export default [
             '../protocol/**', '../../protocol/**', '../../../protocol/**', '../../../../protocol/**',
             '../extension/**', '../../extension/**', '../../../extension/**', '../../../../extension/**',
             '../webview/**', '../../webview/**', '../../../webview/**', '../../../../webview/**',
+            '@application/**', '@protocol/**', '@extension/**', '@webview/**',
           ],
           message: 'Core must stay independent from protocol, extension, and webview layers.',
         }],
@@ -69,6 +70,7 @@ export default [
             '../core/**', '../../core/**', '../../../core/**', '../../../../core/**',
             '../extension/**', '../../extension/**', '../../../extension/**', '../../../../extension/**',
             '../webview/**', '../../webview/**', '../../../webview/**', '../../../../webview/**',
+            '@core/**', '@application/**', '@extension/**', '@webview/**',
           ],
           message: 'Protocol must contain serializable contracts only.',
         }],
@@ -84,6 +86,7 @@ export default [
           group: [
             '../core/**', '../../core/**', '../../../core/**', '../../../../core/**',
             '../extension/**', '../../extension/**', '../../../extension/**', '../../../../extension/**',
+            '@core/**', '@application/**', '@extension/**',
           ],
           message: 'Webview code may depend on protocol and webview modules only, not core or extension.',
         }],
@@ -101,7 +104,7 @@ export default [
     rules: {
       'no-restricted-imports': ['error', {
         patterns: [{
-          group: ['../webview/**', '../../webview/**', '../../../webview/**', '../../../../webview/**'],
+          group: ['../webview/**', '../../webview/**', '../../../webview/**', '../../../../webview/**', '@webview/**'],
           message: 'Extension adapters must not import React/webview implementation code.',
         }],
       }],

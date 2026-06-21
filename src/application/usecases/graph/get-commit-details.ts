@@ -1,4 +1,4 @@
-import type { GitFileChange } from '../../../core/git/domain/GitCommit';
+import type { GitFileChange } from '@core/git/domain/GitCommit';
 
 export interface CommitDetailsRepository {
     getCommitFiles(commit: string, signal?: AbortSignal): Promise<readonly GitFileChange[]>;

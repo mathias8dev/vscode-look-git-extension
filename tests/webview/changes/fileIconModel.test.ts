@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { iconKindForPath, iconKindForStatusEntry, iconKindForStashFile } from '../../../src/webview/features/changes/fileIconModel';
+import { iconKindForPath, iconKindForStatusEntry, iconKindForStashFile } from '@webview/features/changes/fileIconModel';
 
 describe('fileIconModel', () => {
     it('resolves common file icon kinds from paths', () => {

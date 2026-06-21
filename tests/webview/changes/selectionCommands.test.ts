@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ChangeSelectionAction, messageForSelectionAction, selectionActionsFor } from '../../../src/webview/features/changes/selectionCommands';
-import { ChangeSectionId, type ChangeListItem } from '../../../src/webview/features/changes/changeTree';
+import { ChangeSelectionAction, messageForSelectionAction, selectionActionsFor } from '@webview/features/changes/selectionCommands';
+import { ChangeSectionId, type ChangeListItem } from '@webview/features/changes/changeTree';
 
 function item(section: ChangeSectionId, filePath: string): ChangeListItem {
     return {

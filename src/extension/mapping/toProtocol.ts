@@ -1,10 +1,11 @@
 // Mapping functions: Git-prefix core types → protocol types (webview-facing)
-import type { GitGraphCommit } from '../../core/git/domain/GitCommit';
-import type { GitBranch } from '../../core/git/domain/GitStatus';
-import type { GitWorktree, GitSubmodule } from '../../core/git/domain/GitWorktree';
-import { RepoKind, type RepoContext } from '../../core/git/domain/RepoContext';
-import type { BranchInfo, GraphCommit, GraphSubmoduleInfo, WorktreeInfo } from '../../protocol/graph/types';
-import { SubmoduleStatus, type RepositoryLocator, type SerializedRepoContext, type WorktreeLocator } from '../../protocol/shared/repo';
+import type { GitGraphCommit } from '@core/git/domain/GitCommit';
+import type { GitBranch } from '@core/git/domain/GitStatus';
+import type { GitWorktree, GitSubmodule } from '@core/git/domain/GitWorktree';
+import { RepoKind, type RepoContext } from '@core/git/domain/RepoContext';
+import type { BranchInfo, GraphCommit, GraphSubmoduleInfo, WorktreeInfo } from '@protocol/graph/types';
+import { SubmoduleStatus, type RepositoryLocator, type SerializedRepoContext, type WorktreeLocator } from '@protocol/shared/repo';
+import { stableRepoContextId } from '@extension/repositories/repo-context-id';
 
 export function toProtocolGraphCommit(commit: GitGraphCommit): GraphCommit {
     return {
@@ -32,8 +33,9 @@ export function toProtocolBranch(b: GitBranch): BranchInfo {
     };
 }
 
-export function toProtocolWorktree(w: GitWorktree): WorktreeInfo {
+export function toProtocolWorktree(w: GitWorktree, repositoryId?: string): WorktreeInfo {
     return {
+        ...(repositoryId ? { locator: { repoId: repositoryId, worktreeId: stableRepoContextId(w.path), path: w.path } } : {}),
         path: w.path,
         head: w.head,
         branch: w.branch,
@@ -51,13 +53,15 @@ export function toProtocolGraphSubmodule(
         readonly branches: readonly GitBranch[];
         readonly worktrees: readonly GitWorktree[];
     },
+    repository?: RepositoryLocator,
 ): GraphSubmoduleInfo {
     return {
+        ...(repository ? { repository } : {}),
         path: submodule.path,
         name: submodule.path.split(/[\\/]/).at(-1) ?? submodule.path,
         status: toProtocolSubmoduleStatus(submodule.status),
         branches: submodule.branches.map(toProtocolBranch),
-        worktrees: submodule.worktrees.map(toProtocolWorktree),
+        worktrees: submodule.worktrees.map((worktree) => toProtocolWorktree(worktree, repository?.repoId)),
     };
 }
 

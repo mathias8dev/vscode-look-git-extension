@@ -5,8 +5,8 @@ import type {
     PointerEvent as ReactPointerEvent,
     ReactNode,
 } from 'react';
-import { ResizeAxis } from './resizeAxis';
-import { ResizeHandleSide } from './resizeHandleSide';
+import { ResizeAxis } from '@webview/shared/resizeAxis';
+import { ResizeHandleSide } from '@webview/shared/resizeHandleSide';
 
 const KEYBOARD_STEP = 16;
 

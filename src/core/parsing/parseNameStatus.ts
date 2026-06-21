@@ -1,4 +1,4 @@
-import type { GitFileChange, GitFileStatus } from '../git/domain/GitCommit';
+import type { GitFileChange, GitFileStatus } from '@core/git/domain/GitCommit';
 
 export function parseNameStatusZ(output: string, parentHash?: string): GitFileChange[] {
     const seen = new Set<string>();

@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Page } from '../../../../src/core/git/domain/Page';
-import type { GitStatus } from '../../../../src/core/git/domain/GitStatus';
-import type { GitSubmodule } from '../../../../src/core/git/domain/GitWorktree';
-import { GetRuntimeChangesStatusUseCase } from '../../../../src/application/usecases/changes/get-runtime-changes-status';
-import type { GitReferenceOperations, GitStashOperations, GitStatusOperations, GitSubmoduleOperations } from '../../../../src/application/ports/git-capabilities';
+import { Page } from '@core/git/domain/Page';
+import type { GitStatus } from '@core/git/domain/GitStatus';
+import type { GitSubmodule } from '@core/git/domain/GitWorktree';
+import { GetRuntimeChangesStatusUseCase } from '@application/usecases/changes/get-runtime-changes-status';
+import type { GitReferenceOperations, GitStashOperations, GitStatusOperations, GitSubmoduleOperations } from '@application/ports/git-capabilities';
 
 describe('GetRuntimeChangesStatusUseCase', () => {
     it('loads status from a worktree and repository metadata from repository capabilities', async () => {
@@ -70,8 +70,10 @@ function repositoryCapabilities(overrides: Partial<GitReferenceOperations & GitS
         listTags: vi.fn(async () => []),
         listRemotes: vi.fn(async () => []),
         resolveRef: vi.fn(async () => ''),
+        getUserName: vi.fn(async () => ''),
+        getUpstreamBranch: vi.fn(async () => undefined),
         listSubmodules: vi.fn(async () => []),
-        getSubmoduleStatus: vi.fn(async () => ({ path: '', status: ' ' })),
+        getSubmoduleStatus: vi.fn(async () => emptySubmodule()),
         initSubmodule: vi.fn(async () => {}),
         updateSubmodule: vi.fn(async () => {}),
         syncSubmodule: vi.fn(async () => {}),
@@ -84,10 +86,12 @@ function repositoryCapabilities(overrides: Partial<GitReferenceOperations & GitS
 
 function worktreeCapabilities(overrides: Partial<GitStatusOperations & GitStashOperations> = {}): GitStatusOperations & GitStashOperations {
     return {
-        getStatus: vi.fn(async () => ({ staged: [], unstaged: [], conflicts: [], conflictState: 'none' })),
+        getStatus: vi.fn(async () => emptyStatus()),
         getUntrackedFiles: vi.fn(async () => new Page([], false)),
         getIgnoredFiles: vi.fn(async () => new Page([], false)),
         listStashes: vi.fn(async () => new Page([], false)),
+        getStashFiles: vi.fn(async () => []),
+        getStashSummary: vi.fn(async () => ''),
         stash: vi.fn(async () => {}),
         applyStash: vi.fn(async () => {}),
         popStash: vi.fn(async () => {}),
@@ -96,4 +100,12 @@ function worktreeCapabilities(overrides: Partial<GitStatusOperations & GitStashO
         branchFromStash: vi.fn(async () => {}),
         ...overrides,
     };
+}
+
+function emptySubmodule(): GitSubmodule {
+    return { path: '', status: ' ' };
+}
+
+function emptyStatus(): GitStatus {
+    return { staged: [], unstaged: [], conflicts: [], conflictState: 'none' };
 }

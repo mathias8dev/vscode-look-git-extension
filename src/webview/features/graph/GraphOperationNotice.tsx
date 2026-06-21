@@ -1,10 +1,10 @@
 import {
     GraphOperationCategory,
     type GraphOperationStatusPush,
-} from '../../../protocol/graph/messages';
-import { OperationStatus } from '../../../protocol/shared/operation';
-import { OperationNotice } from '../../shared/OperationNotice';
-import { operationNoticeActions } from '../../shared/operationNoticeActions';
+} from '@protocol/graph/messages';
+import { OperationStatus } from '@protocol/shared/operation';
+import { OperationNotice } from '@webview/shared/OperationNotice';
+import { operationNoticeActions } from '@webview/shared/operationNoticeActions';
 
 interface GraphOperationNoticeProps {
     readonly operation: GraphOperationStatusPush | undefined;
@@ -109,7 +109,6 @@ function commitOperationLabel(command: string, target: string): string {
         case 'fixup': return `fixup${target}`;
         case 'squashInto': return `squash commits${target}`;
         case 'dropCommit': return `drop${target}`;
-        case 'interactiveRebaseFromHere': return `start interactive rebase from${target}`;
         case 'pushAllUpToHere': return `push commits up to${target}`;
         case 'newBranch': return `create branch from${target}`;
         case 'newTag': return `create tag at${target}`;

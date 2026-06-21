@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { GraphOperationCategory } from '../../../protocol/graph/messages';
-import { branches, graphOperation, graphSubmodules, noop, worktrees } from '../../storybookFixtures';
-import { BranchPanel } from './BranchPanel';
+import { GraphOperationCategory } from '@protocol/graph/messages';
+import { branches, graphOperation, graphSubmodules, noop, worktrees } from '@webview/storybookFixtures';
+import { BranchPanel } from '@webview/features/graph/BranchPanel';
 
 const meta = {
     title: 'Graph/BranchPanel',
@@ -53,7 +53,7 @@ export const Fetching = {
 
 export const SubmoduleScope = {
     args: {
-        repositoryScope: {
+        selectedRepository: {
             kind: 'submodule',
             path: 'vendor/ui-kit',
             label: 'ui-kit',

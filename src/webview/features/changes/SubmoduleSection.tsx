@@ -1,16 +1,16 @@
 import { useState } from 'react';
-import type { ChangesSelectionContextTarget, CommitMode } from '../../../protocol/changes/types';
-import type { StashFileEntry, SubmoduleEntry, SubmoduleStatusData } from '../../../protocol/changes/types';
-import { Codicon } from '../../shared/Codicon';
-import { IconButton } from '../../shared/IconButton';
-import type { ChangeBulkAction, ChangeRowAction } from './changeCommands';
-import type { ChangeListItem } from './changeTree';
-import { submoduleStashKey, type CommitFeedback, type GeneratedCommitMessage } from './changesState';
-import type { ProtocolError } from '../../../protocol/shared/base';
-import type { ActiveConflictState, OperationAction } from './operationCommands';
-import { SubmoduleAction } from './submoduleCommands';
-import { SubmoduleItem } from './SubmoduleItem';
-import type { StashEntryAction } from './stashCommands';
+import type { ChangesSelectionContextTarget, CommitMode } from '@protocol/changes/types';
+import type { StashFileEntry, SubmoduleEntry, SubmoduleStatusData } from '@protocol/changes/types';
+import { Codicon } from '@webview/shared/Codicon';
+import { IconButton } from '@webview/shared/IconButton';
+import type { ChangeBulkAction, ChangeRowAction } from '@webview/features/changes/changeCommands';
+import type { ChangeListItem } from '@webview/features/changes/changeTree';
+import { submoduleStashKey, type CommitFeedback, type GeneratedCommitMessage } from '@webview/features/changes/changesState';
+import type { ProtocolError } from '@protocol/shared/base';
+import type { ActiveConflictState, OperationAction } from '@webview/features/changes/operationCommands';
+import { SubmoduleAction } from '@webview/features/changes/submoduleCommands';
+import { SubmoduleItem } from '@webview/features/changes/SubmoduleItem';
+import type { StashEntryAction } from '@webview/features/changes/stashCommands';
 
 interface SubmoduleSectionProps {
     readonly submodules: readonly SubmoduleEntry[];

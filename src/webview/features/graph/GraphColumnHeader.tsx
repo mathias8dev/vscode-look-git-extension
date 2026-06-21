@@ -1,7 +1,7 @@
-import { GRAPH_COLUMNS, type GraphColumnId } from './graphTableColumns';
-import { ResizablePanel } from '../../shared/ResizablePanel';
-import { ResizeAxis } from '../../shared/resizeAxis';
-import { ResizeHandleSide } from '../../shared/resizeHandleSide';
+import { GRAPH_COLUMNS, type GraphColumnId } from '@webview/features/graph/graphTableColumns';
+import { ResizablePanel } from '@webview/shared/ResizablePanel';
+import { ResizeAxis } from '@webview/shared/resizeAxis';
+import { ResizeHandleSide } from '@webview/shared/resizeHandleSide';
 
 interface GraphColumnHeaderProps {
     readonly className: string;

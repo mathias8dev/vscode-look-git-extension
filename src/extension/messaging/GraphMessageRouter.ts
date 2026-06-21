@@ -10,36 +10,36 @@ import {
     type WorktreeDetailsResponse,
     type OpenWorktreeDiffRequest,
     type GraphOperationStatusPush,
-} from '../../protocol/graph/messages';
-import type { GraphData, GraphFilters, GraphRepositoryScope, GraphSubmoduleInfo } from '../../protocol/graph/types';
-import type { ErrorCode, RequestId } from '../../protocol/shared/base';
-import type { GitRepository as LegacyGitRepository } from '../../application/ports/git-repository';
-import type { GitRepository, Worktree } from '../../application/ports/git-topology';
-import { GetGraphDataUseCase, type GraphDataResult } from '../../application/usecases/graph/get-graph-data';
-import { GetCommitDetailsUseCase } from '../../application/usecases/graph/get-commit-details';
-import { GetWorktreeDetailsUseCase } from '../../application/usecases/graph/get-worktree-details';
-import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
-import { toProtocolBranch, toProtocolGraphCommit, toProtocolGraphSubmodule, toProtocolWorktree, toRepositoryLocator, toWorktreeLocator } from '../mapping/toProtocol';
-import { ScopedGitRepository } from '../git/scoped-git-repository';
-import { stableRepoContextId } from '../repositories/repo-context-id';
-import { runCommitCommand } from '../commands/commit-commands';
-import { runBranchCommand } from '../commands/branch-commands';
-import { runWorktreeCommand } from '../commands/worktree-commands';
-import { requireRuntimeWorktree, type RuntimeCommandTargets } from '../commands/runtime-command-targets';
-import { operationActionsForStatus } from '../utils/operation-feedback';
-import { openCommitGitlinkDiff, openWorktreeGitlinkDiff } from '../utils/gitlink-diff';
-import { commitFileDiffUris, emptyDiffUri } from '../utils/diff-uris';
-import { gitBlobUri } from '../utils/git-blob-documents';
-import { createErrorPayload, isAbortError } from './errorSerialization';
-import { appendErrorToOutput, showErrorOutput } from './errorOutputChannel';
-import { openVisualRebasePanel } from '../utils/visual-rebase-panel';
-import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
+} from '@protocol/graph/messages';
+import type { GraphData, GraphFilters, GraphSubmoduleInfo } from '@protocol/graph/types';
+import type { ErrorCode, RequestId } from '@protocol/shared/base';
+import type { RepositoryLocator, WorktreeLocator } from '@protocol/shared/repo';
+import type { GitStatus } from '@core/git/domain/GitStatus';
+import type { GitRepository } from '@application/ports/git-topology';
+import { GetGraphDataUseCase, type GraphDataResult } from '@application/usecases/graph/get-graph-data';
+import { GetCommitDetailsUseCase } from '@application/usecases/graph/get-commit-details';
+import { GetWorktreeDetailsUseCase } from '@application/usecases/graph/get-worktree-details';
+import type { ActiveRepositoryAccessor } from '@extension/repositories/ActiveRepositoryRegistry';
+import { toProtocolBranch, toProtocolGraphCommit, toProtocolGraphSubmodule, toProtocolWorktree } from '@extension/mapping/toProtocol';
+import { runCommitCommand } from '@extension/commands/commit-commands';
+import { runBranchCommand } from '@extension/commands/branch-commands';
+import { runWorktreeCommand } from '@extension/commands/worktree-commands';
+import { requireRuntimeRepository, requireRuntimeWorktree, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
+import { operationActionsForStatus } from '@extension/utils/operation-feedback';
+import { openCommitGitlinkDiff, openWorktreeGitlinkDiff } from '@extension/utils/gitlink-diff';
+import { emptyDiffUri } from '@extension/utils/diff-uris';
+import { gitBlobUri } from '@extension/utils/git-blob-documents';
+import { createErrorPayload, isAbortError } from '@extension/messaging/errorSerialization';
+import { appendErrorToOutput, showErrorOutput } from '@extension/messaging/errorOutputChannel';
+import type { RepositoryRegistry } from '@extension/repositories/RepositoryRegistry';
+import { requireRuntimeLocator } from '@extension/repositories/runtime-repository-locator';
+import { stableRepoContextId } from '@extension/repositories/repo-context-id';
 
 type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
 
 interface BranchFilterInvalidation {
     readonly branch: string;
-    readonly repositoryScope?: GraphRepositoryScope;
+    readonly repository?: RepositoryLocator;
 }
 
 export class GraphMessageRouter {
@@ -54,7 +54,6 @@ export class GraphMessageRouter {
         private readonly getCommitDetails = new GetCommitDetailsUseCase(),
         private readonly getWorktreeDetails = new GetWorktreeDetailsUseCase(),
         private readonly extensionUri?: vscode.Uri,
-        private readonly storageUri?: vscode.Uri,
         private readonly runtimeRepositories?: RepositoryRegistry,
     ) {}
 
@@ -101,8 +100,8 @@ export class GraphMessageRouter {
 
     private async conflictFilesBeforeOperation(msg: GraphWebviewToExtensionMessage): Promise<ReadonlySet<string> | undefined> {
         if (!shouldRefreshAfterFailedRepositoryMutation(msg)) { return undefined; }
-        const repo = await this.repositoryForScope(repositoryScopeOf(msg));
-        return conflictFileSet(await repo.getStatus());
+        const worktree = requireRuntimeWorktree(this.runtimeTargetsForRepository(repositoryOf(msg)));
+        return conflictFileSet(await worktree.getStatus());
     }
 
     private async detectOperationConflicts(
@@ -112,8 +111,8 @@ export class GraphMessageRouter {
     ): Promise<boolean> {
         if (!existingConflicts) { return false; }
         try {
-            const repo = await this.repositoryForScope(repositoryScopeOf(msg));
-            const status = await repo.getStatus();
+            const worktree = requireRuntimeWorktree(this.runtimeTargetsForRepository(repositoryOf(msg)));
+            const status = await worktree.getStatus();
             if (!hasNewConflicts(conflictFileSet(status), existingConflicts)) { return false; }
             const payload = createErrorPayload(error, {
                 code: errorCodeFor(msg),
@@ -141,16 +140,17 @@ export class GraphMessageRouter {
                 break;
 
             case 'graph/dataRequest': {
-                const key = graphRequestKey(msg.repoId, msg.repositoryScope, 'replace');
-                this.abortPendingGraphSubmodules(msg.repoId, msg.repositoryScope);
+                const repoId = this.repoIdForRequest(msg.repoId);
+                const key = graphRequestKey(repoId, msg.repository, 'replace');
+                this.abortPendingGraphSubmodules(repoId, msg.repository);
                 this.pending.get(key)?.abort();
                 const ctrl = new AbortController();
                 this.pending.set(key, ctrl);
                 try {
-                    const data = await this.buildGraphData(msg.filters, msg.page.offset, msg.page.limit, ctrl.signal, msg.repositoryScope, false);
+                    const data = await this.buildGraphData(msg.filters, msg.page.offset, msg.page.limit, ctrl.signal, msg.repository, false);
                     const response: GraphDataResponse = { type: 'graph/dataResponse', requestId: msg.requestId, data };
                     this.postMessage(response);
-                    this.requestGraphSubmoduleHydration(msg.repoId, msg.repositoryScope, data);
+                    this.requestGraphSubmoduleHydration(repoId, msg.repository, data);
                 } finally {
                     if (this.pending.get(key) === ctrl) { this.pending.delete(key); }
                 }
@@ -158,12 +158,13 @@ export class GraphMessageRouter {
             }
 
             case 'graph/loadMore': {
-                const key = graphRequestKey(msg.repoId, msg.repositoryScope, 'more');
+                const repoId = this.repoIdForRequest(msg.repoId);
+                const key = graphRequestKey(repoId, msg.repository, 'more');
                 this.pending.get(key)?.abort();
                 const ctrl = new AbortController();
                 this.pending.set(key, ctrl);
                 try {
-                    const data = await this.buildGraphData(msg.filters, msg.page.offset, msg.page.limit, ctrl.signal, msg.repositoryScope, false);
+                    const data = await this.buildGraphData(msg.filters, msg.page.offset, msg.page.limit, ctrl.signal, msg.repository, false);
                     const response: GraphDataResponse = { type: 'graph/dataResponse', requestId: msg.requestId, data };
                     this.postMessage(response);
                 } finally {
@@ -173,7 +174,7 @@ export class GraphMessageRouter {
             }
 
             case 'graph/commitDetailsRequest': {
-                const runtimeRepo = this.runtimeTargetsForScope(msg.repositoryScope).repository;
+                const runtimeRepo = this.runtimeTargetsForRepository(msg.repository).repository;
                 if (!runtimeRepo) { throw new Error('No runtime repository available.'); }
                 const details = await this.getCommitDetails.execute(runtimeRepo, msg.hash);
                 const response: CommitDetailsResponse = {
@@ -193,7 +194,7 @@ export class GraphMessageRouter {
             }
 
             case 'graph/worktreeDetailsRequest': {
-                const runtimeWorktree = this.runtimeTargetsForWorktreePath(msg.repositoryScope, msg.path).worktree;
+                const runtimeWorktree = this.runtimeTargetsForWorktree(msg.repository, msg.worktree, msg.path).worktree;
                 if (!runtimeWorktree) { throw new Error('No runtime worktree available.'); }
                 const details = await this.getWorktreeDetails.execute(runtimeWorktree);
                 const response: WorktreeDetailsResponse = {
@@ -225,23 +226,21 @@ export class GraphMessageRouter {
                 break;
 
             case 'graph/openDiff': {
-                const repo = await this.repositoryForScope(msg.repositoryScope);
                 if (msg.isSubmodule) {
-                    await openCommitGitlinkDiff(repo, msg);
+                    await openCommitGitlinkDiff(this.requireRuntimeRepositoryForRequest(msg.repository), msg);
                     break;
                 }
-                const { left, right } = await commitFileDiffUris(repo.cwd, msg);
+                const { left, right } = await createCommitFileDiffUris(msg, this.requireRuntimeRepositoryForRequest(msg.repository));
                 await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(msg.filePath)} (${msg.commitHash.substring(0, 7)})`);
                 break;
             }
 
             case 'graph/openWorktreeDiff': {
                 if (msg.isSubmodule) {
-                    const repo = await this.repositoryForScope(msg.repositoryScope);
-                    await openWorktreeGitlinkDiff(repo, msg);
+                    await openWorktreeGitlinkDiff(requireRuntimeWorktree(this.runtimeTargetsForWorktree(msg.repository, msg.worktree, msg.worktreePath)), msg);
                     break;
                 }
-                const { left, right } = await createWorktreeDiffUris(msg, this.runtimeTargetsForWorktreePath(msg.repositoryScope, msg.worktreePath));
+                const { left, right } = await createWorktreeDiffUris(msg, this.runtimeTargetsForWorktree(msg.repository, msg.worktree, msg.worktreePath));
                 await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(msg.filePath)} (${path.basename(msg.worktreePath)})`);
                 break;
             }
@@ -253,14 +252,14 @@ export class GraphMessageRouter {
 
     async pushGraphData(filters: GraphFilters | undefined, signal: AbortSignal | undefined): Promise<void> {
         try {
-            const repo = this.repositories.currentRepository;
-            if (!repo) {
+            const context = this.repositories.currentContext;
+            if (!context) {
                 this.postMessage({ type: 'graph/dataPush', repoId: '', data: emptyGraphData() });
                 return;
             }
             const data = await this.buildGraphData(filters ?? {}, 0, 300, signal, undefined, false);
-            this.postMessage({ type: 'graph/dataPush', repoId: repo.cwd, data });
-            this.requestGraphSubmoduleHydration(repo.cwd, undefined, data);
+            this.postMessage({ type: 'graph/dataPush', repoId: context.id, data });
+            this.requestGraphSubmoduleHydration(context.id, undefined, data);
         } catch (error) {
             if (isAbortError(error)) { return; }
             this.postGraphError(error, { operation: 'graph/refresh', code: 'refreshFailed' });
@@ -272,10 +271,10 @@ export class GraphMessageRouter {
         offset: number,
         limit: number,
         signal?: AbortSignal,
-        scope?: GraphRepositoryScope,
+        repository?: RepositoryLocator,
         includeSubmoduleRepositories = true,
     ): Promise<GraphData> {
-        const runtimeRepo = this.requireRuntimeRepositoryForScope(scope);
+        const runtimeRepo = this.requireRuntimeRepositoryForRequest(repository);
         const result = await this.getGraphData.execute(runtimeRepo, filters, { offset, limit }, signal, { includeSubmoduleRepositories });
         for (const warning of result.warnings) {
             this.postGraphError(warning.error, {
@@ -283,29 +282,33 @@ export class GraphMessageRouter {
                 code: 'optionalDataUnavailable',
             });
         }
-        return toProtocolGraphData(result, normalizedScope(scope));
+        return toProtocolGraphData(result, repositoryLocatorForRuntimeRepository(runtimeRepo));
     }
 
-    private abortPendingGraphSubmodules(repoId: string, scope: GraphRepositoryScope | undefined): void {
-        this.pending.get(graphRequestKey(repoId, scope, 'submodules'))?.abort();
+    private repoIdForRequest(repoId: string | undefined): string {
+        return repoId ?? this.repositories.currentContext?.id ?? '';
     }
 
-    private requestGraphSubmoduleHydration(repoId: string, scope: GraphRepositoryScope | undefined, data: GraphData): void {
+    private abortPendingGraphSubmodules(repoId: string, repository: RepositoryLocator | undefined): void {
+        this.pending.get(graphRequestKey(repoId, repository, 'submodules'))?.abort();
+    }
+
+    private requestGraphSubmoduleHydration(repoId: string, repository: RepositoryLocator | undefined, data: GraphData): void {
         if (data.submodules.length === 0) { return; }
 
-        const repositoryScope = normalizedScope(scope);
-        const key = graphRequestKey(repoId, repositoryScope, 'submodules');
+        const targetRepository = repository ?? data.repository;
+        const key = graphRequestKey(repoId, targetRepository, 'submodules');
         this.pending.get(key)?.abort();
         const ctrl = new AbortController();
         this.pending.set(key, ctrl);
 
-        void this.buildGraphSubmodules(repositoryScope, ctrl.signal)
+        void this.buildGraphSubmodules(targetRepository, ctrl.signal)
             .then((submodules) => {
                 if (this.pending.get(key) !== ctrl || submodules.length === 0) { return; }
                 this.postMessage({
                     type: 'graph/submodulesPush',
                     repoId,
-                    repositoryScope,
+                    ...repositoryMessageProperty(targetRepository),
                     submodules,
                 });
             })
@@ -321,38 +324,39 @@ export class GraphMessageRouter {
             });
     }
 
-    private async buildGraphSubmodules(scope: GraphRepositoryScope, signal?: AbortSignal): Promise<readonly GraphSubmoduleInfo[]> {
-        const runtimeRepo = this.requireRuntimeRepositoryForScope(scope);
+    private async buildGraphSubmodules(repository: RepositoryLocator | undefined, signal?: AbortSignal): Promise<readonly GraphSubmoduleInfo[]> {
+        const runtimeRepo = this.requireRuntimeRepositoryForRequest(repository);
         const submoduleStatuses = await runtimeRepo.listSubmodules(signal);
-        const result = await this.getGraphData.getSubmoduleRepositories(runtimeRepo, submoduleStatuses, signal);
-        for (const warning of result.warnings) {
-            this.postGraphError(warning.error, {
-                operation: warning.operation,
-                code: 'optionalDataUnavailable',
-            });
-        }
-        return result.submodules.map(toProtocolGraphSubmodule);
+        return Promise.all(submoduleStatuses.map(async (submodule) => {
+            const submoduleRepository = submoduleRepositoryLocator(runtimeRepo, submodule.path, submodule.status);
+            if (!submoduleRepository || !this.runtimeRepositories) {
+                return toProtocolGraphSubmodule({ path: submodule.path, status: submodule.status, branches: [], worktrees: [] }, submoduleRepository);
+            }
+            try {
+                const childRepository = this.runtimeRepositories.resolveRepository(submoduleRepository);
+                const [branches, worktrees] = await Promise.all([
+                    childRepository.listBranches(signal),
+                    childRepository.listWorktrees(signal),
+                ]);
+                return toProtocolGraphSubmodule({ path: submodule.path, status: submodule.status, branches, worktrees }, submoduleRepository);
+            } catch (error) {
+                this.postGraphError(error, {
+                    operation: `graph/submoduleRepository:${submodule.path}`,
+                    code: 'optionalDataUnavailable',
+                });
+                return toProtocolGraphSubmodule({ path: submodule.path, status: submodule.status, branches: [], worktrees: [] }, submoduleRepository);
+            }
+        }));
     }
 
-    private requireRuntimeRepositoryForScope(scope: GraphRepositoryScope | undefined): GitRepository {
-        const targets = this.runtimeTargetsForScope(scope);
+    private requireRuntimeRepositoryForRequest(repository: RepositoryLocator | undefined): GitRepository {
+        const targets = this.runtimeTargetsForRepository(repository);
         if (!targets.repository) { throw new Error('Runtime repository is not available.'); }
         return targets.repository;
     }
 
-    private async repositoryForScope(scope: GraphRepositoryScope | undefined, signal?: AbortSignal): Promise<LegacyGitRepository> {
-        const repo = this.repositories.requireRepository();
-        const submodulePath = submodulePathForScope(scope);
-        if (!submodulePath) { return repo; }
-        const submodules = await repo.getSubmoduleStatus(signal);
-        if (!submodules.some((submodule) => submodule.path === submodulePath)) {
-            throw new Error(`Unknown submodule: ${submodulePath}`);
-        }
-        return new ScopedGitRepository(repo, submodulePath);
-    }
-
     private async handleRepositoryCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/repositoryCommand' }>): Promise<void> {
-        const runtimeRepo = this.requireRuntimeRepositoryForScope(msg.repositoryScope);
+        const runtimeRepo = this.requireRuntimeRepositoryForRequest(msg.repository);
         switch (msg.command) {
             case 'fetch':
                 await runtimeRepo.fetchAll({});
@@ -362,101 +366,79 @@ export class GraphMessageRouter {
     }
 
     private async handleBranchCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/branchCommand' }>): Promise<void> {
-        const repo = await this.repositoryForScope(msg.repositoryScope);
-        if (msg.command === 'planInteractiveRebaseOnto') {
-            if (!this.extensionUri) { throw new Error('Visual Rebase requires the extension URI.'); }
-            if (!this.storageUri) { throw new Error('Visual Rebase requires extension storage.'); }
-            await openVisualRebasePanel(repo, this.extensionUri, this.storageUri, {
-                upstream: msg.branch,
-                onto: msg.branch,
-                title: `Visual Rebase onto ${msg.branch}`,
-            });
-            return;
-        }
-        const shouldRefresh = await runBranchCommand(repo, msg.command, msg.branch, msg.isRemote, undefined, this.runtimeTargetsForScope(msg.repositoryScope));
+        const runtimeTargets = this.runtimeTargetsForRepository(msg.repository);
+        const repo = requireRuntimeRepository(runtimeTargets);
+        const shouldRefresh = await runBranchCommand(repo, msg.command, msg.branch, msg.isRemote, undefined, runtimeTargets);
         if (!shouldRefresh) { return; }
         // `delete` removes the branch and `rename` frees its old name; if the graph is
         // filtered to that branch, the next reload would query a now-missing ref, so the
         // webview has to drop the filter first.
         const invalidatesBranchFilter = msg.command === 'delete' || msg.command === 'rename';
         await this.refreshAfterRepositoryChange(invalidatesBranchFilter
-            ? { branch: msg.branch, repositoryScope: msg.repositoryScope }
+            ? { branch: msg.branch, repository: msg.repository }
             : undefined);
     }
 
     private async handleWorktreeCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/worktreeCommand' }>): Promise<void> {
-        const repo = await this.repositoryForScope(msg.repositoryScope);
         const runtimeTargets = msg.path
-            ? this.runtimeTargetsForWorktreePath(msg.repositoryScope, msg.path)
-            : this.runtimeTargetsForScope(msg.repositoryScope);
+            ? this.runtimeTargetsForWorktree(msg.repository, msg.worktree, msg.path)
+            : this.runtimeTargetsForRepository(msg.repository);
+        const repo = requireRuntimeRepository(runtimeTargets);
         const shouldRefresh = await runWorktreeCommand(repo, msg.command, msg.path, runtimeTargets);
         if (shouldRefresh) { await this.refreshAfterRepositoryChange(); }
     }
 
     private async handleCommitCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/commitCommand' }>): Promise<void> {
-        const repo = await this.repositoryForScope(msg.repositoryScope);
-        const shouldRefresh = await runCommitCommand(repo, msg.command, msg.hash, msg.hashes, undefined, undefined, undefined, diffExplanationScopeFor(msg.repositoryScope), this.extensionUri, this.storageUri, undefined, this.runtimeTargetsForScope(msg.repositoryScope));
+        const runtimeTargets = this.runtimeTargetsForRepository(msg.repository);
+        const shouldRefresh = await runCommitCommand(requireRuntimeRepository(runtimeTargets), msg.command, msg.hash, msg.hashes, undefined, undefined, undefined, diffExplanationScopeFor(msg.repository), this.extensionUri, undefined, runtimeTargets);
         if (shouldRefresh) { await this.refreshAfterRepositoryChange(); }
     }
 
-    private runtimeTargetsForScope(scope: GraphRepositoryScope | undefined): RuntimeCommandTargets {
-        const context = this.repositories.currentContext;
-        if (!context || !this.runtimeRepositories) {
-            const repo = this.repositories.currentRepository;
-            if (!isRuntimeRepository(repo)) { return {}; }
-            return isRuntimeWorktree(repo)
-                ? { repository: repo, worktree: repo, worktrees: [repo] }
-                : { repository: repo };
+    private runtimeTargetsForRepository(repository: RepositoryLocator | undefined): RuntimeCommandTargets {
+        if (repository && this.runtimeRepositories) {
+            try {
+                const runtimeRepository = this.runtimeRepositories.resolveRepository(repository);
+                const worktrees = this.runtimeRepositories.worktrees(runtimeRepository.repoId);
+                const worktree = worktrees.find((candidate) => candidate.isMain) ?? worktrees[0];
+                return {
+                    repository: runtimeRepository,
+                    ...(worktree ? { worktree } : {}),
+                    worktrees,
+                };
+            } catch {
+                return {};
+            }
         }
         try {
-            const normalized = normalizedScope(scope);
-            if (normalized.kind === 'submodule' && normalized.path) {
-                const subCwd = path.resolve(context.cwd, normalized.path);
-                const subId = stableRepoContextId(subCwd);
-                const repository = this.runtimeRepositories.resolveRepository({ repoId: subId, kind: 'submodule', path: subCwd, parentRepoId: context.id });
-                return {
-                    repository,
-                    worktree: this.runtimeRepositories.resolveWorktree({ repoId: subId, worktreeId: subId, path: subCwd }),
-                    worktrees: this.runtimeRepositories.worktrees(repository.repoId),
-                };
-            }
-            const repository = this.runtimeRepositories.resolveRepository(toRepositoryLocator(context));
-            return {
-                repository,
-                worktree: this.runtimeRepositories.resolveWorktree(toWorktreeLocator(context)),
-                worktrees: this.runtimeRepositories.worktrees(repository.repoId),
-            };
+            return requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext).targets();
         } catch {
             return {};
         }
     }
 
-    private runtimeTargetsForWorktreePath(scope: GraphRepositoryScope | undefined, worktreePath: string): RuntimeCommandTargets {
-        const context = this.repositories.currentContext;
-        if (!context || !this.runtimeRepositories) {
-            const repo = this.repositories.currentRepository;
-            if (!isRuntimeRepository(repo)) { return {}; }
-            return isRuntimeWorktree(repo) && path.normalize(repo.path) === path.normalize(worktreePath)
-                ? { repository: repo, worktree: repo, worktrees: [repo] }
-                : { repository: repo, worktrees: isRuntimeWorktree(repo) ? [repo] : [] };
+    private runtimeTargetsForWorktree(
+        repository: RepositoryLocator | undefined,
+        worktree: WorktreeLocator | undefined,
+        worktreePath: string,
+    ): RuntimeCommandTargets {
+        if (repository && this.runtimeRepositories) {
+            try {
+                const runtimeRepository = this.runtimeRepositories.resolveRepository(repository);
+                const worktrees = this.runtimeRepositories.worktrees(runtimeRepository.repoId);
+                const resolvedWorktree = worktree
+                    ? this.runtimeRepositories.resolveWorktree(worktree)
+                    : worktrees.find((candidate) => samePath(candidate.path, worktreePath));
+                return {
+                    repository: runtimeRepository,
+                    ...(resolvedWorktree ? { worktree: resolvedWorktree } : {}),
+                    worktrees,
+                };
+            } catch {
+                return {};
+            }
         }
         try {
-            const normalized = normalizedScope(scope);
-            let repository: RuntimeCommandTargets['repository'];
-            if (normalized.kind === 'submodule' && normalized.path) {
-                const subCwd = path.resolve(context.cwd, normalized.path);
-                const subId = stableRepoContextId(subCwd);
-                repository = this.runtimeRepositories.resolveRepository({ repoId: subId, kind: 'submodule', path: subCwd, parentRepoId: context.id });
-            } else {
-                repository = this.runtimeRepositories.resolveRepository(toRepositoryLocator(context));
-            }
-            const normalizedWorktreePath = path.normalize(worktreePath);
-            const worktree = this.runtimeRepositories
-                .worktrees(repository.repoId)
-                .find((candidate) => path.normalize(candidate.path) === normalizedWorktreePath);
-            return worktree
-                ? { repository, worktree, worktrees: this.runtimeRepositories.worktrees(repository.repoId) }
-                : { repository, worktrees: this.runtimeRepositories.worktrees(repository.repoId) };
+            return requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext).targetsForWorktreePath(worktreePath);
         } catch {
             return {};
         }
@@ -500,7 +482,7 @@ export class GraphMessageRouter {
             this.postMessage({
                 type: 'graph/branchFilterInvalidated',
                 branch: invalidatedBranchFilter.branch,
-                repositoryScope: invalidatedBranchFilter.repositoryScope,
+                ...repositoryMessageProperty(invalidatedBranchFilter.repository),
             });
         } else {
             this.requestGraphRefresh();
@@ -526,10 +508,10 @@ export class GraphMessageRouter {
 
 type GraphOperationDescriptor = Omit<GraphOperationStatusPush, 'type' | 'operationId' | 'status'>;
 
-function toProtocolGraphData(result: GraphDataResult, repositoryScope: GraphRepositoryScope): GraphData {
+function toProtocolGraphData(result: GraphDataResult, repository: RepositoryLocator): GraphData {
     const currentBranchCommits = new Set(result.currentBranchCommitHashes);
     return {
-        repositoryScope,
+        repository,
         branches: result.branches.map(toProtocolBranch),
         tags: result.tags.map((tag) => ({ name: tag.name, hash: tag.hash })),
         commits: result.commits.map((commit) => ({
@@ -542,44 +524,54 @@ function toProtocolGraphData(result: GraphDataResult, repositoryScope: GraphRepo
         loadedCount: result.loadedCount,
         totalCount: result.totalCount,
         hasRemotes: result.hasRemotes,
-        worktrees: result.worktrees.map(toProtocolWorktree),
+        worktrees: result.worktrees.map((worktree) => toProtocolWorktree(worktree, repository.repoId)),
         worktreeWips: result.worktreeWips,
-        submodules: result.submodules.map(toProtocolGraphSubmodule),
+        submodules: result.submodules.map((submodule) => toProtocolGraphSubmodule(
+            submodule,
+            submoduleRepositoryLocator(repository, submodule.path, submodule.status),
+        )),
     };
 }
 
-function normalizedScope(scope: GraphRepositoryScope | undefined): GraphRepositoryScope {
-    const submodulePath = submodulePathForScope(scope);
-    if (!submodulePath) { return { kind: 'main' }; }
-    return scope?.label
-        ? { kind: 'submodule', path: submodulePath, label: scope.label }
-        : { kind: 'submodule', path: submodulePath };
-}
-
-function submodulePathForScope(scope: GraphRepositoryScope | undefined): string | undefined {
-    if (!scope || scope.kind !== 'submodule') { return undefined; }
-    const submodulePath = scope.path?.trim();
-    if (!submodulePath || path.isAbsolute(submodulePath) || submodulePath.split(/[\\/]+/).includes('..')) {
-        throw new Error('Invalid submodule scope.');
-    }
-    return submodulePath;
-}
-
-function graphRequestKey(repoId: string, scope: GraphRepositoryScope | undefined, kind: 'replace' | 'more' | 'submodules'): string {
-    return `${repoId}:${graphScopeKey(scope)}:${kind}`;
-}
-
-function graphScopeKey(scope: GraphRepositoryScope | undefined): string {
-    if (!scope || scope.kind === 'main') { return 'main'; }
-    return `submodule:${scope.path ?? ''}`;
+function graphRequestKey(repoId: string, repository: RepositoryLocator | undefined, kind: 'replace' | 'more' | 'submodules'): string {
+    return `${repoId}:${repository?.repoId ?? 'active'}:${kind}`;
 }
 
 function requestIdOf(msg: GraphWebviewToExtensionMessage): RequestId | undefined {
     return 'requestId' in msg ? msg.requestId : undefined;
 }
 
-function repositoryScopeOf(msg: GraphWebviewToExtensionMessage): GraphRepositoryScope | undefined {
-    return 'repositoryScope' in msg ? msg.repositoryScope : undefined;
+function repositoryOf(msg: GraphWebviewToExtensionMessage): RepositoryLocator | undefined {
+    return 'repository' in msg ? msg.repository : undefined;
+}
+
+function repositoryMessageProperty(repository: RepositoryLocator | undefined): { readonly repository: RepositoryLocator } | Record<string, never> {
+    return repository ? { repository } : {};
+}
+
+function repositoryLocatorForRuntimeRepository(repository: GitRepository): RepositoryLocator {
+    return {
+        repoId: repository.repoId,
+        kind: repository.kind,
+        path: repository.cwd,
+        ...(repository.parentRepositoryId ? { parentRepoId: repository.parentRepositoryId } : {}),
+    };
+}
+
+function submoduleRepositoryLocator(parent: GitRepository | RepositoryLocator, submodulePath: string, status: string): RepositoryLocator | undefined {
+    if (status === '-') { return undefined; }
+    const parentPath = 'cwd' in parent ? parent.cwd : parent.path;
+    const submoduleCwd = path.resolve(parentPath, submodulePath);
+    return {
+        repoId: stableRepoContextId(submoduleCwd),
+        kind: 'submodule',
+        path: submoduleCwd,
+        parentRepoId: parent.repoId,
+    };
+}
+
+function samePath(left: string, right: string): boolean {
+    return path.normalize(left) === path.normalize(right);
 }
 
 function errorCodeFor(msg: GraphWebviewToExtensionMessage): ErrorCode {
@@ -622,7 +614,7 @@ function shouldRefreshAfterFailedRepositoryMutation(msg: GraphWebviewToExtension
     }
 }
 
-function conflictFileSet(status: import('../../core/git/domain/GitStatus').GitStatus): ReadonlySet<string> {
+function conflictFileSet(status: GitStatus): ReadonlySet<string> {
     return new Set(status.conflicts.map((entry) => entry.filePath));
 }
 
@@ -639,7 +631,7 @@ function graphOperationForMessage(msg: GraphWebviewToExtensionMessage): GraphOpe
             return {
                 category: GraphOperationCategory.Repository,
                 command: msg.command,
-                repositoryScope: msg.repositoryScope,
+                ...repositoryMessageProperty(msg.repository),
             };
         case 'graph/branchCommand':
             return graphBranchOperation(msg);
@@ -671,7 +663,7 @@ function graphBranchOperation(msg: Extract<GraphWebviewToExtensionMessage, { rea
                 background: msg.command === 'push'
                     || msg.command === 'pullBranchWorktree'
                     || msg.command === 'pushBranchWorktree',
-                repositoryScope: msg.repositoryScope,
+                ...repositoryMessageProperty(msg.repository),
             };
         case 'newBranchFrom':
         case 'newWorktreeFromBranch':
@@ -684,7 +676,6 @@ function graphBranchOperation(msg: Extract<GraphWebviewToExtensionMessage, { rea
         case 'showDiffWithWorkingTree':
         case 'compareBranchWithWorktree':
         case 'showDiffWithBranchWorktree':
-        case 'planInteractiveRebaseOnto':
             return undefined;
     }
 }
@@ -701,7 +692,7 @@ function graphWorktreeOperation(msg: Extract<GraphWebviewToExtensionMessage, { r
                 command: msg.command,
                 target: msg.path,
                 background: msg.command === 'fetch' || msg.command === 'pull' || msg.command === 'push',
-                repositoryScope: msg.repositoryScope,
+                ...repositoryMessageProperty(msg.repository),
             };
         case 'commit':
         case 'stash':
@@ -729,14 +720,13 @@ function graphCommitOperation(msg: Extract<GraphWebviewToExtensionMessage, { rea
                 category: GraphOperationCategory.Commit,
                 command: msg.command,
                 target: msg.hash,
-                repositoryScope: msg.repositoryScope,
+                ...repositoryMessageProperty(msg.repository),
             };
         case 'resetCurrentBranchToHere':
         case 'undoCommit':
         case 'editCommitMessage':
         case 'squashInto':
         case 'dropCommit':
-        case 'interactiveRebaseFromHere':
         case 'pushAllUpToHere':
         case 'newBranch':
         case 'newTag':
@@ -751,9 +741,48 @@ function graphCommitOperation(msg: Extract<GraphWebviewToExtensionMessage, { rea
     }
 }
 
-function diffExplanationScopeFor(scope: GraphRepositoryScope | undefined): { readonly label: string; readonly value: string } | undefined {
-    if (scope?.kind !== 'submodule' || !scope.path) { return undefined; }
-    return { label: 'Submodule', value: scope.path };
+function diffExplanationScopeFor(repository: RepositoryLocator | undefined): { readonly label: string; readonly value: string } | undefined {
+    if (repository?.kind !== 'submodule') { return undefined; }
+    return { label: 'Submodule', value: repository.path };
+}
+
+async function createCommitFileDiffUris(
+    file: {
+        readonly commitHash: string;
+        readonly filePath: string;
+        readonly origPath?: string;
+        readonly parentHash?: string;
+        readonly status: string;
+    },
+    repository: GitRepository,
+): Promise<{ readonly left: vscode.Uri; readonly right: vscode.Uri }> {
+    const parentRef = file.parentHash ?? `${file.commitHash}~1`;
+    const status = file.status.charAt(0);
+    const origPath = file.origPath ?? file.filePath;
+
+    if (status === 'A') {
+        return {
+            left: emptyDiffUri(file.commitHash, file.filePath, 'parent'),
+            right: await commitBlobUri(repository, file.commitHash, file.filePath, 'commit'),
+        };
+    }
+
+    if (status === 'D') {
+        return {
+            left: await commitBlobUri(repository, parentRef, origPath, 'parent'),
+            right: emptyDiffUri(file.commitHash, file.filePath, 'commit'),
+        };
+    }
+
+    return {
+        left: await commitBlobUri(repository, parentRef, origPath, 'parent'),
+        right: await commitBlobUri(repository, file.commitHash, file.filePath, 'commit'),
+    };
+}
+
+async function commitBlobUri(repository: GitRepository, ref: string, filePath: string, side: string): Promise<vscode.Uri> {
+    const content = await repository.getFileAtRevision(filePath, ref);
+    return gitBlobUri(ref, filePath, side, content);
 }
 
 async function createWorktreeDiffUris(
@@ -794,7 +823,6 @@ async function worktreeHeadBlobUri(
 
 function emptyGraphData(): GraphData {
     return {
-        repositoryScope: { kind: 'main' },
         branches: [],
         tags: [],
         commits: [],
@@ -808,18 +836,4 @@ function emptyGraphData(): GraphData {
         worktreeWips: [],
         submodules: [],
     };
-}
-
-function isRuntimeRepository(repo: LegacyGitRepository | undefined): repo is LegacyGitRepository & GitRepository {
-    return typeof repo === 'object'
-        && repo !== null
-        && typeof (repo as { readonly getCommitGraph?: unknown }).getCommitGraph === 'function'
-        && typeof (repo as { readonly listBranches?: unknown }).listBranches === 'function';
-}
-
-function isRuntimeWorktree(repo: LegacyGitRepository & GitRepository): repo is LegacyGitRepository & GitRepository & Worktree {
-    return typeof (repo as { readonly worktreeId?: unknown }).worktreeId === 'string'
-        && typeof (repo as { readonly path?: unknown }).path === 'string'
-        && typeof (repo as { readonly cherryPick?: unknown }).cherryPick === 'function'
-        && typeof (repo as { readonly getFileAtRevision?: unknown }).getFileAtRevision === 'function';
 }

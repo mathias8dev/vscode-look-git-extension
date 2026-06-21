@@ -1,8 +1,9 @@
-import type { GitRepository } from '../../ports/git-topology';
-import type { GitGraphCommit } from '../../../core/git/domain/GitCommit';
-import type { GitBranch, GitTag } from '../../../core/git/domain/GitStatus';
-import type { GitSubmodule, GitWorktree } from '../../../core/git/domain/GitWorktree';
-import { getReachableCommitHashes } from '../commits/get-reachable-commit-hashes';
+import type { GitRepository } from '@application/ports/git-topology';
+import { settleOptional } from '@core/shared/async';
+import type { GitGraphCommit } from '@core/git/domain/GitCommit';
+import type { GitBranch, GitTag } from '@core/git/domain/GitStatus';
+import type { GitSubmodule, GitWorktree } from '@core/git/domain/GitWorktree';
+import { getReachableCommitHashes } from '@application/usecases/commits/get-reachable-commit-hashes';
 
 export interface GraphDataFilters {
     readonly search?: string;
@@ -136,30 +137,6 @@ export class GetGraphDataUseCase {
         };
     }
 
-    async getSubmoduleRepositories(
-        repo: GitRepository,
-        submodules: readonly GitSubmodule[],
-        signal?: AbortSignal,
-    ): Promise<GraphSubmoduleRepositoriesResult> {
-        const warnings: GraphDataWarning[] = [];
-        const repositories = await mapLimited(submodules, 4, async (submodule) => {
-            if (submodule.status === '-') {
-                return { path: submodule.path, status: submodule.status, branches: [], worktrees: [] };
-            }
-            const [branchesResult, worktreesResult] = await Promise.all([
-                settleOptional(`graph/submoduleBranches:${submodule.path}`, repo.listBranches(signal)),
-                settleOptional(`graph/submoduleWorktrees:${submodule.path}`, repo.listWorktrees(signal)),
-            ]);
-            return {
-                path: submodule.path,
-                status: submodule.status,
-                branches: optionalValue(branchesResult, warnings),
-                worktrees: optionalValue(worktreesResult, warnings),
-            };
-        });
-        return { submodules: repositories, warnings };
-    }
-
     private async getCurrentBranchCommitHashes(
         repo: GitRepository,
         commits: readonly GitGraphCommit[],
@@ -186,28 +163,6 @@ function toSubmoduleRepositorySummary(submodule: GitSubmodule): GraphSubmoduleRe
     };
 }
 
-async function mapLimited<T, R>(
-    items: readonly T[],
-    limit: number,
-    mapper: (item: T) => Promise<R>,
-): Promise<readonly R[]> {
-    const results: R[] = [];
-    for (let index = 0; index < items.length; index += limit) {
-        results.push(...await Promise.all(items.slice(index, index + limit).map(mapper)));
-    }
-    return results;
-}
-
-async function settleOptional<T>(
-    operation: string,
-    promise: Promise<readonly T[]>,
-): Promise<{ readonly operation: string; readonly status: 'fulfilled'; readonly value: readonly T[] } | { readonly operation: string; readonly status: 'rejected'; readonly reason: unknown }> {
-    try {
-        return { operation, status: 'fulfilled', value: await promise };
-    } catch (error) {
-        return { operation, status: 'rejected', reason: error };
-    }
-}
 
 function optionalValue<T>(
     result: { readonly operation: string; readonly status: 'fulfilled'; readonly value: readonly T[] } | { readonly operation: string; readonly status: 'rejected'; readonly reason: unknown },

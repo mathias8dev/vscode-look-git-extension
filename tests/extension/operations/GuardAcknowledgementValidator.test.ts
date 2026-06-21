@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { GuardAcknowledgementValidator, GuardAcknowledgementValidationError } from '../../../src/extension/operations/GuardAcknowledgementValidator';
-import { OperationPlanRegistry } from '../../../src/extension/operations/OperationPlanRegistry';
-import type { OperationPlan } from '../../../src/application/ports/operation-guard';
+import { GuardAcknowledgementValidator, GuardAcknowledgementValidationError } from '@extension/operations/GuardAcknowledgementValidator';
+import { OperationPlanRegistry } from '@extension/operations/OperationPlanRegistry';
+import type { OperationPlan } from '@application/ports/operation-guard';
 
 describe('GuardAcknowledgementValidator', () => {
     it('returns a validated acknowledgement when plan, context, guards, preview, and expiry match', () => {
@@ -60,7 +60,7 @@ describe('GuardAcknowledgementValidator', () => {
         }, {
             repositoryId: 'repo',
             worktreeId: 'worktree',
-        })).toThrow(/preview hash/);
+        }, new Date('2026-06-20T10:00:00.000Z'))).toThrow(/preview hash/);
     });
 
     it('rejects missing guard acknowledgements', () => {
@@ -75,7 +75,7 @@ describe('GuardAcknowledgementValidator', () => {
         }, {
             repositoryId: 'repo',
             worktreeId: 'worktree',
-        })).toThrow(/missing guards/);
+        }, new Date('2026-06-20T10:00:00.000Z'))).toThrow(/missing guards/);
     });
 
     it('rejects expired plans', () => {

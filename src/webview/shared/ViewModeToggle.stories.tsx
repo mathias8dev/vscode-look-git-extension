@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ViewMode } from './viewMode';
-import { ViewModeToggle } from './ViewModeToggle';
+import { ViewMode } from '@webview/shared/viewMode';
+import { ViewModeToggle } from '@webview/shared/ViewModeToggle';
 
 const meta = {
     title: 'Shared/ViewModeToggle',

@@ -2,10 +2,13 @@
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { GraphOperationCategory, GraphOperationStatus } from '../../../src/protocol/graph/messages';
-import { OperationNoticeActionKind } from '../../../src/protocol/shared/operation';
-import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
-import { createMockVsCodeApi, sendToWebview } from '../../helpers/webviewRuntime';
+import { GraphOperationCategory, GraphOperationStatus } from '@protocol/graph/messages';
+import { OperationNoticeActionKind } from '@protocol/shared/operation';
+import { SubmoduleStatus } from '@protocol/shared/repo';
+import { createMockVsCodeApi, sendToWebview } from '@tests/helpers/webviewRuntime';
+
+const mainRepository = { repoId: 'main-repo-id', kind: 'main', path: '/repo' } as const;
+const authKitRepository = { repoId: 'auth-kit-id', kind: 'submodule', path: '/repo/modules/auth-kit', parentRepoId: 'main-repo-id' } as const;
 
 describe('GraphApp', () => {
     beforeEach(() => {
@@ -19,10 +22,10 @@ describe('GraphApp', () => {
     });
 
     it('applies live Look Git font-size changes', async () => {
-        createMockVsCodeApi();
-        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('@webview/graph/GraphApp');
 
-        render(<GraphApp />);
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
         await act(async () => sendToWebview({ type: 'ui/fontSizeChanged', fontSize: 23 }));
 
         await waitFor(() => expect(document.documentElement.style.getPropertyValue('--look-git-font-size')).toBe('23px'));
@@ -31,11 +34,21 @@ describe('GraphApp', () => {
         expect(document.getElementById('root')?.style.fontSize).toBe('23px');
     });
 
-    it('exposes the branch panel splitter as a keyboard-resizable separator', async () => {
-        createMockVsCodeApi();
-        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+    it('does not send a synthetic repository id before graph data is loaded', async () => {
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('@webview/graph/GraphApp');
 
-        render(<GraphApp />);
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
+
+        await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
+        expect(latestGraphDataRequest(api.messages)).not.toHaveProperty('repoId');
+    });
+
+    it('exposes the branch panel splitter as a keyboard-resizable separator', async () => {
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('@webview/graph/GraphApp');
+
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
 
         const separator = screen.getByRole('separator', { name: 'Resize branches panel' });
         expect(separator).toHaveAttribute('tabindex', '0');
@@ -58,12 +71,12 @@ describe('GraphApp', () => {
     });
 
     it('restores document styles and persists the branch panel width after pointer resize', async () => {
-        createMockVsCodeApi();
-        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('@webview/graph/GraphApp');
 
         document.body.style.cursor = 'default';
         document.body.style.userSelect = 'text';
-        render(<GraphApp />);
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
 
         const separator = screen.getByRole('separator', { name: 'Resize branches panel' });
         fireEvent.pointerDown(separator, { pointerId: 1, clientX: 100 });
@@ -80,10 +93,10 @@ describe('GraphApp', () => {
     });
 
     it('cleans document resize state when the graph unmounts during a drag', async () => {
-        createMockVsCodeApi();
-        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('@webview/graph/GraphApp');
 
-        const { unmount } = render(<GraphApp />);
+        const { unmount } = render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
         const separator = screen.getByRole('separator', { name: 'Resize branches panel' });
         fireEvent.pointerDown(separator, { pointerId: 2, clientX: 100 });
 
@@ -97,10 +110,10 @@ describe('GraphApp', () => {
     });
 
     it('exposes a resizable separator for the commit details panel', async () => {
-        createMockVsCodeApi();
-        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('@webview/graph/GraphApp');
 
-        render(<GraphApp />);
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
         await act(async () => sendToWebview({ type: 'graph/selectCommit', hash: 'abcdef1234567890' }));
 
         const separator = await screen.findByRole('separator', { name: 'Resize commit details panel' });
@@ -115,9 +128,9 @@ describe('GraphApp', () => {
 
     it('requests unfiltered graph data in a submodule scope when a submodule row is clicked', async () => {
         const api = createMockVsCodeApi();
-        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+        const { GraphApp } = await import('@webview/graph/GraphApp');
 
-        render(<GraphApp />);
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
         await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
         const initialRequest = latestGraphDataRequest(api.messages);
 
@@ -125,6 +138,7 @@ describe('GraphApp', () => {
             type: 'graph/dataResponse',
             requestId: initialRequest.requestId,
             data: {
+                repository: mainRepository,
                 branches: [{ name: 'main', isRemote: false, isCurrent: true, hash: 'main-head' }],
                 tags: [],
                 commits: [],
@@ -137,6 +151,7 @@ describe('GraphApp', () => {
                 worktrees: [],
                 worktreeWips: [],
                 submodules: [{
+                    repository: authKitRepository,
                     path: 'modules/auth-kit',
                     name: 'auth-kit',
                     status: SubmoduleStatus.Clean,
@@ -148,19 +163,17 @@ describe('GraphApp', () => {
 
         fireEvent.click(await screen.findByTitle('modules/auth-kit'));
 
-        await waitFor(() => expect(graphDataRequests(api.messages).some((request) => (
-            isSubmoduleScope(request.repositoryScope, 'modules/auth-kit')
-        ))).toBe(true));
+        await waitFor(() => expect(graphDataRequests(api.messages).some((request) => request.repository?.repoId === authKitRepository.repoId)).toBe(true));
         const scopedRequest = latestGraphDataRequest(api.messages);
-        expect(scopedRequest.repositoryScope).toEqual({ kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' });
+        expect(scopedRequest.repository).toEqual(authKitRepository);
         expect(scopedRequest.filters?.branches).toBeUndefined();
     });
 
     it('keeps scoped submodule branches visible when a main repository data push arrives', async () => {
         const api = createMockVsCodeApi();
-        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+        const { GraphApp } = await import('@webview/graph/GraphApp');
 
-        render(<GraphApp />);
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
         await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
         const initialRequest = latestGraphDataRequest(api.messages);
 
@@ -171,15 +184,14 @@ describe('GraphApp', () => {
         }));
         fireEvent.click(await screen.findByTitle('modules/auth-kit'));
 
-        await waitFor(() => expect(graphDataRequests(api.messages).some((request) => (
-            isSubmoduleScope(request.repositoryScope, 'modules/auth-kit')
-        ))).toBe(true));
+        await waitFor(() => expect(graphDataRequests(api.messages).some((request) => request.repository?.repoId === authKitRepository.repoId)).toBe(true));
         const scopedRequest = latestGraphDataRequest(api.messages);
 
         await act(async () => sendToWebview({
             type: 'graph/dataResponse',
             requestId: scopedRequest.requestId,
             data: {
+                repository: authKitRepository,
                 branches: [{ name: 'feature/oauth', isRemote: false, isCurrent: true, hash: 'submodule-head' }],
                 tags: [],
                 commits: [],
@@ -192,7 +204,6 @@ describe('GraphApp', () => {
                 worktrees: [],
                 worktreeWips: [],
                 submodules: [],
-                repositoryScope: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
             },
         }));
 
@@ -202,6 +213,7 @@ describe('GraphApp', () => {
             type: 'graph/dataPush',
             repoId: '/repo',
             data: {
+                repository: mainRepository,
                 branches: [],
                 tags: [],
                 commits: [],
@@ -214,20 +226,19 @@ describe('GraphApp', () => {
                 worktrees: [],
                 worktreeWips: [],
                 submodules: [],
-                repositoryScope: { kind: 'main' },
             },
         }));
 
         expect(findBranchLeafSync('oauth')).toBeInTheDocument();
         await waitFor(() => expect(graphDataRequests(api.messages).length).toBeGreaterThan(requestsBeforePush));
-        expect(isSubmoduleScope(latestGraphDataRequest(api.messages).repositoryScope, 'modules/auth-kit')).toBe(true);
+        expect(latestGraphDataRequest(api.messages).repository).toEqual(authKitRepository);
     });
 
     it('shows operation feedback and busy state for graph repository commands', async () => {
-        createMockVsCodeApi();
-        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('@webview/graph/GraphApp');
 
-        render(<GraphApp />);
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
         const fetchButton = screen.getByRole('button', { name: 'Fetch' });
 
         await act(async () => sendToWebview({
@@ -257,9 +268,9 @@ describe('GraphApp', () => {
 
     it('shows output and dismiss actions for failed graph operations', async () => {
         const api = createMockVsCodeApi();
-        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+        const { GraphApp } = await import('@webview/graph/GraphApp');
 
-        render(<GraphApp />);
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
         await act(async () => sendToWebview({
             type: 'graph/operationStatus',
             operationId: 'push-1',
@@ -281,9 +292,9 @@ describe('GraphApp', () => {
 
     it('shows an actionable empty state for an initialized repository without commits', async () => {
         const api = createMockVsCodeApi();
-        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+        const { GraphApp } = await import('@webview/graph/GraphApp');
 
-        render(<GraphApp />);
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
         await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
         const initialRequest = latestGraphDataRequest(api.messages);
 
@@ -299,9 +310,9 @@ describe('GraphApp', () => {
 
     it('clears graph filters from the filtered empty state', async () => {
         const api = createMockVsCodeApi();
-        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+        const { GraphApp } = await import('@webview/graph/GraphApp');
 
-        render(<GraphApp />);
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
         await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
         const initialRequest = latestGraphDataRequest(api.messages);
         await act(async () => sendToWebview({
@@ -327,9 +338,9 @@ describe('GraphApp', () => {
 
     it('moves graph row focus with arrow keys', async () => {
         const api = createMockVsCodeApi();
-        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+        const { GraphApp } = await import('@webview/graph/GraphApp');
 
-        render(<GraphApp />);
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
         await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
         const initialRequest = latestGraphDataRequest(api.messages);
         await act(async () => sendToWebview({
@@ -357,9 +368,9 @@ describe('GraphApp', () => {
 
     it('requests the next page when loading more graph rows', async () => {
         const api = createMockVsCodeApi();
-        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+        const { GraphApp } = await import('@webview/graph/GraphApp');
 
-        render(<GraphApp />);
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
         await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
         const initialRequest = latestGraphDataRequest(api.messages);
         await act(async () => sendToWebview({
@@ -385,9 +396,9 @@ describe('GraphApp', () => {
 
     it('offers retry and output actions for graph errors with details', async () => {
         const api = createMockVsCodeApi();
-        const { GraphApp } = await import('../../../src/webview/graph/GraphApp');
+        const { GraphApp } = await import('@webview/graph/GraphApp');
 
-        render(<GraphApp />);
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
         await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
         const initialRequest = latestGraphDataRequest(api.messages);
 
@@ -441,7 +452,7 @@ interface GraphDataRequestLike {
         readonly branches?: readonly string[];
         readonly search?: string;
     };
-    readonly repositoryScope?: unknown;
+    readonly repository?: typeof mainRepository | typeof authKitRepository;
 }
 
 function graphDataRequests(messages: readonly unknown[]): readonly GraphDataRequestLike[] {
@@ -472,15 +483,6 @@ interface GraphLoadMoreRequestLike {
     };
 }
 
-function isSubmoduleScope(value: unknown, path: string): boolean {
-    return typeof value === 'object'
-        && value !== null
-        && 'kind' in value
-        && value.kind === 'submodule'
-        && 'path' in value
-        && value.path === path;
-}
-
 async function findBranchLeaf(label: string): Promise<HTMLElement> {
     const element = await screen.findByText(label);
     const leaf = element.closest('.branch-leaf');
@@ -497,6 +499,7 @@ function findBranchLeafSync(label: string): HTMLElement {
 
 function mainGraphDataWithAuthKitSubmodule() {
     return {
+        repository: mainRepository,
         branches: [{ name: 'main', isRemote: false, isCurrent: true, hash: 'main-head' }],
         tags: [],
         commits: [],
@@ -509,6 +512,7 @@ function mainGraphDataWithAuthKitSubmodule() {
         worktrees: [],
         worktreeWips: [],
         submodules: [{
+            repository: authKitRepository,
             path: 'modules/auth-kit',
             name: 'auth-kit',
             status: SubmoduleStatus.Clean,
@@ -520,6 +524,7 @@ function mainGraphDataWithAuthKitSubmodule() {
 
 function graphData(commits: readonly ReturnType<typeof graphCommit>[]) {
     return {
+        repository: mainRepository,
         branches: [{ name: 'main', isRemote: false, isCurrent: true, hash: commits[0]?.hash ?? '' }],
         tags: [],
         commits,

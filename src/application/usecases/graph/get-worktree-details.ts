@@ -1,5 +1,5 @@
-import type { Worktree } from '../../ports/git-topology';
-import type { GitStatus, GitStatusEntry } from '../../../core/git/domain/GitStatus';
+import type { Worktree } from '@application/ports/git-topology';
+import type { GitStatus, GitStatusEntry } from '@core/git/domain/GitStatus';
 
 export interface WorktreeDetailsFile {
     readonly status: string;

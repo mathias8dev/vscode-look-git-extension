@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
-import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
-import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, WorktreeCommand } from '../../protocol/graph/messages';
-import type { GraphContextTarget } from '../../protocol/graph/types';
-import type { RepoContext } from '../../core/git/domain/RepoContext';
-import { toSerializedRepoContext } from '../mapping/toProtocol';
-import { GraphMessageRouter } from '../messaging/GraphMessageRouter';
-import { getWebviewHtml } from './webviewHtml';
-import { webviewFontSizeMessage } from './webview-font';
-import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
+import type { ActiveRepositoryAccessor } from '@extension/repositories/ActiveRepositoryRegistry';
+import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, WorktreeCommand } from '@protocol/graph/messages';
+import type { GraphContextTarget } from '@protocol/graph/types';
+import type { RepoContext } from '@core/git/domain/RepoContext';
+import { toSerializedRepoContext } from '@extension/mapping/toProtocol';
+import { GraphMessageRouter } from '@extension/messaging/GraphMessageRouter';
+import { getWebviewHtml } from '@extension/views/webviewHtml';
+import { webviewFontSizeMessage } from '@extension/views/webview-font';
+import type { RepositoryRegistry } from '@extension/repositories/RepositoryRegistry';
 
 const GRAPH_COMMIT_COMMANDS: readonly { readonly id: string; readonly command: CommitCommand }[] = [
     { id: 'lookGit.graph.commit.copyRevisionNumber', command: 'copyRevisionNumber' },
@@ -26,7 +26,6 @@ const GRAPH_COMMIT_COMMANDS: readonly { readonly id: string; readonly command: C
     { id: 'lookGit.graph.commit.fixup', command: 'fixup' },
     { id: 'lookGit.graph.commit.squashInto', command: 'squashInto' },
     { id: 'lookGit.graph.commit.dropCommit', command: 'dropCommit' },
-    { id: 'lookGit.graph.commit.interactiveRebaseFromHere', command: 'interactiveRebaseFromHere' },
     { id: 'lookGit.graph.commit.pushAllUpToHere', command: 'pushAllUpToHere' },
     { id: 'lookGit.graph.commit.newBranch', command: 'newBranch' },
     { id: 'lookGit.graph.commit.newTag', command: 'newTag' },
@@ -44,7 +43,6 @@ const GRAPH_BRANCH_COMMANDS: readonly { readonly id: string; readonly command: B
     { id: 'lookGit.graph.branch.compareBranchWithWorktree', command: 'compareBranchWithWorktree' },
     { id: 'lookGit.graph.branch.showDiffWithBranchWorktree', command: 'showDiffWithBranchWorktree' },
     { id: 'lookGit.graph.branch.rebaseOnto', command: 'rebaseOnto' },
-    { id: 'lookGit.graph.branch.planInteractiveRebaseOnto', command: 'planInteractiveRebaseOnto' },
     { id: 'lookGit.graph.branch.mergeInto', command: 'mergeInto' },
     { id: 'lookGit.graph.branch.push', command: 'push' },
     { id: 'lookGit.graph.branch.publish', command: 'push' },
@@ -87,7 +85,6 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         private readonly extensionUri: vscode.Uri,
         private readonly repositories: ActiveRepositoryAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
-        private readonly storageUri?: vscode.Uri,
         private readonly runtimeRepositories?: RepositoryRegistry,
     ) {}
 
@@ -103,7 +100,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         this.router?.dispose();
         this.router = new GraphMessageRouter(this.repositories, (msg) => {
             webviewView.webview.postMessage(msg);
-        }, this.onRepositoryUpdated, undefined, undefined, undefined, this.extensionUri, this.storageUri, this.runtimeRepositories);
+        }, this.onRepositoryUpdated, undefined, undefined, undefined, this.extensionUri, this.runtimeRepositories);
 
         webviewView.webview.onDidReceiveMessage((msg: GraphWebviewToExtensionMessage) => {
             if (msg.type === 'graph/contextTarget') {
@@ -158,7 +155,13 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
             return;
         }
         if (command === 'squashInto' && (target.canSquash === false || target.hashes.length < 2)) { return; }
-        await this.router?.handle({ type: 'graph/commitCommand', command, hash: target.hash, hashes: target.hashes, repositoryScope: target.repositoryScope });
+        await this.router?.handle({
+            type: 'graph/commitCommand',
+            command,
+            hash: target.hash,
+            hashes: target.hashes,
+            ...(target.repository ? { repository: target.repository } : {}),
+        });
     }
 
     private async runBranchContextCommand(command: BranchCommand, options: BranchContextCommandOptions = {}): Promise<void> {
@@ -178,13 +181,25 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
                 : 'Push is unavailable because this branch has no upstream. Use Publish Branch.');
             return;
         }
-        await this.router?.handle({ type: 'graph/branchCommand', command, branch: target.branch, isRemote: target.isRemote, repositoryScope: target.repositoryScope });
+        await this.router?.handle({
+            type: 'graph/branchCommand',
+            command,
+            branch: target.branch,
+            isRemote: target.isRemote,
+            ...(target.repository ? { repository: target.repository } : {}),
+        });
     }
 
     private async runWorktreeContextCommand(command: WorktreeCommand): Promise<void> {
         const target = this.contextTarget;
         if (target?.kind !== 'worktree') { return; }
-        await this.router?.handle({ type: 'graph/worktreeCommand', command, path: target.path, repositoryScope: target.repositoryScope });
+        await this.router?.handle({
+            type: 'graph/worktreeCommand',
+            command,
+            path: target.path,
+            ...(target.repository ? { repository: target.repository } : {}),
+            ...(target.worktree ? { worktree: target.worktree } : {}),
+        });
     }
 
     private selectContextCommit(direction: 'child' | 'parent'): void {

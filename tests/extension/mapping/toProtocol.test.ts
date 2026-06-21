@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { GitGraphCommit } from '../../../src/core/git/domain/GitCommit';
-import type { GitBranch } from '../../../src/core/git/domain/GitStatus';
-import { RepoKind } from '../../../src/core/git/domain/RepoContext';
+import type { GitGraphCommit } from '@core/git/domain/GitCommit';
+import type { GitBranch } from '@core/git/domain/GitStatus';
+import { RepoKind } from '@core/git/domain/RepoContext';
 import {
     toProtocolBranch,
     toProtocolGraphCommit,
+    toProtocolGraphSubmodule,
     toSerializedRepoContext,
     toProtocolSubmoduleStatus,
-} from '../../../src/extension/mapping/toProtocol';
+    toProtocolWorktree,
+} from '@extension/mapping/toProtocol';
 
 describe('toProtocol mapping', () => {
     it('maps graph commits as semantic protocol data without rendering fields', () => {
@@ -56,6 +58,42 @@ describe('toProtocol mapping', () => {
         expect(toProtocolSubmoduleStatus('+')).toBe('out-of-sync');
         expect(toProtocolSubmoduleStatus('-')).toBe('not-initialized');
         expect(toProtocolSubmoduleStatus('U')).toBe('dirty');
+    });
+
+    it('maps graph worktree locators when repository id is available', () => {
+        expect(toProtocolWorktree({
+            path: '/workspace/repo',
+            head: 'abc1234',
+            branch: 'main',
+            isMain: true,
+            isDetached: false,
+            isLocked: false,
+        }, 'repo-id')).toEqual(expect.objectContaining({
+            locator: {
+                repoId: 'repo-id',
+                worktreeId: expect.any(String),
+                path: '/workspace/repo',
+            },
+        }));
+    });
+
+    it('maps graph submodule repository locators', () => {
+        const repository = {
+            repoId: 'submodule-id',
+            kind: 'submodule',
+            path: '/workspace/repo/modules/auth-kit',
+            parentRepoId: 'repo-id',
+        } as const;
+
+        expect(toProtocolGraphSubmodule({
+            path: 'modules/auth-kit',
+            status: ' ',
+            branches: [],
+            worktrees: [],
+        }, repository)).toEqual(expect.objectContaining({
+            repository,
+            path: 'modules/auth-kit',
+        }));
     });
 
     it('maps domain repo context into serialized protocol context', () => {

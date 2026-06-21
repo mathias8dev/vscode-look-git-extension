@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import type { CommitFileChange } from '../../../protocol/graph/types';
-import { IconButton } from '../../shared/IconButton';
-import { GraphFileTypeIcon } from './GraphFileTypeIcon';
-import { iconKindForCommitFile } from './graphFileIconModel';
-import type { FileTreeNode } from './commitFileTreeModel';
+import type { CommitFileChange } from '@protocol/graph/types';
+import { IconButton } from '@webview/shared/IconButton';
+import { GraphFileTypeIcon } from '@webview/features/graph/GraphFileTypeIcon';
+import { iconKindForCommitFile } from '@webview/features/graph/graphFileIconModel';
+import type { FileTreeNode } from '@webview/features/graph/commitFileTreeModel';
 
 interface FileTreeNodeViewProps {
     readonly node: FileTreeNode;

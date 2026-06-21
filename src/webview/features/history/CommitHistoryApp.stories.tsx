@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { HistoryCommit } from '../../../protocol/history/types';
-import { OperationNoticeActionKind, OperationStatus } from '../../../protocol/shared/operation';
-import { historyCommit, historyDetails, noop } from '../../storybookFixtures';
-import { CommitHistoryApp } from './CommitHistoryApp';
-import { createInitialHistoryState, HistoryCommitSelectionMode, type HistoryState } from './historyState';
+import type { HistoryCommit } from '@protocol/history/types';
+import { OperationNoticeActionKind, OperationStatus } from '@protocol/shared/operation';
+import { historyCommit, historyDetails, noop } from '@webview/storybookFixtures';
+import { CommitHistoryApp } from '@webview/features/history/CommitHistoryApp';
+import { createInitialHistoryState, HistoryCommitSelectionMode, type HistoryState } from '@webview/features/history/historyState';
 
 const secondCommit = {
     ...historyCommit,

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { noop } from '../storybookFixtures';
-import { ErrorNotice } from './ErrorNotice';
+import { noop } from '@webview/storybookFixtures';
+import { ErrorNotice } from '@webview/shared/ErrorNotice';
 
 const meta = {
     title: 'Shared/ErrorNotice',

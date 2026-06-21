@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { BranchNode } from './graphBranchTree';
-import type { BranchTreeExpansionRequest } from './BranchTreeNode';
+import type { BranchNode } from '@webview/features/graph/graphBranchTree';
+import type { BranchTreeExpansionRequest } from '@webview/features/graph/BranchTreeNode';
 
 interface ReadonlyBranchTreeNodeProps {
     readonly node: BranchNode;

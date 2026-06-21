@@ -1,4 +1,4 @@
-import type { CommitMessageWebviewToExtensionMessage } from '../../protocol/commit-message/messages';
+import type { CommitMessageWebviewToExtensionMessage } from '@protocol/commit-message/messages';
 
 export function messageForCommitMessageReady(): CommitMessageWebviewToExtensionMessage {
     return { type: 'commitMessage/ready' };

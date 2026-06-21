@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import type { StashEntry, StashFileEntry } from '../../../protocol/changes/types';
-import { Codicon } from '../../shared/Codicon';
-import type { StashEntryAction } from './stashCommands';
-import { StashItem } from './StashItem';
+import type { StashEntry, StashFileEntry } from '@protocol/changes/types';
+import { Codicon } from '@webview/shared/Codicon';
+import type { StashEntryAction } from '@webview/features/changes/stashCommands';
+import { StashItem } from '@webview/features/changes/StashItem';
 
 interface StashListProps {
     readonly stashes: readonly StashEntry[];

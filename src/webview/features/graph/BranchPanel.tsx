@@ -1,20 +1,21 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
-import { GraphOperationCategory, GraphOperationStatus, type BranchCommand, type GraphOperationStatusPush } from '../../../protocol/graph/messages';
-import type { BranchInfo, GraphContextTarget, GraphRepositoryScope, GraphSubmoduleInfo, WorktreeInfo } from '../../../protocol/graph/types';
-import { buildBranchTree, buildRemoteBranchTree } from './graphBranchTree';
-import { BranchTreeNode, type BranchTreeExpansionRequest } from './BranchTreeNode';
-import { GraphSubmoduleNode } from './GraphSubmoduleNode';
-import { IconButton } from '../../shared/IconButton';
-import { SearchInput } from '../../shared/SearchInput';
-import { selectBranchFilter } from './graphBranchSelection';
+import { GraphOperationCategory, GraphOperationStatus, type BranchCommand, type GraphOperationStatusPush } from '@protocol/graph/messages';
+import type { BranchInfo, GraphContextTarget, GraphSubmoduleInfo, WorktreeInfo } from '@protocol/graph/types';
+import { mainGraphRepositorySelection, type GraphRepositorySelection } from '@webview/features/graph/graphRepositorySelection';
+import { buildBranchTree, buildRemoteBranchTree } from '@webview/features/graph/graphBranchTree';
+import { BranchTreeNode, type BranchTreeExpansionRequest } from '@webview/features/graph/BranchTreeNode';
+import { GraphSubmoduleNode } from '@webview/features/graph/GraphSubmoduleNode';
+import { IconButton } from '@webview/shared/IconButton';
+import { SearchInput } from '@webview/shared/SearchInput';
+import { selectBranchFilter } from '@webview/features/graph/graphBranchSelection';
 
 interface BranchPanelProps {
     readonly style?: CSSProperties;
     readonly branches: readonly BranchInfo[];
     readonly worktrees: readonly WorktreeInfo[];
     readonly submodules: readonly GraphSubmoduleInfo[];
-    readonly repositoryScope?: GraphRepositoryScope;
+    readonly selectedRepository?: GraphRepositorySelection;
     readonly currentBranch: string;
     readonly hasRemotes?: boolean;
     readonly selectedBranchFilter: string | undefined;
@@ -22,7 +23,7 @@ interface BranchPanelProps {
     readonly operationStatus?: GraphOperationStatusPush;
     readonly onSelectBranch: (branch: string | undefined) => void;
     readonly onSelectMainRepository?: () => void;
-    readonly onSelectSubmodule?: (submodulePath: string, submoduleLabel: string) => void;
+    readonly onSelectSubmodule?: (submodule: GraphSubmoduleInfo) => void;
     readonly onBranchCommand: (command: BranchCommand, branch: string, isRemote: boolean) => void;
     readonly onFetch: () => void;
     readonly onSelectWorktree: (path: string) => void;
@@ -36,7 +37,7 @@ export function BranchPanel({
     branches,
     worktrees,
     submodules,
-    repositoryScope = { kind: 'main' },
+    selectedRepository = mainGraphRepositorySelection(),
     currentBranch,
     hasRemotes = false,
     selectedBranchFilter,
@@ -224,17 +225,17 @@ export function BranchPanel({
                     </div>
 
                     <div className="branch-list">
-                        {repositoryScope.kind === 'submodule' ? (
+                        {selectedRepository.kind === 'submodule' ? (
                             <button
                                 type="button"
                                 className="graph-resource-row graph-resource-row-clickable graph-scope-back-row"
-                                title={`Show main repository from ${repositoryScope.path ?? repositoryScope.label ?? 'submodule'}`}
+                                title={`Show main repository from ${selectedRepository.path}`}
                                 onClick={onSelectMainRepository}
                             >
                                 <i className="codicon codicon-arrow-left branch-leaf-icon" aria-hidden="true" />
                                 <span className="branch-node-name">Main repository</span>
                                 <span className="graph-resource-badge">
-                                    {repositoryScope.label ?? repositoryScope.path ?? 'submodule'}
+                                    {selectedRepository.label}
                                 </span>
                             </button>
                         ) : null}
@@ -383,7 +384,7 @@ export function BranchPanel({
                                     <GraphSubmoduleNode
                                         key={submodule.path}
                                         submodule={submodule}
-                                        selectedSubmodulePath={repositoryScope.kind === 'submodule' ? repositoryScope.path : undefined}
+                                        selectedSubmodulePath={selectedRepository.kind === 'submodule' ? selectedRepository.path : undefined}
                                         onSelectSubmodule={onSelectSubmodule}
                                     />
                                 ))}

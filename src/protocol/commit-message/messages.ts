@@ -1,4 +1,4 @@
-import type { RequestId } from '../shared/base';
+import type { RequestId } from '@protocol/shared/base';
 
 export interface CommitMessageInitPush {
     readonly type: 'commitMessage/init';

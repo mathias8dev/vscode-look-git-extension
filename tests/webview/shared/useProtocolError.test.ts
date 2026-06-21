@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readProtocolError } from '../../../src/webview/shared/useProtocolError';
+import { readProtocolError } from '@webview/shared/useProtocolError';
 
 describe('readProtocolError', () => {
     it('ignores non-error messages', () => {
@@ -24,12 +24,7 @@ describe('readProtocolError', () => {
         });
     });
 
-    it('falls back to legacy message-only error payloads', () => {
-        expect(readProtocolError({ type: 'error', message: 'Legacy failure' })).toEqual({
-            code: 'unknown',
-            message: 'Legacy failure',
-            operation: 'error',
-            recoverable: true,
-        });
+    it('ignores message-only error payloads without structured protocol errors', () => {
+        expect(readProtocolError({ type: 'error', message: 'Missing structured error' })).toBeUndefined();
     });
 });

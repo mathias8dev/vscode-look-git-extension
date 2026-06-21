@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { GitRepository, Worktree } from '../../../src/application/ports/git-topology';
-import type { GitRuntime } from '../../../src/application/ports/git-runtime';
-import { RepositoryRegistry, RepositoryResolutionError } from '../../../src/extension/repositories/RepositoryRegistry';
+import type { GitRepository, Worktree } from '@application/ports/git-topology';
+import type { GitRuntime } from '@application/ports/git-runtime';
+import { RepositoryRegistry, RepositoryResolutionError } from '@extension/repositories/RepositoryRegistry';
 
 const runtime = {
     supports: () => false,
-    execute: async () => undefined,
+    async execute<_TInput = unknown, TResult = unknown>(): Promise<TResult> {
+        return undefined as TResult; // Registry tests never execute runtime results.
+    },
 } satisfies GitRuntime;
 
 describe('RepositoryRegistry', () => {
@@ -31,6 +33,19 @@ describe('RepositoryRegistry', () => {
 
         expect(registry.worktrees('repo')).toEqual([main, linked]);
         expect(registry.worktrees('missing')).toEqual([]);
+    });
+
+    it('replaces a repository topology without keeping stale worktrees', () => {
+        const registry = new RepositoryRegistry();
+        const main = worktreeModel('repo', 'main');
+        const linked = worktreeModel('repo', 'linked');
+
+        registry.replaceRepository(repositoryModel('repo'), [main, linked]);
+        registry.replaceRepository(repositoryModel('repo'), [main]);
+
+        expect(registry.worktrees('repo')).toEqual([main]);
+        expect(() => registry.resolveWorktree({ repoId: 'repo', worktreeId: 'linked', path: '/linked' }))
+            .toThrow(RepositoryResolutionError);
     });
 
     it('rejects missing repositories and kind mismatches', () => {
@@ -63,16 +78,31 @@ describe('RepositoryRegistry', () => {
         expect(() => registry.resolveWorktree({ repoId: 'repo', worktreeId: 'main', path: '/repo' }))
             .toThrow(RepositoryResolutionError);
     });
+
+    it('unregisters child repositories and worktrees with a repository tree', () => {
+        const registry = new RepositoryRegistry();
+        registry.replaceRepository(repositoryModel('repo'), [worktreeModel('repo', 'main')]);
+        registry.replaceRepository(repositoryModel('submodule', 'repo'), [worktreeModel('submodule', 'submodule-main')]);
+
+        registry.unregisterRepositoryTree('repo');
+
+        expect(registry.repositories()).toEqual([]);
+        expect(registry.worktrees('repo')).toEqual([]);
+        expect(registry.worktrees('submodule')).toEqual([]);
+        expect(() => registry.resolveRepository({ repoId: 'submodule', kind: 'submodule', path: '/submodule', parentRepoId: 'repo' }))
+            .toThrow(RepositoryResolutionError);
+    });
 });
 
-function repositoryModel(repoId: string): GitRepository {
+function repositoryModel(repoId: string, parentRepositoryId?: string): GitRepository {
     return {
         repoId,
         gitDir: `/${repoId}/.git`,
-        kind: 'main',
+        kind: parentRepositoryId ? 'submodule' : 'main',
         label: repoId,
+        parentRepositoryId,
         runtime,
-    } as GitRepository;
+    } as unknown as GitRepository; // Partial registry fixture: tests only use identity and locator fields.
 }
 
 function worktreeModel(repoId: string, worktreeId: string): Worktree {
@@ -84,5 +114,5 @@ function worktreeModel(repoId: string, worktreeId: string): Worktree {
         head: 'abc123',
         dirty: false,
         runtime,
-    } as Worktree;
+    } as unknown as Worktree; // Partial registry fixture: tests only use identity and locator fields.
 }

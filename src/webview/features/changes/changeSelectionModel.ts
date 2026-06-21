@@ -1,5 +1,5 @@
-import type { ChangesSelectionContextTarget } from '../../../protocol/changes/types';
-import { ChangeSectionId, type ChangeListItem } from './changeTree';
+import type { ChangesSelectionContextTarget } from '@protocol/changes/types';
+import { ChangeSectionId, type ChangeListItem } from '@webview/features/changes/changeTree';
 
 export function changesSelectionTarget(
     items: readonly ChangeListItem[],

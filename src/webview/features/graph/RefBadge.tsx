@@ -1,4 +1,4 @@
-import type { ParsedRef } from './refModel';
+import type { ParsedRef } from '@webview/features/graph/refModel';
 
 interface RefBadgeProps {
     readonly parsed: ParsedRef;

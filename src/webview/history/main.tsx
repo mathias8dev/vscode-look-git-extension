@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { HistoryWebview } from './HistoryWebview';
-import '../styles.css';
+import { HistoryWebview } from '@webview/history/HistoryWebview';
+import '@webview/styles.css';
 
 const root = document.getElementById('root');
 if (root) { createRoot(root).render(<StrictMode><HistoryWebview /></StrictMode>); }

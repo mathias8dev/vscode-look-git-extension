@@ -1,7 +1,7 @@
 import { useEffect, useReducer } from 'react';
-import type { ChangesExtensionToWebviewMessage, ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
-import type { CommitMode, StashFileEntry } from '../../protocol/changes/types';
-import { OperationStatus } from '../../protocol/shared/operation';
+import type { ChangesExtensionToWebviewMessage, ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
+import type { CommitMode, StashFileEntry } from '@protocol/changes/types';
+import { OperationStatus } from '@protocol/shared/operation';
 import {
     messageForBulkAction,
     messageForChangesToolbarCommand,
@@ -10,25 +10,25 @@ import {
     messageForRowAction,
     type ChangeBulkAction,
     type ChangeRowAction,
-} from '../features/changes/changeCommands';
-import type { ChangeListItem, ChangeSectionId } from '../features/changes/changeTree';
-import { messageForGenerateCommitMessage, messageForGenerateSubmoduleCommitMessage } from '../features/changes/commit-message-commands';
-import { ChangesApp } from '../features/changes/ChangesApp';
+} from '@webview/features/changes/changeCommands';
+import type { ChangeListItem, ChangeSectionId } from '@webview/features/changes/changeTree';
+import { messageForGenerateCommitMessage, messageForGenerateSubmoduleCommitMessage } from '@webview/features/changes/commit-message-commands';
+import { ChangesApp } from '@webview/features/changes/ChangesApp';
 import {
     createInitialChangesState,
     reduceChangesState,
     submoduleStashKey,
     type ChangeSelectionMode,
-} from '../features/changes/changesState';
-import { changesStateToPersisted, readChangesStatePreferences } from '../features/changes/changesPersistence';
-import { messageForOperationAction, type ActiveConflictState, type OperationAction } from '../features/changes/operationCommands';
+} from '@webview/features/changes/changesState';
+import { changesStateToPersisted, readChangesStatePreferences } from '@webview/features/changes/changesPersistence';
+import { messageForOperationAction, type ActiveConflictState, type OperationAction } from '@webview/features/changes/operationCommands';
 import {
     messageForCreateStash,
     messageForStashAction,
     messageForStashFileDiff,
     StashEntryAction,
     type CreateStashKind,
-} from '../features/changes/stashCommands';
+} from '@webview/features/changes/stashCommands';
 import {
     messageForChangesContextTarget,
     messageForSubmoduleAction,
@@ -42,9 +42,9 @@ import {
     messageForGetSubmoduleStatus,
     submoduleStatusRequestId,
     SubmoduleAction,
-} from '../features/changes/submoduleCommands';
-import { applyWebviewFontSize, isWebviewFontSizeMessage } from '../platform/font-size';
-import { vscodeApi } from '../platform/vscodeHost';
+} from '@webview/features/changes/submoduleCommands';
+import { applyWebviewFontSize, isWebviewFontSizeMessage } from '@webview/platform/font-size';
+import { vscodeApi } from '@webview/platform/vscodeHost';
 
 const COMMIT_FEEDBACK_TIMEOUT_MS = 5000;
 const OPERATION_NOTICE_TIMEOUT_MS = 5000;

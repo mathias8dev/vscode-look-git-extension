@@ -9,8 +9,8 @@ import {
     messageForExplainSelection,
     messageForRowAction,
     rowActionsFor,
-} from '../../../src/webview/features/changes/changeCommands';
-import { ChangeSectionId, type ChangeListItem, type ChangeSection } from '../../../src/webview/features/changes/changeTree';
+} from '@webview/features/changes/changeCommands';
+import { ChangeSectionId, type ChangeListItem, type ChangeSection } from '@webview/features/changes/changeTree';
 
 function item(section: ChangeSectionId, filePath = 'src/app.ts'): ChangeListItem {
     return {

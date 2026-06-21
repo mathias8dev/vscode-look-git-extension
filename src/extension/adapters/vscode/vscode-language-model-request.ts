@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { isRecord } from '@core/shared/type-guards';
 
 interface LanguageModelApi {
     selectChatModels(selector?: vscode.LanguageModelChatSelector): Thenable<vscode.LanguageModelChat[]>;
@@ -50,8 +51,4 @@ function isLanguageModelApi(value: unknown): value is LanguageModelApi {
 function selectPreferredModel(models: readonly vscode.LanguageModelChat[]): vscode.LanguageModelChat | undefined {
     const preferred = models.find((model) => PREFERRED_MODEL_VENDORS.includes(model.vendor.toLowerCase()));
     return preferred ?? models[0];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
 }

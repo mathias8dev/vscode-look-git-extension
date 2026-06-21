@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CommitMessageExtensionToWebviewMessage, CommitMessageWebviewToExtensionMessage } from '../../protocol/commit-message/messages';
-import { vscodeApi } from '../platform/vscodeHost';
-import { CommitMessageEditor } from './CommitMessageEditor';
+import type { CommitMessageExtensionToWebviewMessage, CommitMessageWebviewToExtensionMessage } from '@protocol/commit-message/messages';
+import { vscodeApi } from '@webview/platform/vscodeHost';
+import { CommitMessageEditor } from '@webview/commit-message/CommitMessageEditor';
 import {
     messageForCommitMessageApply,
     messageForCommitMessageCancel,
     messageForCommitMessageGenerate,
     messageForCommitMessageReady,
-} from './commit-message-commands';
+} from '@webview/commit-message/commit-message-commands';
 
 export function CommitMessageWebview() {
     const [title, setTitle] = useState('Commit Message');

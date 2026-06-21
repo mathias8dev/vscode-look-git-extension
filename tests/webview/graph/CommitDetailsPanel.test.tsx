@@ -2,8 +2,8 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CommitDetailsPanel } from '../../../src/webview/features/graph/CommitDetailsPanel';
-import type { CommitDetails } from '../../../src/webview/features/graph/graphState';
+import { CommitDetailsPanel } from '@webview/features/graph/CommitDetailsPanel';
+import type { CommitDetails } from '@webview/features/graph/graphState';
 
 describe('CommitDetailsPanel', () => {
     beforeEach(() => {

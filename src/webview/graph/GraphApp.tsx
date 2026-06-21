@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useReducer } from 'react';
-import type { GraphExtensionToWebviewMessage } from '../../protocol/graph/messages';
-import type { CommitFileChange, GraphContextTarget, GraphRepositoryScope } from '../../protocol/graph/types';
-import { BranchPanel } from '../features/graph/BranchPanel';
-import { CommitDetailsPanel } from '../features/graph/CommitDetailsPanel';
-import { GraphTable } from '../features/graph/GraphTable';
-import { GraphToolbar } from '../features/graph/GraphToolbar';
-import { GraphOperationNotice } from '../features/graph/GraphOperationNotice';
-import { GraphEmptyState } from '../features/graph/GraphEmptyState';
+import type { GraphExtensionToWebviewMessage, GraphWebviewToExtensionMessage } from '@protocol/graph/messages';
+import type { CommitFileChange, GraphContextTarget, GraphSubmoduleInfo } from '@protocol/graph/types';
+import type { RepositoryLocator } from '@protocol/shared/repo';
+import { BranchPanel } from '@webview/features/graph/BranchPanel';
+import { CommitDetailsPanel } from '@webview/features/graph/CommitDetailsPanel';
+import { GraphTable } from '@webview/features/graph/GraphTable';
+import { GraphToolbar } from '@webview/features/graph/GraphToolbar';
+import { GraphOperationNotice } from '@webview/features/graph/GraphOperationNotice';
+import { GraphEmptyState } from '@webview/features/graph/GraphEmptyState';
 import {
     createInitialGraphState,
     reduceGraphState,
-} from '../features/graph/graphState';
-import { graphEmptyStateModel } from '../features/graph/graphEmptyStateModel';
+} from '@webview/features/graph/graphState';
+import { graphEmptyStateModel } from '@webview/features/graph/graphEmptyStateModel';
 import {
     messageForCommitDetails,
     messageForGraphDataRequest,
@@ -24,14 +25,14 @@ import {
     messageForWorktreeCommand,
     messageForWorktreeDetails,
     messageForBranchCheckout,
-} from '../features/graph/graphCommands';
-import { ErrorNotice } from '../shared/ErrorNotice';
-import { GraphOperationStatus } from '../../protocol/graph/messages';
-import { ResizablePanel } from '../shared/ResizablePanel';
-import { ResizeAxis } from '../shared/resizeAxis';
-import { ResizeHandleSide } from '../shared/resizeHandleSide';
-import { vscodeApi } from '../platform/vscodeHost';
-import { applyWebviewFontSize, isWebviewFontSizeMessage } from '../platform/font-size';
+} from '@webview/features/graph/graphCommands';
+import { ErrorNotice } from '@webview/shared/ErrorNotice';
+import { GraphOperationStatus } from '@protocol/graph/messages';
+import { graphRepositorySelectionKey } from '@webview/features/graph/graphRepositorySelection';
+import { ResizablePanel } from '@webview/shared/ResizablePanel';
+import { ResizeAxis } from '@webview/shared/resizeAxis';
+import { ResizeHandleSide } from '@webview/shared/resizeHandleSide';
+import { applyWebviewFontSize, isWebviewFontSizeMessage } from '@webview/platform/font-size';
 
 const PAGE_LIMIT = 300;
 const ERROR_NOTICE_TIMEOUT_MS = 8000;
@@ -45,14 +46,18 @@ const DETAILS_PANEL_MAX = 720;
 const DETAILS_PANEL_DEFAULT = 320;
 const DETAILS_PANEL_STORAGE_KEY = 'lookGit.commitDetailsPanelWidth';
 
-export function GraphApp() {
+interface GraphAppProps {
+    readonly sendMessage: (message: GraphWebviewToExtensionMessage) => void;
+}
+
+export function GraphApp({ sendMessage }: GraphAppProps) {
     const [state, dispatch] = useReducer(reduceGraphState, undefined, createInitialGraphState);
-    const scopeAnimationKey = graphScopeAnimationKey(state.repositoryScope);
+    const scopeAnimationKey = graphRepositorySelectionKey(state.selectedRepository);
     const showGraphEmptyState = !state.loading && state.displayRows.length === 0 && !state.hasMore;
     const emptyState = graphEmptyStateModel({
         filters: state.filters,
         selectedBranchFilter: state.selectedBranchFilter,
-        repositoryScope: state.repositoryScope,
+        selectedRepository: state.selectedRepository,
     });
 
     useEffect(() => {
@@ -64,45 +69,44 @@ export function GraphApp() {
             dispatch({ type: 'message', message: event.data });
         };
         window.addEventListener('message', onMessage);
-        vscodeApi.postMessage({ type: 'graph/ready' });
+        sendMessage({ type: 'graph/ready' });
         return () => window.removeEventListener('message', onMessage);
-    }, []);
+    }, [sendMessage]);
 
     useEffect(() => {
         if (!state.selectedHash) { return; }
-        vscodeApi.postMessage(messageForCommitDetails(state.selectedHash, state.repositoryScope));
-    }, [state.repositoryScope, state.selectedHash]);
+        sendMessage(messageForCommitDetails(state.selectedHash, state.repository));
+    }, [sendMessage, state.repository, state.selectedHash]);
 
     useEffect(() => {
         if (!state.selectedWorktreePath) { return; }
-        vscodeApi.postMessage(messageForWorktreeDetails(state.selectedWorktreePath, state.repositoryScope));
-    }, [state.repositoryScope, state.selectedWorktreePath]);
+        const worktree = state.worktrees.find((candidate) => candidate.path === state.selectedWorktreePath)?.locator;
+        sendMessage(messageForWorktreeDetails(state.selectedWorktreePath, state.repository, worktree));
+    }, [sendMessage, state.repository, state.selectedWorktreePath, state.worktrees]);
 
     useEffect(() => {
         if (!state.loading || !state.activeGraphRequestId) { return; }
-        const repoId = state.repoId ?? 'default';
         const limit = Math.max(PAGE_LIMIT, state.loadedCount || PAGE_LIMIT);
         const message = messageForGraphDataRequest(
-            repoId,
+            state.repoId,
             state.filters,
             { offset: 0, limit },
-            state.repositoryScope,
+            state.repository,
             state.activeGraphRequestId,
         );
-        vscodeApi.postMessage(message);
-    }, [state.activeGraphRequestId, state.filters, state.loading, state.repoId, state.loadedCount, state.repositoryScope]);
+        sendMessage(message);
+    }, [sendMessage, state.activeGraphRequestId, state.filters, state.loading, state.repoId, state.loadedCount, state.repository]);
 
     useEffect(() => {
         if (!state.loadingMore || !state.activeGraphRequestId) { return; }
-        const repoId = state.repoId ?? 'default';
-        vscodeApi.postMessage(messageForLoadMore(
-            repoId,
+        sendMessage(messageForLoadMore(
+            state.repoId,
             state.filters,
             { offset: state.loadedCount, limit: PAGE_LIMIT },
-            state.repositoryScope,
+            state.repository,
             state.activeGraphRequestId,
         ));
-    }, [state.activeGraphRequestId, state.filters, state.loadedCount, state.loadingMore, state.repoId, state.repositoryScope]);
+    }, [sendMessage, state.activeGraphRequestId, state.filters, state.loadedCount, state.loadingMore, state.repoId, state.repository]);
 
     useEffect(() => {
         if (!state.error) { return; }
@@ -124,27 +128,29 @@ export function GraphApp() {
 
     const handleDiff = useCallback((file: CommitFileChange) => {
         if (state.commitDetails?.kind === 'worktree' && state.commitDetails.path) {
-            vscodeApi.postMessage(messageForOpenWorktreeDiff(
+            const worktree = state.worktrees.find((candidate) => candidate.path === state.commitDetails?.path)?.locator;
+            sendMessage(messageForOpenWorktreeDiff(
                 state.commitDetails.path,
                 file.filePath,
                 file.status,
                 file.origPath,
                 file.isSubmodule,
-                state.repositoryScope,
+                state.repository,
+                worktree,
             ));
             return;
         }
         if (!state.selectedHash) { return; }
-        vscodeApi.postMessage(messageForOpenDiff(
+        sendMessage(messageForOpenDiff(
             file.filePath,
             state.selectedHash,
             file.status,
             file.origPath,
             file.parentHash,
             file.isSubmodule,
-            state.repositoryScope,
+            state.repository,
         ));
-    }, [state.commitDetails, state.repositoryScope, state.selectedHash]);
+    }, [sendMessage, state.commitDetails, state.repository, state.selectedHash, state.worktrees]);
 
     const handleSelectCommit = useCallback((hash: string, mode: 'replace' | 'toggle' | 'range') => {
         if (mode === 'toggle') {
@@ -163,8 +169,17 @@ export function GraphApp() {
     }, []);
 
     const handleContextTarget = useCallback((target: GraphContextTarget) => {
-        vscodeApi.postMessage(messageForGraphContextTarget(contextTargetForScope(target, state.repositoryScope)));
-    }, [state.repositoryScope]);
+        sendMessage(messageForGraphContextTarget(contextTargetForRepository(target, state.repository)));
+    }, [sendMessage, state.repository]);
+
+    const handleSelectSubmodule = useCallback((submodule: GraphSubmoduleInfo) => {
+        dispatch({
+            type: 'selectSubmodule',
+            submodulePath: submodule.path,
+            submoduleLabel: submodule.name,
+            ...(submodule.repository ? { repository: submodule.repository } : {}),
+        });
+    }, []);
 
     const handleMoveGraphFocus = useCallback((currentHash: string, direction: 'previous' | 'next', mode?: 'replace' | 'toggle' | 'range') => {
         const hashes = state.rows.map((row) => row.commit.hash);
@@ -194,7 +209,7 @@ export function GraphApp() {
                         branches={state.branches}
                         worktrees={state.worktrees}
                         submodules={state.submodules}
-                        repositoryScope={state.repositoryScope}
+                        selectedRepository={state.selectedRepository}
                         currentBranch={state.currentBranch}
                         hasRemotes={state.hasRemotes}
                         selectedBranchFilter={state.selectedBranchFilter}
@@ -202,12 +217,12 @@ export function GraphApp() {
                         operationStatus={state.operationStatus}
                         onSelectBranch={(branch) => dispatch({ type: 'setBranchFilter', branch })}
                         onSelectMainRepository={() => dispatch({ type: 'selectMainRepository' })}
-                        onSelectSubmodule={(submodulePath, submoduleLabel) => dispatch({ type: 'selectSubmodule', submodulePath, submoduleLabel })}
-                        onBranchCommand={(command, branch, isRemote) => vscodeApi.postMessage(messageForBranchCommand(command, branch, isRemote, state.repositoryScope))}
-                        onFetch={() => vscodeApi.postMessage(messageForGraphRepositoryCommand('fetch', state.repositoryScope))}
+                        onSelectSubmodule={handleSelectSubmodule}
+                        onBranchCommand={(command, branch, isRemote) => sendMessage(messageForBranchCommand(command, branch, isRemote, state.repository))}
+                        onFetch={() => sendMessage(messageForGraphRepositoryCommand('fetch', state.repository))}
                         onSelectWorktree={handleSelectWorktree}
-                        onOpenWorktree={(path) => vscodeApi.postMessage(messageForWorktreeCommand('openInNewWindow', path, state.repositoryScope))}
-                        onAddWorktree={() => vscodeApi.postMessage(messageForWorktreeCommand('add', undefined, state.repositoryScope))}
+                        onOpenWorktree={(path) => sendMessage(messageForWorktreeCommand('openInNewWindow', path, state.repository, state.worktrees.find((worktree) => worktree.path === path)?.locator))}
+                        onAddWorktree={() => sendMessage(messageForWorktreeCommand('add', undefined, state.repository))}
                         onContextTarget={handleContextTarget}
                     />
                 )}
@@ -227,7 +242,7 @@ export function GraphApp() {
 
                     <GraphOperationNotice
                         operation={state.operationStatus}
-                        onShowOutput={() => vscodeApi.postMessage({ type: 'graph/showOutput' })}
+                        onShowOutput={() => sendMessage({ type: 'graph/showOutput' })}
                         onDismiss={() => {
                             if (state.operationStatus) {
                                 dispatch({ type: 'clearOperationStatus', operationId: state.operationStatus.operationId });
@@ -238,7 +253,7 @@ export function GraphApp() {
                     <ErrorNotice
                         error={state.error}
                         primaryAction={{ label: 'Retry', onClick: () => dispatch({ type: 'refreshRequested' }) }}
-                        secondaryAction={state.error?.details ? { label: 'Show Output', onClick: () => vscodeApi.postMessage({ type: 'graph/showOutput' }) } : undefined}
+                        secondaryAction={state.error?.details ? { label: 'Show Output', onClick: () => sendMessage({ type: 'graph/showOutput' }) } : undefined}
                     />
 
                     {state.loading && state.rows.length === 0 ? (
@@ -270,7 +285,7 @@ export function GraphApp() {
                             onSelectWorktree={handleSelectWorktree}
                             onContextTarget={handleContextTarget}
                             onLoadMore={handleLoadMore}
-                            onBranchDoubleClick={(branch, isRemote) => vscodeApi.postMessage(messageForBranchCheckout(branch, isRemote, state.repositoryScope))}
+                            onBranchDoubleClick={(branch, isRemote) => sendMessage(messageForBranchCheckout(branch, isRemote, state.repository))}
                             onMoveFocus={handleMoveGraphFocus}
                         />
                     ) : null}
@@ -312,12 +327,6 @@ function selectedRangeHashes(hashes: readonly string[], anchorHash: string, focu
     return hashes.slice(start, end + 1);
 }
 
-function contextTargetForScope(target: GraphContextTarget, repositoryScope: GraphRepositoryScope): GraphContextTarget {
-    if (repositoryScope.kind === 'main') { return target; }
-    return { ...target, repositoryScope };
-}
-
-function graphScopeAnimationKey(repositoryScope: GraphRepositoryScope): string {
-    if (repositoryScope.kind === 'main') { return 'main'; }
-    return `submodule:${repositoryScope.path ?? repositoryScope.label ?? ''}`;
+function contextTargetForRepository(target: GraphContextTarget, repository: RepositoryLocator | undefined): GraphContextTarget {
+    return repository ? { ...target, repository } : target;
 }

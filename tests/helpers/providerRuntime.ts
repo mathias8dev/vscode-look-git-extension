@@ -1,6 +1,6 @@
 // Mock helpers for testing WebviewViewProviders
 import * as vscode from 'vscode';
-import { resetMockVscode } from '../mocks/vscode';
+import { resetMockVscode } from '@tests/mocks/vscode';
 
 export function resetVscodeMock(): void {
     resetMockVscode();

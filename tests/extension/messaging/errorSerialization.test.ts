@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createErrorPayload, isAbortError, serializeProtocolError } from '../../../src/extension/messaging/errorSerialization';
+import { createErrorPayload, isAbortError, serializeProtocolError } from '@extension/messaging/errorSerialization';
 
 describe('errorSerialization', () => {
     it('serializes ordinary errors with explicit operation metadata', () => {
@@ -40,7 +40,7 @@ describe('errorSerialization', () => {
         }));
     });
 
-    it('creates a legacy-compatible message plus structured error payload', () => {
+    it('creates top-level and structured protocol error messages', () => {
         expect(createErrorPayload(new Error('failed'), { operation: 'graph/refresh' })).toEqual({
             message: 'failed',
             error: expect.objectContaining({

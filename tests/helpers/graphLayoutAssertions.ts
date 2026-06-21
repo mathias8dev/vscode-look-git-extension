@@ -1,4 +1,4 @@
-import type { GraphRow, LineDef } from '../../src/webview/features/graph/layout/graph-lane-model';
+import type { GraphRow, LineDef } from '@webview/features/graph/layout/graph-lane-model';
 
 export interface FloatingNodeIssue {
     readonly hash: string;

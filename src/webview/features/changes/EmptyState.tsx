@@ -1,4 +1,4 @@
-import { Codicon, type CodiconName } from '../../shared/Codicon';
+import { Codicon, type CodiconName } from '@webview/shared/Codicon';
 
 interface EmptyStateProps {
     readonly title: string;

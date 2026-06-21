@@ -1,8 +1,8 @@
-import type { RequestId, ErrorMessage, ProtocolError } from '../shared/base';
-import type { OperationNoticeActionKind, OperationStatus } from '../shared/operation';
-import type { SerializedRepoContext } from '../shared/repo';
-import type { WebviewFontSizeChangedPush } from '../shared/ui';
-import type { StatusData, CommitMode, StashFileEntry, ConflictState, SubmoduleStatusData, ChangesContextTarget, ChangesSelectionContextTarget } from './types';
+import type { RequestId, ErrorMessage, ProtocolError } from '@protocol/shared/base';
+import type { OperationNoticeActionKind, OperationStatus } from '@protocol/shared/operation';
+import type { SerializedRepoContext } from '@protocol/shared/repo';
+import type { WebviewFontSizeChangedPush } from '@protocol/shared/ui';
+import type { StatusData, CommitMode, StashFileEntry, ConflictState, SubmoduleStatusData, ChangesContextTarget, ChangesSelectionContextTarget } from '@protocol/changes/types';
 
 // ── Extension → Webview (push) ──────────────────────────────────────────────
 
@@ -117,7 +117,6 @@ export type ChangesToolbarCommand =
     | 'openGraph'
     | 'pull'
     | 'push'
-    | 'clone'
     | 'checkout'
     | 'fetch'
     | 'applyPatch'

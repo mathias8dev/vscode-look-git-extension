@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialChangesState, getChangeCount, reduceChangesState, ChangesViewMode, ChangesSortMode, ChangeSelectionMode, submoduleStashKey } from '../../../src/webview/features/changes/changesState';
-import { ChangeSectionId } from '../../../src/webview/features/changes/changeTree';
-import { ConflictState } from '../../../src/protocol/changes/types';
-import { OperationStatus } from '../../../src/protocol/shared/operation';
-import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
+import { createInitialChangesState, getChangeCount, reduceChangesState, ChangesViewMode, ChangesSortMode, ChangeSelectionMode, submoduleStashKey } from '@webview/features/changes/changesState';
+import { ChangeSectionId } from '@webview/features/changes/changeTree';
+import { ConflictState } from '@protocol/changes/types';
+import { OperationStatus } from '@protocol/shared/operation';
+import { SubmoduleStatus } from '@protocol/shared/repo';
 
 describe('changesState', () => {
     it('starts in list loading mode', () => {

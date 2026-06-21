@@ -1,5 +1,5 @@
-import type { StatusData, StatusEntry } from '../../../protocol/changes/types';
-import { SubmoduleStatus } from '../../../protocol/shared/repo';
+import type { StatusData, StatusEntry } from '@protocol/changes/types';
+import { SubmoduleStatus } from '@protocol/shared/repo';
 
 export enum ChangeSectionId {
     Conflicts = 'conflicts',

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ConflictState, RepositoryState, type StatusData } from '../../../protocol/changes/types';
-import { OperationNoticeActionKind, OperationStatus } from '../../../protocol/shared/operation';
+import { ConflictState, RepositoryState, type StatusData } from '@protocol/changes/types';
+import { OperationNoticeActionKind, OperationStatus } from '@protocol/shared/operation';
 import {
     changedFiles,
     conflictFiles,
@@ -10,10 +10,10 @@ import {
     stashFiles,
     submodules,
     submoduleStatusData,
-} from '../../storybookFixtures';
-import { ChangeSectionId } from './changeTree';
-import { ChangesApp } from './ChangesApp';
-import { ChangesSortMode, ChangesViewMode, createInitialChangesState, submoduleStashKey, type ChangesState } from './changesState';
+} from '@webview/storybookFixtures';
+import { ChangeSectionId } from '@webview/features/changes/changeTree';
+import { ChangesApp } from '@webview/features/changes/ChangesApp';
+import { ChangesSortMode, ChangesViewMode, createInitialChangesState, submoduleStashKey, type ChangesState } from '@webview/features/changes/changesState';
 
 const status = {
     repositoryState: RepositoryState.Available,

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { GitCliBackend } from '../../../src/extension/git/git-cli-backend';
-import { createTempGitRepo, type TempGitRepo } from '../../helpers/gitRepo';
+import { GitCliBackend } from '@extension/git/git-cli-backend';
+import { createTempGitRepo, type TempGitRepo } from '@tests/helpers/gitRepo';
 
 describe('GitCliBackend', () => {
     const repos: TempGitRepo[] = [];

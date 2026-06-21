@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { commitDetails, noop } from '../../storybookFixtures';
-import { CommitDetailsPanel } from './CommitDetailsPanel';
+import { commitDetails, noop } from '@webview/storybookFixtures';
+import { CommitDetailsPanel } from '@webview/features/graph/CommitDetailsPanel';
 
 const meta = {
     title: 'Graph/CommitDetailsPanel',

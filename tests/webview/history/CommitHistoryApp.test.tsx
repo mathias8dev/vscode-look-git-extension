@@ -2,10 +2,10 @@
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { HistoryCommit, HistoryCommitFile, HistoryContextTarget } from '../../../src/protocol/history/types';
-import { HistoryCommitSelectionMode, type HistoryState } from '../../../src/webview/features/history/historyState';
-import { CommitHistoryApp } from '../../../src/webview/features/history/CommitHistoryApp';
-import { createInitialHistoryState } from '../../../src/webview/features/history/historyState';
+import type { HistoryCommit, HistoryCommitFile, HistoryContextTarget } from '@protocol/history/types';
+import { HistoryCommitSelectionMode, type HistoryState } from '@webview/features/history/historyState';
+import { CommitHistoryApp } from '@webview/features/history/CommitHistoryApp';
+import { createInitialHistoryState } from '@webview/features/history/historyState';
 
 describe('CommitHistoryApp', () => {
     it('renders commits and dispatches selection', () => {

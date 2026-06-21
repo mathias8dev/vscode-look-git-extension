@@ -1,5 +1,5 @@
-import type { CommitFileChange } from '../../../protocol/graph/types';
-import { iconKindForPath, type WebviewFileIconKind } from '../../shared/fileIconModel';
+import type { CommitFileChange } from '@protocol/graph/types';
+import { iconKindForPath, type WebviewFileIconKind } from '@webview/shared/fileIconModel';
 
 export type GraphFileIconKind = WebviewFileIconKind;
 

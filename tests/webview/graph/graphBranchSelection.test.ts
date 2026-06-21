@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { selectBranchFilter } from '../../../src/webview/features/graph/graphBranchSelection';
+import { selectBranchFilter } from '@webview/features/graph/graphBranchSelection';
 
 describe('graphBranchSelection', () => {
     it('keeps branch selection idempotent instead of toggling it off', () => {

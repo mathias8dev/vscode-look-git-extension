@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { SemanticGitOperation } from '../../../src/application/ports/git-operation';
-import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '../../../src/application/ports/git-runtime';
-import { RuntimeGitRepository } from '../../../src/extension/git/runtime-git-repository';
+import type { SemanticGitOperation } from '@application/ports/git-operation';
+import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '@application/ports/git-runtime';
+import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
 
 describe('RuntimeGitRepository', () => {
     it('delegates repository semantic actions through GitRuntime', async () => {

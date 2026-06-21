@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { messageForGenerateCommitMessage, messageForGenerateSubmoduleCommitMessage } from '../../../src/webview/features/changes/commit-message-commands';
+import { messageForGenerateCommitMessage, messageForGenerateSubmoduleCommitMessage } from '@webview/features/changes/commit-message-commands';
 
 describe('commit message commands', () => {
     it('creates correlated commit message generation requests', () => {

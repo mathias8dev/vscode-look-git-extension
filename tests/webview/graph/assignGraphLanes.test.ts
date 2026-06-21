@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { GraphCommit } from '../../../src/protocol/graph/types';
-import { assignLanes, getMaxLane, type GraphRow } from '../../../src/webview/features/graph/layout/assignGraphLanes';
-import { expectItem } from '../../helpers/assertions';
-import { findAdjacentDisconnectedSameLaneIssues, findCommitLanePassThroughIssues, findFloatingNodeIssues, findLaneContinuityIssues, findNonVisibleLineTargetIssues } from '../../helpers/graphLayoutAssertions';
+import type { GraphCommit } from '@protocol/graph/types';
+import { assignLanes, getMaxLane, type GraphRow } from '@webview/features/graph/layout/assignGraphLanes';
+import { expectItem } from '@tests/helpers/assertions';
+import { findAdjacentDisconnectedSameLaneIssues, findCommitLanePassThroughIssues, findFloatingNodeIssues, findLaneContinuityIssues, findNonVisibleLineTargetIssues } from '@tests/helpers/graphLayoutAssertions';
 
 function commit(hash: string, parents: string[] = [], refs: string[] = []): GraphCommit {
     return {

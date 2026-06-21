@@ -1,6 +1,6 @@
-import type { ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
-import { ChangeRowAction, messageForRowAction, type ChangeActionDescriptor } from './changeCommands';
-import { ChangeSectionId, type ChangeListItem } from './changeTree';
+import type { ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
+import { ChangeRowAction, messageForRowAction, type ChangeActionDescriptor } from '@webview/features/changes/changeCommands';
+import { ChangeSectionId, type ChangeListItem } from '@webview/features/changes/changeTree';
 
 export enum ChangeSelectionAction {
     Open = 'open',

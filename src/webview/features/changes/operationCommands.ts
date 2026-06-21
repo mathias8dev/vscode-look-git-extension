@@ -1,5 +1,5 @@
-import type { ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
-import { ConflictState } from '../../../protocol/changes/types';
+import type { ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
+import { ConflictState } from '@protocol/changes/types';
 
 export type ActiveConflictState = Exclude<ConflictState, ConflictState.None>;
 

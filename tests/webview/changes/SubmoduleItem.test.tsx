@@ -2,12 +2,12 @@
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { SubmoduleStatusData } from '../../../src/protocol/changes/types';
-import { ConflictState } from '../../../src/protocol/changes/types';
-import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
-import { OperationAction } from '../../../src/webview/features/changes/operationCommands';
-import { SubmoduleAction } from '../../../src/webview/features/changes/submoduleCommands';
-import { SubmoduleItem } from '../../../src/webview/features/changes/SubmoduleItem';
+import type { SubmoduleStatusData } from '@protocol/changes/types';
+import { ConflictState } from '@protocol/changes/types';
+import { SubmoduleStatus } from '@protocol/shared/repo';
+import { OperationAction } from '@webview/features/changes/operationCommands';
+import { SubmoduleAction } from '@webview/features/changes/submoduleCommands';
+import { SubmoduleItem } from '@webview/features/changes/SubmoduleItem';
 
 describe('SubmoduleItem', () => {
     it('renders one compact empty state instead of empty sections', () => {

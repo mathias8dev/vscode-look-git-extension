@@ -1,4 +1,5 @@
-import type { GraphFilters, GraphRepositoryScope } from '../../../protocol/graph/types';
+import type { GraphFilters } from '@protocol/graph/types';
+import type { GraphRepositorySelection } from '@webview/features/graph/graphRepositorySelection';
 
 export interface GraphEmptyStateModel {
     readonly title: string;
@@ -9,7 +10,7 @@ export interface GraphEmptyStateModel {
 export interface GraphEmptyStateInput {
     readonly filters: GraphFilters;
     readonly selectedBranchFilter: string | undefined;
-    readonly repositoryScope: GraphRepositoryScope;
+    readonly selectedRepository: GraphRepositorySelection;
 }
 
 export function graphEmptyStateModel(input: GraphEmptyStateInput): GraphEmptyStateModel {
@@ -21,7 +22,7 @@ export function graphEmptyStateModel(input: GraphEmptyStateInput): GraphEmptySta
         };
     }
 
-    if (input.repositoryScope.kind === 'submodule') {
+    if (input.selectedRepository.kind === 'submodule') {
         return {
             title: 'No commits in this submodule yet',
             subtitle: 'Create the initial commit from the submodule changes.',

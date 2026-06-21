@@ -1,5 +1,5 @@
-import { OperationNoticeActionKind } from '../../protocol/shared/operation';
-import type { OperationNoticeAction } from './OperationNotice';
+import { OperationNoticeActionKind } from '@protocol/shared/operation';
+import type { OperationNoticeAction } from '@webview/shared/OperationNotice';
 
 interface OperationNoticeActionHandlers {
     readonly onShowOutput?: () => void;

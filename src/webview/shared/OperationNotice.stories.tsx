@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { OperationStatus } from '../../protocol/shared/operation';
-import { OperationNotice } from './OperationNotice';
+import { OperationStatus } from '@protocol/shared/operation';
+import { OperationNotice } from '@webview/shared/OperationNotice';
 
 const noop = () => undefined;
 

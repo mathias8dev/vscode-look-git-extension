@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { ConflictState } from '../../../src/protocol/changes/types';
-import { ChangesSortMode } from '../../../src/webview/features/changes/changesState';
-import { buildChangeSections } from '../../../src/webview/features/changes/changeTree';
-import { filterAndSortSections, flattenedItems, selectedItemsForIds } from '../../../src/webview/features/changes/changeViewModel';
+import { ConflictState } from '@protocol/changes/types';
+import { ChangesSortMode } from '@webview/features/changes/changesState';
+import { buildChangeSections } from '@webview/features/changes/changeTree';
+import { filterAndSortSections, flattenedItems, selectedItemsForIds } from '@webview/features/changes/changeViewModel';
 
 const sections = buildChangeSections({
     conflicts: [],

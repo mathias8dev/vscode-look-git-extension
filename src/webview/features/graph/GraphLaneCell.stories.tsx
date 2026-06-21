@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { graphRows } from '../../storybookFixtures';
-import { GraphLaneCell } from './GraphLaneCell';
+import { graphRows } from '@webview/storybookFixtures';
+import { GraphLaneCell } from '@webview/features/graph/GraphLaneCell';
 
 const meta = {
     title: 'Graph/GraphLaneCell',

@@ -1,7 +1,7 @@
-import type { GitCommit, GitFileChange } from '../../core/git/domain/GitCommit';
-import type { Page, PageRequest } from '../../core/git/domain/Page';
-import type { GitBranch, GitTag } from '../../core/git/domain/GitStatus';
-import type { GitSubmodule, GitWorktree } from '../../core/git/domain/GitWorktree';
+import type { GitCommit, GitFileChange } from '@core/git/domain/GitCommit';
+import type { Page, PageRequest } from '@core/git/domain/Page';
+import type { GitBranch, GitTag } from '@core/git/domain/GitStatus';
+import type { GitSubmodule, GitWorktree } from '@core/git/domain/GitWorktree';
 import type {
     AddWorktreeInput,
     CommitGraphQuery,
@@ -9,11 +9,11 @@ import type {
     FileSelection,
     RefCompareOptions,
     SubmoduleUpdateOptions,
-} from '../../application/ports/git-capabilities';
-import type { GitRepository } from '../../application/ports/git-topology';
-import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime, type RepositoryKind } from '../../application/ports/git-runtime';
-import type { SemanticGitOperation } from '../../application/ports/git-operation';
-import { HybridGitRuntime } from './hybrid-git-runtime';
+} from '@application/ports/git-capabilities';
+import type { GitRepository } from '@application/ports/git-topology';
+import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime, type RepositoryKind } from '@application/ports/git-runtime';
+import type { SemanticGitOperation } from '@application/ports/git-operation';
+import { HybridGitRuntime } from '@extension/git/hybrid-git-runtime';
 
 export interface RuntimeGitRepositoryInput {
     readonly repoId: string;
@@ -30,6 +30,7 @@ export class RuntimeGitRepository implements GitRepository {
     readonly gitDir: string;
     readonly kind: RepositoryKind;
     readonly label: string;
+    readonly parentRepositoryId?: string;
 
     private readonly context: GitExecutionContext;
 
@@ -42,6 +43,7 @@ export class RuntimeGitRepository implements GitRepository {
         this.gitDir = input.gitDir;
         this.kind = input.kind;
         this.label = input.label;
+        this.parentRepositoryId = input.parentRepositoryId;
         this.context = {
             cwd: input.cwd,
             gitDir: input.gitDir,

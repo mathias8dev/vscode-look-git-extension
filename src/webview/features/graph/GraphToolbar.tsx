@@ -1,6 +1,6 @@
 import { useRef } from 'react';
-import type { BranchInfo, GraphFilters } from '../../../protocol/graph/types';
-import { SearchInput } from '../../shared/SearchInput';
+import type { BranchInfo, GraphFilters } from '@protocol/graph/types';
+import { SearchInput } from '@webview/shared/SearchInput';
 
 interface GraphToolbarProps {
     readonly filters: GraphFilters;

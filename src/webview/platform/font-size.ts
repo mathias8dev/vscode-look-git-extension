@@ -1,4 +1,4 @@
-import type { WebviewFontSizeChangedPush } from '../../protocol/shared/ui';
+import type { WebviewFontSizeChangedPush } from '@protocol/shared/ui';
 
 export function isWebviewFontSizeMessage(message: unknown): message is WebviewFontSizeChangedPush {
     if (!message || typeof message !== 'object') { return false; }

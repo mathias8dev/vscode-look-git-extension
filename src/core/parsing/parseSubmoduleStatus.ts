@@ -1,4 +1,4 @@
-import type { GitSubmodule } from '../git/domain/GitWorktree';
+import type { GitSubmodule } from '@core/git/domain/GitWorktree';
 
 /** Parse the output of `git submodule status`. Returns one entry per submodule. */
 export function parseSubmoduleStatus(output: string): GitSubmodule[] {

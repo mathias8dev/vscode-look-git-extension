@@ -1,29 +1,28 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import type { GitRepository } from '../../application/ports/git-repository';
-import type { GitStatusEntry } from '../../core/git/domain/GitStatus';
-import type { GitSubmodule } from '../../core/git/domain/GitWorktree';
-import type { ChangesOperationStatusPush, ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage, ChangesExtensionToWebviewMessage } from '../../protocol/changes/messages';
-import { CommitMode, ConflictState, RepositoryState } from '../../protocol/changes/types';
-import type { StatusData, StatusEntry } from '../../protocol/changes/types';
-import type { ErrorCode, RequestId } from '../../protocol/shared/base';
-import { OperationStatus } from '../../protocol/shared/operation';
-import { SubmoduleStatus } from '../../protocol/shared/repo';
-import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
-import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
-import type { GitRepository as RuntimeGitRepository, Worktree } from '../../application/ports/git-topology';
-import { confirmTypedPhrase, showModalWarningMessage } from '../utils/confirmation';
-import { showBranchNameInput } from '../utils/branch-name-input';
-import { createReadonlyDocumentUri } from '../utils/readonly-diff-documents';
-import { openStatusGitlinkDiff } from '../utils/gitlink-diff';
-import { toProtocolSubmoduleStatus, toRepositoryLocator, toWorktreeLocator } from '../mapping/toProtocol';
-import { GenerateCommitMessageUseCase } from '../../application/usecases/changes/generate-commit-message';
-import { VscodeLanguageModelCommitMessageGenerator } from '../adapters/vscode/vscode-language-model-commit-message-generator';
-import { ScopedGitRepository } from '../git/scoped-git-repository';
-import { createErrorPayload, isAbortError } from './errorSerialization';
-import { notifyConflictsDetected, openAllThreeWayMergeEditors, openThreeWayMergeEditor } from '../utils/merge-editor';
-import { operationActionsForStatus } from '../utils/operation-feedback';
-import { stableRepoContextId } from '../repositories/repo-context-id';
+import type { GitStash, GitStatus, GitStatusEntry } from '@core/git/domain/GitStatus';
+import type { GitSubmodule } from '@core/git/domain/GitWorktree';
+import type { ChangesOperationStatusPush, ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage, ChangesExtensionToWebviewMessage } from '@protocol/changes/messages';
+import { CommitMode, ConflictState, RepositoryState } from '@protocol/changes/types';
+import type { StatusData, StatusEntry } from '@protocol/changes/types';
+import type { ErrorCode, RequestId } from '@protocol/shared/base';
+import { OperationStatus } from '@protocol/shared/operation';
+import { SubmoduleStatus } from '@protocol/shared/repo';
+import type { ActiveRepositoryAccessor } from '@extension/repositories/ActiveRepositoryRegistry';
+import type { RepositoryRegistry } from '@extension/repositories/RepositoryRegistry';
+import type { GitRepository as RuntimeGitRepository, Worktree } from '@application/ports/git-topology';
+import { confirmTypedPhrase, showModalWarningMessage } from '@extension/utils/confirmation';
+import { createReadonlyDocumentUri, openReadonlyDiffDocument } from '@extension/utils/readonly-diff-documents';
+import { toProtocolSubmoduleStatus } from '@extension/mapping/toProtocol';
+import { GenerateCommitMessageUseCase } from '@application/usecases/changes/generate-commit-message';
+import { VscodeLanguageModelCommitMessageGenerator } from '@extension/adapters/vscode/vscode-language-model-commit-message-generator';
+import { createErrorPayload, isAbortError } from '@extension/messaging/errorSerialization';
+import { notifyRuntimeConflictsDetected, openAllRuntimeThreeWayMergeEditors, openRuntimeThreeWayMergeEditor } from '@extension/utils/runtime-merge-editor';
+import { operationActionsForStatus } from '@extension/utils/operation-feedback';
+import { requireRuntimeLocator } from '@extension/repositories/runtime-repository-locator';
+import { currentLocalBranchName } from '@extension/git/current-branch';
+import { requireRemoteBranchName } from '@extension/git/remote-branch';
+import { inputBranchName, inputText, pickBranch, pickLocalBranch, pickRef, pickRemote, pickRemoteBranch, pickStash, pickTag } from '@extension/git/reference-pickers';
 
 type PostMessage = (msg: ChangesExtensionToWebviewMessage) => void;
 type RefreshCallback = () => Promise<void>;
@@ -96,8 +95,8 @@ export class ChangesMessageRouter {
                 return;
         }
 
-        const repo = this.repositories.requireRepository();
         const currentRuntimeWorktree = () => this.requireCurrentRuntimeWorktree();
+        const repoRoot = () => this.requireCurrentRepoRoot();
 
         switch (msg.type) {
 
@@ -272,7 +271,11 @@ export class ChangesMessageRouter {
                 const controller = new AbortController();
                 this.commitMessageGenerationAbortController = controller;
                 try {
-                    const result = await this.generateCommitMessage.execute(repo, controller.signal);
+                    const result = await this.generateCommitMessage.execute(
+                        this.requireCurrentRuntimeRepository(),
+                        this.requireCurrentRuntimeWorktree(),
+                        controller.signal,
+                    );
                     this.postMessage({
                         type: 'changes/generatedCommitMessage',
                         requestId: msg.requestId,
@@ -294,12 +297,16 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/generateSubmoduleCommitMessage': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
                 this.submoduleCommitMessageGenerationAbortControllers.get(submodulePath)?.abort();
                 const controller = new AbortController();
                 this.submoduleCommitMessageGenerationAbortControllers.set(submodulePath, controller);
                 try {
-                    const result = await this.generateCommitMessage.execute(new ScopedGitRepository(repo, submodulePath), controller.signal);
+                    const result = await this.generateCommitMessage.execute(
+                        this.requireRuntimeSubmoduleRepository(submodulePath),
+                        this.requireRuntimeSubmoduleWorktree(submodulePath),
+                        controller.signal,
+                    );
                     this.postMessage({
                         type: 'changes/submoduleGeneratedCommitMessage',
                         requestId: msg.requestId,
@@ -322,7 +329,7 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/submoduleCommit': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
                 const message = msg.message.trim();
                 if (!message) {
                     this.postMessage({
@@ -337,7 +344,7 @@ export class ChangesMessageRouter {
                     });
                     return;
                 }
-                const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(repo, submodulePath);
+                const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(submodulePath);
                 try {
                     switch (msg.mode) {
                         case CommitMode.Amend:
@@ -375,27 +382,26 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/submoduleToolbarCommand': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
                 await this.handleToolbarCommandForRepo(
-                    new ScopedGitRepository(repo, submodulePath),
                     msg.command,
                     {
-                        repository: this.runtimeSubmoduleRepository(repo, submodulePath),
-                        worktree: this.runtimeSubmoduleWorktree(repo, submodulePath),
+                        repository: this.runtimeSubmoduleRepository(submodulePath),
+                        worktree: this.runtimeSubmoduleWorktree(submodulePath),
                     },
                 );
                 break;
             }
 
             case 'changes/openFile': {
-                const uri = vscode.Uri.file(path.join(repo.cwd, msg.filePath));
+                const uri = vscode.Uri.file(path.join(repoRoot(), msg.filePath));
                 await vscode.commands.executeCommand('vscode.open', uri);
                 break;
             }
 
             case 'changes/openSubmodule': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.filePath);
-                const uri = vscode.Uri.file(path.join(repo.cwd, submodulePath));
+                const submodulePath = await this.requireKnownSubmodulePath(msg.filePath);
+                const uri = vscode.Uri.file(path.join(repoRoot(), submodulePath));
                 const choice = await vscode.window.showQuickPick(
                     ['Open in New Window', 'Open in Current Window'],
                     { placeHolder: 'Open submodule' },
@@ -406,25 +412,25 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/openMergeEditor': {
-                await openThreeWayMergeEditor(repo, msg.filePath);
+                await openRuntimeThreeWayMergeEditor(this.requireCurrentRuntimeWorktree(), msg.filePath);
                 break;
             }
 
             case 'changes/openFirstMergeEditor': {
-                await this.openFirstMergeEditor(repo);
+                await this.openFirstMergeEditor(this.requireCurrentRuntimeWorktree());
                 break;
             }
 
             case 'changes/openAllMergeEditors': {
-                await this.openAllMergeEditors(repo);
+                await this.openAllMergeEditors(this.requireCurrentRuntimeWorktree());
                 break;
             }
 
             case 'changes/openDiff': {
                 if (msg.isSubmodule) {
-                    await openSubmoduleGitlinkDiff(repo, msg);
+                    await openSubmoduleGitlinkDiff(this.requireCurrentRuntimeWorktree(), msg);
                 } else {
-                    await openStatusDiff(repo, msg, {
+                    await openStatusDiff(repoRoot(), msg, {
                         repository: this.currentRuntimeRepository(),
                         worktree: this.currentRuntimeWorktree(),
                     });
@@ -433,57 +439,57 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/openSubmoduleDiff': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                await openStatusDiff(new ScopedGitRepository(repo, submodulePath), msg, {
-                    repository: this.runtimeSubmoduleRepository(repo, submodulePath),
-                    worktree: this.runtimeSubmoduleWorktree(repo, submodulePath),
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
+                await openStatusDiff(this.requireRuntimeSubmoduleWorktree(submodulePath).path, msg, {
+                    repository: this.runtimeSubmoduleRepository(submodulePath),
+                    worktree: this.runtimeSubmoduleWorktree(submodulePath),
                 });
                 break;
             }
 
             case 'changes/submoduleOpenFile': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(path.join(repo.cwd, submodulePath, msg.filePath)));
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
+                await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(path.join(repoRoot(), submodulePath, msg.filePath)));
                 break;
             }
 
             case 'changes/submoduleStageFile': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).stage([msg.filePath]);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
+                await this.requireRuntimeSubmoduleWorktree(submodulePath).stage([msg.filePath]);
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleStageFiles': {
                 if (msg.filePaths.length === 0) { break; }
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).stage(msg.filePaths);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
+                await this.requireRuntimeSubmoduleWorktree(submodulePath).stage(msg.filePaths);
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleUnstageFile': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).unstage([msg.filePath]);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
+                await this.requireRuntimeSubmoduleWorktree(submodulePath).unstage([msg.filePath]);
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleUnstageFiles': {
                 if (msg.filePaths.length === 0) { break; }
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).unstage(msg.filePaths);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
+                await this.requireRuntimeSubmoduleWorktree(submodulePath).unstage(msg.filePaths);
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleDiscardFile': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
                 const choice = await showModalWarningMessage(
                     `Discard changes to "${submodulePath}/${msg.filePath}"? This cannot be undone.`, 'Discard',
                 );
                 if (choice === 'Discard') {
-                    await discardRuntimeFile(this.requireRuntimeSubmoduleWorktree(repo, submodulePath), msg.filePath);
+                    await discardRuntimeFile(this.requireRuntimeSubmoduleWorktree(submodulePath), msg.filePath);
                     await this.refresh();
                 }
                 break;
@@ -491,14 +497,14 @@ export class ChangesMessageRouter {
 
             case 'changes/submoduleDiscardFiles': {
                 if (msg.filePaths.length === 0) { break; }
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
                 const count = msg.filePaths.length;
                 const choice = await showModalWarningMessage(
                     `Discard changes to ${count} file${count === 1 ? '' : 's'} inside "${submodulePath}"? This cannot be undone.`,
                     'Discard',
                 );
                 if (choice === 'Discard') {
-                    const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(repo, submodulePath);
+                    const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(submodulePath);
                     for (const filePath of msg.filePaths) {
                         await discardRuntimeFile(runtimeSubmoduleWorktree, filePath);
                     }
@@ -508,40 +514,40 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/submoduleOpenMergeEditor': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                await openThreeWayMergeEditor(new ScopedGitRepository(repo, submodulePath), msg.filePath);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
+                await openRuntimeThreeWayMergeEditor(this.requireRuntimeSubmoduleWorktree(submodulePath), msg.filePath);
                 break;
             }
 
             case 'changes/submoduleOpenFirstMergeEditor': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                await this.openFirstMergeEditor(new ScopedGitRepository(repo, submodulePath));
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
+                await this.openFirstMergeEditor(this.requireRuntimeSubmoduleWorktree(submodulePath));
                 break;
             }
 
             case 'changes/submoduleOpenAllMergeEditors': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                await this.openAllMergeEditors(new ScopedGitRepository(repo, submodulePath));
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
+                await this.openAllMergeEditors(this.requireRuntimeSubmoduleWorktree(submodulePath));
                 break;
             }
 
             case 'changes/submoduleMarkResolved': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).markResolved([msg.filePath]);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
+                await this.requireRuntimeSubmoduleWorktree(submodulePath).markResolved([msg.filePath]);
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleAcceptOurs': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).acceptOurs([msg.filePath]);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
+                await this.requireRuntimeSubmoduleWorktree(submodulePath).acceptOurs([msg.filePath]);
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleAcceptTheirs': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).acceptTheirs([msg.filePath]);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
+                await this.requireRuntimeSubmoduleWorktree(submodulePath).acceptTheirs([msg.filePath]);
                 await this.refresh();
                 break;
             }
@@ -606,8 +612,8 @@ export class ChangesMessageRouter {
             case 'changes/submoduleStashDrop':
             case 'changes/getSubmoduleStashFiles':
             case 'changes/openSubmoduleStashDiff': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                const runtimeSubmoduleWorktree = () => this.requireRuntimeSubmoduleWorktree(repo, submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
+                const runtimeSubmoduleWorktree = () => this.requireRuntimeSubmoduleWorktree(submodulePath);
                 switch (msg.type) {
                     case 'changes/submoduleStash':
                         await runtimeSubmoduleWorktree().stash(msg.message, {});
@@ -650,7 +656,7 @@ export class ChangesMessageRouter {
                     case 'changes/openSubmoduleStashDiff':
                         await openStashDiff(
                             msg,
-                            { repository: this.runtimeSubmoduleRepository(repo, submodulePath) },
+                            { repository: this.runtimeSubmoduleRepository(submodulePath) },
                         );
                         break;
                 }
@@ -658,8 +664,8 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/submoduleUpdate': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.path);
-                await repo.updateSubmodule(submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.path);
+                await this.requireCurrentRuntimeRepository().updateSubmodule(submodulePath, { init: true, recursive: true });
                 await this.refresh();
                 break;
             }
@@ -670,34 +676,37 @@ export class ChangesMessageRouter {
                     'Update All',
                 );
                 if (choice === 'Update All') {
-                    await repo.updateAllSubmodules();
+                    const runtimeRepository = this.requireCurrentRuntimeRepository();
+                    for (const submodule of await runtimeRepository.listSubmodules()) {
+                        await runtimeRepository.updateSubmodule(submodule.path, { init: true, recursive: true });
+                    }
                     await this.refresh();
                 }
                 break;
             }
 
             case 'changes/submoduleStageAll': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).stageAll();
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
+                await this.requireRuntimeSubmoduleWorktree(submodulePath).stageAll();
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleUnstageAll': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                await this.requireRuntimeSubmoduleWorktree(repo, submodulePath).unstageAll();
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
+                await this.requireRuntimeSubmoduleWorktree(submodulePath).unstageAll();
                 await this.refresh();
                 break;
             }
 
             case 'changes/submoduleDiscardAll': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
                 const confirmed = await confirmTypedPhrase(
                     `Discard all changes inside "${submodulePath}"? This cannot be undone.`,
                     'DISCARD ALL',
                 );
                 if (confirmed) {
-                    const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(repo, submodulePath);
+                    const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(submodulePath);
                     const status = await runtimeSubmoduleWorktree.getStatus();
                     const stagedPaths = status.staged.map((entry) => entry.filePath);
                     if (stagedPaths.length > 0) { await runtimeSubmoduleWorktree.unstage(stagedPaths); }
@@ -710,12 +719,12 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/submoduleAcceptAllTheirs': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
                 const choice = await showModalWarningMessage(
                     `Accept incoming changes for all conflicts inside "${submodulePath}"?`, 'Accept All Theirs',
                 );
                 if (choice !== 'Accept All Theirs') { break; }
-                const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(repo, submodulePath);
+                const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(submodulePath);
                 const status = await runtimeSubmoduleWorktree.getStatus();
                 const conflictPaths = status.conflicts.map((entry) => entry.filePath);
                 await runtimeSubmoduleWorktree.acceptTheirs(conflictPaths);
@@ -724,8 +733,8 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/getSubmoduleStatus': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.path);
-                const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(repo, submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.path);
+                const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(submodulePath);
                 const [status, stashPage] = await Promise.all([
                     runtimeSubmoduleWorktree.getStatus(),
                     runtimeSubmoduleWorktree.listStashes({ limit: Number.MAX_SAFE_INTEGER }),
@@ -770,8 +779,8 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/submoduleContinueOp': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
-                const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(repo, submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
+                const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(submodulePath);
                 if (msg.conflictState === ConflictState.Merge) {
                     await runtimeSubmoduleWorktree.continueMerge();
                 } else {
@@ -782,11 +791,11 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/submoduleAbortOp': {
-                const submodulePath = await this.requireKnownSubmodulePath(repo, msg.submodulePath);
+                const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
                 const opName = msg.conflictState === ConflictState.Merge ? 'merge' : 'rebase';
                 const choice = await showModalWarningMessage(`Abort the current ${opName} in "${submodulePath}"?`, 'Abort');
                 if (choice === 'Abort') {
-                    const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(repo, submodulePath);
+                    const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(submodulePath);
                     if (msg.conflictState === ConflictState.Merge) {
                         await runtimeSubmoduleWorktree.abortMerge();
                     } else {
@@ -803,79 +812,75 @@ export class ChangesMessageRouter {
     }
 
     private currentRuntimeWorktree(): Worktree | undefined {
-        const context = this.repositories.currentContext;
-        if (!context || !this.runtimeRepositories) { return undefined; }
         try {
-            return this.runtimeRepositories.resolveWorktree(toWorktreeLocator(context));
+            return requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext).worktree();
         } catch {
             return undefined;
         }
     }
 
     private requireCurrentRuntimeWorktree(): Worktree {
-        const worktree = this.currentRuntimeWorktree();
-        if (!worktree) {
-            throw new Error('Runtime Worktree is required for this git operation.');
-        }
-        return worktree;
+        return requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext).worktree();
     }
 
     private currentRuntimeRepository(): RuntimeGitRepository | undefined {
+        try {
+            return requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext).repository();
+        } catch {
+            return undefined;
+        }
+    }
+
+    private requireCurrentRuntimeRepository(): RuntimeGitRepository {
+        return requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext).repository();
+    }
+
+    private requireCurrentRepoRoot(): string {
         const context = this.repositories.currentContext;
-        if (!context || !this.runtimeRepositories) { return undefined; }
+        if (!context) { throw new Error('Runtime repository context is required for this operation.'); }
+        return context.cwd;
+    }
+
+    private runtimeSubmoduleWorktree(submodulePath: string): Worktree | undefined {
         try {
-            return this.runtimeRepositories.resolveRepository(toRepositoryLocator(context));
+            return requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext).submoduleWorktree(submodulePath);
         } catch {
             return undefined;
         }
     }
 
-    private runtimeSubmoduleWorktree(repo: GitRepository, submodulePath: string): Worktree | undefined {
-        if (!this.runtimeRepositories) { return undefined; }
-        const submoduleCwd = path.resolve(repo.cwd, submodulePath);
-        const submoduleId = stableRepoContextId(submoduleCwd);
-        try {
-            return this.runtimeRepositories.resolveWorktree({
-                repoId: submoduleId,
-                worktreeId: submoduleId,
-                path: submoduleCwd,
-            });
-        } catch {
-            return undefined;
-        }
-    }
-
-    private requireRuntimeSubmoduleWorktree(repo: GitRepository, submodulePath: string): Worktree {
-        const worktree = this.runtimeSubmoduleWorktree(repo, submodulePath);
+    private requireRuntimeSubmoduleWorktree(submodulePath: string): Worktree {
+        const worktree = this.runtimeSubmoduleWorktree(submodulePath);
         if (!worktree) {
             throw new Error(`Runtime Worktree is required for submodule "${submodulePath}".`);
         }
         return worktree;
     }
 
-    private runtimeSubmoduleRepository(repo: GitRepository, submodulePath: string): RuntimeGitRepository | undefined {
-        if (!this.runtimeRepositories) { return undefined; }
-        const submoduleCwd = path.resolve(repo.cwd, submodulePath);
-        const submoduleId = stableRepoContextId(submoduleCwd);
+    private runtimeSubmoduleRepository(submodulePath: string): RuntimeGitRepository | undefined {
         try {
-            return this.runtimeRepositories.resolveRepository({
-                repoId: submoduleId,
-                kind: 'submodule',
-                path: submoduleCwd,
-            });
+            return requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext).submoduleRepository(submodulePath);
         } catch {
             return undefined;
         }
     }
 
-    async handleToolbarCommand(command: ChangesToolbarCommand): Promise<void> {
-        if (await this.handleGlobalToolbarCommand(command)) { return; }
-        await this.handleToolbarCommandForRepo(this.repositories.requireRepository(), command);
+    private requireRuntimeSubmoduleRepository(submodulePath: string): RuntimeGitRepository {
+        const repository = this.runtimeSubmoduleRepository(submodulePath);
+        if (!repository) {
+            throw new Error(`Runtime GitRepository is required for submodule "${submodulePath}".`);
+        }
+        return repository;
     }
 
-    async handleToolbarCommandForRepo(repo: GitRepository, command: ChangesToolbarCommand, runtimeTargets?: ToolbarRuntimeTargets): Promise<void> {
+    async handleToolbarCommand(command: ChangesToolbarCommand): Promise<void> {
         if (await this.handleGlobalToolbarCommand(command)) { return; }
-        const canUseCurrentRuntime = repo === this.repositories.currentRepository;
+        await this.handleToolbarCommandForRepo(command);
+    }
+
+    async handleToolbarCommandForRepo(command: ChangesToolbarCommand, runtimeTargets?: ToolbarRuntimeTargets): Promise<void> {
+        if (await this.handleGlobalToolbarCommand(command)) { return; }
+        const canUseCurrentRuntime = runtimeTargets === undefined;
         const runtimeRepository = runtimeTargets?.repository ?? (canUseCurrentRuntime ? this.currentRuntimeRepository() : undefined);
         const runtimeWorktree = runtimeTargets?.worktree ?? (canUseCurrentRuntime ? this.currentRuntimeWorktree() : undefined);
         const requireRuntimeRepository = () => {
@@ -889,7 +894,7 @@ export class ChangesMessageRouter {
         switch (command) {
             case 'pull':
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, () => requireRuntimeWorktree().pull({}), 'Pull stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => requireRuntimeWorktree().pull({}), 'Pull stopped with conflicts.'));
                 return;
             case 'push':
                 await this.runTrackedToolbarOperation(command, async () => {
@@ -916,21 +921,21 @@ export class ChangesMessageRouter {
                 return;
             case 'sync':
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, async () => {
+                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), async () => {
                         await requireRuntimeWorktree().pull({ rebase: true });
                         await requireRuntimeWorktree().push(undefined, {});
                     }, 'Sync stopped with conflicts.'));
                 return;
             case 'pullRebase':
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, () => requireRuntimeWorktree().pull({ rebase: true }), 'Pull with rebase stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => requireRuntimeWorktree().pull({ rebase: true }), 'Pull with rebase stopped with conflicts.'));
                 return;
             case 'pullFrom':
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, async () => {
+                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), async () => {
                         const ref = await pickRemoteBranch('Pull from remote branch', requireRuntimeRepository());
                         if (!ref) { return; }
-                        const parsed = remoteBranchName(ref);
+                        const parsed = requireRemoteBranchName(ref);
                         await requireRuntimeRepository().fetch(parsed.remote, {});
                         await requireRuntimeWorktree().merge(ref, {});
                     }, 'Pull from remote stopped with conflicts.'));
@@ -991,14 +996,14 @@ export class ChangesMessageRouter {
                 const branch = await pickBranch('Merge branch', requireRuntimeRepository());
                 if (!branch) { return; }
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, () => requireRuntimeWorktree().merge(branch, {}), 'Merge stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => requireRuntimeWorktree().merge(branch, {}), 'Merge stopped with conflicts.'));
                 return;
             }
             case 'rebaseBranch': {
                 const branch = await pickBranch('Rebase current branch onto', requireRuntimeRepository());
                 if (!branch) { return; }
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, () => requireRuntimeWorktree().rebase(branch, undefined, {}), 'Rebase stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => requireRuntimeWorktree().rebase(branch, undefined, {}), 'Rebase stopped with conflicts.'));
                 return;
             }
             case 'createBranch': {
@@ -1018,7 +1023,7 @@ export class ChangesMessageRouter {
                 return;
             }
             case 'renameBranch': {
-                const current = await currentBranchName(requireRuntimeRepository());
+                const current = await currentLocalBranchName(requireRuntimeRepository());
                 const oldName = await pickLocalBranch('Rename branch', requireRuntimeRepository(), current);
                 if (!oldName) { return; }
                 const newName = await inputText('New branch name', oldName);
@@ -1040,10 +1045,10 @@ export class ChangesMessageRouter {
                 await this.runTrackedToolbarOperation(command, async () => {
                     const selected = await pickRemoteBranch('Delete remote branch', requireRuntimeRepository());
                     if (!selected) { return undefined; }
-                    const parsed = remoteBranchName(selected);
+                    const parsed = requireRemoteBranchName(selected);
                     const choice = await showModalWarningMessage(`Delete remote branch "${selected}"?`, 'Delete');
                     if (choice !== 'Delete') { return undefined; }
-                    await requireRuntimeRepository().deleteRemoteBranch(parsed.remote, parsed.branch);
+                    await requireRuntimeRepository().deleteRemoteBranch(parsed.remote, parsed.branchName);
                     await this.refreshAfterRepositoryUpdate();
                     return undefined;
                 });
@@ -1051,7 +1056,7 @@ export class ChangesMessageRouter {
             }
             case 'publishBranch': {
                 await this.runTrackedToolbarOperation(command, async () => {
-                    const branch = await currentBranchName(requireRuntimeRepository());
+                    const branch = await currentLocalBranchName(requireRuntimeRepository());
                     if (!branch || branch === 'HEAD') { throw new Error('No local branch is checked out.'); }
                     const remote = await pickRemote('Publish branch to remote', requireRuntimeRepository());
                     if (!remote) { return undefined; }
@@ -1102,24 +1107,24 @@ export class ChangesMessageRouter {
                 return;
             case 'applyLatestStash':
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, () => requireRuntimeWorktree().applyStash(stashRef(0), {}), 'Apply stash stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => requireRuntimeWorktree().applyStash(stashRef(0), {}), 'Apply stash stopped with conflicts.'));
                 return;
             case 'applyStash': {
                 const index = await pickStash('Apply stash', requireRuntimeWorktree());
                 if (index === undefined) { return; }
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, () => requireRuntimeWorktree().applyStash(stashRef(index), {}), 'Apply stash stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => requireRuntimeWorktree().applyStash(stashRef(index), {}), 'Apply stash stopped with conflicts.'));
                 return;
             }
             case 'popLatestStash':
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, () => popRuntimeStashWithLocalChangesHint(requireRuntimeWorktree(), stashRef(0)), 'Pop stash stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => popRuntimeStashWithLocalChangesHint(requireRuntimeWorktree(), stashRef(0)), 'Pop stash stopped with conflicts.'));
                 return;
             case 'popStash': {
                 const index = await pickStash('Pop stash', requireRuntimeWorktree());
                 if (index === undefined) { return; }
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(repo, () => popRuntimeStashWithLocalChangesHint(requireRuntimeWorktree(), stashRef(index)), 'Pop stash stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => popRuntimeStashWithLocalChangesHint(requireRuntimeWorktree(), stashRef(index)), 'Pop stash stopped with conflicts.'));
                 return;
             }
             case 'dropStash': {
@@ -1198,10 +1203,6 @@ export class ChangesMessageRouter {
             await vscode.commands.executeCommand('lookGit.graphView.focus');
             return true;
         }
-        if (command === 'clone') {
-            await vscode.commands.executeCommand('git.clone');
-            return true;
-        }
         if (command === 'showGitOutput') {
             await vscode.commands.executeCommand('workbench.action.output.toggleOutput');
             return true;
@@ -1209,19 +1210,19 @@ export class ChangesMessageRouter {
         return false;
     }
 
-    private async openAllMergeEditors(repo: GitRepository): Promise<void> {
-        const status = await repo.getStatus();
-        await openAllThreeWayMergeEditors(repo, status.conflicts.filter((entry) => !entry.isSubmodule).map((entry) => entry.filePath));
+    private async openAllMergeEditors(worktree: Worktree): Promise<void> {
+        const status = await worktree.getStatus();
+        await openAllRuntimeThreeWayMergeEditors(worktree, status.conflicts.filter((entry) => !entry.isSubmodule).map((entry) => entry.filePath));
     }
 
-    private async openFirstMergeEditor(repo: GitRepository): Promise<void> {
-        const status = await repo.getStatus();
+    private async openFirstMergeEditor(worktree: Worktree): Promise<void> {
+        const status = await worktree.getStatus();
         const conflict = status.conflicts.find((entry) => !entry.isSubmodule);
         if (!conflict) {
             await vscode.window.showInformationMessage('No conflicts to open.');
             return;
         }
-        await openThreeWayMergeEditor(repo, conflict.filePath);
+        await openRuntimeThreeWayMergeEditor(worktree, conflict.filePath);
     }
 
     private async runTrackedToolbarOperation(
@@ -1252,30 +1253,30 @@ export class ChangesMessageRouter {
     }
 
     private async runRepositoryMutationWithConflictNotice(
-        repo: GitRepository,
+        worktree: Worktree,
         mutation: () => Promise<void>,
         conflictMessage: string,
     ): Promise<OperationStatus | undefined> {
-        const existingConflicts = await conflictFileSet(repo);
+        const existingConflicts = await conflictFileSet(worktree);
         try {
             await mutation();
             await this.refreshAfterRepositoryUpdate();
-            return await this.notifyNewConflicts(repo, existingConflicts, conflictMessage)
+            return await this.notifyNewConflicts(worktree, existingConflicts, conflictMessage)
                 ? OperationStatus.Conflict
                 : undefined;
         } catch (error) {
-            if (await this.refreshAndNotifyNewConflicts(repo, existingConflicts, conflictMessage)) { return OperationStatus.Conflict; }
+            if (await this.refreshAndNotifyNewConflicts(worktree, existingConflicts, conflictMessage)) { return OperationStatus.Conflict; }
             throw error;
         }
     }
 
     private async refreshAndNotifyNewConflicts(
-        repo: GitRepository,
+        worktree: Worktree,
         existingConflicts: ReadonlySet<string>,
         message: string,
     ): Promise<boolean> {
         await this.refresh();
-        const didNotify = await this.notifyNewConflicts(repo, existingConflicts, message);
+        const didNotify = await this.notifyNewConflicts(worktree, existingConflicts, message);
         if (didNotify) {
             await this.onRepositoryUpdated();
         }
@@ -1283,15 +1284,15 @@ export class ChangesMessageRouter {
     }
 
     private async notifyNewConflicts(
-        repo: GitRepository,
+        worktree: Worktree,
         existingConflicts: ReadonlySet<string>,
         message: string,
     ): Promise<boolean> {
-        const status = await repo.getStatus();
+        const status = await worktree.getStatus();
         const conflictPaths = status.conflicts.map((entry) => entry.filePath);
         if (!hasNewConflicts(conflictPaths, existingConflicts)) { return false; }
-        await notifyConflictsDetected(
-            repo,
+        await notifyRuntimeConflictsDetected(
+            worktree,
             message,
             conflictPaths,
             status.conflicts.filter((entry) => !entry.isSubmodule).map((entry) => entry.filePath),
@@ -1334,14 +1335,14 @@ export class ChangesMessageRouter {
         return `changes-op-${this.operationSequence}`;
     }
 
-    private async requireKnownSubmodulePath(repo: GitRepository, requestedPath: string): Promise<string> {
+    private async requireKnownSubmodulePath(requestedPath: string): Promise<string> {
         if (this.knownSubmodulePaths) {
             if (!this.knownSubmodulePaths.has(requestedPath)) {
                 throw new Error(`Unknown submodule path: ${requestedPath}`);
             }
             return requestedPath;
         }
-        const submodulePaths = await repo.getSubmodulePaths();
+        const submodulePaths = new Set((await this.requireCurrentRuntimeRepository().listSubmodules()).map((submodule) => submodule.path));
         this.knownSubmodulePaths = submodulePaths;
         if (!submodulePaths.has(requestedPath)) {
             throw new Error(`Unknown submodule path: ${requestedPath}`);
@@ -1391,9 +1392,9 @@ function errorCodeFor(msg: ChangesWebviewToExtensionMessage): ErrorCode {
     }
 }
 
-async function conflictFileSet(repo: GitRepository): Promise<ReadonlySet<string>> {
+async function conflictFileSet(worktree: Worktree): Promise<ReadonlySet<string>> {
     try {
-        const status = await repo.getStatus();
+        const status = await worktree.getStatus();
         return new Set(status.conflicts.map((entry) => entry.filePath));
     } catch {
         return new Set();
@@ -1404,97 +1405,16 @@ function hasNewConflicts(conflictPaths: readonly string[], existingConflicts: Re
     return conflictPaths.some((filePath) => !existingConflicts.has(filePath));
 }
 
-async function inputText(placeHolder: string, value?: string): Promise<string | undefined> {
-    const input = await vscode.window.showInputBox({ placeHolder, value });
-    const trimmed = input?.trim();
-    return trimmed || undefined;
-}
-
-async function inputBranchName(placeHolder: string, value?: string): Promise<string | undefined> {
-    return showBranchNameInput({ placeHolder, value });
-}
-
-async function pickBranch(placeHolder: string, runtimeRepository: RuntimeGitRepository): Promise<string | undefined> {
-    const branches = await runtimeRepository.listBranches();
-    return vscode.window.showQuickPick(branches.map((branch) => branch.name), { placeHolder });
-}
-
-async function pickRemoteBranch(placeHolder: string, runtimeRepository: RuntimeGitRepository): Promise<string | undefined> {
-    const branches = (await runtimeRepository.listRemoteBranches())
-        .filter((branch) => branch.isRemote)
-        .map((branch) => branch.name);
-    return vscode.window.showQuickPick(branches, { placeHolder });
-}
-
-function remoteBranchName(ref: string): { readonly remote: string; readonly branch: string } {
-    const slashIdx = ref.indexOf('/');
-    if (slashIdx === -1) { throw new Error(`Expected remote branch name, got "${ref}".`); }
-    return {
-        remote: ref.substring(0, slashIdx),
-        branch: ref.substring(slashIdx + 1),
-    };
-}
-
-async function currentBranchName(runtimeRepository: RuntimeGitRepository): Promise<string | undefined> {
-    const branches = await runtimeRepository.listBranches();
-    return branches.find((branch) => branch.isCurrent && !branch.isRemote)?.name;
-}
-
-async function pickLocalBranch(
-    placeHolder: string,
-    runtimeRepository: RuntimeGitRepository,
-    preferred?: string,
-): Promise<string | undefined> {
-    const branches = (await runtimeRepository.listBranches())
-        .filter((branch) => !branch.isRemote)
-        .map((branch) => branch.name);
-    const ordered = preferred && branches.includes(preferred)
-        ? [preferred, ...branches.filter((branch) => branch !== preferred)]
-        : branches;
-    return vscode.window.showQuickPick(ordered, { placeHolder });
-}
-
-async function pickRemote(placeHolder: string, runtimeRepository: RuntimeGitRepository): Promise<string | undefined> {
-    const remotes = await runtimeRepository.listRemotes();
-    if (remotes.length === 1) { return remotes[0]; }
-    return vscode.window.showQuickPick(remotes, { placeHolder });
-}
-
 async function pushCurrentBranchToPickedRemote(
     runtimeRepository: RuntimeGitRepository,
     worktree: Worktree,
     forceWithLease: boolean,
 ): Promise<void> {
-    const branch = await currentBranchName(runtimeRepository);
+    const branch = await currentLocalBranchName(runtimeRepository);
     if (!branch || branch === 'HEAD') { throw new Error('No local branch is checked out.'); }
     const remote = await pickRemote('Push branch to remote', runtimeRepository);
     if (!remote) { return; }
     await worktree.pushBranch(remote, branch, { forceWithLease });
-}
-
-async function pickRef(placeHolder: string, runtimeRepository: RuntimeGitRepository): Promise<string | undefined> {
-    const [branches, tags] = await Promise.all([
-        runtimeRepository.listBranches(),
-        runtimeRepository.listTags(),
-    ]);
-    return vscode.window.showQuickPick([
-        ...branches.map((branch) => branch.name),
-        ...tags.map((tag) => tag.name),
-    ], { placeHolder });
-}
-
-async function pickTag(placeHolder: string, runtimeRepository: RuntimeGitRepository): Promise<string | undefined> {
-    const tags = await runtimeRepository.listTags();
-    return vscode.window.showQuickPick(tags.map((tag) => tag.name), { placeHolder });
-}
-
-async function pickStash(placeHolder: string, runtimeWorktree: Worktree): Promise<number | undefined> {
-    const stashes = (await runtimeWorktree.listStashes({ limit: Number.MAX_SAFE_INTEGER })).items;
-    const items = stashes.map((stash) => `stash@{${stash.index}} ${stash.message}`);
-    const selected = await vscode.window.showQuickPick(items, { placeHolder });
-    if (!selected) { return undefined; }
-    const match = selected.match(/^stash@\{(\d+)\}/);
-    return match?.[1] ? parseInt(match[1], 10) : undefined;
 }
 
 async function popRuntimeStashWithLocalChangesHint(worktree: Worktree, stash: string): Promise<void> {
@@ -1537,8 +1457,8 @@ interface StatusDiffInput {
     readonly workTreeStatus: string;
 }
 
-async function openStatusDiff(repo: GitRepository, msg: StatusDiffInput, runtimeTargets?: DiffRuntimeTargets): Promise<void> {
-    const filePath = path.join(repo.cwd, msg.filePath);
+async function openStatusDiff(cwd: string, msg: StatusDiffInput, runtimeTargets?: DiffRuntimeTargets): Promise<void> {
+    const filePath = path.join(cwd, msg.filePath);
     const fileUri = vscode.Uri.file(filePath);
     const baseName = path.basename(msg.filePath);
     const status = msg.isStaged ? msg.indexStatus : msg.workTreeStatus;
@@ -1570,8 +1490,11 @@ async function openStatusDiff(repo: GitRepository, msg: StatusDiffInput, runtime
     await vscode.commands.executeCommand('vscode.diff', left, right, title);
 }
 
-async function openSubmoduleGitlinkDiff(repo: GitRepository, msg: StatusDiffInput): Promise<void> {
-    await openStatusGitlinkDiff(repo, { filePath: msg.filePath, isStaged: msg.isStaged });
+async function openSubmoduleGitlinkDiff(worktree: Worktree, msg: StatusDiffInput): Promise<void> {
+    const diff = msg.isStaged
+        ? await worktree.getIndexDiff([msg.filePath])
+        : await worktree.getWorkingTreeDiff([msg.filePath]);
+    await openReadonlyDiffDocument(`${path.basename(msg.filePath)} submodule gitlink`, diff.trimEnd() || `No submodule gitlink changes for ${msg.filePath}.\n`);
 }
 
 interface StashDiffInput {
@@ -1689,8 +1612,8 @@ function stashRef(index: number): string {
 }
 
 export function buildStatusData(
-    status: Awaited<ReturnType<GitRepository['getStatus']>>,
-    stashes: Awaited<ReturnType<GitRepository['stashList']>>,
+    status: GitStatus,
+    stashes: readonly GitStash[],
     submodules: readonly GitSubmodule[] = [],
     currentBranch?: string,
 ): { type: 'changes/statusData'; data: StatusData } {

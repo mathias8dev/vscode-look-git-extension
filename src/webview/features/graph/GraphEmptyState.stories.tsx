@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { noop } from '../../storybookFixtures';
-import { GraphEmptyState } from './GraphEmptyState';
+import { noop } from '@webview/storybookFixtures';
+import { GraphEmptyState } from '@webview/features/graph/GraphEmptyState';
 
 const meta = {
     title: 'Graph/GraphEmptyState',

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ConflictState } from '../../../protocol/changes/types';
-import { noop } from '../../storybookFixtures';
-import { CommitComposer } from './CommitComposer';
+import { ConflictState } from '@protocol/changes/types';
+import { noop } from '@webview/storybookFixtures';
+import { CommitComposer } from '@webview/features/changes/CommitComposer';
 
 const meta = {
     title: 'Changes/CommitComposer',

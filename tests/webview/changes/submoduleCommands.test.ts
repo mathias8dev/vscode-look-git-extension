@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { CommitMode, ConflictState } from '../../../src/protocol/changes/types';
-import { ChangeBulkAction, ChangeRowAction } from '../../../src/webview/features/changes/changeCommands';
-import { OperationAction } from '../../../src/webview/features/changes/operationCommands';
+import { CommitMode, ConflictState } from '@protocol/changes/types';
+import { ChangeBulkAction, ChangeRowAction } from '@webview/features/changes/changeCommands';
+import { OperationAction } from '@webview/features/changes/operationCommands';
 import {
     messageForSubmoduleAction,
     messageForSubmoduleCommit,
@@ -15,8 +15,8 @@ import {
     messageForSubmoduleToolbarCommand,
     SubmoduleAction,
     submoduleStashFilesRequestId,
-} from '../../../src/webview/features/changes/submoduleCommands';
-import { StashEntryAction } from '../../../src/webview/features/changes/stashCommands';
+} from '@webview/features/changes/submoduleCommands';
+import { StashEntryAction } from '@webview/features/changes/stashCommands';
 
 const entry = {
     indexStatus: ' ',

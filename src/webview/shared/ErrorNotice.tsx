@@ -1,4 +1,4 @@
-import type { ProtocolError } from '../../protocol/shared/base';
+import type { ProtocolError } from '@protocol/shared/base';
 
 interface ErrorNoticeProps {
     readonly error: ProtocolError | undefined;

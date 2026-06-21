@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { IconButton } from '../../shared/IconButton';
-import { bulkActionsFor, type ChangeBulkAction, type ChangeRowAction } from './changeCommands';
-import { buildChangeTree, type ChangeListItem, type ChangeSection } from './changeTree';
-import { ChangesViewMode, type ChangeSelectionMode, type ChangesSortMode } from './changesState';
-import { CHANGE_SECTION_PAGE_SIZE, visibleChangeItems } from './changePagination';
-import { ChangeRow } from './ChangeRow';
-import { compareChangeItems } from './changeViewModel';
-import { TreeNodeView } from './TreeNodeView';
+import { IconButton } from '@webview/shared/IconButton';
+import { bulkActionsFor, type ChangeBulkAction, type ChangeRowAction } from '@webview/features/changes/changeCommands';
+import { buildChangeTree, type ChangeListItem, type ChangeSection } from '@webview/features/changes/changeTree';
+import { ChangesViewMode, type ChangeSelectionMode, type ChangesSortMode } from '@webview/features/changes/changesState';
+import { CHANGE_SECTION_PAGE_SIZE, visibleChangeItems } from '@webview/features/changes/changePagination';
+import { ChangeRow } from '@webview/features/changes/ChangeRow';
+import { compareChangeItems } from '@webview/features/changes/changeViewModel';
+import { TreeNodeView } from '@webview/features/changes/TreeNodeView';
 
 interface ChangeSectionViewProps {
     readonly section: ChangeSection;

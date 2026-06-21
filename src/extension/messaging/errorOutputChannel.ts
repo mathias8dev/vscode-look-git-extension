@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { ProtocolError } from '../../protocol/shared/base';
+import type { ProtocolError } from '@protocol/shared/base';
 
 let channel: vscode.OutputChannel | undefined;
 

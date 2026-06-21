@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { changeItem, changedFiles, conflictFiles, stagedFiles, noop } from '../../storybookFixtures';
-import { ChangeSectionId } from './changeTree';
-import { SelectionToolbar } from './SelectionToolbar';
+import { changeItem, changedFiles, conflictFiles, stagedFiles, noop } from '@webview/storybookFixtures';
+import { ChangeSectionId } from '@webview/features/changes/changeTree';
+import { SelectionToolbar } from '@webview/features/changes/SelectionToolbar';
 
 const selectedItems = [
     changeItem(ChangeSectionId.Unstaged, changedFiles[0]),

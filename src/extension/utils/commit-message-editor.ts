@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import type { CommitMessageWebviewToExtensionMessage } from '../../protocol/commit-message/messages';
-import { getWebviewHtml } from '../views/webviewHtml';
+import type { CommitMessageWebviewToExtensionMessage } from '@protocol/commit-message/messages';
+import { getWebviewHtml } from '@extension/views/webviewHtml';
 
 export type CommitMessageEditorMode = 'window' | 'editor' | 'input';
 

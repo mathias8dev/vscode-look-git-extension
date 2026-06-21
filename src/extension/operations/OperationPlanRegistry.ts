@@ -1,4 +1,4 @@
-import type { OperationPlan } from '../../application/ports/operation-guard';
+import type { OperationPlan } from '@application/ports/operation-guard';
 
 export class OperationPlanRegistry {
     private readonly plans = new Map<string, OperationPlan>();

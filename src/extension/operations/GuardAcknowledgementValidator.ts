@@ -1,5 +1,5 @@
-import type { GuardAcknowledgement, OperationPlan, ValidatedGuardAcknowledgement } from '../../application/ports/operation-guard';
-import { OperationPlanRegistry, isExpired } from './OperationPlanRegistry';
+import type { GuardAcknowledgement, OperationPlan, ValidatedGuardAcknowledgement } from '@application/ports/operation-guard';
+import { OperationPlanRegistry, isExpired } from '@extension/operations/OperationPlanRegistry';
 
 export interface GuardValidationContext {
     readonly repositoryId: string;

@@ -1,12 +1,12 @@
-import { ConflictState, type StatusEntry, type StashEntry, type StashFileEntry, type SubmoduleEntry, type SubmoduleStatusData } from '../protocol/changes/types';
-import type { BranchInfo, CommitFileChange, GraphCommit, GraphSubmoduleInfo, WorktreeInfo, WorktreeWip } from '../protocol/graph/types';
-import type { HistoryCommit, HistoryCommitDetails, HistoryCommitFile } from '../protocol/history/types';
-import { OperationNoticeActionKind, OperationStatus } from '../protocol/shared/operation';
-import { SubmoduleStatus } from '../protocol/shared/repo';
-import { GraphOperationCategory, type GraphOperationStatusPush } from '../protocol/graph/messages';
-import type { CommitDetails } from './features/graph/graphState';
-import type { GraphRow } from './features/graph/layout/graph-lane-model';
-import { ChangeSectionId, type ChangeListItem } from './features/changes/changeTree';
+import { ConflictState, type StatusEntry, type StashEntry, type StashFileEntry, type SubmoduleEntry, type SubmoduleStatusData } from '@protocol/changes/types';
+import type { BranchInfo, CommitFileChange, GraphCommit, GraphSubmoduleInfo, WorktreeInfo, WorktreeWip } from '@protocol/graph/types';
+import type { HistoryCommit, HistoryCommitDetails, HistoryCommitFile } from '@protocol/history/types';
+import { OperationNoticeActionKind, OperationStatus } from '@protocol/shared/operation';
+import { SubmoduleStatus } from '@protocol/shared/repo';
+import { GraphOperationCategory, type GraphOperationStatusPush } from '@protocol/graph/messages';
+import type { CommitDetails } from '@webview/features/graph/graphState';
+import type { GraphRow } from '@webview/features/graph/layout/graph-lane-model';
+import { ChangeSectionId, type ChangeListItem } from '@webview/features/changes/changeTree';
 
 export const noop = () => undefined;
 
@@ -148,7 +148,7 @@ export const graphOperation = {
     operationId: 'storybook-operation',
     status: OperationStatus.Conflict,
     category: GraphOperationCategory.Commit,
-    command: 'interactiveRebaseFromHere',
+    command: 'rebaseOnto',
     target: 'bbbbbbb',
     actions: [OperationNoticeActionKind.ShowOutput],
 } satisfies GraphOperationStatusPush;

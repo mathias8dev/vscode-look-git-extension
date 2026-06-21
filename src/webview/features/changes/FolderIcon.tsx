@@ -18,8 +18,8 @@ import folderTypeSrcOpened from '@iconify/icons-vscode-icons/folder-type-src-ope
 import folderTypeSrc from '@iconify/icons-vscode-icons/folder-type-src';
 import folderTypeTestOpened from '@iconify/icons-vscode-icons/folder-type-test-opened';
 import folderTypeTest from '@iconify/icons-vscode-icons/folder-type-test';
-import { IconifySvg, type IconifySvgData } from '../../shared/IconifySvg';
-import { folderIconKindForName, type FolderIconKind } from './folderIconModel';
+import { IconifySvg, type IconifySvgData } from '@webview/shared/IconifySvg';
+import { folderIconKindForName, type FolderIconKind } from '@webview/features/changes/folderIconModel';
 
 interface FolderIconProps {
     readonly name: string;

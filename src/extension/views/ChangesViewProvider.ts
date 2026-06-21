@@ -1,33 +1,30 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs/promises';
-import * as os from 'os';
-import * as path from 'path';
-import type { ActiveRepositoryAccessor } from '../repositories/ActiveRepositoryRegistry';
-import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush, ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage } from '../../protocol/changes/messages';
-import { CommitMode, type ChangesContextTarget } from '../../protocol/changes/types';
-import type { RepoContext } from '../../core/git/domain/RepoContext';
-import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '../messaging/ChangesMessageRouter';
-import { ScopedGitRepository } from '../git/scoped-git-repository';
-import type { GitRepository, GitStatus } from '../../application/ports/git-repository';
-import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
-import { OperationStatus } from '../../protocol/shared/operation';
-import { createErrorPayload, isAbortError } from '../messaging/errorSerialization';
-import { getWebviewHtml } from './webviewHtml';
-import { GetChangesStatusUseCase } from '../../application/usecases/changes/get-changes-status';
-import { GetRuntimeChangesStatusUseCase, type RuntimeChangesStatusResult } from '../../application/usecases/changes/get-runtime-changes-status';
-import { GenerateCommitMessageUseCase } from '../../application/usecases/changes/generate-commit-message';
-import { CreateChangesPatchResultKind, type CreateChangesPatchResult, type CreateChangesPatchUseCase } from '../../application/usecases/changes/create-changes-patch';
-import { ApplyPatchMode, ApplyPatchResultKind, ApplyPatchUseCase } from '../../application/usecases/changes/apply-patch';
-import { ExplainSelectedChangesUseCase, type ExplainSelectedChangesInput } from '../../application/usecases/changes/explain-selected-changes';
-import { VscodeLanguageModelCommitMessageGenerator } from '../adapters/vscode/vscode-language-model-commit-message-generator';
-import { VscodeLanguageModelDiffExplainer } from '../adapters/vscode/vscode-language-model-diff-explainer';
-import { defaultCreateChangesPatch } from '../adapters/vscode/default-create-changes-patch';
-import { toRepositoryLocator, toSerializedRepoContext, toWorktreeLocator } from '../mapping/toProtocol';
-import { openDiffExplanationDocument, showDiffExplanationError } from '../utils/diff-explanation-document';
-import { notifyConflictsDetected } from '../utils/merge-editor';
-import { operationActionsForStatus } from '../utils/operation-feedback';
-import { withCancellationSignal } from '../utils/vscode-cancellation';
-import { webviewFontSizeMessage } from './webview-font';
+import type { ActiveRepositoryAccessor } from '@extension/repositories/ActiveRepositoryRegistry';
+import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush, ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
+import { CommitMode, type ChangesContextTarget } from '@protocol/changes/types';
+import type { RepoContext } from '@core/git/domain/RepoContext';
+import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '@extension/messaging/ChangesMessageRouter';
+import type { GitStatus } from '@core/git/domain/GitStatus';
+import type { RepositoryRegistry } from '@extension/repositories/RepositoryRegistry';
+import { OperationStatus } from '@protocol/shared/operation';
+import { createErrorPayload, isAbortError } from '@extension/messaging/errorSerialization';
+import { getWebviewHtml } from '@extension/views/webviewHtml';
+import { GetRuntimeChangesStatusUseCase, type RuntimeChangesStatusResult } from '@application/usecases/changes/get-runtime-changes-status';
+import { GenerateCommitMessageUseCase } from '@application/usecases/changes/generate-commit-message';
+import { CreateChangesPatchResultKind, type CreateChangesPatchResult, type CreateChangesPatchUseCase } from '@application/usecases/changes/create-changes-patch';
+import { ApplyPatchMode, ApplyPatchResultKind, ApplyPatchUseCase } from '@application/usecases/changes/apply-patch';
+import type { Worktree } from '@application/ports/git-topology';
+import { ExplainSelectedChangesUseCase, type ExplainSelectedChangesInput } from '@application/usecases/changes/explain-selected-changes';
+import { VscodeLanguageModelCommitMessageGenerator } from '@extension/adapters/vscode/vscode-language-model-commit-message-generator';
+import { VscodeLanguageModelDiffExplainer } from '@extension/adapters/vscode/vscode-language-model-diff-explainer';
+import { defaultCreateChangesPatch } from '@extension/adapters/vscode/default-create-changes-patch';
+import { toSerializedRepoContext } from '@extension/mapping/toProtocol';
+import { requireRuntimeLocator } from '@extension/repositories/runtime-repository-locator';
+import { openDiffExplanationDocument, showDiffExplanationError } from '@extension/utils/diff-explanation-document';
+import { notifyRuntimeConflictsDetected } from '@extension/utils/runtime-merge-editor';
+import { operationActionsForStatus } from '@extension/utils/operation-feedback';
+import { withCancellationSignal } from '@extension/utils/vscode-cancellation';
+import { webviewFontSizeMessage } from '@extension/views/webview-font';
 
 const APPLY_PATCH_FROM_CLIPBOARD = 'From Clipboard';
 const APPLY_PATCH_FROM_FILE = 'From File...';
@@ -77,7 +74,6 @@ interface ChangesSelectionCommandDescriptor {
 const SHARED_TOOLBAR_COMMANDS: readonly ChangesToolbarCommand[] = [
     'pull',
     'push',
-    'clone',
     'checkout',
     'fetch',
     'sync',
@@ -211,7 +207,6 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         private readonly extensionUri: vscode.Uri,
         private readonly repositories: ActiveRepositoryAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
-        private readonly getChangesStatus = new GetChangesStatusUseCase(),
         private readonly generateCommitMessage = new GenerateCommitMessageUseCase(new VscodeLanguageModelCommitMessageGenerator()),
         private readonly createChangesPatch: CreateChangesPatchUseCase = defaultCreateChangesPatch,
         private readonly applyPatch = new ApplyPatchUseCase(),
@@ -312,11 +307,10 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     private async explainSelectedDiff(target: Extract<ChangesContextTarget, { readonly kind: 'selection' }>): Promise<void> {
         try {
-            const baseRepo = this.repositories.requireRepository();
-            const repo = target.submodulePath
-                ? new ScopedGitRepository(baseRepo, await requireKnownSubmodulePath(baseRepo, target.submodulePath))
-                : baseRepo;
-            await this.explainChanges(repo, {
+            const worktree = target.submodulePath
+                ? this.requireRuntimeSubmoduleWorktree(await this.requireKnownSubmodulePath(target.submodulePath))
+                : this.requireCurrentRuntimeWorktree();
+            await this.explainChanges(worktree, {
                 stagedFilePaths: target.patchStagedFilePaths,
                 unstagedFilePaths: target.patchUnstagedFilePaths,
                 untrackedFilePaths: target.patchUntrackedFilePaths,
@@ -335,21 +329,20 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     private async explainRepositoryChanges(submodulePath: string | undefined): Promise<void> {
         try {
-            const baseRepo = this.repositories.requireRepository();
-            const repo = submodulePath
-                ? new ScopedGitRepository(baseRepo, await requireKnownSubmodulePath(baseRepo, submodulePath))
-                : baseRepo;
+            const worktree = submodulePath
+                ? this.requireRuntimeSubmoduleWorktree(await this.requireKnownSubmodulePath(submodulePath))
+                : this.requireCurrentRuntimeWorktree();
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
                 title: submodulePath ? 'Reviewing submodule changes...' : 'Reviewing changes...',
                 cancellable: true,
             }, async (_progress, token) => withCancellationSignal(token, async (signal) => {
-                const input = explanationInputForStatus(await repo.getStatus(signal));
+                const input = explanationInputForStatus(await worktree.getStatus(signal));
                 if (explanationInputCount(input) === 0) {
                     await vscode.window.showWarningMessage(submodulePath ? 'No submodule changes can be reviewed.' : 'No changes can be reviewed.');
                     return;
                 }
-                const result = await this.explainSelectedChanges.execute(repo, input, signal);
+                const result = await this.explainSelectedChanges.execute(worktree, input, signal);
                 await openDiffExplanationDocument({
                     title: submodulePath ? 'Submodule Changes Review' : 'Changes Review',
                     scope: submodulePath,
@@ -367,7 +360,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async explainChanges(
-        repo: GitRepository,
+        worktree: Worktree,
         input: ExplainSelectedChangesInput,
         options: {
             readonly progressTitle: string;
@@ -387,7 +380,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 title: options.progressTitle,
                 cancellable: true,
             }, async (_progress, token) => withCancellationSignal(token, async (signal) => {
-                const result = await this.explainSelectedChanges.execute(repo, input, signal);
+                const result = await this.explainSelectedChanges.execute(worktree, input, signal);
                 await openDiffExplanationDocument({
                     title: options.documentTitle,
                     scope: options.scope,
@@ -410,11 +403,10 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             await vscode.window.showWarningMessage('No selected changes can be exported as a patch.');
             return;
         }
-        const baseRepo = this.repositories.requireRepository();
-        const repo = target.submodulePath
-            ? new ScopedGitRepository(baseRepo, await requireKnownSubmodulePath(baseRepo, target.submodulePath))
-            : baseRepo;
-        await showChangesPatchNotification(await this.createChangesPatch.execute(repo, {
+        const worktree = target.submodulePath
+            ? this.requireRuntimeSubmoduleWorktree(await this.requireKnownSubmodulePath(target.submodulePath))
+            : this.requireCurrentRuntimeWorktree();
+        await showChangesPatchNotification(await this.createChangesPatch.execute(worktree, {
             stagedFilePaths: target.patchStagedFilePaths,
             unstagedFilePaths: target.patchUnstagedFilePaths,
             untrackedFilePaths: target.patchUntrackedFilePaths,
@@ -532,7 +524,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     ): Promise<void> {
         if (scope === ChangesCommandScope.ActiveRepository) {
             if (command === 'applyPatch') {
-                await this.applyPatchToRepository(this.repositories.requireRepository());
+                await this.applyPatchToRepository(this.requireCurrentRuntimeWorktree());
                 return;
             }
             await this.router?.handleToolbarCommand(command);
@@ -542,7 +534,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         await this.router?.handle({ type: 'changes/submoduleToolbarCommand', submodulePath, command });
     }
 
-    private async applyPatchToRepository(repo: GitRepository): Promise<void> {
+    private async applyPatchToRepository(worktree: Worktree): Promise<void> {
         const patchContent = await pickPatchContent();
         if (patchContent === undefined) { return; }
         if (!patchContent.trim()) {
@@ -551,24 +543,23 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         }
         const mode = await pickApplyPatchMode();
         if (mode === undefined) { return; }
-        const tempFile = await writeTempPatchFile(patchContent);
         const operationId = this.nextOperationId();
         this.postChangesOperation({ operationId, status: OperationStatus.Running, command: 'applyPatch' });
         try {
             try {
-                await this.applyPatch.preflight(repo, tempFile, mode);
+                await this.applyPatch.preflight(worktree, patchContent, mode);
             } catch (error) {
                 this.postChangesOperation({ operationId, status: OperationStatus.Failed, command: 'applyPatch' });
                 await showApplyPatchPreflightError(error);
                 return;
             }
-            const result = await this.applyPatch.execute(repo, tempFile, mode);
+            const result = await this.applyPatch.execute(worktree, patchContent, mode);
             await Promise.all([this.refresh(), this.onRepositoryUpdated()]);
             if (result.kind === ApplyPatchResultKind.AppliedWithConflicts) {
                 this.postChangesOperation({ operationId, status: OperationStatus.Conflict, command: 'applyPatch' });
-                const status = await repo.getStatus();
-                await notifyConflictsDetected(
-                    repo,
+                const status = await worktree.getStatus();
+                await notifyRuntimeConflictsDetected(
+                    worktree,
                     'Patch applied with conflicts.',
                     status.conflicts.map((entry) => entry.filePath),
                     status.conflicts.filter((entry) => !entry.isSubmodule).map((entry) => entry.filePath),
@@ -580,8 +571,6 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         } catch (error) {
             this.postChangesOperation({ operationId, status: OperationStatus.Failed, command: 'applyPatch' });
             await vscode.window.showErrorMessage(`Could not apply patch: ${error instanceof Error ? error.message : String(error)}`);
-        } finally {
-            await fs.rm(path.dirname(tempFile), { recursive: true, force: true });
         }
     }
 
@@ -668,15 +657,15 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             const controller = new AbortController();
             this.refreshAbortController = controller;
             try {
-                const repo = this.repositories.currentRepository;
-                if (!repo) {
+                const context = this.repositories.currentContext;
+                if (!context) {
                     this.router?.setKnownSubmodulePaths([]);
                     this.updateBadge(0);
                     this.view.webview.postMessage(emptyStatusData());
                     continue;
                 }
 
-                const { status, stashes, submodules, currentBranch } = await this.loadChangesStatus(repo, controller.signal);
+                const { status, stashes, submodules, currentBranch } = await this.loadChangesStatus(controller.signal);
                 this.router?.setKnownSubmodulePaths(submodules.map((submodule) => submodule.path));
                 this.updateBadge(status.staged.length + status.unstaged.length + status.conflicts.length);
                 this.view.webview.postMessage(buildStatusData(status, stashes, submodules, currentBranch));
@@ -705,20 +694,27 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async loadChangesStatus(repo: GitRepository, signal?: AbortSignal): Promise<RuntimeChangesStatusResult> {
-        const context = this.repositories.currentContext;
-        if (context && this.runtimeRepositories) {
-            try {
-                return await this.getRuntimeChangesStatus.execute(
-                    this.runtimeRepositories.resolveRepository(toRepositoryLocator(context)),
-                    this.runtimeRepositories.resolveWorktree(toWorktreeLocator(context)),
-                    signal,
-                );
-            } catch {
-                signal?.throwIfAborted();
-            }
-        }
-        return await this.getChangesStatus.execute(repo, signal);
+    private async loadChangesStatus(signal?: AbortSignal): Promise<RuntimeChangesStatusResult> {
+        const locator = requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext);
+        return await this.getRuntimeChangesStatus.execute(
+            locator.repository(),
+            locator.worktree(),
+            signal,
+        );
+    }
+
+    private requireCurrentRuntimeWorktree(): Worktree {
+        return requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext).worktree();
+    }
+
+    private requireRuntimeSubmoduleWorktree(submodulePath: string): Worktree {
+        return requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext).submoduleWorktree(submodulePath);
+    }
+
+    private async requireKnownSubmodulePath(submodulePath: string): Promise<string> {
+        const paths = new Set((await requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext).repository().listSubmodules()).map((submodule) => submodule.path));
+        if (!paths.has(submodulePath)) { throw new Error(`Unknown submodule: ${submodulePath}`); }
+        return submodulePath;
     }
 
     /** Called by RepoRegistry when the active repo changes. */
@@ -809,13 +805,6 @@ async function pickApplyPatchMode(): Promise<ApplyPatchMode | undefined> {
     }
 }
 
-async function writeTempPatchFile(content: string): Promise<string> {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'look-git-apply-patch-'));
-    const filePath = path.join(dir, 'patch.diff');
-    await fs.writeFile(filePath, content, 'utf8');
-    return filePath;
-}
-
 async function showApplyPatchPreflightError(error: unknown): Promise<void> {
     const output = vscode.window.createOutputChannel('Look Git');
     output.clear();
@@ -861,10 +850,4 @@ function uniqueStatusPaths(entries: readonly GitStatus['staged'][number][]): rea
 
 function isUntrackedStatusEntry(entry: GitStatus['unstaged'][number]): boolean {
     return entry.indexStatus === '?' || entry.workTreeStatus === '?';
-}
-
-async function requireKnownSubmodulePath(repo: { getSubmodulePaths(): Promise<ReadonlySet<string>> }, submodulePath: string): Promise<string> {
-    const paths = await repo.getSubmodulePaths();
-    if (!paths.has(submodulePath)) { throw new Error(`Unknown submodule: ${submodulePath}`); }
-    return submodulePath;
 }

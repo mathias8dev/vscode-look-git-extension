@@ -14,6 +14,13 @@ const config = {
     sourcemap: !production,
     sourcesContent: false,
     outfile: 'dist/extension.cjs',
+    alias: {
+        '@application': './src/application',
+        '@core': './src/core',
+        '@extension': './src/extension',
+        '@protocol': './src/protocol',
+        '@webview': './src/webview',
+    },
     logLevel: 'info',
 };
 

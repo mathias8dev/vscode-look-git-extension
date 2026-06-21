@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { StatusEntry } from '../../../protocol/changes/types';
-import type { ChangeListItem } from './changeTree';
-import { ChangeSectionId } from './changeTree';
-import { ChangeRow } from './ChangeRow';
-import { ChangeSelectionMode } from './changesState';
+import type { StatusEntry } from '@protocol/changes/types';
+import type { ChangeListItem } from '@webview/features/changes/changeTree';
+import { ChangeSectionId } from '@webview/features/changes/changeTree';
+import { ChangeRow } from '@webview/features/changes/ChangeRow';
+import { ChangeSelectionMode } from '@webview/features/changes/changesState';
 
 const noopSelect = (_item: ChangeListItem, _mode: ChangeSelectionMode) => undefined;
 const noopContext = (_item: ChangeListItem) => undefined;

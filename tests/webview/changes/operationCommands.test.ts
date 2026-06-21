@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { messageForOperationAction, OperationAction } from '../../../src/webview/features/changes/operationCommands';
-import { ConflictState } from '../../../src/protocol/changes/types';
+import { messageForOperationAction, OperationAction } from '@webview/features/changes/operationCommands';
+import { ConflictState } from '@protocol/changes/types';
 
 describe('operationCommands', () => {
     it('creates messages for merge and rebase operation actions', () => {

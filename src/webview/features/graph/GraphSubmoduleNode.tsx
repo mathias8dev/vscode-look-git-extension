@@ -1,10 +1,10 @@
-import { SubmoduleStatus } from '../../../protocol/shared/repo';
-import type { GraphSubmoduleInfo } from '../../../protocol/graph/types';
+import { SubmoduleStatus } from '@protocol/shared/repo';
+import type { GraphSubmoduleInfo } from '@protocol/graph/types';
 
 interface GraphSubmoduleNodeProps {
     readonly submodule: GraphSubmoduleInfo;
     readonly selectedSubmodulePath: string | undefined;
-    readonly onSelectSubmodule: (submodulePath: string, submoduleLabel: string) => void;
+    readonly onSelectSubmodule: (submodule: GraphSubmoduleInfo) => void;
 }
 
 export function GraphSubmoduleNode({
@@ -13,7 +13,7 @@ export function GraphSubmoduleNode({
     onSelectSubmodule,
 }: GraphSubmoduleNodeProps) {
     const selected = selectedSubmodulePath === submodule.path;
-    const selectSubmodule = () => onSelectSubmodule(submodule.path, submodule.name);
+    const selectSubmodule = () => onSelectSubmodule(submodule);
 
     return (
         <div className="graph-submodule-node">

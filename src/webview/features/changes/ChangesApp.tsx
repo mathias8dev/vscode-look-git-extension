@@ -1,30 +1,30 @@
 import { useMemo } from 'react';
-import type { ChangesToolbarCommand } from '../../../protocol/changes/messages';
-import { ConflictState, RepositoryState } from '../../../protocol/changes/types';
-import type { ChangesSelectionContextTarget, CommitMode, StashFileEntry } from '../../../protocol/changes/types';
-import { OperationStatus } from '../../../protocol/shared/operation';
-import { ErrorNotice } from '../../shared/ErrorNotice';
-import { OperationNotice } from '../../shared/OperationNotice';
-import { operationNoticeActions } from '../../shared/operationNoticeActions';
-import type { ChangeBulkAction, ChangeRowAction } from './changeCommands';
-import { ChangeSectionView } from './ChangeSectionView';
-import { changesSelectionTarget, isChangeListItem } from './changeSelectionModel';
-import { CommitComposer } from './CommitComposer';
-import { EmptyState } from './EmptyState';
-import { OperationBanner } from './OperationBanner';
-import { StashList } from './StashList';
-import { SubmoduleSection } from './SubmoduleSection';
-import { buildChangeSections, ChangeSectionId, type ChangeListItem, type ChangeSection } from './changeTree';
+import type { ChangesToolbarCommand } from '@protocol/changes/messages';
+import { ConflictState, RepositoryState } from '@protocol/changes/types';
+import type { ChangesSelectionContextTarget, CommitMode, StashFileEntry } from '@protocol/changes/types';
+import { OperationStatus } from '@protocol/shared/operation';
+import { ErrorNotice } from '@webview/shared/ErrorNotice';
+import { OperationNotice } from '@webview/shared/OperationNotice';
+import { operationNoticeActions } from '@webview/shared/operationNoticeActions';
+import type { ChangeBulkAction, ChangeRowAction } from '@webview/features/changes/changeCommands';
+import { ChangeSectionView } from '@webview/features/changes/ChangeSectionView';
+import { changesSelectionTarget, isChangeListItem } from '@webview/features/changes/changeSelectionModel';
+import { CommitComposer } from '@webview/features/changes/CommitComposer';
+import { EmptyState } from '@webview/features/changes/EmptyState';
+import { OperationBanner } from '@webview/features/changes/OperationBanner';
+import { StashList } from '@webview/features/changes/StashList';
+import { SubmoduleSection } from '@webview/features/changes/SubmoduleSection';
+import { buildChangeSections, ChangeSectionId, type ChangeListItem, type ChangeSection } from '@webview/features/changes/changeTree';
 import {
     ChangeSelectionMode,
     getChangeCount,
     type ChangesState,
-} from './changesState';
-import { filterAndSortSections, flattenedItems } from './changeViewModel';
-import { changesSelectionContext } from './context-menu-model';
-import type { ActiveConflictState, OperationAction } from './operationCommands';
-import { CreateStashKind, type StashEntryAction } from './stashCommands';
-import { SubmoduleAction } from './submoduleCommands';
+} from '@webview/features/changes/changesState';
+import { filterAndSortSections, flattenedItems } from '@webview/features/changes/changeViewModel';
+import { changesSelectionContext } from '@webview/features/changes/context-menu-model';
+import type { ActiveConflictState, OperationAction } from '@webview/features/changes/operationCommands';
+import { CreateStashKind, type StashEntryAction } from '@webview/features/changes/stashCommands';
+import { SubmoduleAction } from '@webview/features/changes/submoduleCommands';
 
 interface ChangesAppProps {
     readonly state: ChangesState;

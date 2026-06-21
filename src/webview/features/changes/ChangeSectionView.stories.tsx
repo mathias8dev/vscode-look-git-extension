@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { changeItem, changedFiles, conflictFiles, noop } from '../../storybookFixtures';
-import { ChangeSectionId } from './changeTree';
-import { ChangesSortMode, ChangesViewMode } from './changesState';
-import { ChangeSectionView } from './ChangeSectionView';
+import { changeItem, changedFiles, conflictFiles, noop } from '@webview/storybookFixtures';
+import { ChangeSectionId } from '@webview/features/changes/changeTree';
+import { ChangesSortMode, ChangesViewMode } from '@webview/features/changes/changesState';
+import { ChangeSectionView } from '@webview/features/changes/ChangeSectionView';
 
 const unstagedSection = {
     id: ChangeSectionId.Unstaged,

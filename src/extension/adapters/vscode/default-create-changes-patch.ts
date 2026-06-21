@@ -1,8 +1,8 @@
-import { CreateChangesPatchUseCase } from '../../../application/usecases/changes/create-changes-patch';
-import { NodeTextFileWriter } from '../node/node-text-file-writer';
-import { VscodeClipboard } from './vscode-clipboard';
-import { VscodeCommitPatchDestinationPicker } from './vscode-commit-patch-destination-picker';
-import { VscodeSaveFile } from './vscode-save-file';
+import { CreateChangesPatchUseCase } from '@application/usecases/changes/create-changes-patch';
+import { NodeTextFileWriter } from '@extension/adapters/node/node-text-file-writer';
+import { VscodeClipboard } from '@extension/adapters/vscode/vscode-clipboard';
+import { VscodeCommitPatchDestinationPicker } from '@extension/adapters/vscode/vscode-commit-patch-destination-picker';
+import { VscodeSaveFile } from '@extension/adapters/vscode/vscode-save-file';
 
 export const defaultCreateChangesPatch = new CreateChangesPatchUseCase(
     new VscodeCommitPatchDestinationPicker(),

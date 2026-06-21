@@ -1,5 +1,6 @@
-import { ChangeSectionId } from './changeTree';
-import { ChangesSortMode, ChangesViewMode, type ChangesState, type ChangesStatePreferences } from './changesState';
+import { isRecord } from '@webview/shared/typeGuards';
+import { ChangeSectionId } from '@webview/features/changes/changeTree';
+import { ChangesSortMode, ChangesViewMode, type ChangesState, type ChangesStatePreferences } from '@webview/features/changes/changesState';
 
 interface PersistedChangesWebviewState {
     readonly viewMode?: unknown;
@@ -39,10 +40,6 @@ export function changesStateToPersisted(state: ChangesState): ChangesStatePrefer
         collapsedSectionIds: state.collapsedSectionIds,
         commitMessageHistory: state.commitMessageHistory,
     };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
 }
 
 function isStringInSet<TValue extends string>(value: unknown, values: ReadonlySet<TValue>): value is TValue {

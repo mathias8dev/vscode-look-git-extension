@@ -1,14 +1,12 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import type { GitRepository } from '../../application/ports/git-repository';
-import type { GitWorktreeTopologyOperations } from '../../application/ports/git-capabilities';
-import type { WorktreeCommand } from '../../protocol/graph/messages';
-import { showModalWarningMessage } from '../utils/confirmation';
-import { showBranchNameInput } from '../utils/branch-name-input';
-import { openChangesWithWorkingTree } from './git-command-helpers';
-import { requireRuntimeRepository, requireRuntimeTargets, requireRuntimeWorktree, type RuntimeCommandTargets } from './runtime-command-targets';
+import type { GitRepository } from '@application/ports/git-topology';
+import type { WorktreeCommand } from '@protocol/graph/messages';
+import { showModalWarningMessage } from '@extension/utils/confirmation';
+import { showBranchNameInput } from '@extension/utils/branch-name-input';
+import { openChangesWithWorkingTree } from '@extension/commands/git-command-helpers';
+import { requireRuntimeRepository, requireRuntimeTargets, requireRuntimeWorktree, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
 
-type WorktreeTopologyReader = Pick<GitWorktreeTopologyOperations, 'listWorktrees'>;
 
 export async function runWorktreeCommand(
     repo: GitRepository,
@@ -109,7 +107,7 @@ function requireWorktreePath(wtPath: string | undefined): string {
     return wtPath;
 }
 
-async function assertNotMainWorktree(repo: WorktreeTopologyReader, wtPath: string, operation: 'locked' | 'unlocked' | 'removed'): Promise<void> {
+async function assertNotMainWorktree(repo: GitRepository, wtPath: string, operation: 'locked' | 'unlocked' | 'removed'): Promise<void> {
     const worktree = (await repo.listWorktrees()).find((candidate) => candidate.path === wtPath);
     if (worktree?.isMain) { throw new Error(`The main worktree cannot be ${operation}.`); }
 }

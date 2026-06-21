@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parsePorcelainStatus, detectConflictStateFromFiles, summarizePorcelainStatus } from '../../../src/core/parsing/parseStatus';
-import { expectItem } from '../../helpers/assertions';
+import { parsePorcelainStatus, detectConflictStateFromFiles, summarizePorcelainStatus } from '@core/parsing/parseStatus';
+import { expectItem } from '@tests/helpers/assertions';
 
 describe('parsePorcelainStatus', () => {
     it('returns empty buckets for empty output', () => {

@@ -170,9 +170,9 @@ interface GitRepository {
 src/extension/
 ├── activate.ts                 Entry point — wires everything, no logic
 ├── git/
-│   ├── GitProcessRepository.ts  ONLY file that calls child_process.execFile
-│   ├── GitLockRetry.ts          Exponential backoff on index.lock errors
-│   └── RepoContextFactory.ts    Creates RepoContexts from vscode.git API
+│   ├── git-cli-backend.ts       ONLY file that calls child_process.execFile
+│   ├── cli-git-runtime.ts       Maps semantic git operations to argv
+│   └── runtime-repository-factory.ts Creates runtime repositories/worktrees
 ├── views/
 │   ├── GraphViewProvider.ts     WebviewViewProvider — owns graph webview (includes worktrees + submodules sections)
 │   └── ChangesViewProvider.ts   WebviewViewProvider — owns changes webview
@@ -191,7 +191,7 @@ src/extension/
 Rules:
 - `activate.ts` only wires dependencies — no business logic
 - Each `MessageRouter` handles exactly one webview's messages
-- `GitProcessRepository` is the only file with `child_process` — one per `RepoContext`
+- `git-cli-backend.ts` is the only file with `child_process`; semantic git actions go through runtime `GitRepository` / `Worktree`
 - All pending git operations use `AbortController`; cancel on view disposal or new request
 
 ### Cancellation pattern
@@ -207,7 +207,7 @@ class GraphMessageRouter {
     this.pending.set(req.repoId, controller);
 
     try {
-      // AbortSignal flows to GitProcessRepository only — use-cases do not receive it
+      // AbortSignal flows through runtime GitRepository / Worktree to the CLI backend
       const data = await this.usecase.execute(req.filters, req.page, controller.signal);
       this.webview.postMessage({ type: 'graph/dataResponse', requestId: req.requestId, data });
     } catch (err) {
@@ -369,7 +369,7 @@ useEffect(() => {
 ## Worktree Rules
 
 1. Each linked worktree is a `RepoContext` with `kind: 'worktree'` and `parentId` = main repo id.
-2. `GitProcessRepository` is instantiated per context — `cwd` always comes from `context.cwd`.
+2. Runtime `GitRepository` / `Worktree` objects are instantiated per context — `cwd` always comes from `context.cwd`.
 3. File watchers must cover `**/.git/worktrees/*/HEAD` in addition to `**/.git/HEAD`.
 4. **Switch worktree**: offer a Quick Pick — "Open in New Window" (default) or "Open in Current Window". Never silently replace the workspace.
 5. **Add worktree wizard**: (1) input path, (2) select existing branch or type new branch name. Validate path does not already exist.
@@ -407,7 +407,7 @@ useEffect(() => {
 |---|---|---|---|
 | Parsing functions | vitest | `tests/core/parsing/` | Pure input/output, no mocks |
 | Use-cases | vitest | `tests/core/usecases/` | Mock `GitRepository` interface only |
-| GitProcessRepository | vitest | `tests/extension/git/` | Real temp git repos via helpers |
+| Git CLI backend/runtime | vitest | `tests/extension/git/` | Real temp git repos via helpers |
 | Message routers | vitest | `tests/extension/messaging/` | Mock webview + mock repo |
 | React components | vitest + RTL or React server rendering | `tests/webview/` | No VS Code runtime; prefer pure rendering tests for icon wrappers |
 | Feature reducers/stores | vitest | `tests/webview/` | Import reducer/store, dispatch actions, assert state |

@@ -1,5 +1,5 @@
-import type { RewordCommitMessageGenerator, RewordCommitMessageGeneratorInput } from '../../../application/ports/commit-message-generator';
-import { requestVscodeLanguageModel } from './vscode-language-model-request';
+import type { RewordCommitMessageGenerator, RewordCommitMessageGeneratorInput } from '@application/ports/commit-message-generator';
+import { requestVscodeLanguageModel } from '@extension/adapters/vscode/vscode-language-model-request';
 
 export class VscodeLanguageModelRewordCommitMessageGenerator implements RewordCommitMessageGenerator {
     generateRewordCommitMessage(input: RewordCommitMessageGeneratorInput, signal?: AbortSignal): Promise<string> {

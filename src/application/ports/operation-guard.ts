@@ -1,4 +1,4 @@
-import type { SemanticGitOperation } from './git-operation';
+import type { SemanticGitOperation } from '@application/ports/git-operation';
 
 export type OperationGuardKind =
     | 'confirm'

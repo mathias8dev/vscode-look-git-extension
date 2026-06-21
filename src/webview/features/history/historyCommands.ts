@@ -1,6 +1,6 @@
-import type { Pagination } from '../../../protocol/shared/base';
-import type { HistoryToolbarCommand, HistoryWebviewToExtensionMessage } from '../../../protocol/history/messages';
-import type { HistoryCommitFile, HistoryContextTarget } from '../../../protocol/history/types';
+import type { Pagination } from '@protocol/shared/base';
+import type { HistoryToolbarCommand, HistoryWebviewToExtensionMessage } from '@protocol/history/messages';
+import type { HistoryCommitFile, HistoryContextTarget } from '@protocol/history/types';
 
 let requestCounter = 0;
 

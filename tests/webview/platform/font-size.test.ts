@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { applyWebviewFontSize, isWebviewFontSizeMessage } from '../../../src/webview/platform/font-size';
+import { applyWebviewFontSize, isWebviewFontSizeMessage } from '@webview/platform/font-size';
 
 describe('webview font size platform helper', () => {
     beforeEach(() => {

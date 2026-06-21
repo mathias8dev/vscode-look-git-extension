@@ -5,8 +5,8 @@ import {
     commitBlockReason,
     messageStats,
     rememberCommitMessage,
-} from '../../../src/webview/features/changes/commitComposerModel';
-import { CommitMode, ConflictState } from '../../../src/protocol/changes/types';
+} from '@webview/features/changes/commitComposerModel';
+import { CommitMode, ConflictState } from '@protocol/changes/types';
 
 describe('commitComposerModel', () => {
     it('blocks empty messages', () => {

@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { BranchInfo, GraphContextTarget } from '../../../protocol/graph/types';
-import type { GraphRow } from './layout/graph-lane-model';
-import { GraphColumnHeader } from './GraphColumnHeader';
-import { GraphCommitRow, type CommitSelectMode } from './GraphRow';
-import { GraphWIPRow } from './GraphWIPRow';
-import { ROW_HEIGHT, rowHeightForFontSize } from './graphRowSizing';
-import { getVisibleGraphRowRange } from './graphVirtualization';
-import type { DisplayRow } from './graphState';
+import type { BranchInfo, GraphContextTarget } from '@protocol/graph/types';
+import type { GraphRow } from '@webview/features/graph/layout/graph-lane-model';
+import { GraphColumnHeader } from '@webview/features/graph/GraphColumnHeader';
+import { GraphCommitRow, type CommitSelectMode } from '@webview/features/graph/GraphRow';
+import { GraphWIPRow } from '@webview/features/graph/GraphWIPRow';
+import { ROW_HEIGHT, rowHeightForFontSize } from '@webview/features/graph/graphRowSizing';
+import { getVisibleGraphRowRange } from '@webview/features/graph/graphVirtualization';
+import type { DisplayRow } from '@webview/features/graph/graphState';
 import {
     graphTableColumnStyle,
     readSavedGraphColumnWidths,
     type GraphColumnId,
-} from './graphTableColumns';
+} from '@webview/features/graph/graphTableColumns';
 
 interface GraphTableProps {
     readonly rows: readonly GraphRow[];

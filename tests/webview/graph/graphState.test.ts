@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { GraphOperationCategory, GraphOperationStatus } from '../../../src/protocol/graph/messages';
-import type { BranchInfo, GraphCommit, GraphData, WorktreeWip } from '../../../src/protocol/graph/types';
-import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
-import { buildDisplayRows, createInitialGraphState, graphRequestId, reduceGraphState } from '../../../src/webview/features/graph/graphState';
-import type { GraphRow, LaneData } from '../../../src/webview/features/graph/layout/graph-lane-model';
-import { findAdjacentDisconnectedSameLaneIssues, findFloatingNodeIssues, findLaneContinuityIssues } from '../../helpers/graphLayoutAssertions';
+import { GraphOperationCategory, GraphOperationStatus } from '@protocol/graph/messages';
+import type { BranchInfo, GraphCommit, GraphData, WorktreeWip } from '@protocol/graph/types';
+import { SubmoduleStatus } from '@protocol/shared/repo';
+import { buildDisplayRows, createInitialGraphState, graphRequestId, reduceGraphState } from '@webview/features/graph/graphState';
+import type { GraphRow, LaneData } from '@webview/features/graph/layout/graph-lane-model';
+import { findAdjacentDisconnectedSameLaneIssues, findFloatingNodeIssues, findLaneContinuityIssues } from '@tests/helpers/graphLayoutAssertions';
+
+const mainRepository = { repoId: 'main-repo-id', kind: 'main', path: '/repo' } as const;
+const authKitRepository = { repoId: 'auth-kit-id', kind: 'submodule', path: '/repo/modules/auth-kit', parentRepoId: 'main-repo-id' } as const;
 
 function commit(hash: string, parents: readonly string[] = []): GraphCommit {
     return {
@@ -21,6 +24,7 @@ function commit(hash: string, parents: readonly string[] = []): GraphCommit {
 
 function graphData(commits: readonly GraphCommit[], loadedCount: number, hasMore: boolean): GraphData {
     return {
+        repository: mainRepository,
         branches: [],
         tags: [],
         commits,
@@ -417,7 +421,7 @@ describe('graphState', () => {
         expect(invalidated.activeGraphRequestId).toBe(graphRequestId(2, 'replace'));
     });
 
-    it('ignores a branch-filter invalidation for a different repository scope', () => {
+    it('ignores a branch-filter invalidation for a different repository', () => {
         const loaded = reduceGraphState(createInitialGraphState(), {
             type: 'message',
             message: {
@@ -432,11 +436,11 @@ describe('graphState', () => {
             message: {
                 type: 'graph/branchFilterInvalidated',
                 branch: 'feature/login',
-                repositoryScope: { kind: 'submodule', path: 'libs/widget' },
+                repository: authKitRepository,
             },
         });
 
-        // Mismatched scope: the filter must be left intact and no reload triggered.
+        // Mismatched repository: the filter must be left intact and no reload triggered.
         expect(ignored).toBe(filtered);
         expect(ignored.selectedBranchFilter).toBe('feature/login');
         expect(ignored.activeGraphRequestId).toBe(graphRequestId(1, 'replace'));
@@ -603,11 +607,12 @@ describe('graphState', () => {
         expect(cleared.operationStatus).toBeUndefined();
     });
 
-    it('ignores graph operation feedback from another repository scope', () => {
+    it('ignores graph operation feedback from another repository', () => {
         const scoped = reduceGraphState(createInitialGraphState(), {
             type: 'selectSubmodule',
             submodulePath: 'modules/auth-kit',
             submoduleLabel: 'auth-kit',
+            repository: authKitRepository,
         });
         const ignored = reduceGraphState(scoped, {
             type: 'message',
@@ -617,7 +622,7 @@ describe('graphState', () => {
                 status: GraphOperationStatus.Running,
                 category: GraphOperationCategory.Repository,
                 command: 'fetch',
-                repositoryScope: { kind: 'main' },
+                repository: mainRepository,
             },
         });
 
@@ -729,7 +734,7 @@ describe('graphState', () => {
             message: {
                 type: 'graph/submodulesPush',
                 repoId: '/repo',
-                repositoryScope: { kind: 'main' },
+                repository: mainRepository,
                 submodules: [{
                     path: 'modules/auth-kit',
                     name: 'auth-kit',
@@ -769,7 +774,7 @@ describe('graphState', () => {
             message: {
                 type: 'graph/submodulesPush',
                 repoId: '/repo',
-                repositoryScope: { kind: 'main' },
+                repository: mainRepository,
                 submodules: [{
                     ...summarySubmodule,
                     branches: [branch('feature/oauth')],
@@ -846,6 +851,7 @@ describe('graphState', () => {
                     ...graphData([commit('parent-hash')], 1, false),
                     branches: [branch('main')],
                     submodules: [{
+                        repository: authKitRepository,
                         path: 'modules/auth-kit',
                         name: 'auth-kit',
                         status: SubmoduleStatus.Clean,
@@ -861,14 +867,16 @@ describe('graphState', () => {
                 type: 'selectSubmodule',
                 submodulePath: 'modules/auth-kit',
                 submoduleLabel: 'auth-kit',
+                repository: authKitRepository,
             },
         );
 
-        expect(selected.repositoryScope).toEqual({
+        expect(selected.selectedRepository).toEqual({
             kind: 'submodule',
             path: 'modules/auth-kit',
             label: 'auth-kit',
         });
+        expect(selected.repository).toEqual(authKitRepository);
         expect(selected.selectedBranchFilter).toBeUndefined();
         expect(selected.filters.branches).toBeUndefined();
         expect(selected.loading).toBe(true);
@@ -884,20 +892,22 @@ describe('graphState', () => {
             type: 'selectSubmodule',
             submodulePath: 'modules/auth-kit',
             submoduleLabel: 'auth-kit',
+            repository: authKitRepository,
         });
         const main = reduceGraphState(scoped, { type: 'selectMainRepository' });
 
-        expect(main.repositoryScope).toEqual({ kind: 'main' });
+        expect(main.selectedRepository).toEqual({ kind: 'main' });
         expect(main.selectedBranchFilter).toBeUndefined();
         expect(main.filters.branches).toBeUndefined();
         expect(main.loading).toBe(true);
     });
 
-    it('ignores stale graph responses for another repository scope', () => {
+    it('ignores stale graph responses for another repository', () => {
         const scoped = reduceGraphState(createInitialGraphState(), {
             type: 'selectSubmodule',
             submodulePath: 'modules/auth-kit',
             submoduleLabel: 'auth-kit',
+            repository: authKitRepository,
         });
         const loaded = reduceGraphState(scoped, {
             type: 'message',
@@ -906,7 +916,7 @@ describe('graphState', () => {
                 requestId: graphRequestId(1, 'replace'),
                 data: {
                     ...graphData([commit('submodule-head')], 1, false),
-                    repositoryScope: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
+                    repository: authKitRepository,
                     branches: [branch('feature/oauth')],
                     currentBranch: 'feature/oauth',
                 },
@@ -920,7 +930,7 @@ describe('graphState', () => {
                 requestId: 'old-main-request',
                 data: {
                     ...graphData([], 0, false),
-                    repositoryScope: { kind: 'main' },
+                    repository: mainRepository,
                     branches: [],
                     currentBranch: 'main',
                 },
@@ -929,7 +939,7 @@ describe('graphState', () => {
 
         expect(stale.branches).toEqual([branch('feature/oauth')]);
         expect(stale.currentBranch).toBe('feature/oauth');
-        expect(stale.repositoryScope).toEqual({ kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' });
+        expect(stale.selectedRepository).toEqual({ kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' });
         expect(stale.loading).toBe(true);
     });
 
@@ -938,6 +948,7 @@ describe('graphState', () => {
             type: 'selectSubmodule',
             submodulePath: 'modules/auth-kit',
             submoduleLabel: 'auth-kit',
+            repository: authKitRepository,
         });
         const loaded = reduceGraphState(scoped, {
             type: 'message',
@@ -946,7 +957,7 @@ describe('graphState', () => {
                 requestId: graphRequestId(1, 'replace'),
                 data: {
                     ...graphData([commit('submodule-head')], 1, false),
-                    repositoryScope: { kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' },
+                    repository: authKitRepository,
                     branches: [branch('feature/oauth')],
                     currentBranch: 'feature/oauth',
                 },
@@ -959,7 +970,7 @@ describe('graphState', () => {
                 repoId: '/repo',
                 data: {
                     ...graphData([], 0, false),
-                    repositoryScope: { kind: 'main' },
+                    repository: mainRepository,
                     branches: [],
                     currentBranch: 'main',
                 },
@@ -968,7 +979,7 @@ describe('graphState', () => {
 
         expect(pushed.branches).toEqual([branch('feature/oauth')]);
         expect(pushed.currentBranch).toBe('feature/oauth');
-        expect(pushed.repositoryScope).toEqual({ kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' });
+        expect(pushed.selectedRepository).toEqual({ kind: 'submodule', path: 'modules/auth-kit', label: 'auth-kit' });
         expect(pushed.loading).toBe(true);
         expect(pushed.refreshVersion).toBe(2);
     });

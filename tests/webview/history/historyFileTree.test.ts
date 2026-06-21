@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildHistoryFileTree } from '../../../src/webview/features/history/historyFileTree';
+import { buildHistoryFileTree } from '@webview/features/history/historyFileTree';
 
 describe('historyFileTree', () => {
     it('groups commit files into sorted folders before files', () => {

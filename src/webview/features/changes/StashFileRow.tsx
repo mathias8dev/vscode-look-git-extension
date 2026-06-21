@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import type { StashFileEntry } from '../../../protocol/changes/types';
-import { IconButton } from '../../shared/IconButton';
-import { changesItemContext } from './context-menu-model';
-import { FileTypeIcon } from './FileTypeIcon';
-import { iconKindForStashFile } from './fileIconModel';
+import type { StashFileEntry } from '@protocol/changes/types';
+import { IconButton } from '@webview/shared/IconButton';
+import { changesItemContext } from '@webview/features/changes/context-menu-model';
+import { FileTypeIcon } from '@webview/features/changes/FileTypeIcon';
+import { iconKindForStashFile } from '@webview/features/changes/fileIconModel';
 
 interface StashFileRowProps {
     readonly index: number;

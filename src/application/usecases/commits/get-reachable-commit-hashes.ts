@@ -1,7 +1,7 @@
-import type { GitHistoryOperations } from '../../ports/git-capabilities';
+import type { GitRepository } from '@application/ports/git-topology';
 
 export async function getReachableCommitHashes(
-    repo: Pick<GitHistoryOperations, 'getReachableCommitHashes'>,
+    repo: GitRepository,
     hashes: readonly string[],
     signal?: AbortSignal,
 ): Promise<ReadonlySet<string>> {

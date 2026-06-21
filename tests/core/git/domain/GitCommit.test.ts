@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GitCommit } from '../../../../src/core/git/domain/GitCommit';
+import { GitCommit } from '@core/git/domain/GitCommit';
 
 describe('GitCommit', () => {
     it('keeps commit fields immutable by construction', () => {

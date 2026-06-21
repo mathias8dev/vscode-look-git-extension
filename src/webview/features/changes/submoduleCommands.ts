@@ -1,9 +1,9 @@
-import type { ChangesToolbarCommand, ChangesWebviewToExtensionMessage } from '../../../protocol/changes/messages';
-import type { ChangesContextTarget, ConflictState, StashFileEntry, StatusEntry } from '../../../protocol/changes/types';
-import { CommitMode } from '../../../protocol/changes/types';
-import { ChangeBulkAction, ChangeRowAction } from './changeCommands';
-import { OperationAction } from './operationCommands';
-import { StashEntryAction } from './stashCommands';
+import type { ChangesToolbarCommand, ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
+import type { ChangesContextTarget, ConflictState, StashFileEntry, StatusEntry } from '@protocol/changes/types';
+import { CommitMode } from '@protocol/changes/types';
+import { ChangeBulkAction, ChangeRowAction } from '@webview/features/changes/changeCommands';
+import { OperationAction } from '@webview/features/changes/operationCommands';
+import { StashEntryAction } from '@webview/features/changes/stashCommands';
 
 export enum SubmoduleAction {
     Refresh   = 'refresh',

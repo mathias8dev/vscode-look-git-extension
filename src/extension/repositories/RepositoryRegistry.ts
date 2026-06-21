@@ -1,5 +1,5 @@
-import type { GitRepository, Worktree } from '../../application/ports/git-topology';
-import type { RepositoryLocator, WorktreeLocator } from '../../protocol/shared/repo';
+import type { GitRepository, Worktree } from '@application/ports/git-topology';
+import type { RepositoryLocator, WorktreeLocator } from '@protocol/shared/repo';
 
 export class RepositoryRegistry {
     private readonly repositoriesById = new Map<string, GitRepository>();
@@ -15,6 +15,14 @@ export class RepositoryRegistry {
         const worktreeIds = this.worktreeIdsByRepositoryId.get(worktree.repoId) ?? new Set<string>();
         worktreeIds.add(worktree.worktreeId);
         this.worktreeIdsByRepositoryId.set(worktree.repoId, worktreeIds);
+    }
+
+    replaceRepository(repository: GitRepository, worktrees: readonly Worktree[]): void {
+        this.unregisterRepository(repository.repoId);
+        this.registerRepository(repository);
+        for (const worktree of worktrees) {
+            this.registerWorktree(worktree);
+        }
     }
 
     resolveRepository(locator: RepositoryLocator): GitRepository {
@@ -58,6 +66,16 @@ export class RepositoryRegistry {
             }
         }
         this.worktreeIdsByRepositoryId.delete(repositoryId);
+    }
+
+    unregisterRepositoryTree(repositoryId: string): void {
+        const childRepositoryIds = [...this.repositoriesById.values()]
+            .filter((repository) => repository.parentRepositoryId === repositoryId)
+            .map((repository) => repository.repoId);
+        for (const childRepositoryId of childRepositoryIds) {
+            this.unregisterRepositoryTree(childRepositoryId);
+        }
+        this.unregisterRepository(repositoryId);
     }
 }
 
