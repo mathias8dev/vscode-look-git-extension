@@ -1,8 +1,8 @@
 import type { GitRepository } from '@application/ports/git-topology';
 import { settleOptional } from '@core/shared/async';
-import type { GitGraphCommit } from '@core/git/domain/GitCommit';
-import type { GitBranch, GitTag } from '@core/git/domain/GitStatus';
-import type { GitSubmodule, GitWorktree } from '@core/git/domain/GitWorktree';
+import type { GitGraphCommit } from '@core/git/domain/git-commit';
+import type { GitBranch, GitTag } from '@core/git/domain/git-status';
+import type { GitSubmodule, GitWorktree } from '@core/git/domain/git-worktree';
 import { getReachableCommitHashes } from '@application/usecases/commits/get-reachable-commit-hashes';
 
 export interface GraphDataFilters {

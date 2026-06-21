@@ -1,8 +1,8 @@
 import * as path from 'path';
 import type { GitRepository, Worktree } from '@application/ports/git-topology';
-import type { RepoContext } from '@core/git/domain/RepoContext';
-import { toRepositoryLocator, toWorktreeLocator } from '@extension/mapping/toProtocol';
-import type { RepositoryRegistry } from '@extension/repositories/RepositoryRegistry';
+import type { RepoContext } from '@core/git/domain/repo-context';
+import { toRepositoryLocator, toWorktreeLocator } from '@extension/mapping/to-protocol';
+import type { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import { stableRepoContextId } from '@extension/repositories/repo-context-id';
 
 export interface RuntimeTargets {

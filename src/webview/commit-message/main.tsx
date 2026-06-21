@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { CommitMessageWebview } from '@webview/commit-message/CommitMessageWebview';
+import { CommitMessageWebview } from '@webview/commit-message/commit-message-webview';
 import '@webview/styles.css';
 
 const root = document.getElementById('root');

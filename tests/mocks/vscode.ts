@@ -1,7 +1,7 @@
 // VS Code API mock for unit tests — mirrors the real API surface used by this extension
 
 import { readFileSync } from 'node:fs';
-import { resetErrorOutputChannel } from '@extension/messaging/errorOutputChannel';
+import { resetErrorOutputChannel } from '@extension/messaging/error-output-channel';
 
 export const TreeItemCollapsibleState = { None: 0, Collapsed: 1, Expanded: 2 } as const;
 export const ProgressLocation = { Notification: 15 } as const;

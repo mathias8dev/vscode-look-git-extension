@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { RepoKind } from '@core/git/domain/RepoContext';
-import { toRepositoryLocator, toWorktreeLocator } from '@extension/mapping/toProtocol';
+import { RepoKind } from '@core/git/domain/repo-context';
+import { toRepositoryLocator, toWorktreeLocator } from '@extension/mapping/to-protocol';
 
 describe('repo locators', () => {
     it('maps a main repo context to repository and worktree locators', () => {

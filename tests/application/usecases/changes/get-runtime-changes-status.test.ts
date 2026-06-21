@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Page } from '@core/git/domain/Page';
-import type { GitStatus } from '@core/git/domain/GitStatus';
-import type { GitSubmodule } from '@core/git/domain/GitWorktree';
+import { Page } from '@core/git/domain/page';
+import type { GitStatus } from '@core/git/domain/git-status';
+import type { GitSubmodule } from '@core/git/domain/git-worktree';
 import { GetRuntimeChangesStatusUseCase } from '@application/usecases/changes/get-runtime-changes-status';
 import type { GitReferenceOperations, GitStashOperations, GitStatusOperations, GitSubmoduleOperations } from '@application/ports/git-capabilities';
 

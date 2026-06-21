@@ -3,7 +3,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { StashFileEntry } from '@protocol/changes/types';
-import { StashFileRow } from '@webview/features/changes/StashFileRow';
+import { StashFileRow } from '@webview/features/changes/stash-file-row';
 
 describe('StashFileRow', () => {
     it('opens the stash diff when clicking the file row', () => {

@@ -1,15 +1,15 @@
 import * as vscode from 'vscode';
 import type { Repository } from '@extension/adapters/vscode/git-api';
-import { ActiveRepositoryRegistry } from '@extension/repositories/ActiveRepositoryRegistry';
-import { ChangesViewProvider } from '@extension/views/ChangesViewProvider';
-import { CommitHistoryViewProvider } from '@extension/views/CommitHistoryViewProvider';
-import { GraphViewProvider } from '@extension/views/GraphViewProvider';
-import { getBuiltInGitApi } from '@extension/utils/gitExtension';
+import { ActiveRepositoryRegistry } from '@extension/repositories/active-repository-registry';
+import { ChangesViewProvider } from '@extension/views/changes-view-provider';
+import { CommitHistoryViewProvider } from '@extension/views/commit-history-view-provider';
+import { GraphViewProvider } from '@extension/views/graph-view-provider';
+import { getBuiltInGitApi } from '@extension/utils/git-extension';
 import { registerReadonlyDiffDocumentProvider } from '@extension/utils/readonly-diff-documents';
 import { registerGitBlobDocumentProvider } from '@extension/utils/git-blob-documents';
 import { registerWebviewFontSizeSync } from '@extension/views/webview-font';
-import { RepositoryRegistry } from '@extension/repositories/RepositoryRegistry';
-import { appendErrorToOutput } from '@extension/messaging/errorOutputChannel';
+import { RepositoryRegistry } from '@extension/repositories/repository-registry';
+import { appendErrorToOutput } from '@extension/messaging/error-output-channel';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const gitApi = await getBuiltInGitApi();

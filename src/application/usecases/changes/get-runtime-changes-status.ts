@@ -1,7 +1,7 @@
 import type { GitReferenceOperations, GitStashOperations, GitStatusOperations, GitSubmoduleOperations } from '@application/ports/git-capabilities';
-import type { GitStatus, GitStash } from '@core/git/domain/GitStatus';
-import type { GitSubmodule } from '@core/git/domain/GitWorktree';
-import type { PageRequest } from '@core/git/domain/Page';
+import type { GitStatus, GitStash } from '@core/git/domain/git-status';
+import type { GitSubmodule } from '@core/git/domain/git-worktree';
+import type { PageRequest } from '@core/git/domain/page';
 
 export interface ChangesStatusWarning {
     readonly operation: string;

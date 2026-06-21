@@ -1,7 +1,7 @@
 import * as path from 'path';
-import type { GitStatus } from '@core/git/domain/GitStatus';
-import type { GitWorktree } from '@core/git/domain/GitWorktree';
-import { RepoKind, type RepoContext } from '@core/git/domain/RepoContext';
+import type { GitStatus } from '@core/git/domain/git-status';
+import type { GitWorktree } from '@core/git/domain/git-worktree';
+import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
 import type { GitRuntime, RepositoryKind } from '@application/ports/git-runtime';
 import { HybridGitRuntime } from '@extension/git/hybrid-git-runtime';
 import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';

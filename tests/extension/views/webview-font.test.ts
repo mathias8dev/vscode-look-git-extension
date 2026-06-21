@@ -7,7 +7,7 @@ import {
     webviewFontSizeMessage,
     webviewFontSizeStyle,
 } from '@extension/views/webview-font';
-import { resetVscodeMock } from '@tests/helpers/providerRuntime';
+import { resetVscodeMock } from '@tests/helpers/provider-runtime';
 import { workspace } from '@tests/mocks/vscode';
 
 describe('webview font size', () => {

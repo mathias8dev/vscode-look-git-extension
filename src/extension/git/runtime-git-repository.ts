@@ -1,7 +1,7 @@
-import type { GitCommit, GitFileChange } from '@core/git/domain/GitCommit';
-import type { Page, PageRequest } from '@core/git/domain/Page';
-import type { GitBranch, GitTag } from '@core/git/domain/GitStatus';
-import type { GitSubmodule, GitWorktree } from '@core/git/domain/GitWorktree';
+import type { GitCommit, GitFileChange } from '@core/git/domain/git-commit';
+import type { Page, PageRequest } from '@core/git/domain/page';
+import type { GitBranch, GitTag } from '@core/git/domain/git-status';
+import type { GitSubmodule, GitWorktree } from '@core/git/domain/git-worktree';
 import type {
     AddWorktreeInput,
     CommitGraphQuery,

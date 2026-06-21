@@ -3,7 +3,7 @@ import * as path from 'path';
 import type { GitRepository, Worktree } from '@application/ports/git-topology';
 import { CheckoutBranchUseCase } from '@application/usecases/branches/checkout-branch';
 import type { BranchCommand } from '@protocol/graph/messages';
-import type { GitWorktree } from '@core/git/domain/GitWorktree';
+import type { GitWorktree } from '@core/git/domain/git-worktree';
 import { showModalWarningMessage } from '@extension/utils/confirmation';
 import { showBranchNameInput } from '@extension/utils/branch-name-input';
 import {
