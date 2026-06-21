@@ -98,7 +98,7 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     popStash: (input) => ({ args: ['stash', 'pop', requiredStringField(input, 'stash')] }),
     dropStash: (input) => ({ args: ['stash', 'drop', requiredString(input, 'stash')] }),
     clearStashes: () => ({ args: ['stash', 'clear'] }),
-    getStashSummary: (input) => ({ args: ['stash', 'show', '--stat', requiredStringField(input, 'stash')] }),
+    getStashSummary: (input) => ({ args: ['stash', 'show', '--include-untracked', '--stat', requiredStringField(input, 'stash')] }),
     checkout: (input) => ({ args: ['checkout', requiredStringField(input, 'ref')] }),
     checkoutNewBranch: (input) => ({ args: checkoutNewBranchArgs(input) }),
     restorePaths: (input) => ({ args: restorePathsArgs(input) }),

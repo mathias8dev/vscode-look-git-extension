@@ -23,7 +23,7 @@ export class ApplyPatchUseCase {
         if (mode === ApplyPatchMode.Index) {
             await worktree.applyPatchToIndex(patch, { threeWay: true });
         } else {
-            await worktree.applyPatch(patch, { threeWay: true });
+            await worktree.applyPatch(patch, {});
         }
         const status = await worktree.getStatus();
         return {
