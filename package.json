@@ -86,6 +86,12 @@
     },
     "commands": [
       {
+        "command": "lookGit.resetExtensionState",
+        "title": "Reset Extension State",
+        "category": "Look Git",
+        "icon": "$(debug-restart)"
+      },
+      {
         "command": "lookGit.history.copyRevisionNumber",
         "title": "Copy Revision Number",
         "category": "Look Git",
@@ -2477,6 +2483,7 @@
     "test:watch": "vitest",
     "test:integration": "npm run compile && npm run compile:tests && node ./out/tests/integration/run-test.js",
     "test:e2e": "npm run compile && npm run compile:tests && node ./out/tests/e2e/run-e2e.js",
+    "test:e2e:wdio": "npm run compile && wdio run ./tests/e2e/wdio.conf.ts",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\" \"*.js\" \"*.mjs\" --max-warnings=0",
     "check:duplication": "jscpd src/ --min-lines 5 --min-tokens 50 --threshold 3",
     "publish:ext": "npx @vscode/vsce publish"
@@ -2501,10 +2508,14 @@
     "@vscode/codicons": "^0.0.45",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.1",
+    "@wdio/cli": "^9.29.0",
+    "@wdio/local-runner": "^9.29.0",
+    "@wdio/mocha-framework": "^9.29.0",
     "esbuild": "^0.28.0",
     "eslint": "^10.4.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
+    "expect-webdriverio": "^5.6.8",
     "globals": "^17.6.0",
     "jscpd": "^5.0.11",
     "jsdom": "^29.1.1",
@@ -2516,6 +2527,8 @@
     "typescript-eslint": "^8.60.0",
     "vite": "^7.2.4",
     "vitest": "^4.1.7",
+    "wdio-vscode-service": "^8.0.0",
+    "webdriverio": "^9.29.0",
     "zustand": "^5.0.14"
   },
   "keywords": [

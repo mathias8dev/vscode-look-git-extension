@@ -92,6 +92,18 @@ describe('RepositoryRegistry', () => {
         expect(() => registry.resolveRepository({ repoId: 'submodule', kind: 'submodule', path: '/submodule', parentRepoId: 'repo' }))
             .toThrow(RepositoryResolutionError);
     });
+
+    it('clears all registered runtime repositories and worktrees', () => {
+        const registry = new RepositoryRegistry();
+        registry.replaceRepository(repositoryModel('repo'), [worktreeModel('repo', 'main')]);
+        registry.replaceRepository(repositoryModel('submodule', 'repo'), [worktreeModel('submodule', 'submodule-main')]);
+
+        registry.clear();
+
+        expect(registry.repositories()).toEqual([]);
+        expect(registry.worktrees('repo')).toEqual([]);
+        expect(registry.worktrees('submodule')).toEqual([]);
+    });
 });
 
 function repositoryModel(repoId: string, parentRepositoryId?: string): GitRepository {

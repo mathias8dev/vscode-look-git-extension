@@ -18,11 +18,17 @@ export function changesSelectionTarget(
         unstageFilePaths: uniqueFilePaths(stagedItems),
         discardFilePaths: uniqueFilePaths(stageableItems),
         stashFilePaths: uniqueFilePaths(stashableItems),
-        patchStagedFilePaths: uniqueFilePaths(stagedItems),
-        patchUnstagedFilePaths: uniqueFilePaths(trackedUnstagedItems),
-        patchUntrackedFilePaths: uniqueFilePaths(untrackedItems),
+        patchStagedFilePaths: uniqueFilePaths(stagedItems.filter(isPatchableChangeItem)),
+        patchUnstagedFilePaths: uniqueFilePaths(trackedUnstagedItems.filter(isPatchableChangeItem)),
+        patchUntrackedFilePaths: uniqueFilePaths(untrackedItems.filter(isPatchableChangeItem)),
         stashIncludeUntracked: stashableItems.some((item) => isUntracked(item)),
     };
+}
+
+export function hasPatchableSelectionTarget(target: ChangesSelectionContextTarget): boolean {
+    return target.patchStagedFilePaths.length > 0
+        || target.patchUnstagedFilePaths.length > 0
+        || target.patchUntrackedFilePaths.length > 0;
 }
 
 export function isChangeListItem(item: ChangeListItem | undefined): item is ChangeListItem {
@@ -35,4 +41,8 @@ function uniqueFilePaths(items: readonly ChangeListItem[]): readonly string[] {
 
 function isUntracked(item: ChangeListItem): boolean {
     return item.entry.indexStatus === '?' || item.entry.workTreeStatus === '?';
+}
+
+function isPatchableChangeItem(item: ChangeListItem): boolean {
+    return item.entry.isSubmodule !== true;
 }

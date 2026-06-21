@@ -7,6 +7,7 @@ export const TreeItemCollapsibleState = { None: 0, Collapsed: 1, Expanded: 2 } a
 export const ProgressLocation = { Notification: 15 } as const;
 export const InputBoxValidationSeverity = { Info: 1, Warning: 2, Error: 3 } as const;
 export const ViewColumn = { Active: -1, Beside: -2, One: 1 } as const;
+export const FileType = { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 } as const;
 
 export class TreeItem {
     public description: unknown;
@@ -524,6 +525,7 @@ export const workspace = {
     fs: {
         files: new Map<string, Uint8Array>(),
         writes: [] as Array<{ uri: unknown; content: Uint8Array }>,
+        deletes: [] as unknown[],
         readFile(uri: unknown) {
             const key = typeof uri === 'object' && uri !== null && 'fsPath' in uri && typeof uri.fsPath === 'string'
                 ? uri.fsPath
@@ -532,8 +534,30 @@ export const workspace = {
             if (!content) { return Promise.reject(new Error(`File not found: ${key}`)); }
             return Promise.resolve(content);
         },
+        readDirectory(uri: unknown) {
+            const directory = uriFsPath(uri);
+            const names = new Set<string>();
+            for (const filePath of this.files.keys()) {
+                if (!filePath.startsWith(`${directory}/`)) { continue; }
+                const relativePath = filePath.slice(directory.length + 1);
+                const name = relativePath.split('/')[0];
+                if (name) { names.add(name); }
+            }
+            if (names.size === 0) { return Promise.reject(new Error(`Directory not found: ${directory}`)); }
+            return Promise.resolve([...names].map((name) => [name, FileType.File] as [string, number]));
+        },
         writeFile(uri: unknown, content: Uint8Array) { this.writes.push({ uri, content }); return Promise.resolve(); },
-        reset() { this.files = new Map(); this.writes = []; },
+        delete(uri: unknown, _options?: unknown) {
+            this.deletes.push(uri);
+            const target = uriFsPath(uri);
+            for (const filePath of [...this.files.keys()]) {
+                if (filePath === target || filePath.startsWith(`${target}/`)) {
+                    this.files.delete(filePath);
+                }
+            }
+            return Promise.resolve();
+        },
+        reset() { this.files = new Map(); this.writes = []; this.deletes = []; },
     },
     getConfiguration(section?: string) {
         return {
@@ -596,6 +620,12 @@ export const workspace = {
         this.fs.reset();
     },
 };
+
+function uriFsPath(uri: unknown): string {
+    return typeof uri === 'object' && uri !== null && 'fsPath' in uri && typeof uri.fsPath === 'string'
+        ? uri.fsPath.replace(/\\/g, '/')
+        : String(uri);
+}
 
 function createMockTextDocument(input: {
     readonly content: string;

@@ -7,6 +7,8 @@ export interface GitWorktree {
     readonly isDetached: boolean;
     readonly isLocked: boolean;
     readonly lockReason?: string;
+    readonly isPrunable?: boolean;
+    readonly pruneReason?: string;
 }
 
 /** Raw submodule from `git submodule status`. Status is the raw git prefix character. */

@@ -8,7 +8,7 @@ import type { StatusData, StatusEntry } from '@protocol/changes/types';
 import type { ErrorCode, RequestId } from '@protocol/shared/base';
 import { OperationStatus } from '@protocol/shared/operation';
 import { SubmoduleStatus } from '@protocol/shared/repo';
-import type { ActiveRepositoryAccessor } from '@extension/repositories/active-repository-registry';
+import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
 import type { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import type { GitRepository as RuntimeGitRepository, Worktree } from '@application/ports/git-topology';
 import { confirmTypedPhrase, showModalWarningMessage } from '@extension/utils/confirmation';
@@ -44,7 +44,7 @@ export class ChangesMessageRouter {
     private operationSequence = 0;
 
     constructor(
-        private readonly repositories: ActiveRepositoryAccessor,
+        private readonly repositories: RepositorySelectionAccessor,
         private readonly postMessage: PostMessage,
         private readonly refresh: RefreshCallback,
         private readonly onRepositoryUpdated: RepositoryUpdatedCallback = async () => {},
@@ -553,7 +553,7 @@ export class ChangesMessageRouter {
             }
 
             case 'changes/stash':
-                await currentRuntimeWorktree().stash(msg.message, {});
+                await currentRuntimeWorktree().stash(msg.message, { includeUntracked: true });
                 await this.refresh();
                 break;
 
@@ -616,7 +616,7 @@ export class ChangesMessageRouter {
                 const runtimeSubmoduleWorktree = () => this.requireRuntimeSubmoduleWorktree(submodulePath);
                 switch (msg.type) {
                     case 'changes/submoduleStash':
-                        await runtimeSubmoduleWorktree().stash(msg.message, {});
+                        await runtimeSubmoduleWorktree().stash(msg.message, { includeUntracked: true });
                         await this.refresh();
                         break;
                     case 'changes/submoduleStashSelectedFiles': {
@@ -765,16 +765,12 @@ export class ChangesMessageRouter {
                 break;
 
             case 'changes/abortOp': {
-                const opName = msg.conflictState === ConflictState.Merge ? 'merge' : 'rebase';
-                const choice = await showModalWarningMessage(`Abort the current ${opName}?`, 'Abort');
-                if (choice === 'Abort') {
-                    if (msg.conflictState === ConflictState.Merge) {
-                        await currentRuntimeWorktree().abortMerge();
-                    } else {
-                        await currentRuntimeWorktree().abortRebase();
-                    }
-                    await this.refresh();
+                if (msg.conflictState === ConflictState.Merge) {
+                    await currentRuntimeWorktree().abortMerge();
+                } else {
+                    await currentRuntimeWorktree().abortRebase();
                 }
+                await this.refresh();
                 break;
             }
 
@@ -792,17 +788,13 @@ export class ChangesMessageRouter {
 
             case 'changes/submoduleAbortOp': {
                 const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
-                const opName = msg.conflictState === ConflictState.Merge ? 'merge' : 'rebase';
-                const choice = await showModalWarningMessage(`Abort the current ${opName} in "${submodulePath}"?`, 'Abort');
-                if (choice === 'Abort') {
-                    const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(submodulePath);
-                    if (msg.conflictState === ConflictState.Merge) {
-                        await runtimeSubmoduleWorktree.abortMerge();
-                    } else {
-                        await runtimeSubmoduleWorktree.abortRebase();
-                    }
-                    await this.refresh();
+                const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(submodulePath);
+                if (msg.conflictState === ConflictState.Merge) {
+                    await runtimeSubmoduleWorktree.abortMerge();
+                } else {
+                    await runtimeSubmoduleWorktree.abortRebase();
                 }
+                await this.refresh();
                 break;
             }
 

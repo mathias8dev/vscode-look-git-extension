@@ -12,7 +12,7 @@ import { ChangeSectionView } from '@webview/features/changes/change-section-view
 import type { ChangeListItem, ChangeSection } from '@webview/features/changes/change-tree';
 import { ChangeSectionId } from '@webview/features/changes/change-tree';
 import { ChangeSelectionMode, ChangesSortMode, ChangesViewMode, type CommitFeedback, type GeneratedCommitMessage } from '@webview/features/changes/changes-state';
-import { changesSelectionTarget, isChangeListItem } from '@webview/features/changes/change-selection-model';
+import { changesSelectionTarget, hasPatchableSelectionTarget, isChangeListItem } from '@webview/features/changes/change-selection-model';
 import { CommitComposer } from '@webview/features/changes/commit-composer';
 import { changesItemContext, changesSelectionContext, changesSubmoduleToolbarContext } from '@webview/features/changes/context-menu-model';
 import { OperationBanner } from '@webview/features/changes/operation-banner';
@@ -114,8 +114,8 @@ export function SubmoduleItem({
             canStage: target.stageFilePaths.length > 0,
             canUnstage: target.unstageFilePaths.length > 0,
             canStash: target.stashFilePaths.length > 0,
-            canExplainDiff: hasPatchableSelection(target),
-            canCreatePatch: hasPatchableSelection(target),
+            canExplainDiff: hasPatchableSelectionTarget(target),
+            canCreatePatch: hasPatchableSelectionTarget(target),
             canDiscard: target.discardFilePaths.length > 0,
         });
     };
@@ -305,19 +305,13 @@ export function SubmoduleItem({
     );
 }
 
-function hasPatchableSelection(target: ReturnType<typeof changesSelectionTarget>): boolean {
-    return target.patchStagedFilePaths.length > 0
-        || target.patchUnstagedFilePaths.length > 0
-        || target.patchUntrackedFilePaths.length > 0;
-}
-
 function reviewHandlerFor(
     section: ChangeSection,
     submodulePath: string,
     onExplainSelection: (target: ChangesSelectionContextTarget) => void,
 ): ((section: ChangeSection) => void) | undefined {
     const target = changesSelectionTarget(section.items, submodulePath);
-    return hasPatchableSelection(target)
+    return hasPatchableSelectionTarget(target)
         ? () => onExplainSelection(target)
         : undefined;
 }

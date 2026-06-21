@@ -1,5 +1,6 @@
 import type { ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
 import { ChangeRowAction, messageForRowAction, type ChangeActionDescriptor } from '@webview/features/changes/change-commands';
+import { changesSelectionTarget, hasPatchableSelectionTarget } from '@webview/features/changes/change-selection-model';
 import { ChangeSectionId, type ChangeListItem } from '@webview/features/changes/change-tree';
 
 export enum ChangeSelectionAction {
@@ -11,6 +12,7 @@ export enum ChangeSelectionAction {
     AcceptOurs = 'acceptOurs',
     AcceptTheirs = 'acceptTheirs',
     MarkResolved = 'markResolved',
+    CreatePatch = 'createPatch',
 }
 
 export function selectionActionsFor(items: readonly ChangeListItem[]): readonly ChangeActionDescriptor<ChangeSelectionAction>[] {
@@ -30,6 +32,7 @@ export function selectionActionsFor(items: readonly ChangeListItem[]): readonly 
         ...actionIf(hasActionableSection(items, ChangeSectionId.Conflicts), { action: ChangeSelectionAction.AcceptOurs, icon: 'fold-up', label: 'Ours', title: 'Accept current changes for selected conflicts' }),
         ...actionIf(hasActionableSection(items, ChangeSectionId.Conflicts), { action: ChangeSelectionAction.AcceptTheirs, icon: 'fold-down', label: 'Theirs', title: 'Accept incoming changes for selected conflicts' }),
         ...actionIf(hasSection(items, ChangeSectionId.Conflicts), { action: ChangeSelectionAction.MarkResolved, icon: 'check', label: 'Resolved', title: 'Mark selected conflicts resolved' }),
+        ...actionIf(hasPatchableSelection(items), { action: ChangeSelectionAction.CreatePatch, icon: 'diff', label: 'Patch', title: 'Create patch from selected changes' }),
     ];
 }
 
@@ -55,6 +58,8 @@ export function messageForSelectionAction(
             return filesMessage('changes/acceptTheirsFiles', actionablePathsForSection(items, ChangeSectionId.Conflicts));
         case ChangeSelectionAction.MarkResolved:
             return filesMessage('changes/markResolvedFiles', pathsForSection(items, ChangeSectionId.Conflicts));
+        case ChangeSelectionAction.CreatePatch:
+            return undefined;
         case ChangeSelectionAction.Open:
         case ChangeSelectionAction.Diff:
             return undefined;
@@ -74,6 +79,10 @@ function hasSection(items: readonly ChangeListItem[], section: ChangeSectionId):
 
 function hasActionableSection(items: readonly ChangeListItem[], section: ChangeSectionId): boolean {
     return items.some((item) => item.section === section && !item.entry.isSubmodule);
+}
+
+function hasPatchableSelection(items: readonly ChangeListItem[]): boolean {
+    return hasPatchableSelectionTarget(changesSelectionTarget(items));
 }
 
 function pathsForSection(items: readonly ChangeListItem[], section: ChangeSectionId): readonly string[] {

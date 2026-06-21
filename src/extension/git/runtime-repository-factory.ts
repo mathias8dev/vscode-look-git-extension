@@ -57,7 +57,8 @@ export class RuntimeRepositoryFactory {
         const repository = this.createRepository(context);
         const mainWorktree = await this.createMainWorktree(context);
         const worktrees = await repository.listWorktrees();
-        const linkedWorktrees = worktrees.filter((worktree) => path.normalize(worktree.path) !== path.normalize(context.cwd));
+        const linkedWorktrees = worktrees.filter((worktree) =>
+            !worktree.isPrunable && path.normalize(worktree.path) !== path.normalize(context.cwd));
         const runtimeWorktrees = await Promise.all(linkedWorktrees.map((worktree) => this.createLinkedWorktree(context, worktree)));
         return [mainWorktree, ...runtimeWorktrees];
     }

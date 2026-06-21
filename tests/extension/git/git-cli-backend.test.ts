@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
 
@@ -20,6 +22,23 @@ describe('GitCliBackend', () => {
         const backend = new GitCliBackend(r.cwd);
 
         await expect(backend.run(['rev-parse', '--show-toplevel'])).resolves.toBe(`${r.cwd}\n`);
+    });
+
+    it('uses a configured git executable path', async () => {
+        const r = repo();
+        const gitWrapperPath = path.join(r.cwd, 'git-wrapper.sh');
+        const markerPath = path.join(r.cwd, 'git-wrapper-called.txt');
+        fs.writeFileSync(gitWrapperPath, [
+            '#!/usr/bin/env sh',
+            `printf '%s\\n' "$@" > ${JSON.stringify(markerPath)}`,
+            'exec git "$@"',
+            '',
+        ].join('\n'));
+        fs.chmodSync(gitWrapperPath, 0o755);
+        const backend = new GitCliBackend(r.cwd, undefined, undefined, gitWrapperPath);
+
+        await expect(backend.run(['rev-parse', '--show-toplevel'])).resolves.toBe(`${r.cwd}\n`);
+        expect(fs.readFileSync(markerPath, 'utf8')).toContain('rev-parse');
     });
 
     it('merges custom environment variables into git process execution', async () => {

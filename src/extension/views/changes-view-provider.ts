@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { ActiveRepositoryAccessor } from '@extension/repositories/active-repository-registry';
+import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
 import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush, ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
 import { CommitMode, type ChangesContextTarget } from '@protocol/changes/types';
 import type { RepoContext } from '@core/git/domain/repo-context';
@@ -205,7 +205,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     constructor(
         private readonly extensionUri: vscode.Uri,
-        private readonly repositories: ActiveRepositoryAccessor,
+        private readonly repositories: RepositorySelectionAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
         private readonly generateCommitMessage = new GenerateCommitMessageUseCase(new VscodeLanguageModelCommitMessageGenerator()),
         private readonly createChangesPatch: CreateChangesPatchUseCase = defaultCreateChangesPatch,
@@ -213,6 +213,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         private readonly explainSelectedChanges = new ExplainSelectedChangesUseCase(new VscodeLanguageModelDiffExplainer()),
         private readonly runtimeRepositories?: RepositoryRegistry,
         private readonly getRuntimeChangesStatus = new GetRuntimeChangesStatusUseCase(),
+        private readonly beforeRefresh: () => Promise<boolean> = async () => true,
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -235,6 +236,10 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             }
             if (msg.type === 'changes/explainSelection') {
                 void this.explainSelectedDiff(msg.target);
+                return;
+            }
+            if (msg.type === 'changes/createPatchFromSelection') {
+                void this.createPatchFromSelectedChanges(msg.target);
                 return;
             }
             if (msg.type === 'changes/explainRepositoryChanges') {
@@ -263,12 +268,20 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     registerNativeContextCommands(): readonly vscode.Disposable[] {
         return [
             vscode.commands.registerCommand('lookGit.changes.refresh', () => this.refresh()),
-            ...CHANGES_VIEW_COMMANDS.flatMap(({ ids, viewMode }) => ids.map((id) => vscode.commands.registerCommand(id, () => this.applyViewMode(viewMode)))),
-            ...CHANGES_SORT_COMMANDS.flatMap(({ ids, sortMode }) => ids.map((id) => vscode.commands.registerCommand(id, () => this.applySortMode(sortMode)))),
-            ...CHANGES_NATIVE_COMMANDS.map((command) => vscode.commands.registerCommand(command.id, () => this.runNativeCommand(command))),
-            ...CHANGES_COMMIT_COMPOSER_NATIVE_COMMANDS.map((command) => vscode.commands.registerCommand(command.id, () => this.runCommitComposerNativeCommand(command))),
-            ...CHANGES_SELECTION_NATIVE_COMMANDS.map((command) => vscode.commands.registerCommand(command.id, () => this.runSelectionNativeCommand(command))),
+            ...CHANGES_VIEW_COMMANDS.flatMap(({ ids, viewMode }) => ids.map((id) => vscode.commands.registerCommand(id, () => this.runNativeHandler(id, () => this.applyViewMode(viewMode))))),
+            ...CHANGES_SORT_COMMANDS.flatMap(({ ids, sortMode }) => ids.map((id) => vscode.commands.registerCommand(id, () => this.runNativeHandler(id, () => this.applySortMode(sortMode))))),
+            ...CHANGES_NATIVE_COMMANDS.map((command) => vscode.commands.registerCommand(command.id, () => this.runNativeHandler(command.id, () => this.runNativeCommand(command)))),
+            ...CHANGES_COMMIT_COMPOSER_NATIVE_COMMANDS.map((command) => vscode.commands.registerCommand(command.id, () => this.runNativeHandler(command.id, () => this.runCommitComposerNativeCommand(command)))),
+            ...CHANGES_SELECTION_NATIVE_COMMANDS.map((command) => vscode.commands.registerCommand(command.id, () => this.runNativeHandler(command.id, () => this.runSelectionNativeCommand(command)))),
         ];
+    }
+
+    private async runNativeHandler(commandId: string, handler: () => Promise<void>): Promise<void> {
+        try {
+            await handler();
+        } catch (error) {
+            await vscode.window.showErrorMessage(`Look Git command ${commandId} failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     private async runSelectionNativeCommand(command: ChangesSelectionCommandDescriptor): Promise<void> {
@@ -664,6 +677,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     this.view.webview.postMessage(emptyStatusData());
                     continue;
                 }
+                if (!await this.beforeRefresh()) { continue; }
 
                 const { status, stashes, submodules, currentBranch } = await this.loadChangesStatus(controller.signal);
                 this.router?.setKnownSubmodulePaths(submodules.map((submodule) => submodule.path));

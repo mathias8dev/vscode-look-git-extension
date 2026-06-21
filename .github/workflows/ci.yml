@@ -98,7 +98,7 @@ jobs:
           fi
       - name: Package VSIX
         if: steps.meta.outputs.exists == 'false'
-        run: npm run vsix
+        run: npm run vsix -- release
       - name: Create tag and GitHub release
         if: steps.meta.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2

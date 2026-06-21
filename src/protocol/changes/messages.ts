@@ -167,6 +167,10 @@ export interface ExplainSelectionMessage {
     readonly type: 'changes/explainSelection';
     readonly target: ChangesSelectionContextTarget;
 }
+export interface CreatePatchFromSelectionMessage {
+    readonly type: 'changes/createPatchFromSelection';
+    readonly target: ChangesSelectionContextTarget;
+}
 export interface ExplainRepositoryChangesMessage {
     readonly type: 'changes/explainRepositoryChanges';
     readonly submodulePath?: string;
@@ -371,7 +375,7 @@ export type ChangesExtensionToWebviewMessage =
     | ErrorMessage;
 
 export type ChangesWebviewToExtensionMessage =
-    | ChangesReadyMessage | ViewModeChangedMessage | ChangesPreferencesChangedMessage | ChangesToolbarCommandMessage | ChangesContextTargetMessage | ExplainSelectionMessage | ExplainRepositoryChangesMessage | SubmoduleToolbarCommandMessage
+    | ChangesReadyMessage | ViewModeChangedMessage | ChangesPreferencesChangedMessage | ChangesToolbarCommandMessage | ChangesContextTargetMessage | ExplainSelectionMessage | CreatePatchFromSelectionMessage | ExplainRepositoryChangesMessage | SubmoduleToolbarCommandMessage
     | StageFileMessage | UnstageFileMessage | StageFilesMessage | UnstageFilesMessage | StageAllMessage | UnstageAllMessage
     | DiscardFileMessage | DiscardFilesMessage | DiscardAllMessage
     | MarkResolvedMessage | MarkResolvedFilesMessage

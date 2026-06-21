@@ -14,7 +14,9 @@ export function parseWorktreeList(output: string): GitWorktree[] {
         let branch: string | undefined;
         let isDetached = false;
         let isLocked = false;
+        let isPrunable = false;
         let lockReason: string | undefined;
+        let pruneReason: string | undefined;
 
         for (const line of stanza.split('\n')) {
             if (line.startsWith('worktree '))       { wtPath = line.slice('worktree '.length); }
@@ -23,10 +25,22 @@ export function parseWorktreeList(output: string): GitWorktree[] {
             else if (line === 'detached')            { isDetached = true; }
             else if (line === 'locked')              { isLocked = true; }
             else if (line.startsWith('locked '))      { isLocked = true; lockReason = line.slice('locked '.length); }
+            else if (line === 'prunable')            { isPrunable = true; }
+            else if (line.startsWith('prunable '))    { isPrunable = true; pruneReason = line.slice('prunable '.length); }
         }
 
         if (!wtPath) { continue; }
-        worktrees.push({ path: wtPath, head, branch, isMain: i === 0, isDetached, isLocked, lockReason } satisfies GitWorktree);
+        worktrees.push({
+            path: wtPath,
+            head,
+            branch,
+            isMain: i === 0,
+            isDetached,
+            isLocked,
+            lockReason,
+            isPrunable,
+            pruneReason,
+        } satisfies GitWorktree);
     }
 
     return worktrees;

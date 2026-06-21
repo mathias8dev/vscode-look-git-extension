@@ -11,6 +11,7 @@ export class GitCliBackend implements GitBackend {
         private readonly cwd: string,
         private readonly maxBuffer = DEFAULT_MAX_BUFFER,
         private readonly maxLockRetries = DEFAULT_MAX_LOCK_RETRIES,
+        private readonly gitPath = 'git',
     ) {}
 
     async run(args: readonly string[], options: GitRunOptions = {}): Promise<string> {
@@ -18,7 +19,7 @@ export class GitCliBackend implements GitBackend {
         for (let attempt = 0; ; attempt++) {
             options.signal?.throwIfAborted();
             try {
-                const { stdout } = await execFileAsync('git', [...args], {
+                const { stdout } = await execFileAsync(this.gitPath, [...args], {
                     cwd: this.cwd,
                     maxBuffer: this.maxBuffer,
                     env: { ...process.env, ...options.env },

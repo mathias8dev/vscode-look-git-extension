@@ -4,7 +4,7 @@ import type { StashFileEntry, StatusData, SubmoduleStatusData } from '@protocol/
 import type { ProtocolError } from '@protocol/shared/base';
 import { OperationStatus } from '@protocol/shared/operation';
 import { readProtocolError } from '@webview/shared/use-protocol-error';
-import { ChangeSectionId } from '@webview/features/changes/change-tree';
+import { buildChangeSections, ChangeSectionId } from '@webview/features/changes/change-tree';
 import { rememberCommitMessage } from '@webview/features/changes/commit-composer-model';
 
 export enum ChangesViewMode {
@@ -222,6 +222,7 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
         case 'changes/statusData': {
             const submodulePaths = new Set(message.data.submodules.map((submodule) => submodule.path));
             const expandedSubmodulePaths = keepKnownPaths(state.expandedSubmodulePaths, submodulePaths);
+            const selectedItemIds = keepKnownChangeItemIds(state.selectedItemIds, message.data);
             return {
                 ...state,
                 status: message.data,
@@ -229,8 +230,10 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 showConflictsOnly: message.data.conflicts.length > 0 ? state.showConflictsOnly : false,
                 generatedCommitMessage: undefined,
                 commitMessageGenerationError: undefined,
-                selectedItemIds: [],
-                selectionAnchorId: undefined,
+                selectedItemIds,
+                selectionAnchorId: state.selectionAnchorId && selectedItemIds.includes(state.selectionAnchorId)
+                    ? state.selectionAnchorId
+                    : undefined,
                 expandedStashIndexes: keepKnownStashIndexes(state.expandedStashIndexes, state.status.stashes, message.data.stashes),
                 stashFilesByIndex: keepKnownStashFilesByIndex(state.stashFilesByIndex, state.status.stashes, message.data.stashes),
                 expandedSubmodulePaths,
@@ -396,7 +399,7 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 },
             };
         case 'repo/contextChanged':
-            return state;
+            return { ...state, selectedItemIds: [], selectionAnchorId: undefined, loading: true };
         case 'ui/fontSizeChanged':
             return state;
     }
@@ -425,6 +428,12 @@ export function submoduleStashKey(submodulePath: string, index: number): string 
 
 function keepKnownPaths(paths: readonly string[], knownPaths: ReadonlySet<string>): readonly string[] {
     return paths.filter((path) => knownPaths.has(path));
+}
+
+function keepKnownChangeItemIds(itemIds: readonly string[], status: StatusData): readonly string[] {
+    if (itemIds.length === 0) { return itemIds; }
+    const knownItemIds = new Set(buildChangeSections(status).flatMap((section) => section.items.map((item) => item.id)));
+    return itemIds.filter((itemId) => knownItemIds.has(itemId));
 }
 
 function pathForRequestId(requestIdsByPath: Readonly<Record<string, string>>, requestId: string | undefined): string | undefined {

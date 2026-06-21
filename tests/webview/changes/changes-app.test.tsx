@@ -35,6 +35,8 @@ describe('ChangesApp', () => {
                 onBulkAction={() => undefined}
                 onExplainSelection={() => undefined}
                 onSelectionContextTarget={() => undefined}
+                onSelectionAction={() => undefined}
+                onClearSelection={() => undefined}
                 onCommit={() => undefined}
                 onCommitComposerContextTarget={() => undefined}
                 onGenerateCommitMessage={() => undefined}
@@ -97,6 +99,8 @@ describe('ChangesApp', () => {
                 onBulkAction={() => undefined}
                 onExplainSelection={() => undefined}
                 onSelectionContextTarget={() => undefined}
+                onSelectionAction={() => undefined}
+                onClearSelection={() => undefined}
                 onCommit={() => undefined}
                 onCommitComposerContextTarget={() => undefined}
                 onGenerateCommitMessage={() => undefined}
