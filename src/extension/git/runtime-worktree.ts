@@ -406,7 +406,7 @@ export class RuntimeWorktree implements Worktree {
         return this.execute('push', { remote, options }, signal);
     }
 
-    pushBranch(remote: string, branch: string, options: PushOptions, signal?: AbortSignal): Promise<void> {
+    pushBranch(remote: string | undefined, branch: string, options: PushOptions, signal?: AbortSignal): Promise<void> {
         return this.execute('pushBranch', { remote, branch, options }, signal);
     }
 

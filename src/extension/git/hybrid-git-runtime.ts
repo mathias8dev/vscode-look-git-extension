@@ -18,10 +18,15 @@ export class HybridGitRuntime implements GitRuntime {
         input: TInput,
         signal?: AbortSignal,
     ): Promise<TResult> {
-        const runtime = this.runtimes.find((candidate) => candidate.supports(operation, context));
-        if (!runtime) {
-            throw new UnsupportedGitOperationError(operation, context);
+        for (const runtime of this.runtimes) {
+            if (!runtime.supports(operation, context)) { continue; }
+            try {
+                return await runtime.execute<TInput, TResult>(operation, context, input, signal);
+            } catch (error) {
+                if (error instanceof UnsupportedGitOperationError) { continue; }
+                throw error;
+            }
         }
-        return runtime.execute<TInput, TResult>(operation, context, input, signal);
+        throw new UnsupportedGitOperationError(operation, context);
     }
 }

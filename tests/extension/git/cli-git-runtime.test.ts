@@ -56,6 +56,78 @@ describe('CliGitRuntime', () => {
         await expect(runtime.execute('previewClean', context, { paths: [] })).resolves.toEqual(['tmp.txt', 'build/out.js']);
     });
 
+    it('pushes a branch to its upstream remote when no remote is provided', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(async (args) => {
+            calls.push([...args]);
+            if (args.join(' ') === 'rev-parse --abbrev-ref main@{upstream}') { return 'upstream/main\n'; }
+            return '';
+        });
+
+        await runtime.execute('pushBranch', context, { branch: 'main', options: {} });
+
+        expect(calls).toEqual([
+            ['rev-parse', '--abbrev-ref', 'main@{upstream}'],
+            ['push', 'upstream', 'main'],
+        ]);
+    });
+
+    it('publishes a branch to the first remote when no upstream exists', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(async (args) => {
+            calls.push([...args]);
+            if (args[0] === 'rev-parse') { throw new Error('no upstream'); }
+            if (args[0] === 'remote') { return 'origin\nupstream\n'; }
+            return '';
+        });
+
+        await runtime.execute('pushBranch', context, { branch: 'feature/auth', options: { forceWithLease: true } });
+
+        expect(calls).toEqual([
+            ['rev-parse', '--abbrev-ref', 'feature/auth@{upstream}'],
+            ['remote'],
+            ['push', '-u', '--force-with-lease', 'origin', 'feature/auth'],
+        ]);
+    });
+
+    it('publishes the current branch on push when it has no upstream', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(async (args) => {
+            calls.push([...args]);
+            if (args.join(' ') === 'rev-parse --abbrev-ref HEAD') { return 'feature/auth\n'; }
+            if (args.join(' ') === 'rev-parse --abbrev-ref feature/auth@{upstream}') { throw new Error('no upstream'); }
+            if (args[0] === 'remote') { return 'origin\n'; }
+            return '';
+        });
+
+        await runtime.execute('push', context, { options: {} });
+
+        expect(calls).toEqual([
+            ['rev-parse', '--abbrev-ref', 'HEAD'],
+            ['rev-parse', '--abbrev-ref', 'feature/auth@{upstream}'],
+            ['remote'],
+            ['push', '-u', 'origin', 'feature/auth'],
+        ]);
+    });
+
+    it('keeps plain push when the current branch has an upstream', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(async (args) => {
+            calls.push([...args]);
+            if (args.join(' ') === 'rev-parse --abbrev-ref HEAD') { return 'main\n'; }
+            if (args.join(' ') === 'rev-parse --abbrev-ref main@{upstream}') { return 'origin/main\n'; }
+            return '';
+        });
+
+        await runtime.execute('push', context, { options: { forceWithLease: true } });
+
+        expect(calls).toEqual([
+            ['rev-parse', '--abbrev-ref', 'HEAD'],
+            ['rev-parse', '--abbrev-ref', 'main@{upstream}'],
+            ['push', '--force-with-lease'],
+        ]);
+    });
+
     it('returns typed status data from git status output', async () => {
         const runtime = new CliGitRuntime(async (args) => {
             if (args[0] === 'status') { return ' M file.txt\0'; }

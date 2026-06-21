@@ -11,6 +11,7 @@ import { addWorktree, queryWorktrees, removeWorktree } from '@extension/git/quer
 import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
 import type { CommitGraphQuery } from '@application/ports/git-capabilities';
+import { requireRemoteBranchName } from '@extension/git/remote-branch';
 
 interface CliInvocation {
     readonly args: readonly string[];
@@ -131,8 +132,6 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     cleanIgnored: (input) => ({ args: cleanArgs('cleanIgnored', input) }),
     previewClean: (input) => ({ args: ['clean', '-n', ...cleanPathArgs(input)] }),
     pull: (input) => ({ args: pullArgs(input) }),
-    push: (input) => ({ args: pushArgs(input) }),
-    pushBranch: (input) => ({ args: pushBranchArgs(input) }),
     pushRef: (input) => ({ args: ['push', requiredStringField(input, 'remote'), `${stringField(input, 'sourceRef')}:${requiredStringField(input, 'destinationRef')}`] }),
     pushTags: (input) => ({ args: ['push', requiredStringField(input, 'remote'), '--tags'] }),
     forcePushWithLease: (input) => ({ args: ['push', '--force-with-lease', requiredStringField(input, 'remote'), requiredStringField(input, 'branch')] }),
@@ -226,6 +225,12 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
     },
     getPatch: async (input, runProcess, context, signal) => {
         return getPatch(input, runProcess, context, signal);
+    },
+    push: async (input, runProcess, context, signal) => {
+        await push(input, runProcess, context, signal);
+    },
+    pushBranch: async (input, runProcess, context, signal) => {
+        await pushBranch(input, runProcess, context, signal);
     },
     checkPatch: async (input, runProcess, context, signal) => {
         try {
@@ -1015,19 +1020,100 @@ function pullArgs(input: unknown): readonly string[] {
     return booleanOption(options, 'rebase') ? ['pull', '--rebase'] : ['pull'];
 }
 
-function pushArgs(input: unknown): readonly string[] {
-    const args = withOptionalRemote(['push'], optionalStringField(input, 'remote'));
+async function push(
+    input: unknown,
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    signal?: AbortSignal,
+): Promise<void> {
     const options = objectField(input, 'options');
+    const requestedRemote = optionalStringField(input, 'remote');
+    if (requestedRemote) {
+        await runProcess(pushArgs(requestedRemote, options), context, { signal });
+        return;
+    }
+
+    const branch = await resolveCurrentBranch(runProcess, context, signal);
+    if (!branch) {
+        await runProcess(pushArgs(undefined, options), context, { signal });
+        return;
+    }
+
+    const upstream = await resolveBranchUpstream(runProcess, context, branch, signal);
+    if (upstream) {
+        await runProcess(pushArgs(undefined, options), context, { signal });
+        return;
+    }
+
+    await runProcess(pushBranchArgs(await defaultRemote(runProcess, context, signal), branch, options, true), context, { signal });
+}
+
+function pushArgs(remote: string | undefined, options: unknown): readonly string[] {
+    const args = withOptionalRemote(['push'], remote);
     return booleanOption(options, 'forceWithLease') ? [...args, '--force-with-lease'] : args;
 }
 
-function pushBranchArgs(input: unknown): readonly string[] {
-    const args = ['push'];
+async function pushBranch(
+    input: unknown,
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    signal?: AbortSignal,
+): Promise<void> {
+    const branch = requiredStringField(input, 'branch');
     const options = objectField(input, 'options');
-    if (booleanOption(options, 'setUpstream')) { args.push('-u'); }
+    const requestedRemote = optionalStringField(input, 'remote');
+    const upstream = await resolveBranchUpstream(runProcess, context, branch, signal);
+    const remote = requestedRemote ?? (upstream ? requireRemoteBranchName(upstream).remote : await defaultRemote(runProcess, context, signal));
+    await runProcess(pushBranchArgs(remote, branch, options, requestedRemote === undefined && upstream === undefined), context, { signal });
+}
+
+function pushBranchArgs(remote: string, branch: string, options: unknown, setUpstreamByDefault: boolean): readonly string[] {
+    const args = ['push'];
+    if (optionalBooleanField(options, 'setUpstream') ?? setUpstreamByDefault) { args.push('-u'); }
     if (booleanOption(options, 'forceWithLease')) { args.push('--force-with-lease'); }
-    args.push(requiredStringField(input, 'remote'), requiredStringField(input, 'branch'));
+    args.push(remote, branch);
     return args;
+}
+
+async function resolveBranchUpstream(
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    branch: string,
+    signal?: AbortSignal,
+): Promise<string | undefined> {
+    try {
+        return (await runProcess(['rev-parse', '--abbrev-ref', `${branch}@{upstream}`], context, { signal })).trim();
+    } catch (error) {
+        if (isAbortError(error)) { throw error; }
+        return undefined;
+    }
+}
+
+async function resolveCurrentBranch(
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    signal?: AbortSignal,
+): Promise<string | undefined> {
+    try {
+        const branch = (await runProcess(['rev-parse', '--abbrev-ref', 'HEAD'], context, { signal })).trim();
+        return branch && branch !== 'HEAD' ? branch : undefined;
+    } catch (error) {
+        if (isAbortError(error)) { throw error; }
+        return undefined;
+    }
+}
+
+async function defaultRemote(
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    signal?: AbortSignal,
+): Promise<string> {
+    const remote = (await runProcess(['remote'], context, { signal }))
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => line.length > 0);
+    if (!remote) { throw new Error('No Git remote configured.'); }
+    return remote;
 }
 
 function cleanArgs(operation: 'cleanUntracked' | 'cleanIgnored', input: unknown): readonly string[] {

@@ -316,7 +316,7 @@ export interface GitCleanOperations {
 export interface GitPullPushOperations {
     pull(options: PullOptions, signal?: AbortSignal): Promise<void>;
     push(remote: string | undefined, options: PushOptions, signal?: AbortSignal): Promise<void>;
-    pushBranch(remote: string, branch: string, options: PushOptions, signal?: AbortSignal): Promise<void>;
+    pushBranch(remote: string | undefined, branch: string, options: PushOptions, signal?: AbortSignal): Promise<void>;
     pushRef(remote: string, sourceRef: string, destinationRef: string, options: PushOptions, signal?: AbortSignal): Promise<void>;
     pushTags(remote: string, options: PushOptions, signal?: AbortSignal): Promise<void>;
     forcePushWithLease(remote: string, branch: string, signal?: AbortSignal): Promise<void>;

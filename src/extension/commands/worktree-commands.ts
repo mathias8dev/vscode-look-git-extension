@@ -7,7 +7,6 @@ import { showBranchNameInput } from '@extension/utils/branch-name-input';
 import { openChangesWithWorkingTree } from '@extension/commands/git-command-helpers';
 import { requireRuntimeRepository, requireRuntimeTargets, requireRuntimeWorktree, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
 
-
 export async function runWorktreeCommand(
     repo: GitRepository,
     command: WorktreeCommand,
