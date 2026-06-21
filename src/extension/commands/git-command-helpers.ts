@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import type { GitRepository, Worktree } from '@application/ports/git-topology';
-import type { GitFileChange } from '@core/git/domain/GitCommit';
+import type { GitFileChange } from '@core/git/domain/git-commit';
 import { openReadonlyDiffDocument } from '@extension/utils/readonly-diff-documents';
 import { emptyDiffUri, refBlobUriFrom } from '@extension/utils/diff-uris';
 

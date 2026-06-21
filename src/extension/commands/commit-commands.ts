@@ -16,7 +16,7 @@ import { getReachableCommitHashes } from '@application/usecases/commits/get-reac
 import { VscodeLanguageModelRewordCommitMessageGenerator } from '@extension/adapters/vscode/vscode-language-model-reword-commit-message-generator';
 import { showModalWarningMessage } from '@extension/utils/confirmation';
 import { openDiffExplanationDocument, showDiffExplanationError } from '@extension/utils/diff-explanation-document';
-import { isAbortError } from '@extension/messaging/errorSerialization';
+import { isAbortError } from '@extension/messaging/error-serialization';
 import { withCancellationSignal } from '@extension/utils/vscode-cancellation';
 import { showBranchNameInput } from '@extension/utils/branch-name-input';
 import { compareRefWithPickedWorktree, openChangesWithWorkingTree, promptNewWorktreePath } from '@extension/commands/git-command-helpers';

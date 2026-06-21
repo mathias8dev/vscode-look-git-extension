@@ -8,7 +8,7 @@ import {
     findFloatingNodeIssues,
     findLaneContinuityIssues,
     findNonVisibleLineTargetIssues,
-} from '@tests/helpers/graphLayoutAssertions';
+} from '@tests/helpers/graph-layout-assertions';
 
 function commit(hash: string, parents: readonly string[] = [], refs: readonly string[] = []): GraphCommit {
     return {

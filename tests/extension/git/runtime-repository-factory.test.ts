@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { RuntimeRepositoryFactory } from '@extension/git/runtime-repository-factory';
-import { RepoKind, type RepoContext } from '@core/git/domain/RepoContext';
+import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
 import type { GitExecutionContext, GitRuntime } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
-import type { GitStatus } from '@core/git/domain/GitStatus';
-import type { GitWorktree } from '@core/git/domain/GitWorktree';
+import type { GitStatus } from '@core/git/domain/git-status';
+import type { GitWorktree } from '@core/git/domain/git-worktree';
 import { stableRepoContextId } from '@extension/repositories/repo-context-id';
 
 describe('RuntimeRepositoryFactory', () => {

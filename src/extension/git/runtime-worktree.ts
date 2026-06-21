@@ -1,6 +1,6 @@
-import type { GitFileChange } from '@core/git/domain/GitCommit';
-import type { Page, PageRequest } from '@core/git/domain/Page';
-import type { GitStash, GitStatus } from '@core/git/domain/GitStatus';
+import type { GitFileChange } from '@core/git/domain/git-commit';
+import type { Page, PageRequest } from '@core/git/domain/page';
+import type { GitStash, GitStatus } from '@core/git/domain/git-status';
 import type {
     CheckoutOptions,
     CherryPickOptions,
