@@ -2,61 +2,13 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
 import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '@application/ports/git-runtime';
-
-export type VscodeGitApiProvider = () => Promise<VscodeGitApi | undefined>;
-
-interface VscodeGitExtension {
-    readonly enabled: boolean;
-    getAPI(version: 1): VscodeGitApi;
-}
-
-export interface VscodeGitApi {
-    readonly repositories: readonly VscodeGitRepository[];
-    getRepository(uri: vscode.Uri): VscodeGitRepository | null;
-}
-
-export interface VscodeGitRepository {
-    readonly rootUri: vscode.Uri;
-    readonly state: VscodeGitRepositoryState;
-    fetch(options?: VscodeFetchOptions): Promise<void>;
-    pull(unshallow?: boolean): Promise<void>;
-    push(remoteName?: string, branchName?: string, setUpstream?: boolean, force?: VscodeForcePushMode): Promise<void>;
-}
-
-interface VscodeGitRepositoryState {
-    readonly HEAD: VscodeGitBranch | undefined;
-    readonly remotes: readonly VscodeGitRemote[];
-}
-
-interface VscodeGitBranch {
-    readonly name?: string;
-    readonly remote?: string;
-    readonly upstream?: VscodeGitUpstream;
-}
-
-interface VscodeGitUpstream {
-    readonly remote: string;
-    readonly name: string;
-}
-
-interface VscodeGitRemote {
-    readonly name: string;
-    readonly pushUrl?: string;
-    readonly fetchUrl?: string;
-    readonly isReadOnly?: boolean;
-}
-
-interface VscodeFetchOptions {
-    readonly remote?: string;
-    readonly all?: boolean;
-    readonly prune?: boolean;
-}
-
-const VscodeForcePushMode = {
-    ForceWithLease: 1,
-} as const;
-
-type VscodeForcePushMode = typeof VscodeForcePushMode[keyof typeof VscodeForcePushMode];
+import {
+    defaultVscodeGitApiProvider,
+    VscodeForcePushMode,
+    type VscodeFetchOptions,
+    type VscodeGitApiProvider,
+    type VscodeGitRepository,
+} from '@extension/git/vscode-git-api';
 
 const VSCODE_REMOTE_OPERATIONS = new Set<SemanticGitOperation>([
     'fetch',
@@ -158,18 +110,6 @@ export class VscodeGitRemoteRuntime implements GitRuntime {
 }
 
 export type VscodeCommandExecutor = <T = unknown>(command: string, ...rest: readonly unknown[]) => PromiseLike<T>;
-
-async function defaultVscodeGitApiProvider(): Promise<VscodeGitApi | undefined> {
-    try {
-        const extension = vscode.extensions.getExtension<VscodeGitExtension>('vscode.git');
-        if (!extension) { return undefined; }
-        const gitExtension = extension.isActive ? extension.exports : await extension.activate();
-        if (!gitExtension.enabled) { return undefined; }
-        return gitExtension.getAPI(1);
-    } catch {
-        return undefined;
-    }
-}
 
 function fetchOptions(input: unknown): VscodeFetchOptions {
     return definedOptions({

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
 import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush, ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
-import { CommitMode, type ChangesContextTarget } from '@protocol/changes/types';
+import { CommitMode, type ChangesContextTarget, type StatusData } from '@protocol/changes/types';
 import type { RepoContext } from '@core/git/domain/repo-context';
 import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '@extension/messaging/changes-message-router';
 import type { GitStatus } from '@core/git/domain/git-status';
@@ -25,11 +25,14 @@ import { notifyRuntimeConflictsDetected } from '@extension/utils/runtime-merge-e
 import { operationActionsForStatus } from '@extension/utils/operation-feedback';
 import { withCancellationSignal } from '@extension/utils/vscode-cancellation';
 import { webviewFontSizeMessage } from '@extension/views/webview-font';
+import { statusDataEqual } from '@protocol/shared/protocol-data-equality';
+import { DISTINCT_MESSAGE_LAST_VALUE_ONLY, DistinctMessagePoster } from '@extension/messaging/distinct-message-poster';
 
 const APPLY_PATCH_FROM_CLIPBOARD = 'From Clipboard';
 const APPLY_PATCH_FROM_FILE = 'From File...';
 const APPLY_PATCH_TO_WORKING_TREE = 'Apply to Working Tree';
 const APPLY_PATCH_AND_STAGE = 'Apply and Stage';
+const ACTIVE_STATUS_DATA_KEY = 'active';
 
 enum ChangesCommandScope {
     ActiveRepository,
@@ -202,6 +205,11 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     private viewAsTree = false;
     private readonly refreshDebounceMs = 50;
     private operationSequence = 0;
+    private readonly statusDataPoster = new DistinctMessagePoster<ChangesExtensionToWebviewMessage, StatusData>(
+        (message) => { this.view?.webview.postMessage(message); },
+        statusDataEqual,
+        DISTINCT_MESSAGE_LAST_VALUE_ONLY,
+    );
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -674,7 +682,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 if (!context) {
                     this.router?.setKnownSubmodulePaths([]);
                     this.updateBadge(0);
-                    this.view.webview.postMessage(emptyStatusData());
+                    this.postStatusDataIfChanged(emptyStatusData());
                     continue;
                 }
                 if (!await this.beforeRefresh()) { continue; }
@@ -682,7 +690,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 const { status, stashes, submodules, currentBranch } = await this.loadChangesStatus(controller.signal);
                 this.router?.setKnownSubmodulePaths(submodules.map((submodule) => submodule.path));
                 this.updateBadge(status.staged.length + status.unstaged.length + status.conflicts.length);
-                this.view.webview.postMessage(buildStatusData(status, stashes, submodules, currentBranch));
+                this.postStatusDataIfChanged(buildStatusData(status, stashes, submodules, currentBranch));
             } catch (error) {
                 if (isAbortError(error)) { continue; }
                 this.updateBadge(0);
@@ -706,6 +714,10 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         if (this.view) {
             this.view.badge = { value: count, tooltip: `${count} change${count !== 1 ? 's' : ''}` };
         }
+    }
+
+    private postStatusDataIfChanged(message: ReturnType<typeof buildStatusData>): void {
+        this.statusDataPoster.postIfChanged(ACTIVE_STATUS_DATA_KEY, message.data, message);
     }
 
     private async loadChangesStatus(signal?: AbortSignal): Promise<RuntimeChangesStatusResult> {
@@ -734,6 +746,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     /** Called by RepoRegistry when the active repo changes. */
     async notifyRepoChanged(context: RepoContext): Promise<void> {
         this.contextTarget = undefined;
+        this.statusDataPoster.clear();
         this.router?.setKnownSubmodulePaths([]);
         this.view?.webview.postMessage({ type: 'repo/contextChanged', context: toSerializedRepoContext(context) });
         this.scheduleRefresh();
