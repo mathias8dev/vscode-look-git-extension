@@ -15,7 +15,22 @@ export async function queryStatus(
     ]);
 
     const { staged, unstaged, conflicts } = parsePorcelainStatus(output, submodulePaths);
-    return { staged, unstaged, conflicts, conflictState: 'none' };
+    return { staged, unstaged, conflicts, conflictState: await queryConflictState(execRawReadonly, signal) };
+}
+
+async function queryConflictState(execRawReadonly: GitExec, signal?: AbortSignal): Promise<GitStatus['conflictState']> {
+    if (await refExists(execRawReadonly, 'MERGE_HEAD', signal)) { return 'merge'; }
+    if (await refExists(execRawReadonly, 'REBASE_HEAD', signal)) { return 'rebase'; }
+    return 'none';
+}
+
+async function refExists(execRawReadonly: GitExec, ref: string, signal?: AbortSignal): Promise<boolean> {
+    try {
+        await execRawReadonly(['rev-parse', '-q', '--verify', ref], signal);
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 export async function querySubmodulePaths(

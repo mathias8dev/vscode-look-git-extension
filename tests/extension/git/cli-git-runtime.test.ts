@@ -252,7 +252,7 @@ describe('CliGitRuntime', () => {
         await runtime.execute('getStashSummary', context, { stash: 'stash@{4}' });
 
         expect(calls).toEqual([
-            ['stash', 'show', '--stat', 'stash@{4}'],
+            ['stash', 'show', '--include-untracked', '--stat', 'stash@{4}'],
         ]);
     });
 
