@@ -1,11 +1,11 @@
 import { useState } from 'react';
+import { FolderIcon } from '@webview/shared/FolderIcon';
+import { depthStyle } from '@webview/shared/viewStyles';
 import type { ChangeRowAction } from '@webview/features/changes/changeCommands';
 import type { ChangeListItem, ChangeTreeNode } from '@webview/features/changes/changeTree';
 import type { ChangeSelectionMode } from '@webview/features/changes/changesState';
 import { ChangeRow } from '@webview/features/changes/ChangeRow';
 import { changesItemContext } from '@webview/features/changes/context-menu-model';
-import { FolderIcon } from '@webview/features/changes/FolderIcon';
-import { depthStyle } from '@webview/features/changes/viewStyles';
 
 interface TreeNodeViewProps {
     readonly node: ChangeTreeNode;

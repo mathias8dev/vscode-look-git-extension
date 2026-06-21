@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import type { HistoryCommitDetails, HistoryCommitFile, HistoryFileStatus } from '@protocol/history/types';
-import { FileTypeIcon } from '@webview/features/changes/FileTypeIcon';
-import { FolderIcon } from '@webview/features/changes/FolderIcon';
-import { iconKindForPath } from '@webview/features/changes/fileIconModel';
-import { depthStyle } from '@webview/features/changes/viewStyles';
 import { buildHistoryFileTree, type HistoryFileTreeNode } from '@webview/features/history/historyFileTree';
+import { FileTypeIcon } from '@webview/shared/FileTypeIcon';
+import { FolderIcon } from '@webview/shared/FolderIcon';
+import { iconKindForPath } from '@webview/shared/fileIconModel';
+import { depthStyle } from '@webview/shared/viewStyles';
 
 interface CommitHistoryFileListProps {
     readonly details: HistoryCommitDetails | undefined;

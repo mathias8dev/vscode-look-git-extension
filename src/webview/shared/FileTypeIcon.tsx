@@ -1,9 +1,9 @@
 import { iconForFileKind } from '@webview/shared/fileIconAssets';
 import { IconifySvg } from '@webview/shared/IconifySvg';
-import type { FileIconKind } from '@webview/features/changes/fileIconModel';
+import type { WebviewFileIconKind } from '@webview/shared/fileIconModel';
 
 interface FileTypeIconProps {
-    readonly kind: FileIconKind;
+    readonly kind: WebviewFileIconKind;
 }
 
 export function FileTypeIcon({ kind }: FileTypeIconProps) {
