@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -10,9 +10,6 @@ export default defineConfig({
     test: {
         globals: true,
         environment: 'node',
-        environmentMatchGlobs: [
-            ['tests/webview/**', 'jsdom'],
-        ],
         exclude: ['node_modules/**', 'dist/**', 'out/**', 'tests/e2e/**', 'tests/integration/**'],
         // Headroom for real-git integration tests that spawn many git subprocesses (slow on Windows runners).
         testTimeout: 60000,
