@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { FileIconKind } from '@webview/features/changes/fileIconModel';
-import { FileTypeIcon } from '@webview/features/changes/FileTypeIcon';
+import { FileTypeIcon } from '@webview/shared/FileTypeIcon';
+import type { WebviewFileIconKind } from '@webview/shared/fileIconModel';
 
 const fileKinds = [
     'typescript',
@@ -47,10 +47,10 @@ const fileKinds = [
     'git',
     'submodule',
     'file',
-] satisfies readonly FileIconKind[];
+] satisfies readonly WebviewFileIconKind[];
 
 const meta = {
-    title: 'Changes/FileTypeIcon',
+    title: 'Shared/FileTypeIcon',
     component: FileTypeIcon,
     args: {
         kind: 'typescript',

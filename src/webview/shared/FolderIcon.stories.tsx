@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { FolderIcon } from '@webview/features/changes/FolderIcon';
+import { FolderIcon } from '@webview/shared/FolderIcon';
 
 const folderNames = [
     'src',
@@ -14,7 +14,7 @@ const folderNames = [
 ] as const;
 
 const meta = {
-    title: 'Changes/FolderIcon',
+    title: 'Shared/FolderIcon',
     component: FolderIcon,
     args: {
         name: 'src',

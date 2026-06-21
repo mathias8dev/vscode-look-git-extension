@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { FileTypeIcon } from '@webview/features/changes/FileTypeIcon';
-import { FolderIcon } from '@webview/features/changes/FolderIcon';
+import { FileTypeIcon } from '@webview/shared/FileTypeIcon';
+import { FolderIcon } from '@webview/shared/FolderIcon';
 
 describe('change icons', () => {
     it('renders Iconify vscode-icons SVGs for file types', () => {

@@ -78,6 +78,27 @@ describe('architecture layer boundaries', () => {
 
         expect(violations).toEqual([]);
     });
+
+    it('keeps webview features from importing each other directly', () => {
+        const violations: string[] = [];
+        const featureRoot = path.join(SRC_ROOT, 'webview', 'features');
+        for (const filePath of listSourceFiles(featureRoot)) {
+            const sourceFeature = webviewFeatureOf(filePath);
+            if (!sourceFeature) { continue; }
+
+            for (const specifier of importSpecifiers(filePath)) {
+                const targetPath = targetPathOf(filePath, specifier);
+                if (!targetPath) { continue; }
+
+                const targetFeature = webviewFeatureOf(targetPath);
+                if (targetFeature && targetFeature !== sourceFeature) {
+                    violations.push(`${relative(filePath)} imports ${targetFeature} feature via "${specifier}"`);
+                }
+            }
+        }
+
+        expect(violations).toEqual([]);
+    });
 });
 
 function listSourceFiles(dir: string): string[] {
@@ -117,6 +138,24 @@ function targetLayerOf(filePath: string, specifier: string): string | undefined 
     const relativeTarget = path.relative(SRC_ROOT, resolved);
     if (relativeTarget.startsWith('..')) { return undefined; }
     return relativeTarget.split(path.sep)[0];
+}
+
+function targetPathOf(filePath: string, specifier: string): string | undefined {
+    if (specifier === '@webview') { return path.join(SRC_ROOT, 'webview'); }
+    if (specifier.startsWith('@webview/')) {
+        return path.join(SRC_ROOT, 'webview', ...specifier.slice('@webview/'.length).split('/'));
+    }
+
+    if (!specifier.startsWith('.')) { return undefined; }
+    const resolved = path.resolve(path.dirname(filePath), specifier);
+    const relativeTarget = path.relative(SRC_ROOT, resolved);
+    return relativeTarget.startsWith('..') ? undefined : resolved;
+}
+
+function webviewFeatureOf(filePath: string): string | undefined {
+    const relativePath = relative(filePath);
+    const parts = relativePath.split(path.sep);
+    return parts[0] === 'webview' && parts[1] === 'features' ? parts[2] : undefined;
 }
 
 function relative(filePath: string): string {
