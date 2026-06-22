@@ -4,6 +4,12 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.1.3] - 2026-06-22
+
+### Fixed
+- Avoid blink on unchanged refresh
+- Align resizable column headers with table rows
+
 ## [1.1.2] - 2026-06-17
 
 ### Changed
