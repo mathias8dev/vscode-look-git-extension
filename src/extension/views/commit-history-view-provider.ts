@@ -11,6 +11,7 @@ import type { CommitCommand } from '@protocol/graph/messages';
 import type { HistoryCommitDetails, HistoryCommitRef, HistoryContextTarget, HistoryData } from '@protocol/history/types';
 import type { HistoryCommitDetailsRequest, HistoryDataRequest, HistoryExtensionToWebviewMessage, HistoryOpenDiffRequest, HistoryOperationStatusPush, HistoryToolbarCommand, HistoryWebviewToExtensionMessage } from '@protocol/history/messages';
 import { runCommitCommand } from '@extension/commands/commit-commands';
+import { runBranchCommand } from '@extension/commands/branch-commands';
 import { createErrorPayload } from '@extension/messaging/error-serialization';
 import { appendErrorToOutput, showErrorOutput } from '@extension/messaging/error-output-channel';
 import { getWebviewHtml } from '@extension/views/webview-html';
@@ -250,10 +251,16 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     private async runRuntimeGitToolbarOperation(operation: 'fetchAll' | 'pull' | 'push', uri?: vscode.Uri): Promise<void> {
         const operationId = this.nextOperationId();
         const nativeFileContext = uri !== undefined;
+        let conflictWorktree: Worktree | undefined;
         try {
             const runtimeRepository = this.requireRuntimeRepository();
-            const runtimeWorktree = this.requireRuntimeWorktreeForHistoryScope();
-            const existingConflicts = operation === 'pull' ? await conflictFileSet(runtimeWorktree) : undefined;
+            const runtimeTargets = this.runtimeTargetsForHistoryScope();
+            const selectedBranch = operation === 'fetchAll'
+                ? undefined
+                : await this.selectedNonCurrentLocalHistoryBranch(runtimeRepository, operation);
+            const selectedBranchWorktree = selectedBranch ? runtimeWorktreeForBranch(runtimeTargets.worktrees ?? [], selectedBranch) : undefined;
+            conflictWorktree = selectedBranchWorktree ?? (selectedBranch ? undefined : this.requireRuntimeWorktreeForHistoryScope());
+            const existingConflicts = operation === 'pull' && conflictWorktree ? await conflictFileSet(conflictWorktree) : undefined;
             if (!nativeFileContext) {
                 this.postHistoryOperation({ operationId, status: OperationStatus.Running, command: operation });
             }
@@ -261,16 +268,24 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 await runtimeRepository.fetchAll({});
             } else {
                 if (operation === 'pull') {
-                    await runtimeWorktree.pull({});
+                    if (selectedBranch) {
+                        await runBranchCommand(runtimeRepository, 'update', selectedBranch, false, undefined, runtimeTargets);
+                    } else {
+                        await this.requireRuntimeWorktreeForHistoryScope().pull({});
+                    }
                 } else {
-                    await runtimeWorktree.push(undefined, {});
+                    if (selectedBranch) {
+                        await (selectedBranchWorktree ?? this.requireRuntimeWorktreeForHistoryScope()).pushBranch(undefined, selectedBranch, {});
+                    } else {
+                        await this.requireRuntimeWorktreeForHistoryScope().push(undefined, {});
+                    }
                 }
             }
             await Promise.all([
                 this.onRepositoryUpdated(),
                 this.refresh(),
             ]);
-            if (existingConflicts && await hasNewConflicts(runtimeWorktree, existingConflicts)) {
+            if (existingConflicts && conflictWorktree && await hasNewConflicts(conflictWorktree, existingConflicts)) {
                 if (nativeFileContext) {
                     await vscode.window.showWarningMessage(`${historyOperationLabel(operation)} stopped with conflicts.`);
                 } else {
@@ -285,7 +300,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             if (operation === 'pull') {
                 try {
                     await Promise.all([this.onRepositoryUpdated(), this.refresh()]);
-                    if (await hasAnyConflicts(this.requireRuntimeWorktreeForHistoryScope())) {
+                    if (conflictWorktree && await hasAnyConflicts(conflictWorktree)) {
                         if (nativeFileContext) {
                             await vscode.window.showWarningMessage('Pull stopped with conflicts.');
                         } else {
@@ -596,6 +611,16 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         const targets = this.runtimeTargetsForHistoryScope();
         if (!targets.worktree) { throw new Error('Runtime worktree is required for this history operation.'); }
         return targets.worktree;
+    }
+
+    private async selectedNonCurrentLocalHistoryBranch(repo: GitRepository, operation: 'pull' | 'push'): Promise<string | undefined> {
+        if (!this.selectedHistoryRef) { return undefined; }
+        const branch = (await repo.listBranches()).find((candidate) => candidate.name === this.selectedHistoryRef);
+        if (!branch) { throw new Error(`Selected history branch "${this.selectedHistoryRef}" no longer exists.`); }
+        if (branch.isRemote) {
+            throw new Error(`${historyOperationLabel(operation)} is unavailable for remote branches. Select a local branch instead.`);
+        }
+        return branch.isCurrent ? undefined : branch.name;
     }
 
     private async selectRepositoryScope(): Promise<void> {
@@ -993,6 +1018,14 @@ function historyOperationLabel(operation: 'fetchAll' | 'pull' | 'push'): string 
         case 'push':
             return 'Push';
     }
+}
+
+function runtimeWorktreeForBranch(worktrees: readonly Worktree[], branch: string): Worktree | undefined {
+    return worktrees.find((candidate) => shortWorktreeBranch(candidate.branch) === branch);
+}
+
+function shortWorktreeBranch(branch: string | undefined): string | undefined {
+    return branch?.replace(/^refs\/heads\//, '');
 }
 
 async function conflictFileSet(worktree: Worktree): Promise<ReadonlySet<string>> {
