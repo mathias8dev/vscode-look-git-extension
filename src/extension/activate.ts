@@ -47,10 +47,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const graphRepositoryRefreshers: Array<() => Promise<void>> = [];
     const graphProvider = new GraphViewProvider(context.extensionUri, repositories, async () => {
         await Promise.all(graphRepositoryRefreshers.map((refresh) => refresh()));
-    }, runtimeRepositories);
+    }, context.globalStorageUri, runtimeRepositories);
     const refreshGraph = () => graphProvider.refresh();
     const changesProvider = new ChangesViewProvider(context.extensionUri, repositories, refreshGraph, undefined, undefined, undefined, undefined, runtimeRepositories);
-    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshGraph, undefined, runtimeRepositories);
+    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshGraph, context.globalStorageUri, undefined, runtimeRepositories);
     graphRepositoryRefreshers.push(() => changesProvider.refresh(), () => commitHistoryProvider.refresh());
 
     async function refreshAll(): Promise<void> {

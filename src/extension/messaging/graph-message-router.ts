@@ -65,6 +65,7 @@ export class GraphMessageRouter {
         private readonly getCommitDetails = new GetCommitDetailsUseCase(),
         private readonly getWorktreeDetails = new GetWorktreeDetailsUseCase(),
         private readonly extensionUri?: vscode.Uri,
+        private readonly storageUri?: vscode.Uri,
         private readonly runtimeRepositories?: RepositoryRegistry,
     ) {
         this.graphDataPoster = new DistinctMessagePoster(postMessage, graphDataEqual, DISTINCT_MESSAGE_LAST_VALUE_ONLY);
@@ -429,7 +430,7 @@ export class GraphMessageRouter {
     private async handleBranchCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/branchCommand' }>): Promise<void> {
         const runtimeTargets = this.runtimeTargetsForRepository(msg.repository);
         const repo = requireRuntimeRepository(runtimeTargets);
-        const shouldRefresh = await runBranchCommand(repo, msg.command, msg.branch, msg.isRemote, undefined, runtimeTargets);
+        const shouldRefresh = await runBranchCommand(repo, msg.command, msg.branch, msg.isRemote, undefined, runtimeTargets, this.extensionUri, this.storageUri);
         if (!shouldRefresh) { return; }
         // `delete` removes the branch and `rename` frees its old name; if the graph is
         // filtered to that branch, the next reload would query a now-missing ref, so the
@@ -451,7 +452,7 @@ export class GraphMessageRouter {
 
     private async handleCommitCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/commitCommand' }>): Promise<void> {
         const runtimeTargets = this.runtimeTargetsForRepository(msg.repository);
-        const shouldRefresh = await runCommitCommand(requireRuntimeRepository(runtimeTargets), msg.command, msg.hash, msg.hashes, undefined, undefined, undefined, diffExplanationScopeFor(msg.repository), this.extensionUri, undefined, runtimeTargets);
+        const shouldRefresh = await runCommitCommand(requireRuntimeRepository(runtimeTargets), msg.command, msg.hash, msg.hashes, undefined, undefined, undefined, diffExplanationScopeFor(msg.repository), this.extensionUri, this.storageUri, undefined, runtimeTargets);
         if (shouldRefresh) { await this.refreshAfterRepositoryChange(); }
     }
 
@@ -721,6 +722,7 @@ function graphBranchOperation(msg: Extract<GraphWebviewToExtensionMessage, { rea
         case 'push':
         case 'update':
         case 'rebaseOnto':
+        case 'planInteractiveRebaseOnto':
         case 'mergeInto':
         case 'pullBranchWorktree':
         case 'pushBranchWorktree':
@@ -797,6 +799,7 @@ function graphCommitOperation(msg: Extract<GraphWebviewToExtensionMessage, { rea
         case 'editCommitMessage':
         case 'squashInto':
         case 'dropCommit':
+        case 'interactiveRebaseFromHere':
         case 'pushAllUpToHere':
         case 'newBranch':
         case 'newTag':

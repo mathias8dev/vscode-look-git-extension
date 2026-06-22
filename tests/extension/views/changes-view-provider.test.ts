@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { Page } from '@core/git/domain/page';
 import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
 import type { GitBranch, GitStatus } from '@core/git/domain/git-status';
-import type { GitExecutionContext, GitRuntime } from '@application/ports/git-runtime';
+import type { GitExecutionContext, GitRuntime, RepositoryKind } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
 import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
 import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
@@ -114,7 +114,7 @@ function runtimeRegistry(context: RepoContext, runtime: GitRuntime): RepositoryR
         repoId: context.id,
         cwd: context.cwd,
         gitDir: `${context.cwd}/.git`,
-        kind: context.kind,
+        kind: repositoryKindForTest(context),
         label: context.label,
     }, runtime));
     registry.registerWorktree(new RuntimeWorktree({
@@ -122,13 +122,17 @@ function runtimeRegistry(context: RepoContext, runtime: GitRuntime): RepositoryR
         worktreeId: context.id,
         path: context.cwd,
         gitDir: `${context.cwd}/.git`,
-        repositoryKind: context.kind,
+        repositoryKind: repositoryKindForTest(context),
         isMain: true,
         head: 'abc123',
         branch: 'main',
         dirty: true,
     }, runtime));
     return registry;
+}
+
+function repositoryKindForTest(context: RepoContext): RepositoryKind {
+    return context.kind === RepoKind.Submodule ? 'submodule' : 'main';
 }
 
 function changesRuntime(status: GitStatus): GitRuntime {

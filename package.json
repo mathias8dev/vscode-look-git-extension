@@ -182,6 +182,11 @@
         "category": "Look Git"
       },
       {
+        "command": "lookGit.history.interactiveRebaseFromHere",
+        "title": "Interactively Rebase from Here...",
+        "category": "Look Git"
+      },
+      {
         "command": "lookGit.history.pushAllUpToHere",
         "title": "Push All up to Here...",
         "category": "Look Git"
@@ -974,6 +979,11 @@
         "category": "Look Git"
       },
       {
+        "command": "lookGit.graph.commit.interactiveRebaseFromHere",
+        "title": "Interactively Rebase from Here...",
+        "category": "Look Git"
+      },
+      {
         "command": "lookGit.graph.commit.pushAllUpToHere",
         "title": "Push All up to Here...",
         "category": "Look Git"
@@ -1062,6 +1072,11 @@
       {
         "command": "lookGit.graph.branch.rebaseOnto",
         "title": "Rebase Current Branch onto This Branch",
+        "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.branch.planInteractiveRebaseOnto",
+        "title": "Plan Interactive Rebase onto This Branch...",
         "category": "Look Git"
       },
       {
@@ -2134,6 +2149,11 @@
           "group": "4_history_rewrite@4"
         },
         {
+          "command": "lookGit.history.interactiveRebaseFromHere",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "group": "4_history_rewrite@5"
+        },
+        {
           "command": "lookGit.history.pushAllUpToHere",
           "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
           "group": "4_history_rewrite@6"
@@ -2244,6 +2264,11 @@
           "group": "4_graph_commit_rewrite@4"
         },
         {
+          "command": "lookGit.graph.commit.interactiveRebaseFromHere",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "group": "4_graph_commit_rewrite@5"
+        },
+        {
           "command": "lookGit.graph.commit.pushAllUpToHere",
           "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
           "group": "4_graph_commit_rewrite@6"
@@ -2322,6 +2347,11 @@
           "command": "lookGit.graph.branch.rebaseOnto",
           "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent",
           "group": "3_graph_branch_history@1"
+        },
+        {
+          "command": "lookGit.graph.branch.planInteractiveRebaseOnto",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent && !graphBranchIsRemote",
+          "group": "3_graph_branch_history@2"
         },
         {
           "command": "lookGit.graph.branch.mergeInto",

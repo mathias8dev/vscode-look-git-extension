@@ -15,6 +15,7 @@ import {
 import { requireRuntimeRepository, requireRuntimeWorktree, requireRuntimeWorktreePath, requireRuntimeWorktrees, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
 import { currentBranchName } from '@extension/git/current-branch';
 import { localBranchNameForRemote, localNameForRemoteBranch, resolveRemoteBranch } from '@extension/git/remote-branch';
+import { openVisualRebasePanel } from '@extension/utils/visual-rebase-panel';
 
 export async function runBranchCommand(
     repo: GitRepository,
@@ -23,6 +24,8 @@ export async function runBranchCommand(
     isRemote: boolean,
     checkoutBranch = new CheckoutBranchUseCase(),
     runtimeTargets: RuntimeCommandTargets = {},
+    extensionUri?: vscode.Uri,
+    storageUri?: vscode.Uri,
 ): Promise<boolean> {
     const runtimeRepository = requireRuntimeRepository(runtimeTargets);
     const currentBranch = await currentBranchName(runtimeRepository);
@@ -110,6 +113,16 @@ export async function runBranchCommand(
             await assertRuntimeNoUnmergedFiles(requireRuntimeWorktree(runtimeTargets), 'rebasing branches');
             await requireRuntimeWorktree(runtimeTargets).rebase(branch, undefined, {});
             return true;
+        case 'planInteractiveRebaseOnto':
+            if (isRemote) { throw new Error('Visual Rebase onto a remote branch is not supported.'); }
+            if (!extensionUri) { throw new Error('Visual Rebase requires the extension URI.'); }
+            if (!storageUri) { throw new Error('Visual Rebase requires extension storage.'); }
+            await openVisualRebasePanel(runtimeRepository, requireRuntimeWorktree(runtimeTargets), extensionUri, storageUri, {
+                upstream: branch,
+                onto: branch,
+                title: `Visual Rebase onto ${branch}`,
+            });
+            return false;
         case 'mergeInto':
             await assertRuntimeNoUnmergedFiles(requireRuntimeWorktree(runtimeTargets), 'merging branches');
             await requireRuntimeWorktree(runtimeTargets).merge(branch, {});

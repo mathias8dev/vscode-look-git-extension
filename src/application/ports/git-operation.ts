@@ -28,6 +28,7 @@ export const SEMANTIC_GIT_OPERATIONS = [
     'listTags',
     'listRemotes',
     'resolveRef',
+    'updateRef',
     'getUserName',
     'getUpstreamBranch',
     'createBranch',

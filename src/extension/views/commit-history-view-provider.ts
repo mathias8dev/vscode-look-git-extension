@@ -49,6 +49,7 @@ const HISTORY_COMMIT_COMMANDS: readonly { readonly id: string; readonly command:
     { id: 'lookGit.history.fixup', command: 'fixup' },
     { id: 'lookGit.history.squashInto', command: 'squashInto' },
     { id: 'lookGit.history.dropCommit', command: 'dropCommit' },
+    { id: 'lookGit.history.interactiveRebaseFromHere', command: 'interactiveRebaseFromHere' },
     { id: 'lookGit.history.pushAllUpToHere', command: 'pushAllUpToHere' },
     { id: 'lookGit.history.newBranch', command: 'newBranch' },
     { id: 'lookGit.history.newTag', command: 'newTag' },
@@ -88,6 +89,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         private readonly extensionUri: vscode.Uri,
         private readonly repositories: RepositorySelectionAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
+        private readonly storageUri?: vscode.Uri,
         _repositoryResolver?: unknown,
         private readonly runtimeRepositories?: RepositoryRegistry,
     ) {}
@@ -450,6 +452,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 undefined,
                 this.contextRepository ? undefined : this.selectedRepositoryScope ? { label: 'Submodule', value: this.selectedRepositoryScope.path } : undefined,
                 this.extensionUri,
+                this.storageUri,
                 undefined,
                 this.runtimeTargetsForHistoryScope(),
             );

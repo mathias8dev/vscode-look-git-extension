@@ -7,7 +7,7 @@ import type { GitExecutionContext, GitRuntime } from '@application/ports/git-run
 import type { SemanticGitOperation } from '@application/ports/git-operation';
 import type { GraphExtensionToWebviewMessage } from '@protocol/graph/messages';
 import type { RepositoryLocator } from '@protocol/shared/repo';
-import type { GraphDataResult } from '@application/usecases/graph/get-graph-data';
+import { GetGraphDataUseCase, type GraphDataResult } from '@application/usecases/graph/get-graph-data';
 import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
 import { RuntimeWorktree } from '@extension/git/runtime-worktree';
 import { GraphMessageRouter } from '@extension/messaging/graph-message-router';
@@ -52,6 +52,7 @@ describe('GraphMessageRouter', () => {
             undefined,
             undefined,
             undefined,
+            undefined,
             registry,
         );
 
@@ -76,14 +77,14 @@ describe('GraphMessageRouter', () => {
         const registry = new RepositoryRegistry();
         registerRuntimeRepository(registry, neverRuntime());
         const messages: GraphExtensionToWebviewMessage[] = [];
-        const getGraphData = {
-            execute: vi.fn(async () => graphDataResult()),
-        };
+        const getGraphData = new GetGraphDataUseCase();
+        const executeGraphData = vi.spyOn(getGraphData, 'execute').mockResolvedValue(graphDataResult());
         const router = new GraphMessageRouter(
             { currentContext: { id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' } },
             (message) => { messages.push(message); },
             async () => {},
             getGraphData,
+            undefined,
             undefined,
             undefined,
             undefined,
@@ -101,25 +102,25 @@ describe('GraphMessageRouter', () => {
 
         expect(messages.filter((message) => message.type === 'graph/dataResponse')).toHaveLength(1);
         expect(messages.filter((message) => message.type === 'graph/dataPush')).toHaveLength(0);
-        expect(getGraphData.execute).toHaveBeenCalledTimes(2);
+        expect(executeGraphData).toHaveBeenCalledTimes(2);
     });
 
     it('pushes graph data when a silent refresh returns a changed snapshot', async () => {
         const registry = new RepositoryRegistry();
         registerRuntimeRepository(registry, neverRuntime());
         const messages: GraphExtensionToWebviewMessage[] = [];
-        const getGraphData = {
-            execute: vi.fn()
-                .mockResolvedValueOnce(graphDataResult())
-                .mockResolvedValueOnce(graphDataResult({
-                    commits: [commit({ hash: 'def456', shortHash: 'def456', message: 'change' })],
-                })),
-        };
+        const getGraphData = new GetGraphDataUseCase();
+        vi.spyOn(getGraphData, 'execute')
+            .mockResolvedValueOnce(graphDataResult())
+            .mockResolvedValueOnce(graphDataResult({
+                commits: [commit({ hash: 'def456', shortHash: 'def456', message: 'change' })],
+            }));
         const router = new GraphMessageRouter(
             { currentContext: { id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' } },
             (message) => { messages.push(message); },
             async () => {},
             getGraphData,
+            undefined,
             undefined,
             undefined,
             undefined,

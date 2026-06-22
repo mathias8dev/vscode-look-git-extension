@@ -23,6 +23,7 @@ import { compareRefWithPickedWorktree, openChangesWithWorkingTree, promptNewWork
 import { promptForCommitMessage } from '@extension/utils/commit-message-editor';
 import { requireRuntimeRepository, requireRuntimeTargets, requireRuntimeWorktree, requireRuntimeWorktrees, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
 import { currentBranchName } from '@extension/git/current-branch';
+import { openVisualRebasePanel } from '@extension/utils/visual-rebase-panel';
 
 export interface CommitCommandDiffExplanationScope {
     readonly label: string;
@@ -42,6 +43,7 @@ export async function runCommitCommand(
     explainCommitDiffUseCase: ExplainCommitDiffUseCase = defaultExplainCommitDiff,
     diffExplanationScope?: CommitCommandDiffExplanationScope,
     extensionUri?: vscode.Uri,
+    storageUri?: vscode.Uri,
     generateRewordCommitMessage: GenerateRewordCommitMessageUseCase = defaultGenerateRewordCommitMessage,
     runtimeTargets: RuntimeCommandTargets = {},
 ): Promise<boolean> {
@@ -100,6 +102,9 @@ export async function runCommitCommand(
         case 'dropCommit':
             await dropCommits(await orderSelectedCommits(requireRuntimeRepository(runtimeTargets), selected, 'newestFirst'), runtimeTargets);
             return true;
+        case 'interactiveRebaseFromHere':
+            await interactiveRebaseFromHere(hash, extensionUri, storageUri, runtimeTargets);
+            return false;
         case 'pushAllUpToHere':
             await pushAllUpToHere(hash, runtimeTargets);
             return true;
@@ -113,6 +118,19 @@ export async function runCommitCommand(
             await compareRefWithPickedWorktree(repo, requireRuntimeWorktrees(runtimeTargets), hash, `Diff ${hash.substring(0, 7)}`);
             return false;
     }
+}
+
+async function interactiveRebaseFromHere(hash: string, extensionUri: vscode.Uri | undefined, storageUri: vscode.Uri | undefined, runtimeTargets: RuntimeCommandTargets): Promise<void> {
+    if (!extensionUri) { throw new Error('Visual Rebase requires the extension URI.'); }
+    if (!storageUri) { throw new Error('Visual Rebase requires extension storage.'); }
+    const { repository, worktree } = requireRuntimeTargets(runtimeTargets);
+    const parents = (await repository.getCommitDetails(hash)).parentHashes;
+    const upstream = parents[0] ?? hash;
+    await openVisualRebasePanel(repository, worktree, extensionUri, storageUri, {
+        upstream,
+        onto: upstream,
+        title: `Visual Rebase from ${hash.substring(0, 7)}`,
+    });
 }
 
 async function explainCommitDiff(

@@ -10,7 +10,7 @@ import { querySubmoduleStatus, updateSubmodule } from '@extension/git/queries/qu
 import { addWorktree, queryWorktrees, removeWorktree } from '@extension/git/queries/query-worktrees';
 import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
-import type { CommitGraphQuery } from '@application/ports/git-capabilities';
+import type { CommitGraphQuery, RebaseOptions } from '@application/ports/git-capabilities';
 import { requireRemoteBranchName } from '@extension/git/remote-branch';
 
 interface CliInvocation {
@@ -71,6 +71,7 @@ type CliSemanticHandler = (
 const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder>> = {
     listRemotes: () => ({ args: ['remote'] }),
     resolveRef: (input) => ({ args: ['rev-parse', requiredString(input, 'ref')] }),
+    updateRef: (input) => ({ args: ['update-ref', requiredStringField(input, 'ref'), requiredStringField(input, 'newValue')] }),
     fetch: (input) => ({ args: withOptionalRemote(['fetch'], optionalStringField(input, 'remote')) }),
     fetchAll: () => ({ args: ['fetch', '--all'] }),
     pruneRemote: (input) => ({ args: ['remote', 'prune', requiredString(input, 'remote')] }),
@@ -110,9 +111,7 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     abortMerge: () => ({ args: ['merge', '--abort'] }),
     quitMerge: () => ({ args: ['merge', '--quit'] }),
     rebase: (input) => ({ args: rebaseArgs(input) }),
-    continueRebase: () => ({ args: ['-c', 'core.editor=true', 'rebase', '--continue'] }),
     abortRebase: () => ({ args: ['rebase', '--abort'] }),
-    skipRebase: () => ({ args: ['rebase', '--skip'] }),
     quitRebase: () => ({ args: ['rebase', '--quit'] }),
     cherryPick: (input) => ({ args: cherryPickArgs(input) }),
     continueCherryPick: () => ({ args: ['cherry-pick', '--continue'] }),
@@ -402,6 +401,18 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
         const allChanges = output ? parseNameStatusZ(output) : [];
         return pageFromOffset(allChanges.slice(offset), pageRequest.limit, offset);
     },
+    getInteractiveRebasePlan: async (input, runProcess, context, signal) => {
+        return interactiveRebasePlan(runProcess, context, requiredStringField(input, 'baseRef'), requiredStringField(input, 'headRef'), signal);
+    },
+    startInteractiveRebase: async (input, runProcess, context, signal) => {
+        await startInteractiveRebase(runProcess, context, input, signal);
+    },
+    continueRebase: async (input, runProcess, context, signal) => {
+        await continueRebase(runProcess, context, 'continue', input, signal);
+    },
+    skipRebase: async (input, runProcess, context, signal) => {
+        await continueRebase(runProcess, context, 'skip', input, signal);
+    },
     rewordCommit: async (input, runProcess, context, signal) => {
         await rewordCommit(runProcess, context, requiredStringField(input, 'commit'), requiredStringField(input, 'message'), signal);
     },
@@ -648,6 +659,120 @@ async function replaceCommitRangeOnBranch(
     await runTrimmed(runProcess, context, ['rebase', '--autostash', '--onto', rewritten, newestHash, branch], signal);
 }
 
+async function interactiveRebasePlan(
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    baseRef: string,
+    headRef: string,
+    signal?: AbortSignal,
+): Promise<string> {
+    const format = 'pick %H %s';
+    return runRaw(runProcess, context, ['log', '--reverse', `--format=${format}`, `${baseRef}..${headRef}`], signal);
+}
+
+async function startInteractiveRebase(
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    input: unknown,
+    signal?: AbortSignal,
+): Promise<void> {
+    const baseRef = requiredStringField(input, 'baseRef');
+    const options = rebaseOptions(input);
+    const args = ['rebase'];
+    if (options.autostash) { args.push('--autostash'); }
+    args.push('-i');
+    if (options.rebaseMerges) { args.push('--rebase-merges'); }
+    args.push(baseRef);
+    const branch = optionalStringField(input, 'branch');
+    if (branch) { args.push(branch); }
+
+    let tempDir: string | undefined;
+    let env = options.editorEnv;
+    if (!env) {
+        const fallback = await createFallbackInteractiveRebaseEnv(requiredStringField(input, 'plan'));
+        tempDir = fallback.tempDir;
+        env = fallback.env;
+    }
+
+    try {
+        await runTrimmed(runProcess, context, args, signal, env);
+    } finally {
+        if (tempDir) { await fs.rm(tempDir, { recursive: true, force: true }); }
+    }
+}
+
+async function continueRebase(
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    mode: 'continue' | 'skip',
+    input: unknown,
+    signal?: AbortSignal,
+): Promise<void> {
+    const options = rebaseContinuationOptions(input);
+    const args = mode === 'continue'
+        ? ['-c', 'core.editor=true', 'rebase', '--continue']
+        : ['rebase', '--skip'];
+    await runTrimmed(runProcess, context, args, signal, options.editorEnv);
+}
+
+interface FallbackInteractiveRebaseEnv {
+    readonly tempDir: string;
+    readonly env: Readonly<Record<string, string>>;
+}
+
+async function createFallbackInteractiveRebaseEnv(plan: string): Promise<FallbackInteractiveRebaseEnv> {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'look-git-rebase-'));
+    const todoPath = path.join(tempDir, 'git-rebase-todo');
+    const editorPath = path.join(tempDir, 'sequence-editor.cjs');
+    await fs.writeFile(todoPath, plan, 'utf8');
+    await fs.writeFile(editorPath, sequenceEditorScript(), 'utf8');
+    return {
+        tempDir,
+        env: {
+            LOOK_GIT_REBASE_TODO: todoPath,
+            GIT_SEQUENCE_EDITOR: nodeEditorCommand(editorPath),
+            GIT_EDITOR: 'true',
+        },
+    };
+}
+
+function sequenceEditorScript(): string {
+    return [
+        "const fs = require('fs');",
+        'const target = process.argv[2];',
+        'const source = process.env.LOOK_GIT_REBASE_TODO;',
+        'if (!target || !source) { process.exit(1); }',
+        'fs.copyFileSync(source, target);',
+    ].join('\n') + '\n';
+}
+
+function nodeEditorCommand(scriptPath: string): string {
+    return `${quoteArg(process.execPath)} ${quoteArg(scriptPath)}`;
+}
+
+function quoteArg(value: string): string {
+    return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function rebaseOptions(input: unknown): RebaseOptions {
+    const options = objectField(input, 'options');
+    if (options === undefined) { return {}; }
+    if (!isRecord(options)) { throw new Error('options must be an object.'); }
+    const editorEnv = stringRecordField(options, 'editorEnv');
+    return {
+        ...(booleanOption(options, 'autostash') ? { autostash: true } : {}),
+        ...(booleanOption(options, 'rebaseMerges') ? { rebaseMerges: true } : {}),
+        ...(editorEnv ? { editorEnv } : {}),
+    };
+}
+
+function rebaseContinuationOptions(input: unknown): { readonly editorEnv?: Readonly<Record<string, string>> } {
+    if (input === undefined) { return {}; }
+    if (!isRecord(input)) { throw new Error('rebase continuation options must be an object.'); }
+    const editorEnv = stringRecordField(input, 'editorEnv');
+    return editorEnv ? { editorEnv } : {};
+}
+
 async function restoreCurrentBranch(
     runProcess: CliGitRuntimeProcess,
     context: GitExecutionContext,
@@ -890,6 +1015,26 @@ function optionalStringArrayField(input: unknown, field: string): readonly strin
 function objectField(input: unknown, field: string): unknown {
     if (typeof input !== 'object' || input === null) { return undefined; }
     return (input as Readonly<Record<string, unknown>>)[field];
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function stringRecordField(input: unknown, field: string): Readonly<Record<string, string>> | undefined {
+    const value = objectField(input, field);
+    if (value === undefined) { return undefined; }
+    if (!isRecord(value)) { throw new Error(`${field} must be an object.`); }
+    const entries = Object.entries(value);
+    if (!entries.every(([, entry]) => typeof entry === 'string')) {
+        throw new Error(`${field} must contain only string values.`);
+    }
+    const record: Record<string, string> = {};
+    for (const [key, entry] of entries) {
+        if (typeof entry !== 'string') { continue; }
+        record[key] = entry;
+    }
+    return record;
 }
 
 function stdoutFromExecError(error: unknown): string | undefined {

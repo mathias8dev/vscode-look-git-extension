@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GitBranch } from '@core/git/domain/git-branch';
-import type { GitStatus } from '@core/git/domain/git-status';
+import type { GitBranch, GitStatus } from '@core/git/domain/git-status';
 import type { GitSubmodule, GitWorktree } from '@core/git/domain/git-worktree';
 import type { GitExecutionContext, GitRuntime } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
@@ -13,7 +12,7 @@ import { stableRepoContextId } from '@extension/repositories/repo-context-id';
 describe('RepositoryRuntimeRegistrar', () => {
     it('registers the selected repository and initialized submodule repositories', async () => {
         const runtime = runtimeWithSubmodules([
-            { path: 'modules/auth-kit', status: ' ', commit: 'def456', head: 'def456', dirty: false, outOfSync: false },
+            { path: 'modules/auth-kit', status: ' ' },
         ]);
         const registry = new RepositoryRegistry();
         const registrar = new RepositoryRuntimeRegistrar(new RuntimeRepositoryFactory(runtime));

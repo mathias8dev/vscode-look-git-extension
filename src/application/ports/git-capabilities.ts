@@ -76,6 +76,13 @@ export interface MergeOptions {
 export interface RebaseOptions {
     readonly interactive?: boolean;
     readonly autosquash?: boolean;
+    readonly autostash?: boolean;
+    readonly rebaseMerges?: boolean;
+    readonly editorEnv?: Readonly<Record<string, string>>;
+}
+
+export interface RebaseContinuationOptions {
+    readonly editorEnv?: Readonly<Record<string, string>>;
 }
 
 export interface CherryPickOptions {
@@ -145,6 +152,7 @@ export interface GitReferenceOperations {
     listTags(signal?: AbortSignal): Promise<readonly GitTag[]>;
     listRemotes(signal?: AbortSignal): Promise<readonly string[]>;
     resolveRef(ref: string, signal?: AbortSignal): Promise<string>;
+    updateRef(ref: string, newValue: string, signal?: AbortSignal): Promise<void>;
     getUserName(signal?: AbortSignal): Promise<string>;
     getUpstreamBranch(branch: string, signal?: AbortSignal): Promise<string | undefined>;
 }
@@ -266,9 +274,9 @@ export interface GitMergeOperations {
 
 export interface GitRebaseOperations {
     rebase(upstream: string, branch: string | undefined, options: RebaseOptions, signal?: AbortSignal): Promise<void>;
-    continueRebase(signal?: AbortSignal): Promise<void>;
+    continueRebase(options?: RebaseContinuationOptions, signal?: AbortSignal): Promise<void>;
     abortRebase(signal?: AbortSignal): Promise<void>;
-    skipRebase(signal?: AbortSignal): Promise<void>;
+    skipRebase(options?: RebaseContinuationOptions, signal?: AbortSignal): Promise<void>;
     quitRebase(signal?: AbortSignal): Promise<void>;
 }
 

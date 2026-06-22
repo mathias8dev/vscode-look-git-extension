@@ -26,6 +26,7 @@ const GRAPH_COMMIT_COMMANDS: readonly { readonly id: string; readonly command: C
     { id: 'lookGit.graph.commit.fixup', command: 'fixup' },
     { id: 'lookGit.graph.commit.squashInto', command: 'squashInto' },
     { id: 'lookGit.graph.commit.dropCommit', command: 'dropCommit' },
+    { id: 'lookGit.graph.commit.interactiveRebaseFromHere', command: 'interactiveRebaseFromHere' },
     { id: 'lookGit.graph.commit.pushAllUpToHere', command: 'pushAllUpToHere' },
     { id: 'lookGit.graph.commit.newBranch', command: 'newBranch' },
     { id: 'lookGit.graph.commit.newTag', command: 'newTag' },
@@ -43,6 +44,7 @@ const GRAPH_BRANCH_COMMANDS: readonly { readonly id: string; readonly command: B
     { id: 'lookGit.graph.branch.compareBranchWithWorktree', command: 'compareBranchWithWorktree' },
     { id: 'lookGit.graph.branch.showDiffWithBranchWorktree', command: 'showDiffWithBranchWorktree' },
     { id: 'lookGit.graph.branch.rebaseOnto', command: 'rebaseOnto' },
+    { id: 'lookGit.graph.branch.planInteractiveRebaseOnto', command: 'planInteractiveRebaseOnto' },
     { id: 'lookGit.graph.branch.mergeInto', command: 'mergeInto' },
     { id: 'lookGit.graph.branch.push', command: 'push' },
     { id: 'lookGit.graph.branch.publish', command: 'push' },
@@ -85,6 +87,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         private readonly extensionUri: vscode.Uri,
         private readonly repositories: RepositorySelectionAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
+        private readonly storageUri?: vscode.Uri,
         private readonly runtimeRepositories?: RepositoryRegistry,
     ) {}
 
@@ -100,7 +103,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         this.router?.dispose();
         this.router = new GraphMessageRouter(this.repositories, (msg) => {
             webviewView.webview.postMessage(msg);
-        }, this.onRepositoryUpdated, undefined, undefined, undefined, this.extensionUri, this.runtimeRepositories);
+        }, this.onRepositoryUpdated, undefined, undefined, undefined, this.extensionUri, this.storageUri, this.runtimeRepositories);
 
         webviewView.webview.onDidReceiveMessage((msg: GraphWebviewToExtensionMessage) => {
             if (msg.type === 'graph/contextTarget') {

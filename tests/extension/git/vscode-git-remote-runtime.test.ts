@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as vscode from 'vscode';
 import { UnsupportedGitOperationError, type GitExecutionContext } from '@application/ports/git-runtime';
 import type { VscodeGitApi, VscodeGitRepository } from '@extension/git/vscode-git-api';
-import { VscodeGitRemoteRuntime } from '@extension/git/vscode-git-remote-runtime';
+import { VscodeGitRemoteRuntime, type VscodeCommandExecutor } from '@extension/git/vscode-git-remote-runtime';
 
 const context = {
     cwd: '/repo',
@@ -57,9 +57,7 @@ describe('VscodeGitRemoteRuntime', () => {
     it('delegates current branch publish without upstream to VS Code publish UI', async () => {
         const repository = recordingRepository('/repo', { HEAD: { name: 'feature/auth' }, remotes: [] });
         const commandCalls: CommandCall[] = [];
-        const runtime = new VscodeGitRemoteRuntime(async () => gitApi(repository), async (command, ...args) => {
-            commandCalls.push({ command, args });
-        });
+        const runtime = new VscodeGitRemoteRuntime(async () => gitApi(repository), recordingCommandExecutor(commandCalls));
 
         await runtime.execute('push', context, { options: {} });
 
@@ -107,9 +105,7 @@ describe('VscodeGitRemoteRuntime', () => {
     it('delegates branch publish without an explicit remote to VS Code publish UI', async () => {
         const repository = recordingRepository('/repo', { HEAD: { name: 'feature/auth' }, remotes: [] });
         const commandCalls: CommandCall[] = [];
-        const runtime = new VscodeGitRemoteRuntime(async () => gitApi(repository), async (command, ...args) => {
-            commandCalls.push({ command, args });
-        });
+        const runtime = new VscodeGitRemoteRuntime(async () => gitApi(repository), recordingCommandExecutor(commandCalls));
 
         await runtime.execute('pushBranch', context, { branch: 'feature/auth', options: { setUpstream: true } });
 
@@ -185,5 +181,12 @@ function gitApi(repository: VscodeGitRepository): VscodeGitApi {
         getRepository(uri): VscodeGitRepository | null {
             return uri.fsPath === repository.rootUri.fsPath ? repository : null;
         },
+    };
+}
+
+function recordingCommandExecutor(calls: CommandCall[]): VscodeCommandExecutor {
+    return <T = unknown>(command: string, ...args: readonly unknown[]): PromiseLike<T> => {
+        calls.push({ command, args });
+        return Promise.resolve(undefined as T); // Test executor emulates commands whose return value is intentionally ignored.
     };
 }

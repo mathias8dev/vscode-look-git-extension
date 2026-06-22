@@ -169,6 +169,10 @@ export class RuntimeGitRepository implements GitRepository {
         return this.execute('resolveRef', ref, signal);
     }
 
+    updateRef(ref: string, newValue: string, signal?: AbortSignal): Promise<void> {
+        return this.execute('updateRef', { ref, newValue }, signal);
+    }
+
     getUserName(signal?: AbortSignal): Promise<string> {
         return this.execute('getUserName', undefined, signal);
     }

@@ -70,6 +70,7 @@ function branchOperationLabel(command: string, target: string): string {
         case 'push': return `push${target}`;
         case 'update': return `update${target}`;
         case 'rebaseOnto': return `rebase onto${target}`;
+        case 'planInteractiveRebaseOnto': return `plan visual rebase onto${target}`;
         case 'mergeInto': return `merge${target}`;
         case 'pullBranchWorktree': return `pull worktree for${target}`;
         case 'pushBranchWorktree': return `push worktree for${target}`;
@@ -109,6 +110,7 @@ function commitOperationLabel(command: string, target: string): string {
         case 'fixup': return `fixup${target}`;
         case 'squashInto': return `squash commits${target}`;
         case 'dropCommit': return `drop${target}`;
+        case 'interactiveRebaseFromHere': return `start interactive rebase from${target}`;
         case 'pushAllUpToHere': return `push commits up to${target}`;
         case 'newBranch': return `create branch from${target}`;
         case 'newTag': return `create tag at${target}`;

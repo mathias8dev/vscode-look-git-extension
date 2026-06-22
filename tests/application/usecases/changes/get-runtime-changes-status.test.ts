@@ -70,6 +70,7 @@ function repositoryCapabilities(overrides: Partial<GitReferenceOperations & GitS
         listTags: vi.fn(async () => []),
         listRemotes: vi.fn(async () => []),
         resolveRef: vi.fn(async () => ''),
+        updateRef: vi.fn(async () => {}),
         getUserName: vi.fn(async () => ''),
         getUpstreamBranch: vi.fn(async () => undefined),
         listSubmodules: vi.fn(async () => []),

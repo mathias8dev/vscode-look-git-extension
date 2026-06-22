@@ -1,3 +1,4 @@
+import * as fs from 'fs/promises';
 import type { GitExec } from '@extension/git/git-exec';
 import type { GitStatus, GitStash } from '@core/git/domain/git-status';
 import type { GitFileChange } from '@core/git/domain/git-commit';
@@ -20,8 +21,18 @@ export async function queryStatus(
 
 async function queryConflictState(execRawReadonly: GitExec, signal?: AbortSignal): Promise<GitStatus['conflictState']> {
     if (await refExists(execRawReadonly, 'MERGE_HEAD', signal)) { return 'merge'; }
-    if (await refExists(execRawReadonly, 'REBASE_HEAD', signal)) { return 'rebase'; }
+    if (await gitPathExists(execRawReadonly, 'rebase-merge', signal) || await gitPathExists(execRawReadonly, 'rebase-apply', signal)) { return 'rebase'; }
     return 'none';
+}
+
+async function gitPathExists(execRawReadonly: GitExec, path: string, signal?: AbortSignal): Promise<boolean> {
+    try {
+        const gitPath = await execRawReadonly(['rev-parse', '--path-format=absolute', '--git-path', path], signal);
+        await fs.access(gitPath.trim());
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 async function refExists(execRawReadonly: GitExec, ref: string, signal?: AbortSignal): Promise<boolean> {

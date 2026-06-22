@@ -47,7 +47,7 @@ Special cases:
 
 As a developer, I want branch, tag, remote, and upstream operations to be semantic actions so that the UI never builds raw refspec commands.
 
-Semantic actions: `listBranches`, `listRemoteBranches`, `listTags`, `listRemotes`, `resolveRef`, `getUserName`, `getUpstreamBranch`, `createBranch`, `renameBranch`, `deleteBranch`, `deleteRemoteBranch`, `setUpstream`, `createTag`, `deleteTag`, `fetch`, `fetchAll`, `pruneRemote`, `getRemoteUrl`, `setRemoteUrl`, `addRemote`, `removeRemote`
+Semantic actions: `listBranches`, `listRemoteBranches`, `listTags`, `listRemotes`, `resolveRef`, `updateRef`, `getUserName`, `getUpstreamBranch`, `createBranch`, `renameBranch`, `deleteBranch`, `deleteRemoteBranch`, `setUpstream`, `createTag`, `deleteTag`, `fetch`, `fetchAll`, `pruneRemote`, `getRemoteUrl`, `setRemoteUrl`, `addRemote`, `removeRemote`
 
 Special cases:
 

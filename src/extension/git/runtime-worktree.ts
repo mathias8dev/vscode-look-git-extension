@@ -10,6 +10,7 @@ import type {
     MergeOptions,
     PatchApplyOptions,
     PullOptions,
+    RebaseContinuationOptions,
     PushOptions,
     RebaseOptions,
     ResetMode,
@@ -266,16 +267,16 @@ export class RuntimeWorktree implements Worktree {
         return this.execute('rebase', { upstream, branch, options }, signal);
     }
 
-    continueRebase(signal?: AbortSignal): Promise<void> {
-        return this.execute('continueRebase', undefined, signal);
+    continueRebase(options?: RebaseContinuationOptions, signal?: AbortSignal): Promise<void> {
+        return this.execute('continueRebase', options, signal);
     }
 
     abortRebase(signal?: AbortSignal): Promise<void> {
         return this.execute('abortRebase', undefined, signal);
     }
 
-    skipRebase(signal?: AbortSignal): Promise<void> {
-        return this.execute('skipRebase', undefined, signal);
+    skipRebase(options?: RebaseContinuationOptions, signal?: AbortSignal): Promise<void> {
+        return this.execute('skipRebase', options, signal);
     }
 
     quitRebase(signal?: AbortSignal): Promise<void> {
