@@ -6,7 +6,7 @@ export default defineConfig({
   base: './',
   plugins: [react()],
   build: {
-    emptyOutDir: false,
+    emptyOutDir: true,
     outDir: 'dist/webview',
     sourcemap: true,
     rollupOptions: {
