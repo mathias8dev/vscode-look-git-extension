@@ -46,6 +46,7 @@ const GRAPH_BRANCH_COMMANDS: readonly { readonly id: string; readonly command: B
     { id: 'lookGit.graph.branch.rebaseOnto', command: 'rebaseOnto' },
     { id: 'lookGit.graph.branch.planInteractiveRebaseOnto', command: 'planInteractiveRebaseOnto' },
     { id: 'lookGit.graph.branch.mergeInto', command: 'mergeInto' },
+    { id: 'lookGit.graph.branch.update', command: 'update' },
     { id: 'lookGit.graph.branch.push', command: 'push' },
     { id: 'lookGit.graph.branch.publish', command: 'push' },
     { id: 'lookGit.graph.branch.pullBranchWorktree', command: 'pullBranchWorktree' },
@@ -173,6 +174,12 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         if (target?.kind !== 'branch') { return; }
         if (command === 'delete' && (target.canDelete === false || target.isCurrent)) {
             await vscode.window.showWarningMessage('Delete is unavailable because the current branch cannot be deleted.');
+            return;
+        }
+        if (command === 'update' && target.canUpdate !== true) {
+            await vscode.window.showWarningMessage(target.isRemote
+                ? 'Update is unavailable because remote branches cannot be updated directly.'
+                : 'Update is unavailable because this branch has no upstream.');
             return;
         }
         if (command === 'push' && options.allowUnpublishedBranchPush && target.canPublish !== true) {

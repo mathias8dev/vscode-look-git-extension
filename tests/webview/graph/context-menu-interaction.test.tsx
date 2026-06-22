@@ -46,6 +46,7 @@ describe('graph native context menu targets', () => {
         expect(context).toContain('"webviewSection":"graphBranch"');
         expect(context).toContain('"graphBranchHasWorktree":true');
         expect(context).toContain('"graphBranchHasUpstream":true');
+        expect(context).toContain('"graphBranchCanUpdate":true');
         expect(context).toContain('"graphBranchCanPush":true');
         expect(context).toContain('"graphBranchCanPublish":false');
         expect(context).toContain('"graphBranchCanDelete":true');
@@ -58,6 +59,7 @@ describe('graph native context menu targets', () => {
             isRemote: false,
             isCurrent: false,
             hasUpstream: true,
+            canUpdate: true,
             canPush: true,
             canPublish: false,
             canDelete: true,

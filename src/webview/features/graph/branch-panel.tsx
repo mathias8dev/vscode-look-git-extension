@@ -123,6 +123,7 @@ export function BranchPanel({
     const branchContextFor = (branch: BranchInfo): Record<string, unknown> => {
         const branchWorktree = branchWorktreeFor(branch);
         const hasUpstream = Boolean(branch.upstream);
+        const canUpdate = !branch.isRemote && hasUpstream;
         const canPush = !branch.isRemote && hasUpstream;
         const canPublish = !branch.isRemote && !hasUpstream;
         const canDelete = !branch.isCurrent;
@@ -132,6 +133,7 @@ export function BranchPanel({
             graphBranchIsRemote: branch.isRemote,
             graphBranchIsCurrent: branch.isCurrent,
             graphBranchHasUpstream: hasUpstream,
+            graphBranchCanUpdate: canUpdate,
             graphBranchCanPush: canPush,
             graphBranchCanPublish: canPublish,
             graphBranchCanDelete: canDelete,
@@ -145,12 +147,14 @@ export function BranchPanel({
 
     const handleOpenContextMenu = (branch: BranchInfo) => {
         const hasUpstream = Boolean(branch.upstream);
+        const canUpdate = !branch.isRemote && hasUpstream;
         onContextTarget({
             kind: 'branch',
             branch: branch.name,
             isRemote: branch.isRemote,
             isCurrent: branch.isCurrent,
             hasUpstream,
+            canUpdate,
             canPush: !branch.isRemote && hasUpstream,
             canPublish: !branch.isRemote && !hasUpstream,
             canDelete: !branch.isCurrent,

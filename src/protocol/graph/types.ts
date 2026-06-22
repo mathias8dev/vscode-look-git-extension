@@ -113,6 +113,7 @@ export interface GraphBranchContextTarget {
     readonly isRemote: boolean;
     readonly isCurrent?: boolean;
     readonly hasUpstream?: boolean;
+    readonly canUpdate?: boolean;
     readonly canPush?: boolean;
     readonly canPublish?: boolean;
     readonly canDelete?: boolean;

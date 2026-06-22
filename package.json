@@ -1085,6 +1085,13 @@
         "category": "Look Git"
       },
       {
+        "command": "lookGit.graph.branch.update",
+        "title": "Update Branch",
+        "category": "Look Git",
+        "icon": "$(sync)",
+        "enablement": "graphBranchCanUpdate"
+      },
+      {
         "command": "lookGit.graph.branch.push",
         "title": "Push...",
         "category": "Look Git",
@@ -2357,6 +2364,11 @@
           "command": "lookGit.graph.branch.mergeInto",
           "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent",
           "group": "3_graph_branch_history@3"
+        },
+        {
+          "command": "lookGit.graph.branch.update",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchCanUpdate",
+          "group": "4_graph_branch_publish@0"
         },
         {
           "command": "lookGit.graph.branch.push",

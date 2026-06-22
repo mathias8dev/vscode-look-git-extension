@@ -106,7 +106,7 @@ export async function runBranchCommand(
             return removeBranchWorktree(repo, branch, isRemote, runtimeTargets);
         case 'update': {
             if (isRemote) { throw new Error('Update selected branch is only available for local branches.'); }
-            await updateSelectedLocalBranch(runtimeRepository, requireRuntimeWorktree(runtimeTargets), branch, currentBranch);
+            await updateSelectedLocalBranch(runtimeRepository, requireRuntimeWorktree(runtimeTargets), runtimeTargets, branch, currentBranch);
             return true;
         }
         case 'rebaseOnto':
@@ -284,6 +284,7 @@ async function pushBranch(runtimeTargets: RuntimeCommandTargets, branch: string)
 async function updateSelectedLocalBranch(
     repository: GitRepository,
     worktree: Worktree,
+    runtimeTargets: RuntimeCommandTargets,
     branch: string,
     currentBranch: string,
 ): Promise<void> {
@@ -291,9 +292,28 @@ async function updateSelectedLocalBranch(
     if (!upstream) { throw new Error(`Branch "${branch}" has no upstream.`); }
     await repository.fetchAll({});
     if (branch !== currentBranch) {
-        throw new Error('Updating a non-current branch is not implemented through semantic git operations yet.');
+        const branchWorktree = runtimeWorktreeForBranch(runtimeTargets.worktrees ?? [], branch);
+        if (branchWorktree) {
+            await branchWorktree.pull({});
+            return;
+        }
+        const { ahead, behind } = await repository.getAheadBehind(branch, upstream);
+        if (behind === 0) { return; }
+        if (ahead > 0) {
+            throw new Error(`Branch "${branch}" and "${upstream}" have diverged. Check out the branch or update its worktree to merge or rebase it.`);
+        }
+        await repository.updateRef(localBranchRef(branch), await repository.resolveRef(upstream));
+        return;
     }
     await worktree.merge(upstream, {});
+}
+
+function runtimeWorktreeForBranch(worktrees: readonly Worktree[], branch: string): Worktree | undefined {
+    return worktrees.find((candidate) => shortWorktreeBranch(candidate.branch) === branch);
+}
+
+function localBranchRef(branch: string): string {
+    return branch.startsWith('refs/heads/') ? branch : `refs/heads/${branch}`;
 }
 
 async function assertRuntimeNoUnmergedFiles(worktree: Worktree, operation: string): Promise<void> {

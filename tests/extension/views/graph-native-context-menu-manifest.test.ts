@@ -27,6 +27,7 @@ describe('Graph native context menu manifest', () => {
             'lookGit.graph.commit.explainDiff',
             'lookGit.graph.commit.goToParentCommit',
             'lookGit.graph.branch.checkout',
+            'lookGit.graph.branch.update',
             'lookGit.graph.branch.publish',
             'lookGit.graph.branch.removeBranchWorktree',
             'lookGit.graph.worktree.open',
@@ -53,6 +54,9 @@ describe('Graph native context menu manifest', () => {
         });
         expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.graph.branch.push')).toMatchObject({
             enablement: 'graphBranchCanPush',
+        });
+        expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.graph.branch.update')).toMatchObject({
+            enablement: 'graphBranchCanUpdate',
         });
         expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.graph.branch.publish')).toMatchObject({
             enablement: 'graphBranchCanPublish',
@@ -100,6 +104,10 @@ describe('Graph native context menu manifest', () => {
             expect.objectContaining({
                 command: 'lookGit.graph.branch.push',
                 when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+            }),
+            expect.objectContaining({
+                command: 'lookGit.graph.branch.update',
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchCanUpdate",
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.branch.publish',
