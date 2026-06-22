@@ -27,6 +27,7 @@ import type { RuntimeCommandTargets } from '@extension/commands/runtime-command-
 import { requireRuntimeLocator } from '@extension/repositories/runtime-repository-locator';
 import { historyDataEqual } from '@protocol/shared/protocol-data-equality';
 import { DISTINCT_MESSAGE_LAST_VALUE_ONLY, DistinctMessagePoster } from '@extension/messaging/distinct-message-poster';
+import { movePanelToFloatingWindow } from '@extension/utils/floating-editor-window';
 
 const DEFAULT_PAGE: Pagination = { offset: 0, limit: 50 };
 const MAX_PAGE_LIMIT = 300;
@@ -102,14 +103,13 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             enableScripts: true,
             localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')],
         };
-        this.renderWebviewHtml(webviewView);
 
         webviewView.webview.onDidReceiveMessage((msg: HistoryWebviewToExtensionMessage) => {
             void this.handleMessage(msg);
         });
 
         void vscode.commands.executeCommand('setContext', 'lookGit.historyFileViewTree', true);
-        void this.refresh();
+        this.renderWebviewHtml(webviewView);
     }
 
     registerNativeContextCommands(): readonly vscode.Disposable[] {
@@ -141,6 +141,9 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     private async handleMessage(message: HistoryWebviewToExtensionMessage): Promise<void> {
         switch (message.type) {
             case 'history/ready':
+                this.historyDataPoster.clear();
+                await this.refresh();
+                return;
             case 'history/refresh':
                 await this.refresh();
                 return;
@@ -433,7 +436,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 this.contextRepository = runtimeRepo;
             },
         );
-        await vscode.commands.executeCommand('workbench.action.moveEditorToNewWindow');
+        movePanelToFloatingWindow(panel, 'Could not open file history in a separate window. Continuing in an editor tab.');
     }
 
     async runCommitContextCommand(command: CommitCommand): Promise<void> {

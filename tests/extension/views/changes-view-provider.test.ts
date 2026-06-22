@@ -76,6 +76,65 @@ describe('ChangesViewProvider', () => {
         vi.clearAllTimers();
     });
 
+    it('posts the current status snapshot to a newly resolved webview even when data is unchanged', async () => {
+        const context = {
+            id: 'repo-1',
+            cwd: '/repo',
+            kind: RepoKind.Main,
+            label: 'repo',
+        } satisfies RepoContext;
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry(context, changesRuntime(statusWithUnstagedFile('src/app.ts'))),
+        );
+        const firstView = makeWebviewView();
+        const secondView = makeWebviewView();
+
+        provider.resolveWebviewView(firstView);
+        await provider.refresh();
+        provider.resolveWebviewView(secondView);
+        await provider.refresh();
+
+        expect(firstView.messages.filter((message) => isMessageType(message, 'changes/statusData'))).toHaveLength(1);
+        expect(secondView.messages.filter((message) => isMessageType(message, 'changes/statusData'))).toHaveLength(1);
+        vi.clearAllTimers();
+    });
+
+    it('posts the current status snapshot again after the webview ready message', async () => {
+        const context = {
+            id: 'repo-1',
+            cwd: '/repo',
+            kind: RepoKind.Main,
+            label: 'repo',
+        } satisfies RepoContext;
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry(context, changesRuntime(statusWithUnstagedFile('src/app.ts'))),
+        );
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        await provider.refresh();
+        view.messageHandler?.({ type: 'changes/ready' });
+
+        await vi.waitFor(() => {
+            expect(view.messages.filter((message) => isMessageType(message, 'changes/statusData'))).toHaveLength(2);
+        });
+        vi.clearAllTimers();
+    });
+
     it('posts status data again when a refresh returns a changed snapshot', async () => {
         const context = {
             id: 'repo-1',

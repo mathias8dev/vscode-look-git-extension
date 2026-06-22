@@ -1,19 +1,10 @@
 import type { ChangesToolbarCommand, ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
 import type { ChangesSelectionContextTarget } from '@protocol/changes/types';
-import type { CodiconName } from '@webview/shared/codicon';
+import { ChangeRowAction, type ChangeActionDescriptor } from '@webview/shared/change-row-actions';
 import { ChangeSectionId, type ChangeListItem, type ChangeSection } from '@webview/features/changes/change-tree';
 
-export enum ChangeRowAction {
-    Open = 'open',
-    Diff = 'diff',
-    Stage = 'stage',
-    Unstage = 'unstage',
-    Discard = 'discard',
-    OpenMergeEditor = 'openMergeEditor',
-    MarkResolved = 'markResolved',
-    AcceptOurs = 'acceptOurs',
-    AcceptTheirs = 'acceptTheirs',
-}
+export { ChangeRowAction };
+export type { ChangeActionDescriptor };
 
 export enum ChangeBulkAction {
     StageAll = 'stageAll',
@@ -21,13 +12,6 @@ export enum ChangeBulkAction {
     DiscardAll = 'discardAll',
     OpenAllMergeEditors = 'openAllMergeEditors',
     AcceptAllTheirs = 'acceptAllTheirs',
-}
-
-export interface ChangeActionDescriptor<TAction extends string> {
-    readonly action: TAction;
-    readonly icon: CodiconName;
-    readonly label: string;
-    readonly title: string;
 }
 
 export function rowActionsFor(item: ChangeListItem): readonly ChangeActionDescriptor<ChangeRowAction>[] {

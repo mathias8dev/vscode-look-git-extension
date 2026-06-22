@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { messageForVisualRebaseAbort, messageForVisualRebaseAcceptIncoming, messageForVisualRebaseAcceptYours, messageForVisualRebaseCancel, messageForVisualRebaseContinue, messageForVisualRebaseMarkResolved, messageForVisualRebaseOpenMergeEditor, messageForVisualRebaseReady, messageForVisualRebaseSkip, messageForVisualRebaseStart } from '@webview/visual-rebase/visual-rebase-commands';
+import { messageForVisualRebaseAbort, messageForVisualRebaseAcceptIncoming, messageForVisualRebaseAcceptYours, messageForVisualRebaseCancel, messageForVisualRebaseContinue, messageForVisualRebaseMarkResolved, messageForVisualRebaseOpenFile, messageForVisualRebaseOpenMergeEditor, messageForVisualRebasePreview, messageForVisualRebaseReady, messageForVisualRebaseSkip, messageForVisualRebaseStart } from '@webview/visual-rebase/visual-rebase-commands';
 
 describe('visual rebase commands', () => {
     it('serializes ready cancel and start messages', () => {
@@ -14,6 +14,10 @@ describe('visual rebase commands', () => {
             type: 'visualRebase/openMergeEditor',
             filePath: 'src/app.ts',
         });
+        expect(messageForVisualRebaseOpenFile('src/app.ts')).toEqual({
+            type: 'visualRebase/openFile',
+            filePath: 'src/app.ts',
+        });
         expect(messageForVisualRebaseMarkResolved('src/app.ts')).toEqual({
             type: 'visualRebase/markResolved',
             filePath: 'src/app.ts',
@@ -26,9 +30,17 @@ describe('visual rebase commands', () => {
             type: 'visualRebase/acceptIncoming',
             filePath: 'src/app.ts',
         });
-        expect(messageForVisualRebaseStart(plan)).toEqual({
+        expect(messageForVisualRebaseStart('main', 'origin/main', plan)).toEqual({
             type: 'visualRebase/start',
+            rewriteAfter: 'main',
+            replayOnto: 'origin/main',
             plan,
+        });
+        expect(messageForVisualRebasePreview('req-1', 'main', 'origin/main')).toEqual({
+            type: 'visualRebase/previewRequest',
+            requestId: 'req-1',
+            rewriteAfter: 'main',
+            replayOnto: 'origin/main',
         });
     });
 });

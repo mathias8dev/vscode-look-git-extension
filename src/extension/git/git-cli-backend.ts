@@ -4,7 +4,7 @@ import type { GitBackend, GitRunOptions } from '@application/ports/git-backend';
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024;
-const DEFAULT_MAX_LOCK_RETRIES = 5;
+const DEFAULT_MAX_LOCK_RETRIES = 8;
 
 export class GitCliBackend implements GitBackend {
     constructor(

@@ -54,6 +54,70 @@ describe('openVisualRebasePanel', () => {
         await expect.poll(() => panel?.webview.messages, GIT_OPERATION_POLL).toContainEqual(expect.objectContaining({ type: 'visualRebase/completed' }));
     });
 
+    it('runs visual rebase with dirty working-tree changes through git autostash', async () => {
+        const fixture = track(createTempGitRepo());
+        fixture.write('base.txt', 'base\n');
+        fixture.commit('base');
+        fixture.git(['checkout', '-q', '-b', 'feature/autostash']);
+        fixture.write('keep.txt', 'keep\n');
+        const keepHash = fixture.commit('feat: keep');
+        fixture.write('keep.txt', 'local edit\n');
+        const runtime = await runtimeFor(fixture);
+
+        await openVisualRebasePanel(runtime.repository, runtime.worktree, vscode.Uri.file('/ext'), storageUri(), {
+            upstream: 'main',
+            onto: 'main',
+            branch: 'feature/autostash',
+        });
+        const panel = window.webviewPanels[0];
+        panel?.webview.messageHandler?.({ type: 'visualRebase/ready' });
+        panel?.webview.messageHandler?.({
+            type: 'visualRebase/start',
+            plan: [
+                { hash: keepHash, action: 'pick', message: 'feat: keep' },
+            ],
+        });
+
+        await expect.poll(() => panel?.webview.messages, GIT_OPERATION_POLL).toContainEqual(expect.objectContaining({ type: 'visualRebase/completed' }));
+        expect(fixture.git(['status', '--short'])).toBe(' M keep.txt\n');
+        expect(fs.readFileSync(path.join(fixture.cwd, 'keep.txt'), 'utf8')).toBe('local edit\n');
+    });
+
+    it('replays the plan onto the selected replay target', async () => {
+        const fixture = track(createTempGitRepo());
+        fixture.write('base.txt', 'base\n');
+        fixture.commit('base');
+        fixture.git(['checkout', '-q', '-b', 'new-base']);
+        fixture.write('new-base.txt', 'new base\n');
+        fixture.commit('new base');
+        const newBaseHash = fixture.gitTrim(['rev-parse', 'HEAD']);
+        fixture.git(['checkout', '-q', 'main']);
+        fixture.git(['checkout', '-q', '-b', 'feature/payments']);
+        fixture.write('feature.txt', 'feature\n');
+        const featureHash = fixture.commit('feat: feature');
+        const runtime = await runtimeFor(fixture);
+
+        await openVisualRebasePanel(runtime.repository, runtime.worktree, vscode.Uri.file('/ext'), storageUri(), {
+            upstream: 'main',
+            onto: 'new-base',
+            branch: 'feature/payments',
+        });
+        const panel = window.webviewPanels[0];
+        panel?.webview.messageHandler?.({ type: 'visualRebase/ready' });
+        panel?.webview.messageHandler?.({
+            type: 'visualRebase/start',
+            rewriteAfter: 'main',
+            replayOnto: 'new-base',
+            plan: [
+                { hash: featureHash, action: 'pick', message: 'feat: feature' },
+            ],
+        });
+
+        await expect.poll(() => panel?.webview.messages, GIT_OPERATION_POLL).toContainEqual(expect.objectContaining({ type: 'visualRebase/completed' }));
+        expect(fixture.gitTrim(['merge-base', 'HEAD', 'new-base'])).toBe(newBaseHash);
+        expect(fixture.gitTrim(['log', '--format=%s', 'new-base..feature/payments'])).toBe('feat: feature');
+    });
+
     it('pauses a real repository for edit actions and can abort the rebase', async () => {
         const fixture = track(createTempGitRepo());
         fixture.write('base.txt', 'base\n');
@@ -89,6 +153,43 @@ describe('openVisualRebasePanel', () => {
         await expect.poll(() => panel?.webview.messages, GIT_OPERATION_POLL).toContainEqual(expect.objectContaining({
             type: 'visualRebase/error',
             message: 'Rebase aborted.',
+        }));
+    });
+
+    it('previews a changed visual rebase setup', async () => {
+        const fixture = track(createTempGitRepo());
+        fixture.write('base.txt', 'base\n');
+        fixture.commit('base');
+        fixture.git(['checkout', '-q', '-b', 'feature/payments']);
+        fixture.write('first.txt', 'first\n');
+        fixture.commit('feat: first');
+        fixture.write('second.txt', 'second\n');
+        fixture.commit('feat: second');
+        const runtime = await runtimeFor(fixture);
+
+        await openVisualRebasePanel(runtime.repository, runtime.worktree, vscode.Uri.file('/ext'), storageUri(), {
+            upstream: 'main',
+            onto: 'main',
+            branch: 'feature/payments',
+        });
+        const panel = window.webviewPanels[0];
+        panel?.webview.messageHandler?.({ type: 'visualRebase/ready' });
+        panel?.webview.messageHandler?.({
+            type: 'visualRebase/previewRequest',
+            requestId: 'preview-1',
+            rewriteAfter: 'main',
+            replayOnto: 'main',
+        });
+
+        await expect.poll(() => panel?.webview.messages, GIT_OPERATION_POLL).toContainEqual(expect.objectContaining({
+            type: 'visualRebase/previewResponse',
+            requestId: 'preview-1',
+            rewriteAfter: 'main',
+            replayOnto: 'main',
+            commits: expect.arrayContaining([
+                expect.objectContaining({ message: 'feat: first' }),
+                expect.objectContaining({ message: 'feat: second' }),
+            ]),
         }));
     });
 
@@ -371,6 +472,14 @@ describe('openVisualRebasePanel', () => {
         await expect.poll(() => panel?.webview.messages, GIT_OPERATION_POLL).toContainEqual(expect.objectContaining({
             type: 'visualRebase/error',
             rebaseInProgress: true,
+            conflictFiles: expect.arrayContaining([
+                expect.objectContaining({
+                    filePath: 'conflict.txt',
+                    indexStatus: 'U',
+                    workTreeStatus: 'U',
+                    state: 'unmerged',
+                }),
+            ]),
         }));
         return panel;
     }

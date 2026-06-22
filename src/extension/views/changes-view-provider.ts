@@ -226,6 +226,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
         this.view = webviewView;
+        this.statusDataPoster.clear();
 
         webviewView.webview.options = {
             enableScripts: true,
@@ -253,6 +254,9 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             if (msg.type === 'changes/explainRepositoryChanges') {
                 void this.explainRepositoryChanges(msg.submodulePath);
                 return;
+            }
+            if (msg.type === 'changes/ready') {
+                this.statusDataPoster.clear();
             }
             void this.router!.handle(msg);
         });

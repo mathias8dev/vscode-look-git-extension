@@ -4,12 +4,13 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 const extensionPath = path.resolve(__dirname, '../..');
-const semanticFixtureRoot = process.env.LOOK_GIT_WDIO_FIXTURE_ROOT ?? fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-wdio-semantic-'));
+const providedSemanticFixtureRoot = process.env.LOOK_GIT_WDIO_FIXTURE_ROOT;
+const semanticFixtureRoot = providedSemanticFixtureRoot ?? fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-wdio-semantic-'));
 process.env.LOOK_GIT_WDIO_FIXTURE_ROOT = semanticFixtureRoot;
 const semanticRepo = path.join(semanticFixtureRoot, 'semantic-actions');
 const storagePath = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-wdio-storage-'));
 const vscodeProxyTimeout = positiveIntegerEnv('LOOK_GIT_E2E_VSCODE_PROXY_TIMEOUT_MS');
-const mochaTimeout = positiveIntegerEnv('LOOK_GIT_E2E_MOCHA_TIMEOUT_MS');
+const WDIO_RUNNER_TIMEOUT_MS = 600_000;
 
 if (!fs.existsSync(path.join(semanticRepo, '.git'))) {
     execFileSync('node', [
@@ -31,7 +32,7 @@ type LookGitVscodeCapability = WebdriverIO.Capabilities & WebdriverIO.WDIOVSCode
 
 const vscodeCapabilities: LookGitVscodeCapability = {
     browserName: 'vscode',
-    browserVersion: '1.87.0',
+    browserVersion: '1.123.0',
     'wdio:enforceWebDriverClassic': true,
     'wdio:vscodeOptions': {
         extensionPath,
@@ -40,6 +41,7 @@ const vscodeCapabilities: LookGitVscodeCapability = {
         userSettings: {
             'workbench.startupEditor': 'none',
             'git.autofetch': false,
+            'git.autorefresh': false,
             'git.confirmSync': false,
         },
         verboseLogging: false,
@@ -54,7 +56,10 @@ const vscodeCapabilities: LookGitVscodeCapability = {
 
 export const config: WebdriverIO.Config = {
     runner: 'local',
-    specs: [path.join(__dirname, 'wdio/changes-webview.e2e.ts')],
+    specs: [
+        path.join(__dirname, 'wdio/changes-webview.e2e.ts'),
+        path.join(__dirname, 'wdio/visual-rebase.e2e.ts'),
+    ],
     maxInstances: 1,
     logLevel: 'error',
     framework: 'mocha',
@@ -62,10 +67,12 @@ export const config: WebdriverIO.Config = {
     services: [['vscode', { cachePath: path.join(extensionPath, '.wdio-vscode') }]],
     mochaOpts: {
         ui: 'bdd',
-        ...(mochaTimeout === undefined ? {} : { timeout: mochaTimeout }),
+        timeout: WDIO_RUNNER_TIMEOUT_MS,
     },
     onComplete: () => {
-        fs.rmSync(semanticFixtureRoot, { recursive: true, force: true });
+        if (!providedSemanticFixtureRoot) {
+            fs.rmSync(semanticFixtureRoot, { recursive: true, force: true });
+        }
         fs.rmSync(storagePath, { recursive: true, force: true });
     },
 };

@@ -19,7 +19,7 @@ async function main(): Promise<void> {
             extensionDevelopmentPath,
             extensionTestsPath,
             launchArgs: [semanticFixture.repo, `--user-data-dir=${userDataDir}`, '--disable-workspace-trust'],
-            version: '1.85.2',
+            version: '1.122.1',
         });
     } finally {
         semanticFixture.cleanup();

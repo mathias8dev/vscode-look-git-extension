@@ -682,6 +682,7 @@ async function startInteractiveRebase(
     if (options.autostash) { args.push('--autostash'); }
     args.push('-i');
     if (options.rebaseMerges) { args.push('--rebase-merges'); }
+    if (options.onto) { args.push('--onto', options.onto); }
     args.push(baseRef);
     const branch = optionalStringField(input, 'branch');
     if (branch) { args.push(branch); }
@@ -762,6 +763,7 @@ function rebaseOptions(input: unknown): RebaseOptions {
     return {
         ...(booleanOption(options, 'autostash') ? { autostash: true } : {}),
         ...(booleanOption(options, 'rebaseMerges') ? { rebaseMerges: true } : {}),
+        ...(optionalStringField(options, 'onto') ? { onto: optionalStringField(options, 'onto') } : {}),
         ...(editorEnv ? { editorEnv } : {}),
     };
 }

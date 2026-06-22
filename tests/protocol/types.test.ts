@@ -110,6 +110,7 @@ describe('protocol discriminated unions', () => {
                 case 'visualRebase/started': return;
                 case 'visualRebase/completed': return msg.backupRef satisfies string;
                 case 'visualRebase/error': return msg.recommendedAction satisfies 'continue' | 'skip' | undefined;
+                case 'visualRebase/previewResponse': return msg.requestId satisfies string;
                 case 'ui/fontSizeChanged': return msg.fontSize satisfies number;
             }
         };
@@ -121,11 +122,13 @@ describe('protocol discriminated unions', () => {
             switch (msg.type) {
                 case 'visualRebase/ready': return;
                 case 'visualRebase/start': return msg.plan satisfies readonly unknown[];
+                case 'visualRebase/previewRequest': return msg.requestId satisfies string;
                 case 'visualRebase/cancel': return;
                 case 'visualRebase/continue': return;
                 case 'visualRebase/abort': return;
                 case 'visualRebase/skip': return;
                 case 'visualRebase/openMergeEditor': return msg.filePath satisfies string;
+                case 'visualRebase/openFile': return msg.filePath satisfies string;
                 case 'visualRebase/markResolved': return msg.filePath satisfies string;
                 case 'visualRebase/acceptYours': return msg.filePath satisfies string;
                 case 'visualRebase/acceptIncoming': return msg.filePath satisfies string;

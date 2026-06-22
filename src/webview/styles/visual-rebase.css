@@ -67,6 +67,139 @@
   font-weight: 600;
 }
 
+.visual-rebase-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6em;
+}
+
+.visual-rebase-panel-heading h2 {
+  margin: 0 0 0.75em;
+}
+
+.visual-rebase-panel-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  margin-bottom: 0.75em;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+.visual-rebase-setup {
+  display: grid;
+  gap: 0.55em;
+  min-width: 0;
+  margin-bottom: 1.2em;
+}
+
+.visual-rebase-setup label,
+.visual-rebase-ref-input {
+  display: grid;
+  gap: 0.25em;
+  min-width: 0;
+}
+
+.visual-rebase-setup label > span,
+.visual-rebase-ref-input > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.86em;
+}
+
+.visual-rebase-setup input,
+.visual-rebase-ref-picker input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 0.35em 0.45em;
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  font: inherit;
+}
+
+.visual-rebase-ref-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.3em;
+}
+
+.visual-rebase-help {
+  display: inline-grid;
+  place-items: center;
+  width: 1.4em;
+  height: 1.4em;
+  padding: 0;
+  border: 0;
+  color: var(--vscode-descriptionForeground);
+  background: transparent;
+}
+
+.visual-rebase-ref-picker {
+  display: grid;
+  gap: 0.5em;
+  min-width: 0;
+}
+
+.visual-rebase-ref-picker-modal {
+  width: min(34em, 100%);
+}
+
+.visual-rebase-ref-results {
+  display: grid;
+  gap: 0.25em;
+  max-height: min(24em, 55vh);
+  overflow: auto;
+}
+
+.visual-rebase-ref-results button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5em;
+  min-width: 0;
+  padding: 0.38em 0.45em;
+  border: 0;
+  border-radius: 4px;
+  color: var(--vscode-foreground);
+  background: transparent;
+  text-align: left;
+}
+
+.visual-rebase-ref-results button:hover,
+.visual-rebase-ref-results button:focus-visible {
+  outline: none;
+  background: var(--vscode-list-hoverBackground);
+}
+
+.visual-rebase-ref-results span {
+  display: grid;
+  min-width: 0;
+}
+
+.visual-rebase-ref-results strong,
+.visual-rebase-ref-results small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visual-rebase-ref-results small,
+.visual-rebase-ref-empty {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+.visual-rebase-ref-empty {
+  padding: 0.45em;
+}
+
 .visual-rebase-facts {
   display: grid;
   gap: 0.35em;
@@ -179,6 +312,59 @@
 .visual-rebase-resume strong {
   color: var(--vscode-foreground);
   font-weight: 600;
+}
+
+.visual-rebase-completed {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.7em;
+  min-height: 0;
+  padding: 1.5em;
+  overflow: auto;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  color: var(--vscode-descriptionForeground);
+  background: var(--vscode-sideBar-background);
+  text-align: center;
+}
+
+.visual-rebase-completed > .codicon {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.visual-rebase-completed h2 {
+  margin: 0;
+  color: var(--vscode-foreground);
+  font-size: 1.1em;
+  font-weight: 600;
+}
+
+.visual-rebase-completed p {
+  max-width: 42em;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.visual-rebase-completed-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.45em 0.8em;
+  width: min(100%, 42em);
+  margin: 0.7em 0 0;
+  text-align: left;
+}
+
+.visual-rebase-completed-facts dt {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+}
+
+.visual-rebase-completed-facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--vscode-foreground);
 }
 
 .visual-rebase-row {
@@ -395,60 +581,65 @@
 
 .visual-rebase-conflict-list {
   display: grid;
-  gap: 0.4em;
+  gap: 0.65em;
   min-height: 0;
   margin: 0;
   overflow: auto;
   padding: 0;
-  list-style: none;
 }
 
-.visual-rebase-conflict-row {
+.visual-rebase-conflict-group {
   display: grid;
-  gap: 0.45em;
-  min-width: 0;
-  padding: 0.55em;
-  border: 1px solid var(--vscode-panel-border);
-  border-radius: 6px;
-  background: var(--vscode-list-hoverBackground);
-}
-
-.visual-rebase-conflict-file {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.45em;
+  gap: 0.3em;
   min-width: 0;
 }
 
-.visual-rebase-conflict-file .codicon {
-  color: var(--vscode-editorWarning-foreground);
-}
-
-.visual-rebase-conflict-file code {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--vscode-textPreformat-foreground);
-  font-family: var(--vscode-editor-font-family);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.visual-rebase-conflict-file span {
-  color: var(--vscode-editorWarning-foreground);
-  font-size: 0.9em;
-}
-
-.visual-rebase-conflict-actions {
+.visual-rebase-conflict-section-heading {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.45em;
-  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75em;
+  padding: 0 0.15em;
+}
+
+.visual-rebase-conflict-section-heading h3 {
+  margin: 0;
+  color: var(--vscode-foreground);
+  font-size: 0.92em;
+  font-weight: 600;
+}
+
+.visual-rebase-conflict-section-heading span {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+.visual-rebase-conflict-group .change-row {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background: var(--vscode-list-hoverBackground);
 }
 
 .visual-rebase-footer-actions {
   display: flex;
+  align-items: center;
   gap: 0.5em;
+}
+
+.visual-rebase-start-blocked {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  max-width: 100%;
+  color: var(--vscode-editorWarning-foreground);
+  font-size: 0.88em;
+  line-height: 1.35;
+}
+
+.visual-rebase-start-blocked span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .visual-rebase-error,
@@ -488,12 +679,7 @@
     grid-column: 3;
   }
 
-  .visual-rebase-conflict-file {
-    grid-template-columns: 1fr;
-  }
-
-  .visual-rebase-conflict-actions {
-    display: grid;
-    grid-template-columns: 1fr;
+  .visual-rebase-conflict-group .change-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 }

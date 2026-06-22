@@ -22,7 +22,7 @@ async function main(): Promise<void> {
             extensionDevelopmentPath,
             extensionTestsPath,
             launchArgs: [semanticFixture.repo, diffFixturePath, `--user-data-dir=${userDataDir}`, '--disable-workspace-trust'],
-            version: '1.85.2',
+            version: '1.122.1',
         });
     } finally {
         fs.rmSync(diffFixturePath, { recursive: true, force: true });

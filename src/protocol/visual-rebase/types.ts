@@ -22,3 +22,23 @@ export interface VisualRebaseSafety {
     readonly pushedCommits: number;
     readonly backupRef: string;
 }
+
+export type VisualRebaseRefKind = 'localBranch' | 'remoteBranch' | 'tag';
+
+export interface VisualRebaseRef {
+    readonly name: string;
+    readonly kind: VisualRebaseRefKind;
+    readonly hash: string;
+    readonly isCurrent?: boolean;
+    readonly upstream?: string;
+}
+
+export type VisualRebaseConflictFileState = 'unmerged' | 'merged';
+
+export interface VisualRebaseConflictFile {
+    readonly filePath: string;
+    readonly indexStatus: string;
+    readonly workTreeStatus: string;
+    readonly state: VisualRebaseConflictFileState;
+    readonly origPath?: string;
+}

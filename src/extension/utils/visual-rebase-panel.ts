@@ -5,11 +5,12 @@ import { createHash } from 'crypto';
 import type { GitRepository, Worktree } from '@application/ports/git-topology';
 import type { GitCommit } from '@core/git/domain/git-commit';
 import type { VisualRebaseErrorPush, VisualRebaseRecommendedAction, VisualRebaseWebviewToExtensionMessage } from '@protocol/visual-rebase/messages';
-import type { VisualRebaseAction, VisualRebaseCommit, VisualRebasePlanEntry, VisualRebaseSafety } from '@protocol/visual-rebase/types';
+import type { VisualRebaseAction, VisualRebaseCommit, VisualRebaseConflictFile, VisualRebasePlanEntry, VisualRebaseRef, VisualRebaseSafety } from '@protocol/visual-rebase/types';
 import { assertNoUnmergedFiles } from '@extension/commands/git-command-helpers';
 import { currentBranchName } from '@extension/git/current-branch';
 import { getWebviewHtml } from '@extension/views/webview-html';
 import { openRuntimeThreeWayMergeEditor } from '@extension/utils/runtime-merge-editor';
+import { movePanelToFloatingWindow } from '@extension/utils/floating-editor-window';
 
 const MAX_REBASE_COMMITS = 200;
 const EXECUTABLE_ACTIONS = new Set<VisualRebaseAction>(['pick', 'reword', 'edit', 'squash', 'fixup', 'drop', 'break', 'merge']);
@@ -36,10 +37,8 @@ export async function openVisualRebasePanel(
     const currentBranch = options.branch ?? worktree.branch ?? await currentBranchName(repo);
     const backupTarget = worktree.branch ?? worktree.head;
     const restoredRuntime = existingRebase ? await restoreVisualRebaseRuntime(worktree, storageUri) : undefined;
-    const rawCommits = existingRebase ? [] : await loadVisualRebaseCommits(repo, options.upstream, currentBranch);
-    const commits = rawCommits.map(toVisualRebaseCommit);
-    const mergeCommitHashes = new Set(rawCommits.filter((commit) => commit.parentHashes.length > 1).map((commit) => commit.hash));
-    const mergeAware = mergeCommitHashes.size > 0;
+    const commits = existingRebase ? [] : await loadVisualRebasePreview(repo, options.upstream, currentBranch);
+    const refs = await loadVisualRebaseRefs(repo);
     const safety = existingRebase
         ? await visualRebaseSafetyForExistingRebase(repo, worktree, restoredRuntime)
         : await visualRebaseSafety(repo, worktree, currentBranch, commits.length);
@@ -76,20 +75,23 @@ export async function openVisualRebasePanel(
                     onto: options.onto,
                     commits,
                     safety,
+                    refs,
                     existingRebaseError,
                 });
                 return;
             case 'visualRebase/start':
                 runOperation(() => runVisualRebase(repo, worktree, panel, runtime, {
                     currentBranch,
-                    upstream: options.upstream,
+                    upstream: message.rewriteAfter || options.upstream,
+                    onto: message.replayOnto || options.onto,
                     plan: message.plan,
                     backupRef: safety.backupRef,
                     backupTarget,
-                    mergeCommitHashes,
-                    mergeAware,
                     storageUri,
                 }));
+                return;
+            case 'visualRebase/previewRequest':
+                runOperation(() => previewVisualRebaseSetup(repo, worktree, panel, currentBranch, message.requestId, message.rewriteAfter, message.replayOnto));
                 return;
             case 'visualRebase/cancel':
                 panel.dispose();
@@ -118,25 +120,49 @@ export async function openVisualRebasePanel(
                     await panel.webview.postMessage(await visualRebaseError(worktree, errorMessage));
                 });
                 return;
+            case 'visualRebase/openFile':
+                void vscode.window.showTextDocument(vscode.Uri.file(path.join(worktree.path, message.filePath))).then(undefined, async (error: unknown) => {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    await panel.webview.postMessage(await visualRebaseError(worktree, errorMessage));
+                });
+                return;
         }
     });
     panel.onDidDispose(() => { messageSubscription.dispose(); });
-    void vscode.commands.executeCommand('workbench.action.moveEditorToNewWindow').then(undefined, () => {
-        void vscode.window.showWarningMessage('Could not open Visual Rebase in a separate window. Continuing in an editor tab.');
-        panel.reveal(vscode.ViewColumn.Active);
-    });
+    movePanelToFloatingWindow(panel, 'Could not open Visual Rebase in a separate window. Continuing in an editor tab.');
 }
 
-async function loadVisualRebaseCommits(
+async function loadVisualRebasePreview(
     repo: GitRepository,
     upstream: string,
     branch: string,
-): Promise<readonly GitCommit[]> {
+): Promise<readonly VisualRebaseCommit[]> {
     const commits = await repo.getCommitRange(upstream, branch, { limit: MAX_REBASE_COMMITS + 1 });
     if (commits.items.length > MAX_REBASE_COMMITS) {
         throw new Error(`Visual Rebase supports up to ${MAX_REBASE_COMMITS} commits at a time.`);
     }
-    return commits.items.slice().reverse();
+    return commits.items.slice().reverse().map(toVisualRebaseCommit);
+}
+
+async function loadVisualRebaseRefs(repo: GitRepository): Promise<readonly VisualRebaseRef[]> {
+    const [branches, tags] = await Promise.all([
+        repo.listBranches(),
+        repo.listTags(),
+    ]);
+    return [
+        ...branches.map((branch): VisualRebaseRef => ({
+            name: branch.name,
+            kind: branch.isRemote ? 'remoteBranch' : 'localBranch',
+            hash: branch.hash,
+            ...(branch.isCurrent ? { isCurrent: true } : {}),
+            ...(branch.upstream ? { upstream: branch.upstream } : {}),
+        })),
+        ...tags.map((tag): VisualRebaseRef => ({
+            name: tag.name,
+            kind: 'tag',
+            hash: tag.hash,
+        })),
+    ];
 }
 
 function toVisualRebaseCommit(commit: GitCommit): VisualRebaseCommit {
@@ -190,6 +216,7 @@ interface InitialVisualRebaseState {
     readonly onto: string;
     readonly commits: readonly VisualRebaseCommit[];
     readonly safety: VisualRebaseSafety;
+    readonly refs: readonly VisualRebaseRef[];
     readonly existingRebaseError: VisualRebaseErrorPush | undefined;
 }
 
@@ -202,6 +229,7 @@ async function postInitialVisualRebaseState(panel: vscode.WebviewPanel, state: I
         onto: state.onto,
         commits: state.commits,
         safety: state.safety,
+        refs: state.refs,
     });
     if (state.existingRebaseError) {
         await panel.webview.postMessage(state.existingRebaseError);
@@ -211,11 +239,10 @@ async function postInitialVisualRebaseState(panel: vscode.WebviewPanel, state: I
 interface RunVisualRebaseOptions {
     readonly currentBranch: string;
     readonly upstream: string;
+    readonly onto: string;
     readonly plan: readonly VisualRebasePlanEntry[];
     readonly backupRef: string;
     readonly backupTarget: string;
-    readonly mergeCommitHashes: ReadonlySet<string>;
-    readonly mergeAware: boolean;
     readonly storageUri: vscode.Uri;
 }
 
@@ -235,7 +262,9 @@ async function runVisualRebase(
     await panel.webview.postMessage({ type: 'visualRebase/started' });
     let keepRuntime = false;
     try {
-        await validateVisualRebasePlan(worktree, options.plan, options.mergeCommitHashes);
+        const mergeCommitHashes = await mergeCommitHashesForPlan(repo, options.plan);
+        const mergeAware = mergeCommitHashes.size > 0;
+        await validateVisualRebasePlan(worktree, options.plan, mergeCommitHashes);
         await cleanupVisualRebaseRuntime(worktree, options.storageUri, runtime);
         await repo.updateRef(options.backupRef, options.backupTarget);
         const tempDir = await createVisualRebaseRuntimeDir(worktree, options.storageUri);
@@ -244,11 +273,11 @@ async function runVisualRebase(
         const messageEditorPath = path.join(tempDir, 'message-editor.cjs');
         const messageQueuePath = path.join(tempDir, 'messages.json');
         const planPath = path.join(tempDir, 'plan.json');
-        await fs.writeFile(todoPath, options.mergeAware ? '' : visualRebaseTodo(options.plan), 'utf8');
+        await fs.writeFile(todoPath, mergeAware ? '' : visualRebaseTodo(options.plan), 'utf8');
         await fs.writeFile(planPath, JSON.stringify(options.plan), 'utf8');
-        await fs.writeFile(editorPath, options.mergeAware ? mergeAwareSequenceEditorScript() : sequenceEditorScript(), 'utf8');
+        await fs.writeFile(editorPath, mergeAware ? mergeAwareSequenceEditorScript() : sequenceEditorScript(), 'utf8');
         await fs.writeFile(messageEditorPath, messageEditorScript(), 'utf8');
-        await fs.writeFile(messageQueuePath, JSON.stringify(options.mergeAware ? [] : editorMessageQueue(options.plan)), 'utf8');
+        await fs.writeFile(messageQueuePath, JSON.stringify(mergeAware ? [] : editorMessageQueue(options.plan)), 'utf8');
         runtime.tempDir = tempDir;
         runtime.env = {
             LOOK_GIT_REBASE_TODO: todoPath,
@@ -258,9 +287,10 @@ async function runVisualRebase(
             GIT_EDITOR: nodeEditorCommand(messageEditorPath),
         };
         await persistVisualRebaseRuntime(worktree, options.storageUri, runtime);
-        await worktree.startInteractiveRebase(options.upstream, options.mergeAware ? '' : visualRebaseTodo(options.plan), {
+        await worktree.startInteractiveRebase(options.upstream, mergeAware ? '' : visualRebaseTodo(options.plan), {
             autostash: true,
-            rebaseMerges: options.mergeAware,
+            rebaseMerges: mergeAware,
+            onto: options.onto,
             editorEnv: runtime.env,
         });
         keepRuntime = await postRebasePausedOrCompleted(worktree, panel, options.backupRef);
@@ -276,6 +306,46 @@ async function runVisualRebase(
     }
 }
 
+async function previewVisualRebaseSetup(
+    repo: GitRepository,
+    worktree: Worktree,
+    panel: vscode.WebviewPanel,
+    currentBranch: string,
+    requestId: string,
+    rewriteAfter: string,
+    replayOnto: string,
+): Promise<void> {
+    try {
+        await Promise.all([
+            repo.resolveRef(rewriteAfter),
+            repo.resolveRef(replayOnto),
+        ]);
+        const commits = await loadVisualRebasePreview(repo, rewriteAfter, currentBranch);
+        const safety = await visualRebaseSafety(repo, worktree, currentBranch, commits.length);
+        await panel.webview.postMessage({
+            type: 'visualRebase/previewResponse',
+            requestId,
+            rewriteAfter,
+            replayOnto,
+            commits,
+            safety,
+        });
+    } catch (error) {
+        await panel.webview.postMessage({
+            type: 'visualRebase/previewResponse',
+            requestId,
+            rewriteAfter,
+            replayOnto,
+            error: error instanceof Error ? error.message : String(error),
+        });
+    }
+}
+
+async function mergeCommitHashesForPlan(repo: GitRepository, plan: readonly VisualRebasePlanEntry[]): Promise<ReadonlySet<string>> {
+    const details = await Promise.all(plan.map((entry) => repo.getCommitDetails(entry.hash)));
+    return new Set(details.filter((commit) => commit.parentHashes.length > 1).map((commit) => commit.hash));
+}
+
 async function validateVisualRebasePlan(
     worktree: Worktree,
     plan: readonly VisualRebasePlanEntry[],
@@ -285,10 +355,6 @@ async function validateVisualRebasePlan(
         throw new Error('A rebase is already in progress.');
     }
     await assertNoUnmergedFiles(worktree, 'starting a visual rebase');
-    const status = await worktree.getStatus();
-    if (status.staged.length > 0 || status.unstaged.length > 0 || status.conflicts.length > 0) {
-        throw new Error('Visual Rebase requires a clean working tree.');
-    }
     if (plan.length === 0) { throw new Error('Visual Rebase requires at least one commit.'); }
     if (plan.every((entry) => entry.action === 'drop')) { throw new Error('Visual Rebase cannot drop every commit.'); }
     for (const [index, entry] of plan.entries()) {
@@ -413,7 +479,7 @@ async function visualRebaseError(
     recommendedAction?: VisualRebaseRecommendedAction,
 ): Promise<VisualRebaseErrorPush> {
     const status = await worktree.getStatus().catch(() => undefined);
-    const conflictFiles = status?.conflicts.map((entry) => entry.filePath) ?? [];
+    const conflictFiles = status ? visualRebaseConflictFiles(status.conflicts, status.unstaged) : [];
     const rebaseInProgress = await isRebaseInProgress(worktree);
     return {
         type: 'visualRebase/error' as const,
@@ -422,6 +488,28 @@ async function visualRebaseError(
         ...(rebaseInProgress ? { rebaseInProgress: true } : {}),
         ...(recommendedAction ? { recommendedAction } : {}),
     };
+}
+
+function visualRebaseConflictFiles(
+    conflicts: readonly { readonly filePath: string; readonly indexStatus: string; readonly workTreeStatus: string; readonly origPath?: string }[],
+    unstaged: readonly { readonly filePath: string; readonly indexStatus: string; readonly workTreeStatus: string; readonly origPath?: string }[],
+): readonly VisualRebaseConflictFile[] {
+    return [
+        ...conflicts.map((entry): VisualRebaseConflictFile => ({
+            filePath: entry.filePath,
+            indexStatus: entry.indexStatus,
+            workTreeStatus: entry.workTreeStatus,
+            state: 'unmerged',
+            ...(entry.origPath ? { origPath: entry.origPath } : {}),
+        })),
+        ...unstaged.map((entry): VisualRebaseConflictFile => ({
+            filePath: entry.filePath,
+            indexStatus: entry.indexStatus,
+            workTreeStatus: entry.workTreeStatus,
+            state: 'merged',
+            ...(entry.origPath ? { origPath: entry.origPath } : {}),
+        })),
+    ];
 }
 
 function visualRebaseTodo(plan: readonly VisualRebasePlanEntry[]): string {

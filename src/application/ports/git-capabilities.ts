@@ -78,6 +78,7 @@ export interface RebaseOptions {
     readonly autosquash?: boolean;
     readonly autostash?: boolean;
     readonly rebaseMerges?: boolean;
+    readonly onto?: string;
     readonly editorEnv?: Readonly<Record<string, string>>;
 }
 

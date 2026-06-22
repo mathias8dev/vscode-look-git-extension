@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { CommitMessageWebviewToExtensionMessage } from '@protocol/commit-message/messages';
 import { getWebviewHtml } from '@extension/views/webview-html';
+import { movePanelToFloatingWindow as moveWebviewPanelToFloatingWindow } from '@extension/utils/floating-editor-window';
 
 export type CommitMessageEditorMode = 'window' | 'editor' | 'input';
 
@@ -111,8 +112,5 @@ async function generateMessage(
 }
 
 function movePanelToFloatingWindow(panel: vscode.WebviewPanel): void {
-    void vscode.commands.executeCommand('workbench.action.moveEditorToNewWindow').then(undefined, () => {
-        void vscode.window.showWarningMessage('Could not open commit message editor in a separate window. Continuing in an editor tab.');
-        panel.reveal(vscode.ViewColumn.Active);
-    });
+    moveWebviewPanelToFloatingWindow(panel, 'Could not open commit message editor in a separate window. Continuing in an editor tab.');
 }
