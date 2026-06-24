@@ -151,6 +151,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 return;
             case 'history/ready':
                 this.historyDataPoster.clear();
+                this.postRepositoriesChangedMessage();
                 await this.refresh();
                 return;
             case 'history/refresh':

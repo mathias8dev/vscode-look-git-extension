@@ -28,10 +28,10 @@ export class RepositoryContextStore implements vscode.Disposable {
         const previousActiveContextId = this.activeContextId;
         this.contextsById = nextContextsById;
         if (this.activeContextId && !this.contextsById.has(this.activeContextId)) {
-            this.activeContextId = firstContextId(this.contextsById);
+            this.activeContextId = defaultContextId(this.contextsById);
         }
         if (!this.activeContextId) {
-            this.activeContextId = firstContextId(this.contextsById);
+            this.activeContextId = defaultContextId(this.contextsById);
         }
         if (previousActiveContextId !== this.activeContextId || contextsChanged(previousContexts, this.contexts)) {
             this.fire();
@@ -43,7 +43,7 @@ export class RepositoryContextStore implements vscode.Disposable {
         if (sameContext(previous, context)) { return; }
         this.contextsById.set(context.id, context);
         if (!this.activeContextId) {
-            this.activeContextId = context.id;
+            this.activeContextId = defaultContextId(this.contextsById);
         }
         this.fire();
     }
@@ -77,7 +77,8 @@ export class RepositoryContextStore implements vscode.Disposable {
     }
 }
 
-function firstContextId(contextsById: ReadonlyMap<string, RepoContext>): string | undefined {
+function defaultContextId(contextsById: ReadonlyMap<string, RepoContext>): string | undefined {
+    if (contextsById.size !== 1) { return undefined; }
     return contextsById.keys().next().value;
 }
 

@@ -265,6 +265,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             }
             if (msg.type === 'changes/ready') {
                 this.statusDataPoster.clear();
+                this.postRepositoriesChangedMessage();
             }
             void this.router!.handle(msg);
         });

@@ -115,6 +115,9 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
                 void this.onRepositoryNavigation(msg);
                 return;
             }
+            if (msg.type === 'graph/ready') {
+                this.postRepositoriesChangedMessage();
+            }
             if (msg.type === 'graph/contextTarget') {
                 this.contextTarget = msg.target;
                 return;
