@@ -7,7 +7,7 @@ import { RuntimeRepositoryFactory } from '@extension/git/runtime-repository-fact
 import { VscodeGitRemoteRuntime } from '@extension/git/vscode-git-remote-runtime';
 import { RepositoryRuntimeRegistrar } from '@extension/repositories/repository-runtime-registrar';
 import { RepositorySelectionStore } from '@extension/repositories/repository-selection-store';
-import { discoverRepositoryContexts } from '@extension/repositories/repository-discovery';
+import { discoverChildRepositoryContexts, discoverRepositoryContexts } from '@extension/repositories/repository-discovery';
 import { RepositorySummaryService } from '@extension/repositories/repository-summary';
 import { registerRuntimeContextWithRecovery } from '@extension/repositories/runtime-registration-recovery';
 import { ChangesViewProvider } from '@extension/views/changes-view-provider';
@@ -53,6 +53,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     let repositoriesResource: Resource<readonly RepositorySummary[]> = { status: 'loading' };
     let navigatedRepositoryContextId: string | undefined;
     const graphRepositoryRefreshers: Array<() => Promise<void>> = [];
+    const childDiscoveryInFlight = new Set<string>();
     async function handleRepositoryNavigation(message: RepositoryNavigationMessage): Promise<void> {
         switch (message.type) {
             case 'repo/selectRepository':
@@ -152,6 +153,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             navigatedRepositoryContextId = undefined;
         }
         workingTreeWatcher.setContexts(contexts);
+        await syncRepositorySummaries(contexts);
+        notifyRepositoriesChanged();
+    }
+
+    async function syncRepositorySummaries(contexts: readonly RepoContext[]): Promise<void> {
         try {
             repositoriesResource = { status: 'ready', data: await repositorySummaryService.summarize(contexts) };
         } catch (error) {
@@ -164,7 +170,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 }).error,
             };
         }
-        notifyRepositoriesChanged();
+    }
+
+    async function syncChildRepositories(repoContext: RepoContext): Promise<void> {
+        if (childDiscoveryInFlight.has(repoContext.id)) { return; }
+        childDiscoveryInFlight.add(repoContext.id);
+        try {
+            const childContexts = await discoverChildRepositoryContexts(repoContext);
+            const knownContextIds = new Set(repositories.contexts.map((contextItem) => contextItem.id));
+            const missingContexts = childContexts.filter((contextItem) => !knownContextIds.has(contextItem.id));
+            if (missingContexts.length === 0) { return; }
+
+            const contexts = [...repositories.contexts, ...missingContexts];
+            repositories.setContexts(contexts);
+            workingTreeWatcher.setContexts(contexts);
+            await syncRepositorySummaries(contexts);
+            notifyRepositoriesChanged();
+        } finally {
+            childDiscoveryInFlight.delete(repoContext.id);
+        }
     }
 
     async function handleRepositoryChanged(repoContext: RepoContext | undefined): Promise<void> {
@@ -200,6 +224,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             commitHistoryProvider.notifyRepoChanged(repoContext),
             graphProvider.notifyRepoChanged(repoContext),
         ]);
+        void syncChildRepositories(repoContext);
     }
 
     context.subscriptions.push(

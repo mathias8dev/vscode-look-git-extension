@@ -5,7 +5,7 @@ import type { RepoContext } from '@core/git/domain/repo-context';
 import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { createRepoContext } from '@extension/repositories/repo-context-factory';
 
-const MAX_REPOSITORY_DISCOVERY_DEPTH = 4;
+const MAX_REPOSITORY_DISCOVERY_DEPTH = 1;
 const IGNORED_DIRECTORY_NAMES = new Set([
     '.git',
     '.vscode',
@@ -36,6 +36,10 @@ export async function discoverRepositoryContexts(input: RepositoryDiscoveryInput
     }
 
     return [...contexts.values()];
+}
+
+export async function discoverChildRepositoryContexts(parentContext: RepoContext): Promise<readonly RepoContext[]> {
+    return discoverNestedRepositoryContexts(parentContext.cwd, parentContext);
 }
 
 async function discoverWorkspaceRepositoryContext(cwd: string): Promise<RepoContext | undefined> {

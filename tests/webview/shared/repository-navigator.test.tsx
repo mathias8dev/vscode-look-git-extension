@@ -224,6 +224,48 @@ describe('RepositoryNavigator', () => {
         expect(onBack).toHaveBeenCalledTimes(1);
     });
 
+    it('can move from an active repository detail to its discovered module list', () => {
+        const onBack = vi.fn<() => void>();
+        const { rerender } = renderNavigator({
+            activeContextId: { status: 'ready', data: 'platform' },
+            onBack,
+            repositories: {
+                status: 'ready',
+                data: [
+                    repositorySummary('platform', '/workspace/platform'),
+                    repositorySummary('api', '/workspace/platform/modules/api', 'main', 'platform'),
+                ],
+            },
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Browse repository modules' }));
+
+        expect(onBack).toHaveBeenCalledTimes(1);
+
+        rerender(
+            <RepositoryNavigator
+                repositories={{
+                    status: 'ready',
+                    data: [
+                        repositorySummary('platform', '/workspace/platform'),
+                        repositorySummary('api', '/workspace/platform/modules/api', 'main', 'platform'),
+                    ],
+                }}
+                activeContextId={{ status: 'ready', data: undefined }}
+                title="Repositories"
+                onNavigate={() => undefined}
+                onBack={onBack}
+                onOpenInNewWindow={() => undefined}
+            >
+                <span>Repository content</span>
+            </RepositoryNavigator>,
+        );
+
+        expect(screen.getByText('platform · 1 repository')).toBeInTheDocument();
+        expect(screen.getByText('api')).toBeInTheDocument();
+        expect(screen.queryByText('Repository content')).not.toBeInTheDocument();
+    });
+
     it('renders loading and error resources', () => {
         const { rerender } = renderNavigator({
             repositories: { status: 'loading' },

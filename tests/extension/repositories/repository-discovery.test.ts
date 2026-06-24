@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type * as vscode from 'vscode';
-import { discoverRepositoryContexts } from '@extension/repositories/repository-discovery';
+import { discoverChildRepositoryContexts, discoverRepositoryContexts } from '@extension/repositories/repository-discovery';
 import { Uri } from '@tests/mocks/vscode';
 import { createSubmoduleFixture, createTempGitRepo, removeDirSyncWithRetry, samePath, type TempGitRepo } from '@tests/helpers/git-repo';
 
@@ -74,7 +74,7 @@ describe('repository discovery', () => {
         expect(contexts).toHaveLength(2);
     });
 
-    it('discovers repositories grouped below a workspace folder', async () => {
+    it('does not discover repositories beyond the filesystem depth limit', async () => {
         const root = tempRoot();
         const checkout = initRepoAt(path.join(root, 'clients', 'desktop'));
 
@@ -82,13 +82,13 @@ describe('repository discovery', () => {
             workspaceFolders: [workspaceFolder(root)],
         });
 
-        expect(contexts).toHaveLength(1);
-        expect(samePath(contexts[0]?.cwd ?? '', checkout)).toBe(true);
+        expect(contexts.some((context) => samePath(context.cwd, checkout))).toBe(false);
+        expect(contexts).toHaveLength(0);
     });
 
     it('discovers modules nested below a workspace repository with parent contexts', async () => {
         const parent = tempRepo();
-        const child = initRepoAt(path.join(parent.cwd, 'modules', 'child'));
+        const child = initRepoAt(path.join(parent.cwd, 'child'));
 
         const contexts = await discoverRepositoryContexts({
             workspaceFolders: [workspaceFolder(parent.cwd)],
@@ -102,22 +102,30 @@ describe('repository discovery', () => {
         expect(contexts).toHaveLength(2);
     });
 
-    it('discovers nested repository trees with nearest parent contexts', async () => {
+    it('discovers nested repository trees one repository level at a time', async () => {
         const root = tempRoot();
         const parent = initRepoAt(path.join(root, 'parent'));
-        const child = initRepoAt(path.join(parent, 'modules', 'child'));
+        const child = initRepoAt(path.join(parent, 'child'));
 
         const contexts = await discoverRepositoryContexts({
             workspaceFolders: [workspaceFolder(root)],
         });
 
         const parentContext = contexts.find((context) => samePath(context.cwd, parent));
-        const childContext = contexts.find((context) => samePath(context.cwd, child));
         expect(parentContext).toBeDefined();
+        expect(contexts.some((context) => samePath(context.cwd, child))).toBe(false);
+        expect(contexts).toHaveLength(1);
+
+        if (!parentContext) {
+            throw new Error('Expected parent repository context.');
+        }
+
+        const childContexts = await discoverChildRepositoryContexts(parentContext);
+        const childContext = childContexts.find((context) => samePath(context.cwd, child));
+
         expect(childContext).toBeDefined();
-        expect(parentContext?.parentId).toBeUndefined();
-        expect(childContext?.parentId).toBe(parentContext?.id);
-        expect(contexts).toHaveLength(2);
+        expect(childContext?.parentId).toBe(parentContext.id);
+        expect(childContexts).toHaveLength(1);
     });
 
     it('does not list registered submodules as nested repository modules', async () => {

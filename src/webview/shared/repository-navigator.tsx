@@ -58,6 +58,7 @@ export function RepositoryNavigator({
 
     const activeRepository = readyRepositories.find((repository) => repository.context.id === activeContextId.data);
     if (activeRepository) {
+        const activeChildCount = navigation.childCounts.get(activeRepository.context.id) ?? 0;
         return (
             <>
                 <div className="repository-navigator-detail-header">
@@ -66,6 +67,17 @@ export function RepositoryNavigator({
                         <span className="repository-navigator-detail-label">{title}</span>
                         <strong>{activeRepository.context.label}</strong>
                     </div>
+                    {activeChildCount > 0 ? (
+                        <IconButton
+                            icon="arrow-right"
+                            title="Browse repository modules"
+                            onClick={() => {
+                                setBrowseParentId(activeRepository.context.id);
+                                setQuery('');
+                                onBack();
+                            }}
+                        />
+                    ) : undefined}
                 </div>
                 <div className="repository-navigator-detail-content">
                     {children}
