@@ -10,6 +10,7 @@ process.env.LOOK_GIT_WDIO_MULTIREPO_ROOT = fixtureRoot;
 const workspacePath = path.join(fixtureRoot, 'workspace');
 const storagePath = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-wdio-multirepo-storage-'));
 const vscodeProxyTimeout = positiveIntegerEnv('LOOK_GIT_E2E_VSCODE_PROXY_TIMEOUT_MS');
+const chromedriverPath = optionalExecutablePathEnv('LOOK_GIT_WDIO_CHROMEDRIVER_PATH');
 const WDIO_RUNNER_TIMEOUT_MS = 600_000;
 
 if (!fs.existsSync(workspacePath)) {
@@ -32,6 +33,11 @@ const vscodeCapabilities: LookGitVscodeCapability = {
     browserName: 'vscode',
     browserVersion: '1.123.0',
     'wdio:enforceWebDriverClassic': true,
+    ...(chromedriverPath === undefined ? {} : {
+        'wdio:chromedriverOptions': {
+            binary: chromedriverPath,
+        },
+    }),
     'wdio:vscodeOptions': {
         extensionPath,
         workspacePath,
@@ -111,4 +117,16 @@ function positiveIntegerEnv(name: string): number | undefined {
     if (!rawValue) { return undefined; }
     const value = Number.parseInt(rawValue, 10);
     return Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function optionalExecutablePathEnv(name: string): string | undefined {
+    const rawValue = process.env[name];
+    if (!rawValue) { return undefined; }
+    const executablePath = path.resolve(rawValue);
+    try {
+        fs.accessSync(executablePath, fs.constants.X_OK);
+        return executablePath;
+    } catch {
+        throw new Error(`${name} must point to an executable chromedriver binary. Received: ${rawValue}`);
+    }
 }
