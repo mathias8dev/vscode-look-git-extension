@@ -404,7 +404,17 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 },
             };
         case 'repo/contextChanged':
-            return { ...state, selectedItemIds: [], selectionAnchorId: undefined, loading: true };
+            return {
+                ...createInitialChangesState({
+                    viewMode: state.viewMode,
+                    sortMode: state.sortMode,
+                    pathFilter: state.pathFilter,
+                    collapsedSectionIds: state.collapsedSectionIds,
+                    commitMessageHistory: state.commitMessageHistory,
+                }),
+                repositorySummaries: state.repositorySummaries,
+                activeRepositoryContextId: state.activeRepositoryContextId,
+            };
         case 'repo/repositoriesChanged':
             return {
                 ...state,

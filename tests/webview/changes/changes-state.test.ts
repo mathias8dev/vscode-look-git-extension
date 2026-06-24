@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialChangesState, getChangeCount, reduceChangesState, ChangesViewMode, ChangesSortMode, ChangeSelectionMode, submoduleStashKey } from '@webview/features/changes/changes-state';
 import { ChangeSectionId } from '@webview/features/changes/change-tree';
-import { ConflictState, type StatusEntry } from '@protocol/changes/types';
+import { ConflictState, RepositoryState, type StatusEntry } from '@protocol/changes/types';
 import type { StatusDataPush } from '@protocol/changes/messages';
 import { OperationStatus } from '@protocol/shared/operation';
 import { SubmoduleStatus, type RepositorySummary } from '@protocol/shared/repo';
@@ -144,6 +144,58 @@ describe('changesState', () => {
 
         expect(state.repositorySummaries).toEqual({ status: 'ready', data: repositories });
         expect(state.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-a' });
+    });
+
+    it('clears repository data on context changes while preserving navigator resources and preferences', () => {
+        const repositories = [repositorySummary('repo-a'), repositorySummary('repo-b')];
+        const withNavigator = reduceChangesState(createInitialChangesState({
+            viewMode: ChangesViewMode.Tree,
+            sortMode: ChangesSortMode.Status,
+            pathFilter: 'src',
+            collapsedSectionIds: [ChangeSectionId.Unstaged],
+            commitMessageHistory: ['feat: previous'],
+        }), {
+            type: 'message',
+            message: {
+                type: 'repo/repositoriesChanged',
+                repositories: { status: 'ready', data: repositories },
+                activeContextId: { status: 'ready', data: 'repo-a' },
+            },
+        });
+        const withStatus = reduceChangesState(withNavigator, {
+            type: 'message',
+            message: statusDataMessage({
+                staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'src/app.ts' }],
+                unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'README.md' }],
+            }),
+        });
+        const selected = reduceChangesState(withStatus, {
+            type: 'selectChange',
+            selection: {
+                itemId: 'src/app.ts',
+                visibleItemIds: ['src/app.ts'],
+                mode: ChangeSelectionMode.Replace,
+            },
+        });
+
+        const reset = reduceChangesState(selected, {
+            type: 'message',
+            message: {
+                type: 'repo/contextChanged',
+                context: { id: 'repo-b', cwd: '/work/repo-b', kind: 'main', label: 'repo-b' },
+            },
+        });
+
+        expect(reset.repositorySummaries).toEqual({ status: 'ready', data: repositories });
+        expect(reset.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-a' });
+        expect(reset.status).toEqual(createStatusData());
+        expect(reset.selectedItemIds).toEqual([]);
+        expect(reset.loading).toBe(true);
+        expect(reset.viewMode).toBe(ChangesViewMode.Tree);
+        expect(reset.sortMode).toBe(ChangesSortMode.Status);
+        expect(reset.pathFilter).toBe('src');
+        expect(reset.collapsedSectionIds).toEqual([ChangeSectionId.Unstaged]);
+        expect(reset.commitMessageHistory).toEqual(['feat: previous']);
     });
 
     it('keeps protocol errors visible across status refreshes', () => {
@@ -731,6 +783,7 @@ function repositorySummary(id: string): RepositorySummary {
 }
 
 type StatusDataOverrides = {
+    readonly repositoryState?: RepositoryState;
     readonly staged?: readonly StatusEntry[];
     readonly unstaged?: readonly StatusEntry[];
     readonly stashes?: readonly { readonly index: number; readonly message: string }[];
@@ -748,6 +801,7 @@ function statusDataMessage(overrides: StatusDataOverrides = {}): StatusDataPush 
 
 function createStatusData(overrides: StatusDataOverrides = {}) {
     return {
+        repositoryState: overrides.repositoryState ?? RepositoryState.Missing,
         staged: overrides.staged ?? [],
         unstaged: overrides.unstaged ?? [],
         conflicts: overrides.conflicts ?? [],
