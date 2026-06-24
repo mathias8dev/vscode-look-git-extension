@@ -14,8 +14,10 @@ const WDIO_RUNNER_TIMEOUT_MS = 600_000;
 
 if (!fs.existsSync(workspacePath)) {
     fs.mkdirSync(workspacePath, { recursive: true });
-    createRepository(path.join(workspacePath, 'app'), 'feature/app-work', 'src/app.ts', 'app working change\n');
-    createRepository(path.join(workspacePath, 'api'), 'main', 'src/api.ts', 'api working change\n');
+    createRepository(workspacePath, 'main', 'README.md', 'workspace parent\n');
+    createRepository(path.join(workspacePath, 'modules', 'app'), 'feature/app-work', 'src/app.ts', 'app working change\n');
+    createRepository(path.join(workspacePath, 'modules', 'api'), 'main', 'src/api.ts', 'api working change\n');
+    createRepository(path.join(workspacePath, 'modules', 'app', 'modules', 'plugin'), 'main', 'src/plugin.ts', 'plugin working change\n');
 }
 
 process.env.LOOK_GIT_WDIO_MULTIREPO_WORKSPACE = workspacePath;

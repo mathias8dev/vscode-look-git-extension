@@ -12,7 +12,11 @@ describe('multi-repository navigator e2e', () => {
         await focusChangesView();
         await openWebviewBySelector('main.changes-shell');
         try {
-            await waitForRepositoryOverview(['app', 'api']);
+            await waitForRepositoryOverview(['app', 'api'], ['plugin']);
+            await browseRepositoryModules('app');
+            await waitForRepositoryOverview(['plugin'], ['api']);
+            await navigateBackToParentRepositories();
+            await waitForRepositoryOverview(['app', 'api'], ['plugin']);
             await navigateRepository('app');
             await waitForRepositoryDetail('app', 'section[aria-label="Repository changes"]');
         } finally {
@@ -40,7 +44,7 @@ describe('multi-repository navigator e2e', () => {
         await focusChangesView();
         await openWebviewBySelector('main.changes-shell');
         try {
-            await waitForRepositoryOverview(['app', 'api']);
+            await waitForRepositoryOverview(['app', 'api'], ['plugin']);
         } finally {
             await closeWebview();
         }
@@ -124,19 +128,20 @@ async function closeWebview(): Promise<void> {
     await browser.switchFrame(null);
 }
 
-async function waitForRepositoryOverview(repositoryLabels: readonly string[]): Promise<void> {
+async function waitForRepositoryOverview(repositoryLabels: readonly string[], hiddenLabels: readonly string[] = []): Promise<void> {
     let snapshot = '';
     await pollUntil(async () => {
         snapshot = await webviewSnapshot();
-        return await browser.execute((labels: readonly string[]) => {
+        return await browser.execute((labels: readonly string[], absentLabels: readonly string[]) => {
             const navigator = document.querySelector('.repository-navigator');
             const list = document.querySelector('.repository-navigator-list');
             const text = document.body.textContent ?? '';
             return Boolean(navigator)
                 && Boolean(list)
                 && labels.every((label) => text.includes(label))
+                && absentLabels.every((label) => !text.includes(label))
                 && !Boolean(document.querySelector('.repository-navigator-detail-header'));
-        }, repositoryLabels);
+        }, repositoryLabels, hiddenLabels);
     }, `Expected repository overview for ${repositoryLabels.join(', ')}.\n${snapshot}`);
 }
 
@@ -155,6 +160,22 @@ async function navigateRepository(label: string): Promise<void> {
     }, `Expected repository row "${label}".\n${snapshot}`);
 }
 
+async function browseRepositoryModules(label: string): Promise<void> {
+    let snapshot = '';
+    await pollUntil(async () => {
+        snapshot = await webviewSnapshot();
+        return await browser.execute((expectedLabel: string) => {
+            const row = Array.from(document.querySelectorAll<HTMLElement>('.repository-navigator-row'))
+                .find((candidate) => candidate.textContent?.includes(expectedLabel));
+            const button = row?.querySelector<HTMLButtonElement>('button[aria-label="Browse repository modules"]');
+            if (!button) { return false; }
+            button.scrollIntoView({ block: 'center', inline: 'nearest' });
+            button.click();
+            return true;
+        }, label);
+    }, `Expected repository module browser for "${label}".\n${snapshot}`);
+}
+
 async function waitForRepositoryDetail(label: string, contentSelector: string): Promise<void> {
     let snapshot = '';
     await pollUntil(async () => {
@@ -167,6 +188,19 @@ async function waitForRepositoryDetail(label: string, contentSelector: string): 
                 && !Boolean(document.querySelector('.repository-navigator-list'));
         }, label, contentSelector);
     }, `Expected repository detail "${label}" with ${contentSelector}.\n${snapshot}`);
+}
+
+async function navigateBackToParentRepositories(): Promise<void> {
+    let snapshot = '';
+    await pollUntil(async () => {
+        snapshot = await webviewSnapshot();
+        return await browser.execute(() => {
+            const button = document.querySelector<HTMLButtonElement>('button[aria-label="Back to parent repositories"]');
+            if (!button) { return false; }
+            button.click();
+            return true;
+        });
+    }, `Expected parent repository back button.\n${snapshot}`);
 }
 
 async function navigateBackToRepositories(): Promise<void> {

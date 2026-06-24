@@ -76,20 +76,22 @@ export function RepositoryNavigator({
     return (
         <section className="repository-navigator repository-navigator-enter" aria-label={title}>
             <div className="repository-navigator-header">
-                <div>
-                    <h2>{title}</h2>
-                    <span>{navigationHeaderDetail(navigation)}</span>
+                <div className="repository-navigator-header-main">
+                    <div>
+                        <h2>{title}</h2>
+                        <span>{navigationHeaderDetail(navigation)}</span>
+                    </div>
+                    {navigation.canGoBack ? (
+                        <IconButton
+                            icon="arrow-left"
+                            title="Back to parent repositories"
+                            onClick={() => {
+                                setBrowseParentId(navigation.backParentId);
+                                setQuery('');
+                            }}
+                        />
+                    ) : undefined}
                 </div>
-                {navigation.canGoBack ? (
-                    <IconButton
-                        icon="arrow-left"
-                        title="Back to parent repositories"
-                        onClick={() => {
-                            setBrowseParentId(navigation.backParentId);
-                            setQuery('');
-                        }}
-                    />
-                ) : undefined}
                 <SearchInput
                     className="repository-navigator-search"
                     value={query}
