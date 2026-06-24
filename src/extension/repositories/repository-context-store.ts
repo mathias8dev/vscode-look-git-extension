@@ -1,6 +1,6 @@
-import * as path from 'path';
 import * as vscode from 'vscode';
 import type { RepoContext } from '@core/git/domain/repo-context';
+import { samePath } from '@extension/utils/path-compare';
 
 export interface RepositoryContextState {
     readonly contexts: readonly RepoContext[];
@@ -60,9 +60,8 @@ export class RepositoryContextStore implements vscode.Disposable {
             this.setActiveContextId(undefined);
             return;
         }
-        const normalizedCwd = path.normalize(cwd);
         this.setActiveContextId([...this.contextsById.values()]
-            .find((context) => path.normalize(context.cwd) === normalizedCwd)?.id);
+            .find((context) => samePath(context.cwd, cwd))?.id);
     }
 
     dispose(): void {
@@ -89,8 +88,13 @@ function contextsChanged(left: readonly RepoContext[], right: readonly RepoConte
 
 function sameContext(left: RepoContext | undefined, right: RepoContext | undefined): boolean {
     return left?.id === right?.id
-        && left?.cwd === right?.cwd
+        && sameOptionalPath(left?.cwd, right?.cwd)
         && left?.kind === right?.kind
         && left?.parentId === right?.parentId
         && left?.label === right?.label;
+}
+
+function sameOptionalPath(left: string | undefined, right: string | undefined): boolean {
+    if (!left || !right) { return left === right; }
+    return samePath(left, right);
 }

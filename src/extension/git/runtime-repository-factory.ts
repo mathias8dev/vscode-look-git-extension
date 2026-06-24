@@ -8,6 +8,7 @@ import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
 import { RuntimeWorktree } from '@extension/git/runtime-worktree';
 import { stableRepoContextId } from '@extension/repositories/repo-context-id';
 import { currentBranchNameOrUndefined } from '@extension/git/current-branch';
+import { samePath } from '@extension/utils/path-compare';
 
 export class RuntimeRepositoryFactory {
     constructor(private readonly runtime: GitRuntime = new HybridGitRuntime()) {}
@@ -58,7 +59,7 @@ export class RuntimeRepositoryFactory {
         const mainWorktree = await this.createMainWorktree(context);
         const worktrees = await repository.listWorktrees();
         const linkedWorktrees = worktrees.filter((worktree) =>
-            !worktree.isPrunable && path.normalize(worktree.path) !== path.normalize(context.cwd));
+            !worktree.isPrunable && !samePath(worktree.path, context.cwd));
         const runtimeWorktrees = await Promise.all(linkedWorktrees.map((worktree) => this.createLinkedWorktree(context, worktree)));
         return [mainWorktree, ...runtimeWorktrees];
     }
@@ -95,7 +96,7 @@ export class RuntimeRepositoryFactory {
     }): RuntimeWorktree {
         return new RuntimeWorktree({
             repoId: repositoryIdFor(input.context),
-            worktreeId: input.path === input.context.cwd ? input.context.id : stableRepoContextId(input.path),
+            worktreeId: samePath(input.path, input.context.cwd) ? input.context.id : stableRepoContextId(input.path),
             path: input.path,
             gitDir: input.gitDir,
             repositoryKind: repositoryKindFor(input.context),

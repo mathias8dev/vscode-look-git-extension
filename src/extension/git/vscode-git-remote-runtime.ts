@@ -1,4 +1,3 @@
-import * as path from 'path';
 import * as vscode from 'vscode';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
 import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '@application/ports/git-runtime';
@@ -9,6 +8,7 @@ import {
     type VscodeGitApiProvider,
     type VscodeGitRepository,
 } from '@extension/git/vscode-git-api';
+import { samePath } from '@extension/utils/path-compare';
 
 const VSCODE_REMOTE_OPERATIONS = new Set<SemanticGitOperation>([
     'fetch',
@@ -186,10 +186,6 @@ function hasCurrentUpstream(repository: VscodeGitRepository): boolean {
 
 function isHeadBranch(repository: VscodeGitRepository, branch: string): boolean {
     return repository.state.HEAD?.name === branch;
-}
-
-function samePath(left: string, right: string): boolean {
-    return path.normalize(left) === path.normalize(right);
 }
 
 function runtimeResult<TResult>(value: unknown): TResult {

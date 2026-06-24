@@ -1191,10 +1191,24 @@ function configureRepo(cwd: string): void {
 
 function isRepositoryRoot(cwd: string): boolean {
     try {
-        return path.normalize(git(cwd, ['rev-parse', '--show-toplevel']).trim()) === path.normalize(cwd);
+        return samePath(git(cwd, ['rev-parse', '--show-toplevel']).trim(), cwd);
     } catch {
         return false;
     }
+}
+
+function samePath(left: string, right: string): boolean {
+    return normalizePathForComparison(left) === normalizePathForComparison(right);
+}
+
+function normalizePathForComparison(resourcePath: string): string {
+    let resolved = path.resolve(resourcePath);
+    try {
+        resolved = fs.realpathSync.native(resolved);
+    } catch {
+        resolved = path.normalize(resolved);
+    }
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
 function findRepositoryRoots(root: string): readonly string[] {

@@ -37,6 +37,7 @@ import { requireRuntimeLocator } from '@extension/repositories/runtime-repositor
 import { stableRepoContextId } from '@extension/repositories/repo-context-id';
 import { graphDataEqual } from '@protocol/shared/protocol-data-equality';
 import { DISTINCT_MESSAGE_LAST_VALUE_ONLY, DistinctMessagePoster } from '@extension/messaging/distinct-message-poster';
+import { samePath } from '@extension/utils/path-compare';
 
 type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
 const ACTIVE_REPOSITORY_KEY = 'active';
@@ -639,10 +640,6 @@ function submoduleRepositoryLocator(parent: GitRepository | RepositoryLocator, s
         path: submoduleCwd,
         parentRepoId: parent.repoId,
     };
-}
-
-function samePath(left: string, right: string): boolean {
-    return path.normalize(left) === path.normalize(right);
 }
 
 function errorCodeFor(msg: GraphWebviewToExtensionMessage): ErrorCode {

@@ -1,7 +1,7 @@
-import * as path from 'path';
 import * as vscode from 'vscode';
 import type { RepoContext } from '@core/git/domain/repo-context';
 import { RepositoryContextStore } from '@extension/repositories/repository-context-store';
+import { isPathInside, normalizePathForComparison } from '@extension/utils/path-compare';
 
 export interface RepositorySelectionState {
     readonly context: RepoContext | undefined;
@@ -41,10 +41,9 @@ export class RepositorySelectionStore implements RepositorySelectionAccessor, vs
 
     selectContextForResource(resourcePath: string | undefined): void {
         if (!resourcePath) { return; }
-        const normalizedResourcePath = path.normalize(resourcePath);
         const context = this.contextStore.contexts
-            .filter((candidate) => isPathInside(normalizedResourcePath, candidate.cwd))
-            .sort((left, right) => right.cwd.length - left.cwd.length)[0];
+            .filter((candidate) => isPathInside(resourcePath, candidate.cwd) || normalizePathForComparison(resourcePath) === normalizePathForComparison(candidate.cwd))
+            .sort((left, right) => normalizePathForComparison(right.cwd).length - normalizePathForComparison(left.cwd).length)[0];
         if (context) {
             this.contextStore.setActiveContextId(context.id);
         }
@@ -54,9 +53,4 @@ export class RepositorySelectionStore implements RepositorySelectionAccessor, vs
         this.contextStore.dispose();
         this.onDidChangeEmitter.dispose();
     }
-}
-
-function isPathInside(resourcePath: string, cwd: string): boolean {
-    const relativePath = path.relative(path.normalize(cwd), resourcePath);
-    return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
 }

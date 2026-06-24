@@ -57,6 +57,22 @@ describe('repository discovery', () => {
         expect(contexts).toHaveLength(2);
     });
 
+    it('discovers sibling repositories when the workspace path is not the canonical filesystem path', async () => {
+        const root = tempRoot();
+        const api = initRepoAt(path.join(root, 'api'));
+        const linkedRoot = path.join(os.tmpdir(), `look-git-discovery-link-${process.pid}-${Date.now()}`);
+        fs.symlinkSync(root, linkedRoot, process.platform === 'win32' ? 'junction' : 'dir');
+        roots.push(linkedRoot);
+
+        const contexts = await discoverRepositoryContexts({
+            workspaceFolders: [workspaceFolder(linkedRoot)],
+        });
+
+        const contextPaths = contexts.map((context) => context.cwd);
+        expect(includesPath(contextPaths, api)).toBe(true);
+        expect(contexts).toHaveLength(1);
+    });
+
     it('does not use an ancestor git repository when the opened workspace folder is a repository container', async () => {
         const parent = tempRepo();
         parent.mkdir('workspace');

@@ -4,6 +4,7 @@ import type { RepoContext } from '@core/git/domain/repo-context';
 import { toRepositoryLocator, toWorktreeLocator } from '@extension/mapping/to-protocol';
 import type { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import { stableRepoContextId } from '@extension/repositories/repo-context-id';
+import { samePath } from '@extension/utils/path-compare';
 
 export interface RuntimeTargets {
     readonly repository?: GitRepository;
@@ -101,8 +102,4 @@ export function requireRuntimeLocator(
         throw new Error('Runtime repository context is required for this git operation.');
     }
     return new RuntimeRepositoryLocator(registry, context);
-}
-
-function samePath(left: string, right: string): boolean {
-    return path.normalize(left) === path.normalize(right);
 }

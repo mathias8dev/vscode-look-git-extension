@@ -6,6 +6,7 @@ import { showModalWarningMessage } from '@extension/utils/confirmation';
 import { showBranchNameInput } from '@extension/utils/branch-name-input';
 import { openChangesWithWorkingTree } from '@extension/commands/git-command-helpers';
 import { requireRuntimeRepository, requireRuntimeTargets, requireRuntimeWorktree, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
+import { samePath } from '@extension/utils/path-compare';
 
 export async function runWorktreeCommand(
     repo: GitRepository,
@@ -107,14 +108,14 @@ function requireWorktreePath(wtPath: string | undefined): string {
 }
 
 async function assertNotMainWorktree(repo: GitRepository, wtPath: string, operation: 'locked' | 'unlocked' | 'removed'): Promise<void> {
-    const worktree = (await repo.listWorktrees()).find((candidate) => candidate.path === wtPath);
+    const worktree = (await repo.listWorktrees()).find((candidate) => samePath(candidate.path, wtPath));
     if (worktree?.isMain) { throw new Error(`The main worktree cannot be ${operation}.`); }
 }
 
 async function showDiffWithMainWorktree(repo: GitRepository, wtPath: string): Promise<void> {
     const worktrees = await repo.listWorktrees();
     const main = worktrees.find((worktree) => worktree.isMain);
-    const selected = worktrees.find((worktree) => worktree.path === wtPath);
+    const selected = worktrees.find((worktree) => samePath(worktree.path, wtPath));
     if (!main) { throw new Error('Main worktree not found.'); }
     if (!selected) { throw new Error(`Unknown worktree: ${wtPath}`); }
     if (selected.isMain) { throw new Error('Cannot compare the main worktree with itself.'); }

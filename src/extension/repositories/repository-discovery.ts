@@ -4,6 +4,7 @@ import type * as vscode from 'vscode';
 import type { RepoContext } from '@core/git/domain/repo-context';
 import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { createRepoContext } from '@extension/repositories/repo-context-factory';
+import { isPathInside, normalizePathForComparison, samePath } from '@extension/utils/path-compare';
 
 const MAX_REPOSITORY_DISCOVERY_DEPTH = 1;
 const IGNORED_DIRECTORY_NAMES = new Set([
@@ -158,14 +159,5 @@ async function readableChildDirectories(dirPath: string): Promise<readonly strin
 }
 
 function addContext(contexts: Map<string, RepoContext>, context: RepoContext): void {
-    contexts.set(path.normalize(context.cwd), context);
-}
-
-function samePath(left: string, right: string): boolean {
-    return path.normalize(left) === path.normalize(right);
-}
-
-function isPathInside(resourcePath: string, parentPath: string): boolean {
-    const relativePath = path.relative(path.normalize(parentPath), path.normalize(resourcePath));
-    return relativePath !== '' && !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
+    contexts.set(normalizePathForComparison(context.cwd), context);
 }
