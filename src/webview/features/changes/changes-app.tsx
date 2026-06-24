@@ -6,6 +6,7 @@ import { OperationStatus } from '@protocol/shared/operation';
 import { ErrorNotice } from '@webview/shared/error-notice';
 import { OperationNotice } from '@webview/shared/operation-notice';
 import { operationNoticeActions } from '@webview/shared/operation-notice-actions';
+import { RepositoryNavigator } from '@webview/shared/repository-navigator';
 import type { ChangeBulkAction, ChangeRowAction } from '@webview/features/changes/change-commands';
 import { ChangeSectionView } from '@webview/features/changes/change-section-view';
 import { changesSelectionTarget, hasPatchableSelectionTarget, isChangeListItem } from '@webview/features/changes/change-selection-model';
@@ -68,6 +69,9 @@ interface ChangesAppProps {
     readonly onToggleSubmoduleStash: (submodulePath: string, index: number) => void;
     readonly onSubmoduleStashAction: (submodulePath: string, index: number, action: StashEntryAction) => void;
     readonly onSubmoduleStashFileDiff: (submodulePath: string, index: number, file: StashFileEntry) => void;
+    readonly onRepositoryNavigate?: (contextId: string) => void;
+    readonly onRepositoryBack?: () => void;
+    readonly onOpenRepositoryInNewWindow?: (contextId: string) => void;
 }
 
 export function ChangesApp({
@@ -110,6 +114,9 @@ export function ChangesApp({
     onToggleSubmoduleStash,
     onSubmoduleStashAction,
     onSubmoduleStashFileDiff,
+    onRepositoryNavigate = noop,
+    onRepositoryBack = noop,
+    onOpenRepositoryInNewWindow = noop,
 }: ChangesAppProps) {
     const rawSections = useMemo(() => buildChangeSections(state.status), [state.status]);
     const visibleRawSections = useMemo(
@@ -165,6 +172,14 @@ export function ChangesApp({
 
     return (
         <main className="changes-shell">
+            <RepositoryNavigator
+                repositories={state.repositorySummaries}
+                activeContextId={state.activeRepositoryContextId}
+                title="Repositories"
+                onNavigate={onRepositoryNavigate}
+                onBack={onRepositoryBack}
+                onOpenInNewWindow={onOpenRepositoryInNewWindow}
+            >
             <ErrorNotice
                 error={state.error}
                 primaryAction={showErrorOutputAction ?? dismissErrorAction}
@@ -288,6 +303,7 @@ export function ChangesApp({
                     />
                 ) : null}
             </section>
+            </RepositoryNavigator>
         </main>
     );
 }
@@ -388,6 +404,8 @@ function pastTense(label: string): string {
 function sentenceCase(value: string): string {
     return value.charAt(0).toUpperCase() + value.slice(1);
 }
+
+function noop(): void {}
 
 function stashHandlerFor(
     sectionId: ChangeSectionId,

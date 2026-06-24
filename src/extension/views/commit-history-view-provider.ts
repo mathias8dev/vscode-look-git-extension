@@ -6,7 +6,7 @@ import type { GitRepository, Worktree } from '@application/ports/git-topology';
 import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
 import type { ErrorCode, Pagination, RequestId } from '@protocol/shared/base';
 import { OperationStatus } from '@protocol/shared/operation';
-import type { RepositoriesChangedPush } from '@protocol/shared/repo';
+import type { RepositoriesChangedPush, RepositoryNavigationMessage } from '@protocol/shared/repo';
 import type { RepoContext } from '@core/git/domain/repo-context';
 import type { CommitCommand } from '@protocol/graph/messages';
 import type { HistoryCommitDetails, HistoryCommitRef, HistoryContextTarget, HistoryData } from '@protocol/history/types';
@@ -96,6 +96,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         private readonly storageUri?: vscode.Uri,
         _repositoryResolver?: unknown,
         private readonly runtimeRepositories?: RepositoryRegistry,
+        private readonly onRepositoryNavigation: (message: RepositoryNavigationMessage) => Promise<void> = async () => {},
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -143,6 +144,11 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private async handleMessage(message: HistoryWebviewToExtensionMessage): Promise<void> {
         switch (message.type) {
+            case 'repo/selectRepository':
+            case 'repo/showRepositoryList':
+            case 'repo/openRepositoryInNewWindow':
+                await this.onRepositoryNavigation(message);
+                return;
             case 'history/ready':
                 this.historyDataPoster.clear();
                 await this.refresh();

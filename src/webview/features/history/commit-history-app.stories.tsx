@@ -85,5 +85,8 @@ function appArgs(state: HistoryState, query: string) {
         onCopyHash: noop,
         onShowOperationOutput: noop,
         onDismissOperation: noop,
+        onRepositoryNavigate: noop,
+        onRepositoryBack: noop,
+        onOpenRepositoryInNewWindow: noop,
     };
 }

@@ -3,7 +3,7 @@ import type { RepositorySelectionAccessor } from '@extension/repositories/reposi
 import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, WorktreeCommand } from '@protocol/graph/messages';
 import type { GraphContextTarget } from '@protocol/graph/types';
 import type { RepoContext } from '@core/git/domain/repo-context';
-import type { RepositoriesChangedPush } from '@protocol/shared/repo';
+import type { RepositoriesChangedPush, RepositoryNavigationMessage } from '@protocol/shared/repo';
 import { toSerializedRepoContext } from '@extension/mapping/to-protocol';
 import { GraphMessageRouter } from '@extension/messaging/graph-message-router';
 import { getWebviewHtml } from '@extension/views/webview-html';
@@ -92,6 +92,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
         private readonly storageUri?: vscode.Uri,
         private readonly runtimeRepositories?: RepositoryRegistry,
+        private readonly onRepositoryNavigation: (message: RepositoryNavigationMessage) => Promise<void> = async () => {},
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -110,6 +111,10 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         }, this.onRepositoryUpdated, undefined, undefined, undefined, this.extensionUri, this.storageUri, this.runtimeRepositories);
 
         webviewView.webview.onDidReceiveMessage((msg: GraphWebviewToExtensionMessage) => {
+            if (isRepositoryNavigationMessage(msg)) {
+                void this.onRepositoryNavigation(msg);
+                return;
+            }
             if (msg.type === 'graph/contextTarget') {
                 this.contextTarget = msg.target;
                 return;
@@ -244,6 +249,12 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     private renderWebviewHtml(webviewView: vscode.WebviewView): void {
         webviewView.webview.html = getWebviewHtml(webviewView.webview, this.extensionUri, 'graph');
     }
+}
+
+function isRepositoryNavigationMessage(message: GraphWebviewToExtensionMessage): message is RepositoryNavigationMessage {
+    return message.type === 'repo/selectRepository'
+        || message.type === 'repo/showRepositoryList'
+        || message.type === 'repo/openRepositoryInNewWindow';
 }
 
 interface BranchContextCommandOptions {

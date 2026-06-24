@@ -8,6 +8,7 @@ import { filterHistoryCommits, formatHistoryDate, historyEmptyLabel, parseCommit
 import { ErrorNotice } from '@webview/shared/error-notice';
 import { OperationNotice } from '@webview/shared/operation-notice';
 import { operationNoticeActions } from '@webview/shared/operation-notice-actions';
+import { RepositoryNavigator } from '@webview/shared/repository-navigator';
 import { SearchInput } from '@webview/shared/search-input';
 
 interface CommitHistoryAppProps {
@@ -23,6 +24,10 @@ interface CommitHistoryAppProps {
     readonly onCopyHash: (hash: string) => void;
     readonly onShowOperationOutput?: () => void;
     readonly onDismissOperation?: () => void;
+    readonly repositoryNavigatorEnabled?: boolean;
+    readonly onRepositoryNavigate?: (contextId: string) => void;
+    readonly onRepositoryBack?: () => void;
+    readonly onOpenRepositoryInNewWindow?: (contextId: string) => void;
 }
 
 export function CommitHistoryApp({
@@ -38,6 +43,10 @@ export function CommitHistoryApp({
     onCopyHash,
     onShowOperationOutput,
     onDismissOperation,
+    repositoryNavigatorEnabled = true,
+    onRepositoryNavigate = noop,
+    onRepositoryBack = noop,
+    onOpenRepositoryInNewWindow = noop,
 }: CommitHistoryAppProps) {
     const commits = filterHistoryCommits(state.commits, query);
     const visibleHashes = commits.map((commit) => commit.hash);
@@ -66,8 +75,8 @@ export function CommitHistoryApp({
         };
     };
 
-    return (
-        <main className="history-shell">
+    const content = (
+        <>
             <SearchInput
                 className="history-search"
                 value={query}
@@ -186,6 +195,23 @@ export function CommitHistoryApp({
                     </button>
                 ) : null}
             </section>
+        </>
+    );
+
+    return (
+        <main className="history-shell">
+            {repositoryNavigatorEnabled ? (
+                <RepositoryNavigator
+                    repositories={state.repositorySummaries}
+                    activeContextId={state.activeRepositoryContextId}
+                    title="Repositories"
+                    onNavigate={onRepositoryNavigate}
+                    onBack={onRepositoryBack}
+                    onOpenInNewWindow={onOpenRepositoryInNewWindow}
+                >
+                    {content}
+                </RepositoryNavigator>
+            ) : content}
         </main>
     );
 }
@@ -207,6 +233,8 @@ function historyOperationMessage(command: HistoryToolbarCommand, status: Operati
 function isPersistentOperationNotice(status: OperationStatus): boolean {
     return status === OperationStatus.Failed || status === OperationStatus.Conflict;
 }
+
+function noop(): void {}
 
 function historyOperationLabel(command: HistoryToolbarCommand): string {
     switch (command) {

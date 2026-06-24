@@ -49,3 +49,22 @@ export interface RepositoriesChangedPush {
     readonly repositories: Resource<readonly RepositorySummary[]>;
     readonly activeContextId: Resource<string | undefined>;
 }
+
+export interface SelectRepositoryContextMessage {
+    readonly type: 'repo/selectRepository';
+    readonly contextId: string;
+}
+
+export interface ShowRepositoryListMessage {
+    readonly type: 'repo/showRepositoryList';
+}
+
+export interface OpenRepositoryInNewWindowMessage {
+    readonly type: 'repo/openRepositoryInNewWindow';
+    readonly contextId: string;
+}
+
+export type RepositoryNavigationMessage =
+    | SelectRepositoryContextMessage
+    | ShowRepositoryListMessage
+    | OpenRepositoryInNewWindowMessage;

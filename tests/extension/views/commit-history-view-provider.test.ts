@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { Page } from '@core/git/domain/page';
 import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
@@ -53,6 +53,27 @@ describe('CommitHistoryViewProvider', () => {
             input: { remote: undefined, branch: 'feature/topic', options: {} },
         }));
         expect(calls).not.toContainEqual(expect.objectContaining({ operation: 'push' }));
+    });
+
+    it('routes repository navigation messages through the navigation callback', async () => {
+        const onRepositoryNavigation = vi.fn(async () => {});
+        const context = repoContext();
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            async () => {},
+            undefined,
+            undefined,
+            runtimeRegistry(context, historyRuntime([])),
+            onRepositoryNavigation,
+        );
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'repo/showRepositoryList' });
+
+        await expect.poll(() => onRepositoryNavigation.mock.calls.length).toBe(1);
+        expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/showRepositoryList' });
     });
 });
 

@@ -1,0 +1,197 @@
+.repository-navigator {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--vscode-sideBar-background, var(--vscode-editor-background, #1e1e1e));
+}
+
+.repository-navigator-enter,
+.repository-navigator-detail-content {
+    animation: repository-navigator-enter var(--look-git-motion-medium) var(--look-git-motion-ease);
+}
+
+.repository-navigator-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--look-git-space-sm);
+    padding: var(--look-git-space-sm);
+    border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
+}
+
+.repository-navigator-header h2 {
+    margin: 0;
+    color: var(--vscode-foreground, #cccccc);
+    font: inherit;
+    font-weight: 600;
+}
+
+.repository-navigator-header span,
+.repository-navigator-row-path,
+.repository-navigator-detail-label,
+.repository-navigator-row-status {
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+.repository-navigator-search {
+    min-width: 0;
+}
+
+.repository-navigator-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--look-git-space-xs) 0;
+}
+
+.repository-navigator-row {
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    min-height: 4.8em;
+}
+
+.repository-navigator-row-open {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 1.25em minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--look-git-space-sm);
+    min-height: 4.8em;
+    border: none;
+    padding: var(--look-git-space-sm);
+    color: var(--vscode-foreground, #cccccc);
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.repository-navigator-row:hover,
+.repository-navigator-row-open:focus-visible {
+    background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
+}
+
+.repository-navigator-row-open:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder, #007fd4);
+    outline-offset: -1px;
+}
+
+.repository-navigator-row-icon {
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+.repository-navigator-row-main,
+.repository-navigator-row-title,
+.repository-navigator-row-stats,
+.repository-navigator-detail-text {
+    min-width: 0;
+}
+
+.repository-navigator-row-main {
+    display: grid;
+    gap: 2px;
+}
+
+.repository-navigator-row-title {
+    display: flex;
+    align-items: center;
+    gap: var(--look-git-space-sm);
+}
+
+.repository-navigator-row-title strong,
+.repository-navigator-detail-text strong,
+.repository-navigator-row-path {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.repository-navigator-row-title span {
+    flex-shrink: 0;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+.repository-navigator-row-stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--look-git-space-sm);
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+.repository-navigator-row-stats span {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.repository-navigator-row-stats .codicon,
+.repository-navigator-row-actions .codicon,
+.repository-navigator-detail-header .codicon {
+    font-size: inherit;
+}
+
+.repository-navigator-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.repository-navigator-detail-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--look-git-space-sm);
+    min-width: 0;
+    min-height: 2.8em;
+    padding: var(--look-git-space-xs) var(--look-git-space-sm);
+    border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
+    background: var(--vscode-sideBar-background, var(--vscode-editor-background, #1e1e1e));
+}
+
+.repository-navigator-detail-text {
+    display: grid;
+    gap: 1px;
+}
+
+.repository-navigator-detail-content {
+    flex: 1;
+    height: calc(100% - 2.8em);
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.repository-navigator-state {
+    flex: 1;
+    min-height: 9em;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--look-git-space-xs);
+    padding: var(--look-git-space-lg);
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    text-align: center;
+}
+
+.repository-navigator-state strong {
+    color: var(--vscode-foreground, #cccccc);
+}
+
+@keyframes repository-navigator-enter {
+    from {
+        opacity: 0;
+        transform: translateX(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}

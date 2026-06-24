@@ -1,7 +1,7 @@
 import { GraphOperationStatus, type GraphExtensionToWebviewMessage, type GraphOperationStatusPush } from '@protocol/graph/messages';
 import type { BranchInfo, CommitFileChange, GraphCommit, GraphData, GraphFilters, GraphSubmoduleInfo, TagInfo, WorktreeInfo, WorktreeWip } from '@protocol/graph/types';
-import type { ProtocolError } from '@protocol/shared/base';
-import type { RepositoryLocator } from '@protocol/shared/repo';
+import type { ProtocolError, Resource } from '@protocol/shared/base';
+import type { RepositoryLocator, RepositorySummary } from '@protocol/shared/repo';
 import { branchesEqual, graphCommitsEqual, graphSubmodulesEqual, tagsEqual, worktreesEqual, worktreeWipsEqual as protocolWorktreeWipsEqual } from '@protocol/shared/protocol-data-equality';
 import { mainGraphRepositorySelection, sameRepositoryLocator, submoduleGraphRepositorySelection, type GraphRepositorySelection } from '@webview/features/graph/graph-repository-selection';
 import type { GraphRow, LaneData, LineDef } from '@webview/features/graph/layout/graph-lane-model';
@@ -80,6 +80,8 @@ export interface CommitDetails {
 }
 
 export interface GraphState {
+    readonly repositorySummaries: Resource<readonly RepositorySummary[]>;
+    readonly activeRepositoryContextId: Resource<string | undefined>;
     readonly selectedRepository: GraphRepositorySelection;
     readonly repository: RepositoryLocator | undefined;
     readonly rows: readonly GraphRow[];
@@ -130,6 +132,8 @@ export type GraphAction =
 
 export function createInitialGraphState(): GraphState {
     return {
+        repositorySummaries: { status: 'ready', data: [] },
+        activeRepositoryContextId: { status: 'ready', data: undefined },
         selectedRepository: mainGraphRepositorySelection(),
         repository: undefined,
         rows: [],
@@ -335,9 +339,18 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
         case 'error':
             return { ...state, loading: false, loadingMore: false, activeGraphRequestId: undefined, error: message.error };
         case 'repo/contextChanged':
-            return { ...createInitialGraphState(), repoId: undefined };
+            return {
+                ...createInitialGraphState(),
+                repositorySummaries: state.repositorySummaries,
+                activeRepositoryContextId: state.activeRepositoryContextId,
+                repoId: undefined,
+            };
         case 'repo/repositoriesChanged':
-            return state;
+            return {
+                ...state,
+                repositorySummaries: message.repositories,
+                activeRepositoryContextId: message.activeContextId,
+            };
         case 'ui/fontSizeChanged':
             return state;
     }

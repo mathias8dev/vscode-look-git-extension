@@ -1,9 +1,12 @@
 import { OperationStatus } from '@protocol/shared/operation';
 import type { HistoryExtensionToWebviewMessage, HistoryOperationStatusPush } from '@protocol/history/messages';
 import type { HistoryCommit, HistoryCommitDetails, HistoryData } from '@protocol/history/types';
-import type { ProtocolError } from '@protocol/shared/base';
+import type { ProtocolError, Resource } from '@protocol/shared/base';
+import type { RepositorySummary } from '@protocol/shared/repo';
 
 export interface HistoryState {
+    readonly repositorySummaries: Resource<readonly RepositorySummary[]>;
+    readonly activeRepositoryContextId: Resource<string | undefined>;
     readonly commits: readonly HistoryCommit[];
     readonly expandedHashes: readonly string[];
     readonly selectedHashes: readonly string[];
@@ -30,6 +33,8 @@ export type HistoryAction =
 
 export function createInitialHistoryState(): HistoryState {
     return {
+        repositorySummaries: { status: 'ready', data: [] },
+        activeRepositoryContextId: { status: 'ready', data: undefined },
         commits: [],
         expandedHashes: [],
         selectedHashes: [],
@@ -87,9 +92,17 @@ function reduceMessage(state: HistoryState, message: HistoryExtensionToWebviewMe
         case 'error':
             return { ...state, loading: false, loadingMore: false, detailsLoadingHash: undefined, error: message.error };
         case 'repo/contextChanged':
-            return createInitialHistoryState();
+            return {
+                ...createInitialHistoryState(),
+                repositorySummaries: state.repositorySummaries,
+                activeRepositoryContextId: state.activeRepositoryContextId,
+            };
         case 'repo/repositoriesChanged':
-            return state;
+            return {
+                ...state,
+                repositorySummaries: message.repositories,
+                activeRepositoryContextId: message.activeContextId,
+            };
         case 'ui/fontSizeChanged':
             return state;
     }

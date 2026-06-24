@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GraphOperationCategory, GraphOperationStatus } from '@protocol/graph/messages';
 import type { BranchInfo, GraphCommit, GraphData, WorktreeWip } from '@protocol/graph/types';
-import { SubmoduleStatus } from '@protocol/shared/repo';
+import { SubmoduleStatus, type RepositorySummary } from '@protocol/shared/repo';
 import { buildDisplayRows, createInitialGraphState, graphRequestId, reduceGraphState } from '@webview/features/graph/graph-state';
 import type { GraphRow, LaneData } from '@webview/features/graph/layout/graph-lane-model';
 import { findAdjacentDisconnectedSameLaneIssues, findFloatingNodeIssues, findLaneContinuityIssues } from '@tests/helpers/graph-layout-assertions';
@@ -75,6 +75,29 @@ function laneData(lines: LaneData['lines'] = []): LaneData {
 }
 
 describe('graphState', () => {
+    it('stores repository navigator resources across repository context resets', () => {
+        const repositories = [repositorySummary('repo-a')];
+        const withRepositories = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'repo/repositoriesChanged',
+                repositories: { status: 'ready', data: repositories },
+                activeContextId: { status: 'ready', data: 'repo-a' },
+            },
+        });
+
+        const reset = reduceGraphState(withRepositories, {
+            type: 'message',
+            message: {
+                type: 'repo/contextChanged',
+                context: { id: 'repo-a', cwd: '/work/repo-a', kind: 'main', label: 'repo-a' },
+            },
+        });
+
+        expect(reset.repositorySummaries).toEqual({ status: 'ready', data: repositories });
+        expect(reset.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-a' });
+    });
+
     it('tracks load-more requests and clears them when graph data arrives', () => {
         const loaded = reduceGraphState(createInitialGraphState(), {
             type: 'message',
@@ -1034,3 +1057,18 @@ describe('graphState', () => {
         expect(commitRow.row.laneData.lines).toContain(parentLine);
     });
 });
+
+function repositorySummary(id: string): RepositorySummary {
+    return {
+        context: { id, cwd: `/work/${id}`, kind: 'main', label: id },
+        branch: 'main',
+        upstream: 'origin/main',
+        hasRemote: true,
+        branchCount: 2,
+        submoduleCount: 0,
+        worktreeCount: 1,
+        stagedCount: 0,
+        unstagedCount: 0,
+        conflictCount: 0,
+    };
+}

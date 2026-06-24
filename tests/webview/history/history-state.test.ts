@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryCommit } from '@protocol/history/types';
 import { OperationStatus } from '@protocol/shared/operation';
+import type { RepositorySummary } from '@protocol/shared/repo';
 import { createInitialHistoryState, HistoryCommitSelectionMode, reduceHistoryState } from '@webview/features/history/history-state';
 
 describe('historyState', () => {
@@ -193,8 +194,11 @@ describe('historyState', () => {
     });
 
     it('resets when repository context changes', () => {
+        const repositories = [repositorySummary('repo-a')];
         const state = reduceHistoryState({
             ...createInitialHistoryState(),
+            repositorySummaries: { status: 'ready', data: repositories },
+            activeRepositoryContextId: { status: 'ready', data: 'repo-a' },
             commits: [commit('a111111', 'feat: first')],
             loading: false,
         }, {
@@ -205,7 +209,26 @@ describe('historyState', () => {
             },
         });
 
-        expect(state).toEqual(createInitialHistoryState());
+        expect(state).toEqual({
+            ...createInitialHistoryState(),
+            repositorySummaries: { status: 'ready', data: repositories },
+            activeRepositoryContextId: { status: 'ready', data: 'repo-a' },
+        });
+    });
+
+    it('stores repository navigator resources from extension messages', () => {
+        const repositories = [repositorySummary('repo-a')];
+        const state = reduceHistoryState(createInitialHistoryState(), {
+            type: 'message',
+            message: {
+                type: 'repo/repositoriesChanged',
+                repositories: { status: 'ready', data: repositories },
+                activeContextId: { status: 'ready', data: undefined },
+            },
+        });
+
+        expect(state.repositorySummaries).toEqual({ status: 'ready', data: repositories });
+        expect(state.activeRepositoryContextId).toEqual({ status: 'ready', data: undefined });
     });
 
     it('stores protocol errors', () => {
@@ -248,6 +271,21 @@ describe('historyState', () => {
         expect(cleared.operationStatus).toBeUndefined();
     });
 });
+
+function repositorySummary(id: string): RepositorySummary {
+    return {
+        context: { id, cwd: `/work/${id}`, kind: 'main', label: id },
+        branch: 'main',
+        upstream: 'origin/main',
+        hasRemote: true,
+        branchCount: 2,
+        submoduleCount: 0,
+        worktreeCount: 1,
+        stagedCount: 0,
+        unstagedCount: 0,
+        conflictCount: 0,
+    };
+}
 
 function commit(hash: string, message: string): HistoryCommit {
     return {

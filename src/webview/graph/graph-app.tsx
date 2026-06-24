@@ -29,6 +29,7 @@ import {
 import { ErrorNotice } from '@webview/shared/error-notice';
 import { GraphOperationStatus } from '@protocol/graph/messages';
 import { graphRepositorySelectionKey } from '@webview/features/graph/graph-repository-selection';
+import { RepositoryNavigator } from '@webview/shared/repository-navigator';
 import { ResizablePanel } from '@webview/shared/resizable-panel';
 import { ResizeAxis } from '@webview/shared/resize-axis';
 import { ResizeHandleSide } from '@webview/shared/resize-handle-side';
@@ -191,7 +192,15 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
     }, [handleSelectCommit, state.rows]);
 
     return (
-        <div className="graph-shell">
+        <RepositoryNavigator
+            repositories={state.repositorySummaries}
+            activeContextId={state.activeRepositoryContextId}
+            title="Repositories"
+            onNavigate={(contextId) => sendMessage({ type: 'repo/selectRepository', contextId })}
+            onBack={() => sendMessage({ type: 'repo/showRepositoryList' })}
+            onOpenInNewWindow={(contextId) => sendMessage({ type: 'repo/openRepositoryInNewWindow', contextId })}
+        >
+            <div className="graph-shell">
             <ResizablePanel
                 storageKey={BRANCH_PANEL_STORAGE_KEY}
                 defaultSize={BRANCH_PANEL_DEFAULT}
@@ -314,7 +323,8 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                     )}
                 </ResizablePanel>
             ) : null}
-        </div>
+            </div>
+        </RepositoryNavigator>
     );
 }
 

@@ -1,8 +1,9 @@
 import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush } from '@protocol/changes/messages';
 import { ConflictState, RepositoryState } from '@protocol/changes/types';
 import type { StashFileEntry, StatusData, SubmoduleStatusData } from '@protocol/changes/types';
-import type { ProtocolError } from '@protocol/shared/base';
+import type { ProtocolError, Resource } from '@protocol/shared/base';
 import { OperationStatus } from '@protocol/shared/operation';
+import type { RepositorySummary } from '@protocol/shared/repo';
 import { readProtocolError } from '@webview/shared/use-protocol-error';
 import { buildChangeSections, ChangeSectionId } from '@webview/features/changes/change-tree';
 import { rememberCommitMessage } from '@webview/features/changes/commit-composer-model';
@@ -27,6 +28,8 @@ export enum ChangeSelectionMode {
 }
 
 export interface ChangesState {
+    readonly repositorySummaries: Resource<readonly RepositorySummary[]>;
+    readonly activeRepositoryContextId: Resource<string | undefined>;
     readonly status: StatusData;
     readonly viewMode: ChangesViewMode;
     readonly sortMode: ChangesSortMode;
@@ -107,6 +110,8 @@ export type ChangesAction =
 
 export function createInitialChangesState(preferences: ChangesStatePreferences = {}): ChangesState {
     return {
+        repositorySummaries: { status: 'ready', data: [] },
+        activeRepositoryContextId: { status: 'ready', data: undefined },
         status: emptyStatusData(),
         viewMode: preferences.viewMode ?? ChangesViewMode.List,
         sortMode: preferences.sortMode ?? ChangesSortMode.Path,
@@ -401,7 +406,11 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
         case 'repo/contextChanged':
             return { ...state, selectedItemIds: [], selectionAnchorId: undefined, loading: true };
         case 'repo/repositoriesChanged':
-            return state;
+            return {
+                ...state,
+                repositorySummaries: message.repositories,
+                activeRepositoryContextId: message.activeContextId,
+            };
         case 'ui/fontSizeChanged':
             return state;
     }

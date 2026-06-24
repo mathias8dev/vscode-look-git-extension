@@ -165,6 +165,32 @@ describe('ChangesViewProvider', () => {
         expect(view.messages.filter((message) => isMessageType(message, 'changes/statusData'))).toHaveLength(2);
         vi.clearAllTimers();
     });
+
+    it('routes repository navigation messages through the navigation callback', async () => {
+        const onRepositoryNavigation = vi.fn(async () => {});
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: undefined },
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            async () => true,
+            onRepositoryNavigation,
+        );
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'repo/selectRepository', contextId: 'repo-2' });
+
+        await vi.waitFor(() => {
+            expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/selectRepository', contextId: 'repo-2' });
+        });
+        vi.clearAllTimers();
+    });
 });
 
 function runtimeRegistry(context: RepoContext, runtime: GitRuntime): RepositoryRegistry {

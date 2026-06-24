@@ -4,7 +4,7 @@ import { ChangeSectionId } from '@webview/features/changes/change-tree';
 import { ConflictState, type StatusEntry } from '@protocol/changes/types';
 import type { StatusDataPush } from '@protocol/changes/messages';
 import { OperationStatus } from '@protocol/shared/operation';
-import { SubmoduleStatus } from '@protocol/shared/repo';
+import { SubmoduleStatus, type RepositorySummary } from '@protocol/shared/repo';
 
 describe('changesState', () => {
     it('starts in list loading mode', () => {
@@ -129,6 +129,21 @@ describe('changesState', () => {
 
         expect(state.loading).toBe(false);
         expect(state.error).toEqual(expect.objectContaining({ code: 'refreshFailed' }));
+    });
+
+    it('stores repository navigator resources from extension messages', () => {
+        const repositories = [repositorySummary('repo-a')];
+        const state = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: {
+                type: 'repo/repositoriesChanged',
+                repositories: { status: 'ready', data: repositories },
+                activeContextId: { status: 'ready', data: 'repo-a' },
+            },
+        });
+
+        expect(state.repositorySummaries).toEqual({ status: 'ready', data: repositories });
+        expect(state.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-a' });
     });
 
     it('keeps protocol errors visible across status refreshes', () => {
@@ -699,6 +714,21 @@ describe('changesState', () => {
         expect(resolved.showConflictsOnly).toBe(false);
     });
 });
+
+function repositorySummary(id: string): RepositorySummary {
+    return {
+        context: { id, cwd: `/work/${id}`, kind: 'main', label: id },
+        branch: 'main',
+        upstream: 'origin/main',
+        hasRemote: true,
+        branchCount: 2,
+        submoduleCount: 0,
+        worktreeCount: 1,
+        stagedCount: 0,
+        unstagedCount: 0,
+        conflictCount: 0,
+    };
+}
 
 type StatusDataOverrides = {
     readonly staged?: readonly StatusEntry[];

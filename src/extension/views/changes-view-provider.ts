@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
 import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush, ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
 import { CommitMode, type ChangesContextTarget, type StatusData } from '@protocol/changes/types';
-import type { RepositoriesChangedPush } from '@protocol/shared/repo';
+import type { RepositoriesChangedPush, RepositoryNavigationMessage } from '@protocol/shared/repo';
 import type { RepoContext } from '@core/git/domain/repo-context';
 import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '@extension/messaging/changes-message-router';
 import type { GitStatus } from '@core/git/domain/git-status';
@@ -224,6 +224,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         private readonly runtimeRepositories?: RepositoryRegistry,
         private readonly getRuntimeChangesStatus = new GetRuntimeChangesStatusUseCase(),
         private readonly beforeRefresh: () => Promise<boolean> = async () => true,
+        private readonly onRepositoryNavigation: (message: RepositoryNavigationMessage) => Promise<void> = async () => {},
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -242,6 +243,10 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         }, () => this.refresh(), this.onRepositoryUpdated, this.generateCommitMessage, this.runtimeRepositories);
 
         webviewView.webview.onDidReceiveMessage((msg: ChangesWebviewToExtensionMessage) => {
+            if (isRepositoryNavigationMessage(msg)) {
+                void this.onRepositoryNavigation(msg);
+                return;
+            }
             if (msg.type === 'changes/contextTarget') {
                 this.contextTarget = msg.target;
                 return;
@@ -794,6 +799,12 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     private renderWebviewHtml(webviewView: vscode.WebviewView): void {
         webviewView.webview.html = getWebviewHtml(webviewView.webview, this.extensionUri, 'changes');
     }
+}
+
+function isRepositoryNavigationMessage(message: ChangesWebviewToExtensionMessage): message is RepositoryNavigationMessage {
+    return message.type === 'repo/selectRepository'
+        || message.type === 'repo/showRepositoryList'
+        || message.type === 'repo/openRepositoryInNewWindow';
 }
 
 async function showChangesPatchNotification(result: CreateChangesPatchResult): Promise<void> {

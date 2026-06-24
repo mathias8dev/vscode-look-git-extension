@@ -84,11 +84,15 @@ export function FileHistoryWebview() {
             onLoadMore={handleLoadMore}
             onCopyHash={(hash) => navigator.clipboard.writeText(hash).catch(() => {})}
             onShowOperationOutput={() => vscodeApi.postMessage(messageForHistoryShowOutput())}
+            repositoryNavigatorEnabled={false}
             onDismissOperation={() => {
                 if (state.operationStatus) {
                     dispatch({ type: 'clearOperationStatus', operationId: state.operationStatus.operationId });
                 }
             }}
+            onRepositoryNavigate={() => undefined}
+            onRepositoryBack={() => undefined}
+            onOpenRepositoryInNewWindow={() => undefined}
         />
     );
 }

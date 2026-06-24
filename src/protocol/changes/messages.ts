@@ -1,6 +1,6 @@
 import type { RequestId, ErrorMessage, ProtocolError } from '@protocol/shared/base';
 import type { OperationNoticeActionKind, OperationStatus } from '@protocol/shared/operation';
-import type { RepositoriesChangedPush, SerializedRepoContext } from '@protocol/shared/repo';
+import type { RepositoriesChangedPush, RepositoryNavigationMessage, SerializedRepoContext } from '@protocol/shared/repo';
 import type { WebviewFontSizeChangedPush } from '@protocol/shared/ui';
 import type { StatusData, CommitMode, StashFileEntry, ConflictState, SubmoduleStatusData, ChangesContextTarget, ChangesSelectionContextTarget } from '@protocol/changes/types';
 
@@ -376,6 +376,7 @@ export type ChangesExtensionToWebviewMessage =
     | ErrorMessage;
 
 export type ChangesWebviewToExtensionMessage =
+    | RepositoryNavigationMessage
     | ChangesReadyMessage | ViewModeChangedMessage | ChangesPreferencesChangedMessage | ChangesToolbarCommandMessage | ChangesContextTargetMessage | ExplainSelectionMessage | CreatePatchFromSelectionMessage | ExplainRepositoryChangesMessage | SubmoduleToolbarCommandMessage
     | StageFileMessage | UnstageFileMessage | StageFilesMessage | UnstageFilesMessage | StageAllMessage | UnstageAllMessage
     | DiscardFileMessage | DiscardFilesMessage | DiscardAllMessage
