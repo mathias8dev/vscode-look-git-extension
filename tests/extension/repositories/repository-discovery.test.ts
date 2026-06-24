@@ -57,6 +57,23 @@ describe('repository discovery', () => {
         expect(contexts).toHaveLength(2);
     });
 
+    it('does not use an ancestor git repository when the opened workspace folder is a module container', async () => {
+        const parent = tempRepo();
+        parent.mkdir('workspace');
+        const api = initRepoAt(path.join(parent.cwd, 'workspace', 'api'));
+        const web = initRepoAt(path.join(parent.cwd, 'workspace', 'web'));
+
+        const contexts = await discoverRepositoryContexts({
+            workspaceFolders: [workspaceFolder(path.join(parent.cwd, 'workspace'))],
+        });
+
+        const contextPaths = contexts.map((context) => context.cwd);
+        expect(includesPath(contextPaths, parent.cwd)).toBe(false);
+        expect(includesPath(contextPaths, api)).toBe(true);
+        expect(includesPath(contextPaths, web)).toBe(true);
+        expect(contexts).toHaveLength(2);
+    });
+
     it('discovers repositories grouped below a workspace folder', async () => {
         const root = tempRoot();
         const checkout = initRepoAt(path.join(root, 'clients', 'desktop'));

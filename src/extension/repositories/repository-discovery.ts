@@ -41,7 +41,7 @@ export async function discoverRepositoryContexts(input: RepositoryDiscoveryInput
 async function discoverWorkspaceRepositoryContext(cwd: string): Promise<RepoContext | undefined> {
     try {
         const root = (await new GitCliBackend(cwd).run(['rev-parse', '--show-toplevel'])).trim();
-        return root ? createRepoContext(root) : undefined;
+        return root && samePath(root, cwd) ? createRepoContext(root) : undefined;
     } catch {
         return undefined;
     }
