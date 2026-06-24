@@ -24,19 +24,20 @@ export function RepositoryNavigator({
     onOpenInNewWindow,
 }: RepositoryNavigatorProps) {
     const [query, setQuery] = useState('');
+    const [browseParentId, setBrowseParentId] = useState<string | undefined>(undefined);
     const readyRepositories = useMemo(
         () => repositories.status === 'ready' ? repositories.data : [],
         [repositories],
     );
-    const overviewRepositories = useMemo(
-        () => repositoriesForOverview(readyRepositories),
-        [readyRepositories],
+    const navigation = useMemo(
+        () => repositoryNavigationModel(readyRepositories, browseParentId),
+        [readyRepositories, browseParentId],
     );
     const normalizedQuery = query.trim().toLowerCase();
     const filteredRepositories = useMemo(() => {
-        if (!normalizedQuery) { return overviewRepositories; }
-        return overviewRepositories.filter((repository) => repositoryMatches(repository, normalizedQuery));
-    }, [normalizedQuery, overviewRepositories]);
+        if (!normalizedQuery) { return navigation.repositories; }
+        return navigation.repositories.filter((repository) => repositoryMatches(repository, normalizedQuery));
+    }, [normalizedQuery, navigation.repositories]);
 
     if (repositories.status === 'loading' || activeContextId.status === 'loading') {
         return <RepositoryNavigatorState icon="loading codicon-modifier-spin" title="Loading repositories" detail="Scanning workspace repositories..." />;
@@ -77,8 +78,18 @@ export function RepositoryNavigator({
             <div className="repository-navigator-header">
                 <div>
                     <h2>{title}</h2>
-                    <span>{repositoryCountLabel(overviewRepositories.length)}</span>
+                    <span>{navigationHeaderDetail(navigation)}</span>
                 </div>
+                {navigation.canGoBack ? (
+                    <IconButton
+                        icon="arrow-left"
+                        title="Back to parent repositories"
+                        onClick={() => {
+                            setBrowseParentId(navigation.backParentId);
+                            setQuery('');
+                        }}
+                    />
+                ) : undefined}
                 <SearchInput
                     className="repository-navigator-search"
                     value={query}
@@ -94,7 +105,12 @@ export function RepositoryNavigator({
                     <RepositoryRow
                         key={repository.context.id}
                         repository={repository}
+                        childCount={navigation.childCounts.get(repository.context.id) ?? 0}
                         onNavigate={onNavigate}
+                        onBrowse={(contextId) => {
+                            setBrowseParentId(contextId);
+                            setQuery('');
+                        }}
                         onOpenInNewWindow={onOpenInNewWindow}
                     />
                 ))}
@@ -105,11 +121,13 @@ export function RepositoryNavigator({
 
 interface RepositoryRowProps {
     readonly repository: RepositorySummary;
+    readonly childCount: number;
     readonly onNavigate: (contextId: string) => void;
+    readonly onBrowse: (contextId: string) => void;
     readonly onOpenInNewWindow: (contextId: string) => void;
 }
 
-function RepositoryRow({ repository, onNavigate, onOpenInNewWindow }: RepositoryRowProps) {
+function RepositoryRow({ repository, childCount, onNavigate, onBrowse, onOpenInNewWindow }: RepositoryRowProps) {
     const status = repositoryStatus(repository);
     return (
         <div className="repository-navigator-row" role="listitem">
@@ -129,6 +147,9 @@ function RepositoryRow({ repository, onNavigate, onOpenInNewWindow }: Repository
                         <span title="Branches"><i className="codicon codicon-git-branch" aria-hidden="true" />{repository.branchCount}</span>
                         <span title="Submodules"><i className="codicon codicon-symbol-namespace" aria-hidden="true" />{repository.submoduleCount}</span>
                         <span title="Worktrees"><i className="codicon codicon-files" aria-hidden="true" />{repository.worktreeCount}</span>
+                        {childCount > 0 ? (
+                            <span title="Repository modules"><i className="codicon codicon-repo" aria-hidden="true" />{childCount}</span>
+                        ) : undefined}
                         <span title={repository.upstream ?? 'No upstream'}><i className="codicon codicon-cloud" aria-hidden="true" />{repository.hasRemote ? 'remote' : 'local'}</span>
                     </span>
                 </span>
@@ -144,8 +165,12 @@ function RepositoryRow({ repository, onNavigate, onOpenInNewWindow }: Repository
                 />
                 <IconButton
                     icon="arrow-right"
-                    title="Open repository"
+                    title={childCount > 0 ? 'Browse repository modules' : 'Open repository'}
                     onClick={() => {
+                        if (childCount > 0) {
+                            onBrowse(repository.context.id);
+                            return;
+                        }
                         onNavigate(repository.context.id);
                     }}
                 />
@@ -174,12 +199,52 @@ function repositoryMatches(repository: RepositorySummary, query: string): boolea
     return repositorySearchText(repository).includes(query);
 }
 
-function repositoriesForOverview(repositories: readonly RepositorySummary[]): readonly RepositorySummary[] {
-    const topLevelRepositories = repositories.filter((repository) => !repository.context.parentId);
-    if (topLevelRepositories.length !== 1) { return topLevelRepositories; }
+interface RepositoryNavigationModel {
+    readonly repositories: readonly RepositorySummary[];
+    readonly parentRepository: RepositorySummary | undefined;
+    readonly childCounts: ReadonlyMap<string, number>;
+    readonly canGoBack: boolean;
+    readonly backParentId: string | undefined;
+}
 
-    const childRepositories = repositories.filter((repository) => repository.context.parentId === topLevelRepositories[0]?.context.id);
-    return childRepositories.length > 0 ? childRepositories : topLevelRepositories;
+function repositoryNavigationModel(repositories: readonly RepositorySummary[], browseParentId: string | undefined): RepositoryNavigationModel {
+    const topLevelRepositories = repositories.filter((repository) => !repository.context.parentId);
+    const childCounts = repositoryChildCounts(repositories);
+    const validBrowseParentId = browseParentId && repositories.some((repository) => repository.context.id === browseParentId)
+        ? browseParentId
+        : undefined;
+    const implicitParentId = topLevelRepositories.length === 1 && (childCounts.get(topLevelRepositories[0]?.context.id ?? '') ?? 0) > 0
+        ? topLevelRepositories[0]?.context.id
+        : undefined;
+    const parentId = validBrowseParentId ?? implicitParentId;
+    const parentRepository = repositories.find((repository) => repository.context.id === parentId);
+    const visibleRepositories = parentId
+        ? repositories.filter((repository) => repository.context.parentId === parentId)
+        : topLevelRepositories;
+
+    return {
+        repositories: visibleRepositories.length > 0 ? visibleRepositories : topLevelRepositories,
+        parentRepository,
+        childCounts,
+        canGoBack: Boolean(validBrowseParentId),
+        backParentId: parentRepository?.context.parentId === implicitParentId ? undefined : parentRepository?.context.parentId,
+    };
+}
+
+function repositoryChildCounts(repositories: readonly RepositorySummary[]): ReadonlyMap<string, number> {
+    const counts = new Map<string, number>();
+    for (const repository of repositories) {
+        const parentId = repository.context.parentId;
+        if (parentId) {
+            counts.set(parentId, (counts.get(parentId) ?? 0) + 1);
+        }
+    }
+    return counts;
+}
+
+function navigationHeaderDetail(navigation: RepositoryNavigationModel): string {
+    const count = repositoryCountLabel(navigation.repositories.length);
+    return navigation.parentRepository ? `${navigation.parentRepository.context.label} · ${count}` : count;
 }
 
 function repositoryCountLabel(count: number): string {

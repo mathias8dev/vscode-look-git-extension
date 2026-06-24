@@ -38,10 +38,68 @@ describe('RepositoryNavigator', () => {
             },
         });
 
-        expect(screen.getByText('2 repositories')).toBeInTheDocument();
+        expect(screen.getByText('workspace · 2 repositories')).toBeInTheDocument();
         expect(screen.getByText('api')).toBeInTheDocument();
         expect(screen.getByText('web')).toBeInTheDocument();
         expect(screen.queryByText('workspace')).not.toBeInTheDocument();
+    });
+
+    it('browses repository modules without selecting the parent repository content', () => {
+        const onNavigate = vi.fn<(contextId: string) => void>();
+        renderNavigator({
+            onNavigate,
+            repositories: {
+                status: 'ready',
+                data: [
+                    repositorySummary('platform', '/workspace/platform'),
+                    repositorySummary('tools', '/workspace/tools'),
+                    repositorySummary('api', '/workspace/platform/modules/api', 'main', 'platform'),
+                    repositorySummary('web', '/workspace/platform/modules/web', 'main', 'platform'),
+                ],
+            },
+        });
+
+        expect(screen.getByText('2 repositories')).toBeInTheDocument();
+        expect(screen.getByText('platform')).toBeInTheDocument();
+        expect(screen.getByText('tools')).toBeInTheDocument();
+        expect(screen.queryByText('api')).not.toBeInTheDocument();
+
+        const platformRow = screen.getByText('platform').closest('[role="listitem"]');
+        if (!(platformRow instanceof HTMLElement)) {
+            throw new Error('Expected platform repository row.');
+        }
+        fireEvent.click(within(platformRow).getByRole('button', { name: 'Browse repository modules' }));
+
+        expect(onNavigate).not.toHaveBeenCalled();
+        expect(screen.getByText('platform · 2 repositories')).toBeInTheDocument();
+        expect(screen.getByText('api')).toBeInTheDocument();
+        expect(screen.getByText('web')).toBeInTheDocument();
+        expect(screen.queryByText('tools')).not.toBeInTheDocument();
+        expect(screen.queryByText('/workspace/platform')).not.toBeInTheDocument();
+    });
+
+    it('returns from a module list to its parent repository list', () => {
+        renderNavigator({
+            repositories: {
+                status: 'ready',
+                data: [
+                    repositorySummary('platform', '/workspace/platform'),
+                    repositorySummary('tools', '/workspace/tools'),
+                    repositorySummary('api', '/workspace/platform/modules/api', 'main', 'platform'),
+                ],
+            },
+        });
+
+        const platformRow = screen.getByText('platform').closest('[role="listitem"]');
+        if (!(platformRow instanceof HTMLElement)) {
+            throw new Error('Expected platform repository row.');
+        }
+        fireEvent.click(within(platformRow).getByRole('button', { name: 'Browse repository modules' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Back to parent repositories' }));
+
+        expect(screen.getByText('platform')).toBeInTheDocument();
+        expect(screen.getByText('tools')).toBeInTheDocument();
+        expect(screen.queryByText('api')).not.toBeInTheDocument();
     });
 
     it('filters repositories by label path branch or upstream', () => {

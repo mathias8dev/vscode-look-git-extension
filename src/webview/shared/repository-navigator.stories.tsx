@@ -46,6 +46,7 @@ const repositorySummaries = [
     repositorySummary('api', '/work/look-git/services/api', 'main', 0, 0, 0, 'workspace'),
     repositorySummary('desktop', '/work/look-git/apps/desktop', 'release/1.2', 0, 3, 2, 'workspace'),
     repositorySummary('cli', '/work/look-git/packages/cli', 'feature/git-runtime', 4, 1, 0, 'workspace'),
+    repositorySummary('plugin-runner', '/work/look-git/packages/cli/modules/plugin-runner', 'main', 0, 0, 0, 'cli'),
 ] satisfies readonly RepositorySummary[];
 
 function repositorySummary(
