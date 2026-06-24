@@ -133,10 +133,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     function syncActiveRepo(): void {
-        repositories.selectContextForResource(vscode.window.activeTextEditor?.document.uri.fsPath);
-        if (navigatedRepositoryContextId && repositories.currentContext) {
-            navigatedRepositoryContextId = repositories.currentContext.id;
+        if (navigatedRepositoryContextId) {
+            notifyRepositoriesChanged();
+            return;
         }
+        repositories.selectContextForResource(vscode.window.activeTextEditor?.document.uri.fsPath);
         notifyRepositoriesChanged();
     }
 

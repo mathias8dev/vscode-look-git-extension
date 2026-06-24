@@ -34,4 +34,15 @@ describe('RepositorySelectionStore', () => {
 
         expect(store.currentContext).toEqual(second);
     });
+
+    it('selects the most specific repository for nested module paths', () => {
+        const store = new RepositorySelectionStore();
+        const parent = createRepoContext('/workspace');
+        const module = createRepoContext('/workspace/packages/app');
+
+        store.setContexts([parent, module]);
+        store.selectContextForResource('/workspace/packages/app/src/index.ts');
+
+        expect(store.currentContext).toEqual(module);
+    });
 });
