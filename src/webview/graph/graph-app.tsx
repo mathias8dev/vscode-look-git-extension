@@ -191,7 +191,7 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
         if (mode) { handleSelectCommit(nextHash, mode); }
     }, [handleSelectCommit, state.rows]);
 
-    return (
+    const repositoryNavigator = (
         <RepositoryNavigator
             repositories={state.repositorySummaries}
             activeContextId={state.activeRepositoryContextId}
@@ -206,7 +206,72 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
             }}
             onOpenInNewWindow={(contextId) => sendMessage({ type: 'repo/openRepositoryInNewWindow', contextId })}
         >
-            <div className="graph-shell">
+            <div key={`graph-scope:${scopeAnimationKey}`} className="graph-scope-content graph-scope-transition-surface">
+                <GraphToolbar
+                    filters={state.filters}
+                    branches={state.branches}
+                    selectedBranchFilter={state.selectedBranchFilter}
+                    refreshing={state.loading && state.rows.length > 0}
+                    onFiltersChange={(filters) => dispatch({ type: 'setFilters', filters })}
+                    onBranchFilterChange={(branch) => dispatch({ type: 'setBranchFilter', branch })}
+                    onRefresh={() => dispatch({ type: 'refreshRequested' })}
+                />
+
+                <GraphOperationNotice
+                    operation={state.operationStatus}
+                    onShowOutput={() => sendMessage({ type: 'graph/showOutput' })}
+                    onDismiss={() => {
+                        if (state.operationStatus) {
+                            dispatch({ type: 'clearOperationStatus', operationId: state.operationStatus.operationId });
+                        }
+                    }}
+                />
+
+                <ErrorNotice
+                    error={state.error}
+                    primaryAction={{ label: 'Retry', onClick: () => dispatch({ type: 'refreshRequested' }) }}
+                    secondaryAction={state.error?.details ? { label: 'Show Output', onClick: () => sendMessage({ type: 'graph/showOutput' }) } : undefined}
+                />
+
+                {state.loading && state.rows.length === 0 ? (
+                    <div className="graph-loading">
+                        <i className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+                        <span>Loading graph…</span>
+                    </div>
+                ) : null}
+
+                {showGraphEmptyState ? (
+                    <GraphEmptyState
+                        title={emptyState.title}
+                        subtitle={emptyState.subtitle}
+                        actionLabel={emptyState.actionLabel}
+                        onAction={emptyState.actionLabel ? () => dispatch({ type: 'clearFilters' }) : undefined}
+                    />
+                ) : null}
+
+                {!showGraphEmptyState && (!state.loading || state.displayRows.length > 0 || state.hasMore) ? (
+                    <GraphTable
+                        rows={state.rows}
+                        displayRows={state.displayRows}
+                        branches={state.branches}
+                        selectedHashes={state.selectedHashes}
+                        selectedWorktreePath={state.selectedWorktreePath}
+                        hasMore={state.hasMore}
+                        loadingMore={state.loadingMore}
+                        onSelectCommit={handleSelectCommit}
+                        onSelectWorktree={handleSelectWorktree}
+                        onContextTarget={handleContextTarget}
+                        onLoadMore={handleLoadMore}
+                        onBranchDoubleClick={(branch, isRemote) => sendMessage(messageForBranchCheckout(branch, isRemote, state.repository))}
+                        onMoveFocus={handleMoveGraphFocus}
+                    />
+                ) : null}
+            </div>
+        </RepositoryNavigator>
+    );
+
+    return (
+        <div className="graph-shell">
             <ResizablePanel
                 storageKey={BRANCH_PANEL_STORAGE_KEY}
                 defaultSize={BRANCH_PANEL_DEFAULT}
@@ -244,67 +309,7 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
             </ResizablePanel>
 
             <div className="graph-center">
-                <div key={`graph-scope:${scopeAnimationKey}`} className="graph-scope-content graph-scope-transition-surface">
-                    <GraphToolbar
-                        filters={state.filters}
-                        branches={state.branches}
-                        selectedBranchFilter={state.selectedBranchFilter}
-                        refreshing={state.loading && state.rows.length > 0}
-                        onFiltersChange={(filters) => dispatch({ type: 'setFilters', filters })}
-                        onBranchFilterChange={(branch) => dispatch({ type: 'setBranchFilter', branch })}
-                        onRefresh={() => dispatch({ type: 'refreshRequested' })}
-                    />
-
-                    <GraphOperationNotice
-                        operation={state.operationStatus}
-                        onShowOutput={() => sendMessage({ type: 'graph/showOutput' })}
-                        onDismiss={() => {
-                            if (state.operationStatus) {
-                                dispatch({ type: 'clearOperationStatus', operationId: state.operationStatus.operationId });
-                            }
-                        }}
-                    />
-
-                    <ErrorNotice
-                        error={state.error}
-                        primaryAction={{ label: 'Retry', onClick: () => dispatch({ type: 'refreshRequested' }) }}
-                        secondaryAction={state.error?.details ? { label: 'Show Output', onClick: () => sendMessage({ type: 'graph/showOutput' }) } : undefined}
-                    />
-
-                    {state.loading && state.rows.length === 0 ? (
-                        <div className="graph-loading">
-                            <i className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
-                            <span>Loading graph…</span>
-                        </div>
-                    ) : null}
-
-                    {showGraphEmptyState ? (
-                        <GraphEmptyState
-                            title={emptyState.title}
-                            subtitle={emptyState.subtitle}
-                            actionLabel={emptyState.actionLabel}
-                            onAction={emptyState.actionLabel ? () => dispatch({ type: 'clearFilters' }) : undefined}
-                        />
-                    ) : null}
-
-                    {!showGraphEmptyState && (!state.loading || state.displayRows.length > 0 || state.hasMore) ? (
-                        <GraphTable
-                            rows={state.rows}
-                            displayRows={state.displayRows}
-                            branches={state.branches}
-                            selectedHashes={state.selectedHashes}
-                            selectedWorktreePath={state.selectedWorktreePath}
-                            hasMore={state.hasMore}
-                            loadingMore={state.loadingMore}
-                            onSelectCommit={handleSelectCommit}
-                            onSelectWorktree={handleSelectWorktree}
-                            onContextTarget={handleContextTarget}
-                            onLoadMore={handleLoadMore}
-                            onBranchDoubleClick={(branch, isRemote) => sendMessage(messageForBranchCheckout(branch, isRemote, state.repository))}
-                            onMoveFocus={handleMoveGraphFocus}
-                        />
-                    ) : null}
-                </div>
+                {repositoryNavigator}
             </div>
 
             {state.selectedHash || state.selectedWorktreePath ? (
@@ -329,8 +334,7 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                     )}
                 </ResizablePanel>
             ) : null}
-            </div>
-        </RepositoryNavigator>
+        </div>
     );
 }
 

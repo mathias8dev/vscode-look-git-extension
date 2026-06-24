@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GraphOperationCategory, GraphOperationStatus } from '@protocol/graph/messages';
 import { OperationNoticeActionKind } from '@protocol/shared/operation';
-import { SubmoduleStatus } from '@protocol/shared/repo';
+import { SubmoduleStatus, type RepositorySummary } from '@protocol/shared/repo';
 import { createMockVsCodeApi, sendToWebview } from '@tests/helpers/webview-runtime';
 
 const mainRepository = { repoId: 'main-repo-id', kind: 'main', path: '/repo' } as const;
@@ -124,6 +124,29 @@ describe('GraphApp', () => {
         fireEvent.keyDown(separator, { key: 'ArrowLeft' });
         await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', '336'));
         expect(localStorage.getItem('lookGit.commitDetailsPanelWidth')).toBe('336');
+    });
+
+    it('renders the repository navigator inside the graph center panel', async () => {
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('@webview/graph/graph-app');
+
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
+        await act(async () => sendToWebview({
+            type: 'repo/repositoriesChanged',
+            repositories: {
+                status: 'ready',
+                data: [
+                    repositorySummary('repo-a'),
+                    repositorySummary('repo-b'),
+                ],
+            },
+            activeContextId: { status: 'ready', data: undefined },
+        }));
+
+        await waitFor(() => expect(document.querySelector('.graph-shell')).toBeInTheDocument());
+        expect(document.querySelector('.graph-center .repository-navigator')).toBeInTheDocument();
+        expect(document.querySelector('.graph-shell > .repository-navigator')).not.toBeInTheDocument();
+        expect(screen.getByRole('separator', { name: 'Resize branches panel' })).toBeInTheDocument();
     });
 
     it('requests unfiltered graph data in a submodule scope when a submodule row is clicked', async () => {
@@ -537,6 +560,21 @@ function graphData(commits: readonly ReturnType<typeof graphCommit>[]) {
         worktrees: [],
         worktreeWips: [],
         submodules: [],
+    };
+}
+
+function repositorySummary(id: string): RepositorySummary {
+    return {
+        context: { id, cwd: `/work/${id}`, kind: 'main', label: id },
+        branch: 'main',
+        upstream: 'origin/main',
+        hasRemote: true,
+        branchCount: 2,
+        submoduleCount: 0,
+        worktreeCount: 1,
+        stagedCount: 0,
+        unstagedCount: 0,
+        conflictCount: 0,
     };
 }
 
