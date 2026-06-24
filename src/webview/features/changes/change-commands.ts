@@ -77,12 +77,14 @@ export function bulkActionsFor(section: ChangeSection): readonly ChangeActionDes
             : [];
     }
     if (section.id === ChangeSectionId.Unstaged) {
-        return section.items.length > 0
-            ? [
-                { action: ChangeBulkAction.StageAll, icon: 'add', label: 'Stage All', title: 'Stage all changed files' },
-                { action: ChangeBulkAction.DiscardAll, icon: 'discard', label: 'Discard All', title: 'Discard all unstaged changes' },
-            ]
-            : [];
+        if (section.items.length === 0) { return []; }
+        const actions: ChangeActionDescriptor<ChangeBulkAction>[] = [
+            { action: ChangeBulkAction.StageAll, icon: 'add', label: 'Stage All', title: 'Stage all changed files' },
+        ];
+        if (hasDiscardableItems(section)) {
+            actions.push({ action: ChangeBulkAction.DiscardAll, icon: 'discard', label: 'Discard All', title: 'Discard all unstaged changes' });
+        }
+        return actions;
     }
     if (section.id === ChangeSectionId.Conflicts) {
         if (section.items.length === 0) { return []; }
@@ -130,19 +132,29 @@ export function messageForRowAction(item: ChangeListItem, action: ChangeRowActio
     }
 }
 
-export function messageForBulkAction(action: ChangeBulkAction): ChangesWebviewToExtensionMessage {
+export function messageForBulkAction(section: ChangeSection, action: ChangeBulkAction): ChangesWebviewToExtensionMessage {
     switch (action) {
         case ChangeBulkAction.StageAll:
             return { type: 'changes/stageAll' };
         case ChangeBulkAction.UnstageAll:
             return { type: 'changes/unstageAll' };
         case ChangeBulkAction.DiscardAll:
-            return { type: 'changes/discardAll' };
+            return { type: 'changes/discardFiles', filePaths: discardableFilePaths(section) };
         case ChangeBulkAction.OpenAllMergeEditors:
             return { type: 'changes/openAllMergeEditors' };
         case ChangeBulkAction.AcceptAllTheirs:
             return { type: 'changes/acceptAllTheirs' };
     }
+}
+
+function discardableFilePaths(section: ChangeSection): readonly string[] {
+    return section.items
+        .filter((item) => !item.entry.isSubmodule)
+        .map((item) => item.entry.filePath);
+}
+
+function hasDiscardableItems(section: ChangeSection): boolean {
+    return section.items.some((item) => !item.entry.isSubmodule);
 }
 
 export function messageForChangesToolbarCommand(command: ChangesToolbarCommand): ChangesWebviewToExtensionMessage {

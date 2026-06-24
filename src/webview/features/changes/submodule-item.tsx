@@ -33,7 +33,7 @@ interface SubmoduleItemProps {
     readonly expandedStashIndexes: readonly number[];
     readonly stashFilesByIndex: Readonly<Record<number, readonly StashFileEntry[]>>;
     readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
-    readonly onBulkAction: (action: ChangeBulkAction) => void;
+    readonly onBulkAction: (section: ChangeSection, action: ChangeBulkAction) => void;
     readonly onExplainSelection: (target: ChangesSelectionContextTarget) => void;
     readonly onSelectionContextTarget: (target: ChangesSelectionContextTarget) => void;
     readonly onOperationAction: (conflictState: ActiveConflictState, action: OperationAction) => void;

@@ -19,7 +19,7 @@ interface ChangeSectionViewProps {
     readonly onSelectItem: (item: ChangeListItem, mode: ChangeSelectionMode) => void;
     readonly onOpenSelectionContext: (item: ChangeListItem) => void;
     readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
-    readonly onBulkAction: (action: ChangeBulkAction) => void;
+    readonly onBulkAction: (section: ChangeSection, action: ChangeBulkAction) => void;
     readonly onReview?: (section: ChangeSection) => void;
     readonly onStash?: (message: string) => void;
     readonly stashTitle?: string;
@@ -98,7 +98,7 @@ export function ChangeSectionView({
                             key={descriptor.action}
                             icon={descriptor.icon}
                             title={descriptor.title}
-                            onClick={() => onBulkAction(descriptor.action)}
+                            onClick={() => onBulkAction(section, descriptor.action)}
                         />
                     ))}
                     {onReview ? (

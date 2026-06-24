@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CommitMode, ConflictState } from '@protocol/changes/types';
 import { ChangeBulkAction, ChangeRowAction } from '@webview/features/changes/change-commands';
+import { ChangeSectionId, type ChangeSection } from '@webview/features/changes/change-tree';
 import { OperationAction } from '@webview/features/changes/operation-commands';
 import {
     messageForSubmoduleAction,
@@ -23,6 +24,31 @@ const entry = {
     workTreeStatus: 'M',
     filePath: 'src/inner.ts',
 } as const;
+
+const unstagedSection = {
+    id: ChangeSectionId.Unstaged,
+    title: 'Changes',
+    items: [
+        {
+            id: 'unstaged:src/inner.ts:',
+            section: ChangeSectionId.Unstaged,
+            entry,
+            isStaged: false,
+        },
+        {
+            id: 'unstaged:README.md:',
+            section: ChangeSectionId.Unstaged,
+            entry: { indexStatus: ' ', workTreeStatus: 'M', filePath: 'README.md' },
+            isStaged: false,
+        },
+        {
+            id: 'unstaged:modules/nested:',
+            section: ChangeSectionId.Unstaged,
+            entry: { indexStatus: 'M', workTreeStatus: ' ', filePath: 'modules/nested', isSubmodule: true },
+            isStaged: false,
+        },
+    ],
+} satisfies ChangeSection;
 
 describe('submoduleCommands', () => {
     it('maps row actions to submodule-scoped messages', () => {
@@ -48,17 +74,22 @@ describe('submoduleCommands', () => {
     });
 
     it('maps bulk actions to submodule-scoped messages', () => {
-        expect(messageForSubmoduleBulkAction('modules/lib', ChangeBulkAction.StageAll)).toEqual({
+        expect(messageForSubmoduleBulkAction('modules/lib', unstagedSection, ChangeBulkAction.StageAll)).toEqual({
             type: 'changes/submoduleStageAll',
             submodulePath: 'modules/lib',
         });
-        expect(messageForSubmoduleBulkAction('modules/lib', ChangeBulkAction.AcceptAllTheirs)).toEqual({
+        expect(messageForSubmoduleBulkAction('modules/lib', unstagedSection, ChangeBulkAction.AcceptAllTheirs)).toEqual({
             type: 'changes/submoduleAcceptAllTheirs',
             submodulePath: 'modules/lib',
         });
-        expect(messageForSubmoduleBulkAction('modules/lib', ChangeBulkAction.OpenAllMergeEditors)).toEqual({
+        expect(messageForSubmoduleBulkAction('modules/lib', unstagedSection, ChangeBulkAction.OpenAllMergeEditors)).toEqual({
             type: 'changes/submoduleOpenAllMergeEditors',
             submodulePath: 'modules/lib',
+        });
+        expect(messageForSubmoduleBulkAction('modules/lib', unstagedSection, ChangeBulkAction.DiscardAll)).toEqual({
+            type: 'changes/submoduleDiscardFiles',
+            submodulePath: 'modules/lib',
+            filePaths: ['src/inner.ts', 'README.md'],
         });
     });
 

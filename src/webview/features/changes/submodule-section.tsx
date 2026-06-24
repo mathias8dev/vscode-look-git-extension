@@ -4,7 +4,7 @@ import type { StashFileEntry, SubmoduleEntry, SubmoduleStatusData } from '@proto
 import { Codicon } from '@webview/shared/codicon';
 import { IconButton } from '@webview/shared/icon-button';
 import type { ChangeBulkAction, ChangeRowAction } from '@webview/features/changes/change-commands';
-import type { ChangeListItem } from '@webview/features/changes/change-tree';
+import type { ChangeListItem, ChangeSection } from '@webview/features/changes/change-tree';
 import { submoduleStashKey, type CommitFeedback, type GeneratedCommitMessage } from '@webview/features/changes/changes-state';
 import type { ProtocolError } from '@protocol/shared/base';
 import type { ActiveConflictState, OperationAction } from '@webview/features/changes/operation-commands';
@@ -30,7 +30,7 @@ interface SubmoduleSectionProps {
     readonly onUpdateAll: () => void;
     readonly onReviewChanges: (submodulePath: string) => void;
     readonly onRowAction: (submodulePath: string, item: ChangeListItem, action: ChangeRowAction) => void;
-    readonly onBulkAction: (submodulePath: string, action: ChangeBulkAction) => void;
+    readonly onBulkAction: (submodulePath: string, section: ChangeSection, action: ChangeBulkAction) => void;
     readonly onExplainSelection: (target: ChangesSelectionContextTarget) => void;
     readonly onSelectionContextTarget: (target: ChangesSelectionContextTarget) => void;
     readonly onOperationAction: (submodulePath: string, conflictState: ActiveConflictState, action: OperationAction) => void;
@@ -122,7 +122,7 @@ export function SubmoduleSection({
                                     return acc;
                                 }, {})}
                                 onRowAction={(item, action) => onRowAction(submodule.path, item, action)}
-                                onBulkAction={(action) => onBulkAction(submodule.path, action)}
+                                onBulkAction={(section, action) => onBulkAction(submodule.path, section, action)}
                                 onExplainSelection={onExplainSelection}
                                 onSelectionContextTarget={onSelectionContextTarget}
                                 onOperationAction={(conflictState, action) => onOperationAction(submodule.path, conflictState, action)}

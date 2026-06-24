@@ -11,7 +11,7 @@ export async function run(): Promise<void> {
     const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
     assert.ok(workspaceFolders.some((folder) => samePath(folder.uri.fsPath, repo)), 'Semantic fixture repository is not open in VS Code.');
 
-    const gitRepository = await waitForGitRepository(repo);
+    const gitRepository = await waitForGitRepository(repo, hasSemanticFixtureState);
     assert.equal(gitRepository.state.HEAD?.name, 'main');
     assert.equal(gitRepository.state.HEAD?.upstream?.remote, 'origin');
     assert.equal(gitRepository.state.HEAD?.upstream?.name, 'main');
@@ -37,15 +37,15 @@ export async function run(): Promise<void> {
     await vscode.commands.executeCommand('lookGit.changes.refresh');
 }
 
-interface VscodeGitExtension {
-    getAPI(version: 1): VscodeGitApi;
+interface NativeGitExtension {
+    getAPI(version: 1): NativeGitApi;
 }
 
-interface VscodeGitApi {
-    readonly repositories: readonly VscodeGitRepository[];
+interface NativeGitApi {
+    readonly repositories: readonly NativeGitApiRepository[];
 }
 
-interface VscodeGitRepository {
+interface NativeGitApiRepository {
     readonly rootUri: vscode.Uri;
     readonly state: {
         readonly HEAD?: {
@@ -67,19 +67,28 @@ async function activateLookGit(): Promise<void> {
     await extension.activate();
 }
 
-async function waitForGitRepository(repo: string): Promise<VscodeGitRepository> {
-    const extension = vscode.extensions.getExtension<VscodeGitExtension>('vscode.git');
+async function waitForGitRepository(
+    repo: string,
+    isReady: (repository: NativeGitApiRepository) => boolean = (repository) => repository.state.HEAD?.name !== undefined,
+): Promise<NativeGitApiRepository> {
+    const extension = vscode.extensions.getExtension<NativeGitExtension>('vscode.git');
     assert.ok(extension, 'VS Code Git extension is not available.');
     const gitApi = extension.isActive ? extension.exports.getAPI(1) : (await extension.activate()).getAPI(1);
     const startedAt = Date.now();
     while (Date.now() - startedAt < 10_000) {
         const repository = gitApi.repositories.find((candidate) => samePath(candidate.rootUri.fsPath, repo));
-        if (repository?.state.HEAD?.name) {
+        if (repository && isReady(repository)) {
             return repository;
         }
         await delay(100);
     }
     throw new Error(`VS Code Git extension did not open ${repo}.`);
+}
+
+function hasSemanticFixtureState(repository: NativeGitApiRepository): boolean {
+    return repository.state.HEAD?.name !== undefined
+        && repository.state.indexChanges.length >= 1
+        && repository.state.workingTreeChanges.length >= 1;
 }
 
 function assertCommand(commands: readonly string[], command: string): void {

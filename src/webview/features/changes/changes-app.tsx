@@ -33,7 +33,7 @@ interface ChangesAppProps {
     readonly onSectionToggle: (sectionId: ChangeSectionId) => void;
     readonly onSelectItem: (item: ChangeListItem, mode: ChangeSelectionMode, visibleItemIds: readonly string[]) => void;
     readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
-    readonly onBulkAction: (action: ChangeBulkAction) => void;
+    readonly onBulkAction: (section: ChangeSection, action: ChangeBulkAction) => void;
     readonly onExplainSelection: (target: ChangesSelectionContextTarget) => void;
     readonly onSelectionContextTarget: (target: ChangesSelectionContextTarget) => void;
     readonly onSelectionAction: (items: readonly ChangeListItem[], action: ChangeSelectionAction) => void;
@@ -56,7 +56,7 @@ interface ChangesAppProps {
     readonly onSubmoduleContextTarget: (path: string) => void;
     readonly onToggleSubmodule: (path: string) => void;
     readonly onSubmoduleRowAction: (submodulePath: string, item: ChangeListItem, action: ChangeRowAction) => void;
-    readonly onSubmoduleBulkAction: (submodulePath: string, action: ChangeBulkAction) => void;
+    readonly onSubmoduleBulkAction: (submodulePath: string, section: ChangeSection, action: ChangeBulkAction) => void;
     readonly onExplainSubmoduleChanges: (submodulePath: string) => void;
     readonly onExplainSubmoduleSelection: (target: ChangesSelectionContextTarget) => void;
     readonly onSubmoduleSelectionContextTarget: (target: ChangesSelectionContextTarget) => void;

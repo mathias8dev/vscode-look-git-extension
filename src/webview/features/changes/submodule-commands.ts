@@ -2,6 +2,7 @@ import type { ChangesToolbarCommand, ChangesWebviewToExtensionMessage } from '@p
 import type { ChangesContextTarget, ConflictState, StashFileEntry, StatusEntry } from '@protocol/changes/types';
 import { CommitMode } from '@protocol/changes/types';
 import { ChangeBulkAction, ChangeRowAction } from '@webview/features/changes/change-commands';
+import type { ChangeSection } from '@webview/features/changes/change-tree';
 import { OperationAction } from '@webview/features/changes/operation-commands';
 import { StashEntryAction } from '@webview/features/changes/stash-commands';
 
@@ -95,6 +96,7 @@ export function messageForSubmoduleRowAction(
 
 export function messageForSubmoduleBulkAction(
     submodulePath: string,
+    section: ChangeSection,
     action: ChangeBulkAction,
 ): ChangesWebviewToExtensionMessage {
     switch (action) {
@@ -103,12 +105,18 @@ export function messageForSubmoduleBulkAction(
         case ChangeBulkAction.UnstageAll:
             return { type: 'changes/submoduleUnstageAll', submodulePath };
         case ChangeBulkAction.DiscardAll:
-            return { type: 'changes/submoduleDiscardAll', submodulePath };
+            return { type: 'changes/submoduleDiscardFiles', submodulePath, filePaths: discardableFilePaths(section) };
         case ChangeBulkAction.OpenAllMergeEditors:
             return { type: 'changes/submoduleOpenAllMergeEditors', submodulePath };
         case ChangeBulkAction.AcceptAllTheirs:
             return { type: 'changes/submoduleAcceptAllTheirs', submodulePath };
     }
+}
+
+function discardableFilePaths(section: ChangeSection): readonly string[] {
+    return section.items
+        .filter((item) => !item.entry.isSubmodule)
+        .map((item) => item.entry.filePath);
 }
 
 export function messageForSubmoduleOperationAction(

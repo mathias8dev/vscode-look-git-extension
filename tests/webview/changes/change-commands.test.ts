@@ -113,10 +113,26 @@ describe('changeCommands', () => {
     });
 
     it('creates protocol messages for bulk actions', () => {
-        expect(messageForBulkAction(ChangeBulkAction.StageAll)).toEqual({ type: 'changes/stageAll' });
-        expect(messageForBulkAction(ChangeBulkAction.UnstageAll)).toEqual({ type: 'changes/unstageAll' });
-        expect(messageForBulkAction(ChangeBulkAction.DiscardAll)).toEqual({ type: 'changes/discardAll' });
-        expect(messageForBulkAction(ChangeBulkAction.OpenAllMergeEditors)).toEqual({ type: 'changes/openAllMergeEditors' });
+        const unstaged: ChangeSection = {
+            id: ChangeSectionId.Unstaged,
+            title: 'Changes',
+            items: [
+                item(ChangeSectionId.Unstaged, 'src/app.ts'),
+                item(ChangeSectionId.Unstaged, 'README.md'),
+                {
+                    ...item(ChangeSectionId.Unstaged, 'modules/lib'),
+                    entry: { indexStatus: 'M', workTreeStatus: ' ', filePath: 'modules/lib', isSubmodule: true },
+                },
+            ],
+        };
+
+        expect(messageForBulkAction(unstaged, ChangeBulkAction.StageAll)).toEqual({ type: 'changes/stageAll' });
+        expect(messageForBulkAction(unstaged, ChangeBulkAction.UnstageAll)).toEqual({ type: 'changes/unstageAll' });
+        expect(messageForBulkAction(unstaged, ChangeBulkAction.DiscardAll)).toEqual({
+            type: 'changes/discardFiles',
+            filePaths: ['src/app.ts', 'README.md'],
+        });
+        expect(messageForBulkAction(unstaged, ChangeBulkAction.OpenAllMergeEditors)).toEqual({ type: 'changes/openAllMergeEditors' });
     });
 
     it('creates protocol messages for toolbar commands', () => {
@@ -158,7 +174,7 @@ describe('changeCommands', () => {
             ChangeBulkAction.OpenAllMergeEditors,
             ChangeBulkAction.AcceptAllTheirs,
         ]);
-        expect(messageForBulkAction(ChangeBulkAction.AcceptAllTheirs)).toEqual({ type: 'changes/acceptAllTheirs' });
+        expect(messageForBulkAction(conflicts, ChangeBulkAction.AcceptAllTheirs)).toEqual({ type: 'changes/acceptAllTheirs' });
     });
 
     it('does not offer open-all merge editors for submodule gitlink conflicts', () => {
@@ -172,5 +188,18 @@ describe('changeCommands', () => {
         };
 
         expect(bulkActionsFor(conflicts).map((action) => action.action)).toEqual([ChangeBulkAction.AcceptAllTheirs]);
+    });
+
+    it('does not offer discard all when unstaged only contains submodule gitlinks', () => {
+        const unstaged: ChangeSection = {
+            id: ChangeSectionId.Unstaged,
+            title: 'Changes',
+            items: [{
+                ...item(ChangeSectionId.Unstaged, 'modules/lib'),
+                entry: { indexStatus: 'M', workTreeStatus: ' ', filePath: 'modules/lib', isSubmodule: true },
+            }],
+        };
+
+        expect(bulkActionsFor(unstaged).map((action) => action.action)).toEqual([ChangeBulkAction.StageAll]);
     });
 });

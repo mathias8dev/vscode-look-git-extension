@@ -132,7 +132,7 @@ export class ChangesMessageRouter {
 
             case 'changes/discardFile': {
                 const choice = await showModalWarningMessage(
-                    `Discard changes to "${msg.filePath}"? This cannot be undone.`, 'Discard',
+                    `Discard unstaged changes in "${msg.filePath}"? This cannot be undone.`, 'Discard',
                 );
                 if (choice === 'Discard') {
                     await discardRuntimeFile(currentRuntimeWorktree(), msg.filePath);
@@ -144,7 +144,7 @@ export class ChangesMessageRouter {
             case 'changes/discardFiles': {
                 const count = msg.filePaths.length;
                 const choice = await showModalWarningMessage(
-                    `Discard changes to ${count} file${count === 1 ? '' : 's'}? This cannot be undone.`, 'Discard',
+                    `Discard unstaged changes in ${count} file${count === 1 ? '' : 's'}? This cannot be undone.`, 'Discard',
                 );
                 if (choice === 'Discard') {
                     for (const filePath of msg.filePaths) {
@@ -486,7 +486,7 @@ export class ChangesMessageRouter {
             case 'changes/submoduleDiscardFile': {
                 const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
                 const choice = await showModalWarningMessage(
-                    `Discard changes to "${submodulePath}/${msg.filePath}"? This cannot be undone.`, 'Discard',
+                    `Discard unstaged changes in "${submodulePath}/${msg.filePath}"? This cannot be undone.`, 'Discard',
                 );
                 if (choice === 'Discard') {
                     await discardRuntimeFile(this.requireRuntimeSubmoduleWorktree(submodulePath), msg.filePath);
@@ -500,7 +500,7 @@ export class ChangesMessageRouter {
                 const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
                 const count = msg.filePaths.length;
                 const choice = await showModalWarningMessage(
-                    `Discard changes to ${count} file${count === 1 ? '' : 's'} inside "${submodulePath}"? This cannot be undone.`,
+                    `Discard unstaged changes in ${count} file${count === 1 ? '' : 's'} inside "${submodulePath}"? This cannot be undone.`,
                     'Discard',
                 );
                 if (choice === 'Discard') {

@@ -11,7 +11,7 @@ import {
     type ChangeBulkAction,
     type ChangeRowAction,
 } from '@webview/features/changes/change-commands';
-import type { ChangeListItem, ChangeSectionId } from '@webview/features/changes/change-tree';
+import type { ChangeListItem, ChangeSection, ChangeSectionId } from '@webview/features/changes/change-tree';
 import { messageForGenerateCommitMessage, messageForGenerateSubmoduleCommitMessage } from '@webview/features/changes/commit-message-commands';
 import { ChangesApp } from '@webview/features/changes/changes-app';
 import {
@@ -177,7 +177,7 @@ export function ChangesWebview() {
                 dispatch({ type: 'selectChange', selection: { itemId: item.id, mode, visibleItemIds } });
             }}
             onRowAction={(item: ChangeListItem, action: ChangeRowAction) => postToExtension(messageForRowAction(item, action))}
-            onBulkAction={(action: ChangeBulkAction) => postToExtension(messageForBulkAction(action))}
+            onBulkAction={(section: ChangeSection, action: ChangeBulkAction) => postToExtension(messageForBulkAction(section, action))}
             onExplainSelection={(target) => postToExtension(messageForExplainSelection(target))}
             onSelectionContextTarget={(target) => postToExtension(messageForChangesContextTarget(target))}
             onSelectionAction={(items, action) => {
@@ -228,8 +228,8 @@ export function ChangesWebview() {
             onSubmoduleAction={handleSubmoduleAction}
             onSubmoduleRowAction={(submodulePath: string, item: ChangeListItem, action: ChangeRowAction) =>
                 postToExtension(messageForSubmoduleRowAction(submodulePath, item.entry, item.isStaged, action))}
-            onSubmoduleBulkAction={(submodulePath: string, action: ChangeBulkAction) =>
-                postToExtension(messageForSubmoduleBulkAction(submodulePath, action))}
+            onSubmoduleBulkAction={(submodulePath: string, section: ChangeSection, action: ChangeBulkAction) =>
+                postToExtension(messageForSubmoduleBulkAction(submodulePath, section, action))}
             onExplainSubmoduleChanges={(submodulePath: string) =>
                 postToExtension(messageForExplainRepositoryChanges(submodulePath))}
             onExplainSubmoduleSelection={(target) => postToExtension(messageForExplainSelection(target))}
