@@ -126,27 +126,40 @@ describe('GraphApp', () => {
         expect(localStorage.getItem('lookGit.commitDetailsPanelWidth')).toBe('336');
     });
 
-    it('renders the repository navigator inside the graph center panel', async () => {
+    it('shows the repository list before rendering graph content for a selected repository', async () => {
         const api = createMockVsCodeApi();
         const { GraphApp } = await import('@webview/graph/graph-app');
+        const repositories = [
+            repositorySummary('repo-a'),
+            repositorySummary('repo-b'),
+        ];
 
         render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
         await act(async () => sendToWebview({
             type: 'repo/repositoriesChanged',
             repositories: {
                 status: 'ready',
-                data: [
-                    repositorySummary('repo-a'),
-                    repositorySummary('repo-b'),
-                ],
+                data: repositories,
             },
             activeContextId: { status: 'ready', data: undefined },
             listContextId: { status: 'ready', data: undefined },
         }));
 
-        await waitFor(() => expect(document.querySelector('.graph-shell')).toBeInTheDocument());
-        expect(document.querySelector('.graph-center .repository-navigator')).toBeInTheDocument();
-        expect(document.querySelector('.graph-shell > .repository-navigator')).not.toBeInTheDocument();
+        expect(screen.getByRole('list')).toBeInTheDocument();
+        expect(document.querySelector('.graph-shell')).not.toBeInTheDocument();
+
+        await act(async () => sendToWebview({
+            type: 'repo/repositoriesChanged',
+            repositories: {
+                status: 'ready',
+                data: repositories,
+            },
+            activeContextId: { status: 'ready', data: 'repo-a' },
+            listContextId: { status: 'ready', data: undefined },
+        }));
+
+        await waitFor(() => expect(document.querySelector('.repository-navigator-detail .graph-shell')).toBeInTheDocument());
+        expect(document.querySelector('.repository-navigator-detail-content > .graph-shell')).toBeInTheDocument();
         expect(screen.getByRole('separator', { name: 'Resize branches panel' })).toBeInTheDocument();
     });
 
