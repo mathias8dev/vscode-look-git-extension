@@ -28,9 +28,9 @@ describe('multi-repository navigator e2e', () => {
         }
 
         await focusGraphView();
-        await openWebviewBySelector('.repository-navigator-detail-header');
+        await openWebviewBySelector('.graph-center .repository-navigator-detail-header');
         try {
-            await waitForRepositoryDetail('app', '.graph-shell');
+            await waitForRepositoryDetail('app', '.graph-center .graph-scope-content');
             await navigateBackToRepositories();
             await waitForRepositoryOverview(['app', 'api']);
         } finally {
