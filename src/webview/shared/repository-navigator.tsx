@@ -36,8 +36,9 @@ export function RepositoryNavigator({
     const normalizedQuery = query.trim().toLowerCase();
     const filteredRepositories = useMemo(() => {
         if (!normalizedQuery) { return navigation.repositories; }
-        return navigation.repositories.filter((repository) => repositoryMatches(repository, normalizedQuery));
-    }, [normalizedQuery, navigation.repositories]);
+        return navigation.repositories.filter((repository) =>
+            repositoryMatches(repository, normalizedQuery, navigation.childCounts.get(repository.context.id) ?? 0));
+    }, [navigation.childCounts, navigation.repositories, normalizedQuery]);
 
     if (repositories.status === 'loading' || activeContextId.status === 'loading') {
         return <RepositoryNavigatorState icon="loading codicon-modifier-spin" title="Loading repositories" detail="Scanning workspace repositories..." />;
@@ -197,8 +198,8 @@ function RepositoryNavigatorState({ icon, title, detail }: RepositoryNavigatorSt
     );
 }
 
-function repositoryMatches(repository: RepositorySummary, query: string): boolean {
-    return repositorySearchText(repository).includes(query);
+function repositoryMatches(repository: RepositorySummary, query: string, childCount: number): boolean {
+    return repositorySearchText(repository, childCount).includes(query);
 }
 
 interface RepositoryNavigationModel {
@@ -253,7 +254,7 @@ function repositoryCountLabel(count: number): string {
     return `${count} ${count === 1 ? 'repository' : 'repositories'}`;
 }
 
-function repositorySearchText(repository: RepositorySummary): string {
+function repositorySearchText(repository: RepositorySummary, childCount: number): string {
     return [
         repository.context.label,
         repository.context.cwd,
@@ -263,6 +264,7 @@ function repositorySearchText(repository: RepositorySummary): string {
         repository.branchCount > 0 ? `${repository.branchCount} branches` : '',
         repository.submoduleCount > 0 ? `${repository.submoduleCount} submodules` : '',
         repository.worktreeCount > 0 ? `${repository.worktreeCount} worktrees` : '',
+        childCount > 0 ? `${childCount} repository modules` : '',
         repositoryStatus(repository),
     ].join(' ').toLowerCase();
 }

@@ -102,6 +102,29 @@ describe('RepositoryNavigator', () => {
         expect(screen.queryByText('api')).not.toBeInTheDocument();
     });
 
+    it('browses nested repository module levels', () => {
+        renderNavigator({
+            repositories: {
+                status: 'ready',
+                data: [
+                    repositorySummary('workspace', '/workspace'),
+                    repositorySummary('app', '/workspace/modules/app', 'main', 'workspace'),
+                    repositorySummary('plugin', '/workspace/modules/app/modules/plugin', 'main', 'app'),
+                ],
+            },
+        });
+
+        const appRow = screen.getByText('app').closest('[role="listitem"]');
+        if (!(appRow instanceof HTMLElement)) {
+            throw new Error('Expected app repository row.');
+        }
+        fireEvent.click(within(appRow).getByRole('button', { name: 'Browse repository modules' }));
+
+        expect(screen.getByText('app · 1 repository')).toBeInTheDocument();
+        expect(screen.getByText('plugin')).toBeInTheDocument();
+        expect(screen.queryByText('/workspace/modules/app')).not.toBeInTheDocument();
+    });
+
     it('filters repositories by label path branch or upstream', () => {
         renderNavigator();
 
@@ -139,6 +162,31 @@ describe('RepositoryNavigator', () => {
         expect(screen.getByText('look-git')).toBeInTheDocument();
         expect(screen.queryByText('api')).not.toBeInTheDocument();
         expect(screen.queryByText('desktop')).not.toBeInTheDocument();
+
+        rerender(
+            <RepositoryNavigator
+                repositories={{
+                    status: 'ready',
+                    data: [
+                        repositorySummary('platform', '/workspace/platform'),
+                        repositorySummary('tools', '/workspace/tools'),
+                        repositorySummary('api', '/workspace/platform/modules/api', 'main', 'platform'),
+                    ],
+                }}
+                activeContextId={{ status: 'ready', data: undefined }}
+                title="Repositories"
+                onNavigate={() => undefined}
+                onBack={() => undefined}
+                onOpenInNewWindow={() => undefined}
+            >
+                <span>Repository content</span>
+            </RepositoryNavigator>,
+        );
+
+        fireEvent.change(screen.getByLabelText('Search repositories'), { target: { value: 'repository modules' } });
+
+        expect(screen.getByText('platform')).toBeInTheDocument();
+        expect(screen.queryByText('tools')).not.toBeInTheDocument();
     });
 
     it('emits navigate and open-in-new-window actions from repository rows', () => {
