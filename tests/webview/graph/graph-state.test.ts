@@ -98,6 +98,43 @@ describe('graphState', () => {
         expect(reset.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-a' });
     });
 
+    it('optimistically opens repository detail without sending graph requests before context confirmation', () => {
+        const repositories = [repositorySummary('repo-a'), repositorySummary('repo-b')];
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: graphData([commit('a', [])], 1, false),
+            },
+        });
+        const withNavigator = reduceGraphState(loaded, {
+            type: 'message',
+            message: {
+                type: 'repo/repositoriesChanged',
+                repositories: { status: 'ready', data: repositories },
+                activeContextId: { status: 'ready', data: undefined },
+            },
+        });
+
+        const selected = reduceGraphState(withNavigator, { type: 'selectRepositoryContext', contextId: 'repo-b' });
+        const confirmed = reduceGraphState(selected, {
+            type: 'message',
+            message: {
+                type: 'repo/contextChanged',
+                context: { id: 'repo-b', cwd: '/work/repo-b', kind: 'main', label: 'repo-b' },
+            },
+        });
+        const back = reduceGraphState(selected, { type: 'showRepositoryList' });
+
+        expect(selected.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-b' });
+        expect(selected.rows).toEqual([]);
+        expect(selected.loading).toBe(true);
+        expect(selected.activeGraphRequestId).toBeUndefined();
+        expect(confirmed.activeGraphRequestId).toBe(graphRequestId(0, 'replace'));
+        expect(back.activeRepositoryContextId).toEqual({ status: 'ready', data: undefined });
+    });
+
     it('tracks load-more requests and clears them when graph data arrives', () => {
         const loaded = reduceGraphState(createInitialGraphState(), {
             type: 'message',

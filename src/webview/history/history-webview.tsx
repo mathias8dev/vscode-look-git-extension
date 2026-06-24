@@ -91,8 +91,14 @@ export function HistoryWebview() {
                     dispatch({ type: 'clearOperationStatus', operationId: state.operationStatus.operationId });
                 }
             }}
-            onRepositoryNavigate={(contextId) => vscodeApi.postMessage({ type: 'repo/selectRepository', contextId })}
-            onRepositoryBack={() => vscodeApi.postMessage({ type: 'repo/showRepositoryList' })}
+            onRepositoryNavigate={(contextId) => {
+                dispatch({ type: 'selectRepositoryContext', contextId });
+                vscodeApi.postMessage({ type: 'repo/selectRepository', contextId });
+            }}
+            onRepositoryBack={() => {
+                dispatch({ type: 'showRepositoryList' });
+                vscodeApi.postMessage({ type: 'repo/showRepositoryList' });
+            }}
             onOpenRepositoryInNewWindow={(contextId) => vscodeApi.postMessage({ type: 'repo/openRepositoryInNewWindow', contextId })}
         />
     );

@@ -231,6 +231,24 @@ describe('historyState', () => {
         expect(state.activeRepositoryContextId).toEqual({ status: 'ready', data: undefined });
     });
 
+    it('optimistically opens and closes repository navigation detail', () => {
+        const repositories = [repositorySummary('repo-a'), repositorySummary('repo-b')];
+        const withNavigator = reduceHistoryState({
+            ...createInitialHistoryState(),
+            repositorySummaries: { status: 'ready', data: repositories },
+            activeRepositoryContextId: { status: 'ready', data: undefined },
+            commits: [commit('a111111', 'feat: first')],
+            loading: false,
+        }, { type: 'selectRepositoryContext', contextId: 'repo-b' });
+        const back = reduceHistoryState(withNavigator, { type: 'showRepositoryList' });
+
+        expect(withNavigator.repositorySummaries).toEqual({ status: 'ready', data: repositories });
+        expect(withNavigator.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-b' });
+        expect(withNavigator.commits).toEqual([]);
+        expect(withNavigator.loading).toBe(true);
+        expect(back.activeRepositoryContextId).toEqual({ status: 'ready', data: undefined });
+    });
+
     it('stores protocol errors', () => {
         const state = reduceHistoryState(createInitialHistoryState(), {
             type: 'message',

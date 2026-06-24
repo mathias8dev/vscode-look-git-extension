@@ -128,7 +128,9 @@ export type GraphAction =
     | { readonly type: 'clearOperationStatus'; readonly operationId: string }
     | { readonly type: 'clearFilters' }
     | { readonly type: 'refreshRequested' }
-    | { readonly type: 'startLoadMore' };
+    | { readonly type: 'startLoadMore' }
+    | { readonly type: 'selectRepositoryContext'; readonly contextId: string }
+    | { readonly type: 'showRepositoryList' };
 
 export function createInitialGraphState(): GraphState {
     return {
@@ -230,6 +232,13 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
             return state.operationStatus?.operationId === action.operationId
                 ? { ...state, operationStatus: undefined }
                 : state;
+        case 'selectRepositoryContext':
+            return resetForRepositoryNavigation(state, action.contextId);
+        case 'showRepositoryList':
+            return {
+                ...state,
+                activeRepositoryContextId: { status: 'ready', data: undefined },
+            };
         case 'clearFilters':
             return startGraphReload({
                 ...state,
@@ -340,10 +349,8 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
             return { ...state, loading: false, loadingMore: false, activeGraphRequestId: undefined, error: message.error };
         case 'repo/contextChanged':
             return {
-                ...createInitialGraphState(),
-                repositorySummaries: state.repositorySummaries,
-                activeRepositoryContextId: state.activeRepositoryContextId,
-                repoId: undefined,
+                ...resetForRepositoryNavigation(state),
+                activeGraphRequestId: graphRequestId(0, 'replace'),
             };
         case 'repo/repositoriesChanged':
             return {
@@ -362,6 +369,18 @@ function reduceGraphOperationStatus(state: GraphState, message: GraphOperationSt
         return state;
     }
     return { ...state, operationStatus: message };
+}
+
+function resetForRepositoryNavigation(state: GraphState, contextId?: string): GraphState {
+    return {
+        ...createInitialGraphState(),
+        repositorySummaries: state.repositorySummaries,
+        activeRepositoryContextId: contextId === undefined
+            ? state.activeRepositoryContextId
+            : { status: 'ready', data: contextId },
+        repoId: undefined,
+        activeGraphRequestId: undefined,
+    };
 }
 
 function reduceGraphDataPush(state: GraphState, data: GraphData, repoId: string | undefined): GraphState {

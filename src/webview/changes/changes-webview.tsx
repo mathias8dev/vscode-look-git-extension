@@ -262,8 +262,14 @@ export function ChangesWebview() {
                 postToExtension(messageForSubmoduleStashAction(submodulePath, index, action))}
             onSubmoduleStashFileDiff={(submodulePath: string, index: number, file: StashFileEntry) =>
                 postToExtension(messageForSubmoduleStashFileDiff(submodulePath, index, file))}
-            onRepositoryNavigate={(contextId) => postToExtension({ type: 'repo/selectRepository', contextId })}
-            onRepositoryBack={() => postToExtension({ type: 'repo/showRepositoryList' })}
+            onRepositoryNavigate={(contextId) => {
+                dispatch({ type: 'selectRepositoryContext', contextId });
+                postToExtension({ type: 'repo/selectRepository', contextId });
+            }}
+            onRepositoryBack={() => {
+                dispatch({ type: 'showRepositoryList' });
+                postToExtension({ type: 'repo/showRepositoryList' });
+            }}
             onOpenRepositoryInNewWindow={(contextId) => postToExtension({ type: 'repo/openRepositoryInNewWindow', contextId })}
         />
     );

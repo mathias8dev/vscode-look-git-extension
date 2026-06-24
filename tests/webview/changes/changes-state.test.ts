@@ -198,6 +198,32 @@ describe('changesState', () => {
         expect(reset.commitMessageHistory).toEqual(['feat: previous']);
     });
 
+    it('optimistically opens and closes repository navigation detail', () => {
+        const repositories = [repositorySummary('repo-a'), repositorySummary('repo-b')];
+        const withNavigator = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: {
+                type: 'repo/repositoriesChanged',
+                repositories: { status: 'ready', data: repositories },
+                activeContextId: { status: 'ready', data: undefined },
+            },
+        });
+        const withStatus = reduceChangesState(withNavigator, {
+            type: 'message',
+            message: statusDataMessage({
+                unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'README.md' }],
+            }),
+        });
+
+        const selected = reduceChangesState(withStatus, { type: 'selectRepositoryContext', contextId: 'repo-b' });
+        const back = reduceChangesState(selected, { type: 'showRepositoryList' });
+
+        expect(selected.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-b' });
+        expect(selected.status).toEqual(createStatusData());
+        expect(selected.loading).toBe(true);
+        expect(back.activeRepositoryContextId).toEqual({ status: 'ready', data: undefined });
+    });
+
     it('keeps protocol errors visible across status refreshes', () => {
         const failed = reduceChangesState(createInitialChangesState(), {
             type: 'message',

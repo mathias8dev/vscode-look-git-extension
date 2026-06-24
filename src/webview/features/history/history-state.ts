@@ -29,7 +29,9 @@ export type HistoryAction =
     | { readonly type: 'startRefresh' }
     | { readonly type: 'startLoadMore' }
     | { readonly type: 'clearError' }
-    | { readonly type: 'clearOperationStatus'; readonly operationId: string };
+    | { readonly type: 'clearOperationStatus'; readonly operationId: string }
+    | { readonly type: 'selectRepositoryContext'; readonly contextId: string }
+    | { readonly type: 'showRepositoryList' };
 
 export function createInitialHistoryState(): HistoryState {
     return {
@@ -72,6 +74,13 @@ export function reduceHistoryState(state: HistoryState, action: HistoryAction): 
             return state.operationStatus?.operationId === action.operationId
                 ? { ...state, operationStatus: undefined }
                 : state;
+        case 'selectRepositoryContext':
+            return resetForRepositoryNavigation(state, action.contextId);
+        case 'showRepositoryList':
+            return {
+                ...state,
+                activeRepositoryContextId: { status: 'ready', data: undefined },
+            };
     }
 }
 
@@ -92,11 +101,7 @@ function reduceMessage(state: HistoryState, message: HistoryExtensionToWebviewMe
         case 'error':
             return { ...state, loading: false, loadingMore: false, detailsLoadingHash: undefined, error: message.error };
         case 'repo/contextChanged':
-            return {
-                ...createInitialHistoryState(),
-                repositorySummaries: state.repositorySummaries,
-                activeRepositoryContextId: state.activeRepositoryContextId,
-            };
+            return resetForRepositoryNavigation(state);
         case 'repo/repositoriesChanged':
             return {
                 ...state,
@@ -106,6 +111,16 @@ function reduceMessage(state: HistoryState, message: HistoryExtensionToWebviewMe
         case 'ui/fontSizeChanged':
             return state;
     }
+}
+
+function resetForRepositoryNavigation(state: HistoryState, contextId?: string): HistoryState {
+    return {
+        ...createInitialHistoryState(),
+        repositorySummaries: state.repositorySummaries,
+        activeRepositoryContextId: contextId === undefined
+            ? state.activeRepositoryContextId
+            : { status: 'ready', data: contextId },
+    };
 }
 
 function reduceHistoryOperationStatus(state: HistoryState, message: HistoryOperationStatusPush): HistoryState {

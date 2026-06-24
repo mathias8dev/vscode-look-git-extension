@@ -106,7 +106,9 @@ export type ChangesAction =
     | { readonly type: 'clearSubmoduleCommitFeedback'; readonly path: string }
     | { readonly type: 'toggleSubmodule'; readonly path: string }
     | { readonly type: 'requestSubmoduleStatus'; readonly path: string }
-    | { readonly type: 'toggleSubmoduleStash'; readonly key: string };
+    | { readonly type: 'toggleSubmoduleStash'; readonly key: string }
+    | { readonly type: 'selectRepositoryContext'; readonly contextId: string }
+    | { readonly type: 'showRepositoryList' };
 
 export function createInitialChangesState(preferences: ChangesStatePreferences = {}): ChangesState {
     return {
@@ -209,6 +211,13 @@ export function reduceChangesState(state: ChangesState, action: ChangesAction): 
             return { ...state, loadingSubmoduleStatusPaths: addedPath(state.loadingSubmoduleStatusPaths, action.path) };
         case 'toggleSubmoduleStash':
             return { ...state, expandedSubmoduleStashKeys: toggledPath(state.expandedSubmoduleStashKeys, action.key) };
+        case 'selectRepositoryContext':
+            return resetForRepositoryNavigation(state, action.contextId);
+        case 'showRepositoryList':
+            return {
+                ...state,
+                activeRepositoryContextId: { status: 'ready', data: undefined },
+            };
         case 'clearError':
             return { ...state, error: undefined };
         case 'clearOperationStatus':
@@ -404,17 +413,7 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 },
             };
         case 'repo/contextChanged':
-            return {
-                ...createInitialChangesState({
-                    viewMode: state.viewMode,
-                    sortMode: state.sortMode,
-                    pathFilter: state.pathFilter,
-                    collapsedSectionIds: state.collapsedSectionIds,
-                    commitMessageHistory: state.commitMessageHistory,
-                }),
-                repositorySummaries: state.repositorySummaries,
-                activeRepositoryContextId: state.activeRepositoryContextId,
-            };
+            return resetForRepositoryNavigation(state);
         case 'repo/repositoriesChanged':
             return {
                 ...state,
@@ -431,6 +430,22 @@ function reduceChangesOperationStatus(state: ChangesState, message: ChangesOpera
         return state;
     }
     return { ...state, operationStatus: message };
+}
+
+function resetForRepositoryNavigation(state: ChangesState, contextId?: string): ChangesState {
+    return {
+        ...createInitialChangesState({
+            viewMode: state.viewMode,
+            sortMode: state.sortMode,
+            pathFilter: state.pathFilter,
+            collapsedSectionIds: state.collapsedSectionIds,
+            commitMessageHistory: state.commitMessageHistory,
+        }),
+        repositorySummaries: state.repositorySummaries,
+        activeRepositoryContextId: contextId === undefined
+            ? state.activeRepositoryContextId
+            : { status: 'ready', data: contextId },
+    };
 }
 
 function sortModeFromProtocol(sortMode: 'name' | 'path' | 'status' | 'extension' | 'directory'): ChangesSortMode {

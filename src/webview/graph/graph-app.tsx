@@ -196,8 +196,14 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
             repositories={state.repositorySummaries}
             activeContextId={state.activeRepositoryContextId}
             title="Repositories"
-            onNavigate={(contextId) => sendMessage({ type: 'repo/selectRepository', contextId })}
-            onBack={() => sendMessage({ type: 'repo/showRepositoryList' })}
+            onNavigate={(contextId) => {
+                dispatch({ type: 'selectRepositoryContext', contextId });
+                sendMessage({ type: 'repo/selectRepository', contextId });
+            }}
+            onBack={() => {
+                dispatch({ type: 'showRepositoryList' });
+                sendMessage({ type: 'repo/showRepositoryList' });
+            }}
             onOpenInNewWindow={(contextId) => sendMessage({ type: 'repo/openRepositoryInNewWindow', contextId })}
         >
             <div className="graph-shell">
