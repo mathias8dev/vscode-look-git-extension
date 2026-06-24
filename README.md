@@ -6,6 +6,13 @@ A modern, React-based Git extension for Visual Studio Code — featuring a visua
 
 ## Features
 
+### Multi-Repo Workspaces
+
+- **Repository discovery** — open a Git repository or a plain workspace folder that contains multiple Git repositories
+- **Repository navigator** — Changes, Commit History, and Look Graph show a repository list when multiple repositories are available, then navigate into the selected repository
+- **Nested repository navigation** — browse one repository level at a time, with back navigation for repository containers that include child repositories
+- **Cross-platform path handling** — repository and worktree matching is canonicalized for macOS path aliases, Windows casing, symlinks, and junctions
+
 ### Changes Panel
 
 - **Staged & unstaged file list** with file-type icons, status letters, and hover actions
@@ -69,9 +76,10 @@ First-class submodule and worktree support, plus the modern conflicts editor for
 
 ## Getting Started
 
-1. Open a folder or workspace containing a Git repository in VS Code
+1. Open a folder or workspace containing one or more Git repositories in VS Code
 2. Click the **Look Git** icon in the Activity Bar to access the Changes and Commit History panels
-3. Open the **Look Graph** panel from the bottom panel area
+3. If multiple repositories are found, choose one from the repository navigator
+4. Open the **Look Graph** panel from the bottom panel area
 
 ## Requirements
 
