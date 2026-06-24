@@ -28,10 +28,9 @@ export async function discoverRepositoryContexts(input: RepositoryDiscoveryInput
         const workspaceContext = await discoverWorkspaceRepositoryContext(folder.uri.fsPath);
         if (workspaceContext) {
             addContext(contexts, workspaceContext);
-            continue;
         }
 
-        for (const context of await discoverNestedRepositoryContexts(folder.uri.fsPath)) {
+        for (const context of await discoverNestedRepositoryContexts(folder.uri.fsPath, workspaceContext)) {
             addContext(contexts, context);
         }
     }
@@ -48,37 +47,89 @@ async function discoverWorkspaceRepositoryContext(cwd: string): Promise<RepoCont
     }
 }
 
-async function discoverNestedRepositoryContexts(workspacePath: string): Promise<readonly RepoContext[]> {
+async function discoverNestedRepositoryContexts(workspacePath: string, workspaceContext?: RepoContext): Promise<readonly RepoContext[]> {
     const contexts: RepoContext[] = [];
-    const queue: Array<{ readonly dirPath: string; readonly depth: number }> = [{ dirPath: workspacePath, depth: 0 }];
+    const scanRoot = workspaceContext?.cwd ?? workspacePath;
+    const registeredSubmodulePathsByParentId = new Map<string, Promise<readonly string[]>>();
+    const queue: Array<{
+        readonly dirPath: string;
+        readonly depth: number;
+        readonly parentContext?: RepoContext;
+    }> = [{ dirPath: scanRoot, depth: 0, parentContext: workspaceContext }];
 
     while (queue.length > 0) {
         const current = queue.shift();
         if (!current) { break; }
 
-        if (await hasGitMarker(current.dirPath)) {
-            const context = await discoverRepositoryContextAtRoot(current.dirPath);
+        if (current.parentContext && await isRegisteredSubmodulePath(current.parentContext, current.dirPath, registeredSubmodulePathsByParentId)) {
+            continue;
+        }
+
+        const isWorkspaceRepositoryRoot = workspaceContext && samePath(current.dirPath, workspaceContext.cwd);
+        if (!isWorkspaceRepositoryRoot && await hasGitMarker(current.dirPath)) {
+            const context = await discoverRepositoryContextAtRoot(current.dirPath, current.parentContext);
             if (context) { contexts.push(context); }
+            if (current.depth >= MAX_REPOSITORY_DISCOVERY_DEPTH) { continue; }
+            for (const childPath of await readableChildDirectories(current.dirPath)) {
+                queue.push({ dirPath: childPath, depth: current.depth + 1, parentContext: context });
+            }
             continue;
         }
 
         if (current.depth >= MAX_REPOSITORY_DISCOVERY_DEPTH) { continue; }
 
         for (const childPath of await readableChildDirectories(current.dirPath)) {
-            queue.push({ dirPath: childPath, depth: current.depth + 1 });
+            queue.push({ dirPath: childPath, depth: current.depth + 1, parentContext: current.parentContext });
         }
     }
 
     return contexts;
 }
 
-async function discoverRepositoryContextAtRoot(cwd: string): Promise<RepoContext | undefined> {
+async function discoverRepositoryContextAtRoot(cwd: string, parentContext: RepoContext | undefined): Promise<RepoContext | undefined> {
     try {
         const root = (await new GitCliBackend(cwd).run(['rev-parse', '--show-toplevel'])).trim();
-        return samePath(root, cwd) ? createRepoContext(root) : undefined;
+        return samePath(root, cwd) ? createRepoContext(root, parentContext?.id) : undefined;
     } catch {
         return undefined;
     }
+}
+
+async function isRegisteredSubmodulePath(
+    parentContext: RepoContext,
+    dirPath: string,
+    cache: Map<string, Promise<readonly string[]>>,
+): Promise<boolean> {
+    const submodulePaths = await cachedRegisteredSubmodulePaths(parentContext, cache);
+    return submodulePaths.some((submodulePath) => samePath(submodulePath, dirPath) || isPathInside(dirPath, submodulePath));
+}
+
+function cachedRegisteredSubmodulePaths(parentContext: RepoContext, cache: Map<string, Promise<readonly string[]>>): Promise<readonly string[]> {
+    const cached = cache.get(parentContext.id);
+    if (cached) { return cached; }
+
+    const submodulePaths = registeredSubmodulePaths(parentContext.cwd);
+    cache.set(parentContext.id, submodulePaths);
+    return submodulePaths;
+}
+
+async function registeredSubmodulePaths(cwd: string): Promise<readonly string[]> {
+    try {
+        const output = await new GitCliBackend(cwd).run(['config', '--file', '.gitmodules', '--get-regexp', 'path']);
+        return output
+            .split(/\r?\n/)
+            .map(submodulePathFromConfigLine)
+            .filter((submodulePath): submodulePath is string => Boolean(submodulePath))
+            .map((submodulePath) => path.resolve(cwd, submodulePath));
+    } catch {
+        return [];
+    }
+}
+
+function submodulePathFromConfigLine(line: string): string | undefined {
+    const separatorIndex = line.search(/\s/);
+    if (separatorIndex < 0) { return undefined; }
+    return line.slice(separatorIndex).trim();
 }
 
 async function hasGitMarker(dirPath: string): Promise<boolean> {
@@ -108,4 +159,9 @@ function addContext(contexts: Map<string, RepoContext>, context: RepoContext): v
 
 function samePath(left: string, right: string): boolean {
     return path.normalize(left) === path.normalize(right);
+}
+
+function isPathInside(resourcePath: string, parentPath: string): boolean {
+    const relativePath = path.relative(path.normalize(parentPath), path.normalize(resourcePath));
+    return relativePath !== '' && !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
 }

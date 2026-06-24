@@ -42,9 +42,10 @@ type Story = StoryObj<typeof meta>;
 export const Navigable = {} satisfies Story;
 
 const repositorySummaries = [
-    repositorySummary('look-git', '/work/look-git', 'feature/multimodule', 4, 1, 0),
-    repositorySummary('api', '/work/services/api', 'main', 0, 0, 0),
-    repositorySummary('desktop', '/work/apps/desktop', 'release/1.2', 0, 3, 2),
+    repositorySummary('workspace', '/work/look-git', 'feature/multimodule', 0, 0, 0),
+    repositorySummary('api', '/work/look-git/services/api', 'main', 0, 0, 0, 'workspace'),
+    repositorySummary('desktop', '/work/look-git/apps/desktop', 'release/1.2', 0, 3, 2, 'workspace'),
+    repositorySummary('cli', '/work/look-git/packages/cli', 'feature/git-runtime', 4, 1, 0, 'workspace'),
 ] satisfies readonly RepositorySummary[];
 
 function repositorySummary(
@@ -54,9 +55,10 @@ function repositorySummary(
     stagedCount: number,
     unstagedCount: number,
     conflictCount: number,
+    parentId?: string,
 ): RepositorySummary {
     return {
-        context: { id, cwd, kind: 'main', label: id },
+        context: { id, cwd, kind: 'main', label: id, parentId },
         branch,
         upstream: `origin/${branch}`,
         hasRemote: true,

@@ -28,11 +28,15 @@ export function RepositoryNavigator({
         () => repositories.status === 'ready' ? repositories.data : [],
         [repositories],
     );
+    const overviewRepositories = useMemo(
+        () => repositoriesForOverview(readyRepositories),
+        [readyRepositories],
+    );
     const normalizedQuery = query.trim().toLowerCase();
     const filteredRepositories = useMemo(() => {
-        if (!normalizedQuery) { return readyRepositories; }
-        return readyRepositories.filter((repository) => repositoryMatches(repository, normalizedQuery));
-    }, [normalizedQuery, readyRepositories]);
+        if (!normalizedQuery) { return overviewRepositories; }
+        return overviewRepositories.filter((repository) => repositoryMatches(repository, normalizedQuery));
+    }, [normalizedQuery, overviewRepositories]);
 
     if (repositories.status === 'loading' || activeContextId.status === 'loading') {
         return <RepositoryNavigatorState icon="loading codicon-modifier-spin" title="Loading repositories" detail="Scanning workspace repositories..." />;
@@ -73,7 +77,7 @@ export function RepositoryNavigator({
             <div className="repository-navigator-header">
                 <div>
                     <h2>{title}</h2>
-                    <span>{readyRepositories.length} repositories</span>
+                    <span>{repositoryCountLabel(overviewRepositories.length)}</span>
                 </div>
                 <SearchInput
                     className="repository-navigator-search"
@@ -168,6 +172,18 @@ function RepositoryNavigatorState({ icon, title, detail }: RepositoryNavigatorSt
 
 function repositoryMatches(repository: RepositorySummary, query: string): boolean {
     return repositorySearchText(repository).includes(query);
+}
+
+function repositoriesForOverview(repositories: readonly RepositorySummary[]): readonly RepositorySummary[] {
+    const topLevelRepositories = repositories.filter((repository) => !repository.context.parentId);
+    if (topLevelRepositories.length !== 1) { return topLevelRepositories; }
+
+    const childRepositories = repositories.filter((repository) => repository.context.parentId === topLevelRepositories[0]?.context.id);
+    return childRepositories.length > 0 ? childRepositories : topLevelRepositories;
+}
+
+function repositoryCountLabel(count: number): string {
+    return `${count} ${count === 1 ? 'repository' : 'repositories'}`;
 }
 
 function repositorySearchText(repository: RepositorySummary): string {

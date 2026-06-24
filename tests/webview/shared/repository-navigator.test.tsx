@@ -26,6 +26,24 @@ describe('RepositoryNavigator', () => {
         expect(screen.queryByText('Repository content')).not.toBeInTheDocument();
     });
 
+    it('lists child repositories instead of the implicit parent workspace repository', () => {
+        renderNavigator({
+            repositories: {
+                status: 'ready',
+                data: [
+                    repositorySummary('workspace', '/workspace'),
+                    repositorySummary('api', '/workspace/modules/api', 'main', 'workspace'),
+                    repositorySummary('web', '/workspace/modules/web', 'main', 'workspace'),
+                ],
+            },
+        });
+
+        expect(screen.getByText('2 repositories')).toBeInTheDocument();
+        expect(screen.getByText('api')).toBeInTheDocument();
+        expect(screen.getByText('web')).toBeInTheDocument();
+        expect(screen.queryByText('workspace')).not.toBeInTheDocument();
+    });
+
     it('filters repositories by label path branch or upstream', () => {
         renderNavigator();
 
@@ -161,9 +179,9 @@ const repositorySummaries = [
     repositorySummary('desktop', '/workspace/apps/desktop', 'release/1.2'),
 ] satisfies readonly RepositorySummary[];
 
-function repositorySummary(id: string, cwd = `/workspace/${id}`, branch = 'main'): RepositorySummary {
+function repositorySummary(id: string, cwd = `/workspace/${id}`, branch = 'main', parentId?: string): RepositorySummary {
     return {
-        context: { id, cwd, kind: 'main', label: id },
+        context: { id, cwd, kind: 'main', label: id, parentId },
         branch,
         upstream: `origin/${branch}`,
         hasRemote: true,
