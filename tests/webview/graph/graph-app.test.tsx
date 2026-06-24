@@ -141,6 +141,7 @@ describe('GraphApp', () => {
                 ],
             },
             activeContextId: { status: 'ready', data: undefined },
+            listContextId: { status: 'ready', data: undefined },
         }));
 
         await waitFor(() => expect(document.querySelector('.graph-shell')).toBeInTheDocument());

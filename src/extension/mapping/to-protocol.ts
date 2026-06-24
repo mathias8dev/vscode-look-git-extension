@@ -96,8 +96,9 @@ export function toRepositoryLocator(context: RepoContext): RepositoryLocator {
 }
 
 export function toWorktreeLocator(context: RepoContext): WorktreeLocator {
+    const repoId = context.kind === RepoKind.Worktree ? context.parentId ?? context.id : context.id;
     return {
-        repoId: context.parentId ?? context.id,
+        repoId,
         worktreeId: context.id,
         path: context.cwd,
     };

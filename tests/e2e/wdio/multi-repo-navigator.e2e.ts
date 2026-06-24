@@ -13,7 +13,7 @@ describe('multi-repository navigator e2e', () => {
         await openWebviewBySelector('main.changes-shell');
         try {
             await waitForRepositoryOverview(['app', 'api'], ['plugin']);
-            await browseRepositoryModules('app');
+            await openRepositoryFolder('app');
             await waitForRepositoryOverview(['plugin'], ['api']);
             await navigateBackToParentRepositories();
             await waitForRepositoryOverview(['app', 'api'], ['plugin']);
@@ -160,20 +160,20 @@ async function navigateRepository(label: string): Promise<void> {
     }, `Expected repository row "${label}".\n${snapshot}`);
 }
 
-async function browseRepositoryModules(label: string): Promise<void> {
+async function openRepositoryFolder(label: string): Promise<void> {
     let snapshot = '';
     await pollUntil(async () => {
         snapshot = await webviewSnapshot();
         return await browser.execute((expectedLabel: string) => {
             const row = Array.from(document.querySelectorAll<HTMLElement>('.repository-navigator-row'))
                 .find((candidate) => candidate.textContent?.includes(expectedLabel));
-            const button = row?.querySelector<HTMLButtonElement>('button[aria-label="Browse repository modules"]');
+            const button = row?.querySelector<HTMLButtonElement>('.repository-navigator-row-open');
             if (!button) { return false; }
             button.scrollIntoView({ block: 'center', inline: 'nearest' });
             button.click();
             return true;
         }, label);
-    }, `Expected repository module browser for "${label}".\n${snapshot}`);
+    }, `Expected repository folder "${label}".\n${snapshot}`);
 }
 
 async function waitForRepositoryDetail(label: string, contentSelector: string): Promise<void> {
@@ -195,7 +195,7 @@ async function navigateBackToParentRepositories(): Promise<void> {
     await pollUntil(async () => {
         snapshot = await webviewSnapshot();
         return await browser.execute(() => {
-            const button = document.querySelector<HTMLButtonElement>('button[aria-label="Back to parent repositories"]');
+            const button = document.querySelector<HTMLButtonElement>('button[aria-label="Back to parent folder"]');
             if (!button) { return false; }
             button.click();
             return true;

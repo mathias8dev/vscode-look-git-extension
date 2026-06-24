@@ -83,6 +83,7 @@ describe('graphState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: 'repo-a' },
+                listContextId: { status: 'ready', data: undefined },
             },
         });
 
@@ -114,6 +115,7 @@ describe('graphState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: undefined },
+                listContextId: { status: 'ready', data: undefined },
             },
         });
 

@@ -7,6 +7,7 @@ import type { RepositorySummary } from '@protocol/shared/repo';
 export interface HistoryState {
     readonly repositorySummaries: Resource<readonly RepositorySummary[]>;
     readonly activeRepositoryContextId: Resource<string | undefined>;
+    readonly repositoryListContextId: Resource<string | undefined>;
     readonly commits: readonly HistoryCommit[];
     readonly expandedHashes: readonly string[];
     readonly selectedHashes: readonly string[];
@@ -31,12 +32,13 @@ export type HistoryAction =
     | { readonly type: 'clearError' }
     | { readonly type: 'clearOperationStatus'; readonly operationId: string }
     | { readonly type: 'selectRepositoryContext'; readonly contextId: string }
-    | { readonly type: 'showRepositoryList' };
+    | { readonly type: 'showRepositoryList'; readonly contextId?: string };
 
 export function createInitialHistoryState(): HistoryState {
     return {
         repositorySummaries: { status: 'ready', data: [] },
         activeRepositoryContextId: { status: 'ready', data: undefined },
+        repositoryListContextId: { status: 'ready', data: undefined },
         commits: [],
         expandedHashes: [],
         selectedHashes: [],
@@ -80,6 +82,7 @@ export function reduceHistoryState(state: HistoryState, action: HistoryAction): 
             return {
                 ...state,
                 activeRepositoryContextId: { status: 'ready', data: undefined },
+                repositoryListContextId: { status: 'ready', data: action.contextId },
             };
     }
 }
@@ -107,6 +110,7 @@ function reduceMessage(state: HistoryState, message: HistoryExtensionToWebviewMe
                 ...state,
                 repositorySummaries: message.repositories,
                 activeRepositoryContextId: message.activeContextId,
+                repositoryListContextId: message.listContextId,
             };
         case 'ui/fontSizeChanged':
             return state;
@@ -117,6 +121,7 @@ function resetForRepositoryNavigation(state: HistoryState, contextId?: string): 
     return {
         ...createInitialHistoryState(),
         repositorySummaries: state.repositorySummaries,
+        repositoryListContextId: state.repositoryListContextId,
         activeRepositoryContextId: contextId === undefined
             ? state.activeRepositoryContextId
             : { status: 'ready', data: contextId },

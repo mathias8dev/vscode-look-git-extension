@@ -57,7 +57,7 @@ describe('repository discovery', () => {
         expect(contexts).toHaveLength(2);
     });
 
-    it('does not use an ancestor git repository when the opened workspace folder is a module container', async () => {
+    it('does not use an ancestor git repository when the opened workspace folder is a repository container', async () => {
         const parent = tempRepo();
         parent.mkdir('workspace');
         const api = initRepoAt(path.join(parent.cwd, 'workspace', 'api'));
@@ -86,7 +86,7 @@ describe('repository discovery', () => {
         expect(contexts).toHaveLength(0);
     });
 
-    it('discovers modules nested below a workspace repository with parent contexts', async () => {
+    it('discovers nested repositories below a workspace repository with parent contexts', async () => {
         const parent = tempRepo();
         const child = initRepoAt(path.join(parent.cwd, 'child'));
 
@@ -128,7 +128,7 @@ describe('repository discovery', () => {
         expect(childContexts).toHaveLength(1);
     });
 
-    it('does not list registered submodules as nested repository modules', async () => {
+    it('does not list registered submodules as nested repositories', async () => {
         const fixture = createSubmoduleFixture();
         cleanups.push(fixture.cleanup);
 
@@ -140,7 +140,7 @@ describe('repository discovery', () => {
         expect(samePath(contexts[0]?.cwd ?? '', fixture.parent.cwd)).toBe(true);
     });
 
-    it('ignores dependency folders while scanning workspace modules', async () => {
+    it('ignores dependency folders while scanning workspace repositories', async () => {
         const root = tempRoot();
         const app = initRepoAt(path.join(root, 'app'));
         initRepoAt(path.join(root, 'node_modules', 'dependency'));

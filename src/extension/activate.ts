@@ -52,6 +52,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const runtimeRepositories = new RepositoryRegistry();
     let repositoriesResource: Resource<readonly RepositorySummary[]> = { status: 'loading' };
     let navigatedRepositoryContextId: string | undefined;
+    let listedRepositoryContextId: string | undefined;
+    let activeRuntimeContextId: string | undefined;
+    let repositoryStateGeneration = 0;
+    let dynamicRepositoryContexts = new Map<string, RepoContext>();
     const graphRepositoryRefreshers: Array<() => Promise<void>> = [];
     const childDiscoveryInFlight = new Set<string>();
     async function handleRepositoryNavigation(message: RepositoryNavigationMessage): Promise<void> {
@@ -60,11 +64,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 if (!repositories.contexts.some((contextItem) => contextItem.id === message.contextId)) { return; }
                 navigatedRepositoryContextId = message.contextId;
                 repositories.selectContext(message.contextId);
-                notifyRepositoriesChanged();
+                {
+                    const repository = repositories.contexts.find((contextItem) => contextItem.id === message.contextId);
+                    if (repository) { void syncChildRepositories(repository); }
+                }
                 return;
             case 'repo/showRepositoryList':
+                if (message.contextId && !repositories.contexts.some((contextItem) => contextItem.id === message.contextId)) { return; }
+                listedRepositoryContextId = message.contextId;
                 navigatedRepositoryContextId = undefined;
+                repositories.selectContext(undefined);
                 notifyRepositoriesChanged();
+                if (message.contextId) {
+                    const repository = repositories.contexts.find((contextItem) => contextItem.id === message.contextId);
+                    if (repository) { void syncChildRepositories(repository); }
+                }
                 return;
             case 'repo/openRepositoryInNewWindow': {
                 const repository = repositories.contexts.find((contextItem) => contextItem.id === message.contextId);
@@ -78,11 +92,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await Promise.all(graphRepositoryRefreshers.map((refresh) => refresh()));
     }, context.globalStorageUri, runtimeRepositories, handleRepositoryNavigation);
     const refreshGraph = () => graphProvider.refresh();
-    const changesProvider = new ChangesViewProvider(context.extensionUri, repositories, refreshGraph, undefined, undefined, undefined, undefined, runtimeRepositories, undefined, undefined, handleRepositoryNavigation);
+    const changesProvider = new ChangesViewProvider(context.extensionUri, repositories, refreshGraph, undefined, undefined, undefined, undefined, runtimeRepositories, undefined, async () => isRuntimeReadyForCurrentContext(), handleRepositoryNavigation);
     const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshGraph, context.globalStorageUri, undefined, runtimeRepositories, handleRepositoryNavigation);
     graphRepositoryRefreshers.push(() => changesProvider.refresh(), () => commitHistoryProvider.refresh());
 
     async function refreshAll(): Promise<void> {
+        if (!isRuntimeReadyForCurrentContext()) { return; }
         await Promise.all([
             changesProvider.refresh(),
             commitHistoryProvider.refresh(),
@@ -116,14 +131,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             type: 'repo/repositoriesChanged',
             repositories: repositoriesResource,
             activeContextId: { status: 'ready', data: activeNavigatorContextId() },
+            listContextId: { status: 'ready', data: activeListContextId() },
         };
     }
 
     function activeNavigatorContextId(): string | undefined {
+        const currentContext = repositories.currentContext;
+        if (currentContext && activeRuntimeContextId !== currentContext.id) {
+            return undefined;
+        }
         if (repositoriesResource.status === 'ready' && repositoriesResource.data.length <= 1) {
-            return repositories.currentContext?.id;
+            return currentContext?.id;
         }
         return navigatedRepositoryContextId;
+    }
+
+    function activeListContextId(): string | undefined {
+        return repositories.contexts.some((contextItem) => contextItem.id === listedRepositoryContextId)
+            ? listedRepositoryContextId
+            : undefined;
     }
 
     function notifyRepositoriesChanged(): void {
@@ -133,8 +159,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         graphProvider.notifyRepositoriesChanged(message);
     }
 
+    function isRuntimeReadyForCurrentContext(): boolean {
+        const currentContext = repositories.currentContext;
+        return currentContext ? activeRuntimeContextId === currentContext.id : true;
+    }
+
     function syncActiveRepo(): void {
-        if (navigatedRepositoryContextId) {
+        if (navigatedRepositoryContextId || listedRepositoryContextId) {
             notifyRepositoriesChanged();
             return;
         }
@@ -143,25 +174,35 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     async function syncDiscoveredRepositories(): Promise<void> {
+        const generation = ++repositoryStateGeneration;
         repositoriesResource = { status: 'loading' };
         notifyRepositoriesChanged();
-        const contexts = await discoverRepositoryContexts({
+        const discoveredContexts = await discoverRepositoryContexts({
             workspaceFolders: vscode.workspace.workspaceFolders,
         });
+        if (generation !== repositoryStateGeneration) { return; }
+        const contexts = await mergeDynamicRepositoryContexts(discoveredContexts);
+        if (generation !== repositoryStateGeneration) { return; }
         repositories.setContexts(contexts);
         if (navigatedRepositoryContextId && !contexts.some((repoContext) => repoContext.id === navigatedRepositoryContextId)) {
             navigatedRepositoryContextId = undefined;
         }
+        if (listedRepositoryContextId && !contexts.some((repoContext) => repoContext.id === listedRepositoryContextId)) {
+            listedRepositoryContextId = undefined;
+        }
         workingTreeWatcher.setContexts(contexts);
-        await syncRepositorySummaries(contexts);
+        const nextRepositoriesResource = await loadRepositorySummaries(contexts);
+        if (generation !== repositoryStateGeneration) { return; }
+        repositoriesResource = nextRepositoriesResource;
         notifyRepositoriesChanged();
+        void syncVisibleRepositoryChildren();
     }
 
-    async function syncRepositorySummaries(contexts: readonly RepoContext[]): Promise<void> {
+    async function loadRepositorySummaries(contexts: readonly RepoContext[]): Promise<Resource<readonly RepositorySummary[]>> {
         try {
-            repositoriesResource = { status: 'ready', data: await repositorySummaryService.summarize(contexts) };
+            return { status: 'ready', data: await repositorySummaryService.summarize(contexts) };
         } catch (error) {
-            repositoriesResource = {
+            return {
                 status: 'error',
                 error: createErrorPayload(error, {
                     code: 'gitOperationFailed',
@@ -177,29 +218,85 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         childDiscoveryInFlight.add(repoContext.id);
         try {
             const childContexts = await discoverChildRepositoryContexts(repoContext);
+            if (!repositories.contexts.some((contextItem) => contextItem.id === repoContext.id)) { return; }
             const knownContextIds = new Set(repositories.contexts.map((contextItem) => contextItem.id));
             const missingContexts = childContexts.filter((contextItem) => !knownContextIds.has(contextItem.id));
             if (missingContexts.length === 0) { return; }
 
+            const generation = ++repositoryStateGeneration;
+            for (const childContext of childContexts) {
+                dynamicRepositoryContexts.set(childContext.id, childContext);
+            }
             const contexts = [...repositories.contexts, ...missingContexts];
             repositories.setContexts(contexts);
             workingTreeWatcher.setContexts(contexts);
-            await syncRepositorySummaries(contexts);
+            const nextRepositoriesResource = await loadRepositorySummaries(contexts);
+            if (generation !== repositoryStateGeneration) { return; }
+            repositoriesResource = nextRepositoriesResource;
             notifyRepositoriesChanged();
+            void syncVisibleRepositoryChildren();
         } finally {
             childDiscoveryInFlight.delete(repoContext.id);
         }
     }
 
+    function syncVisibleRepositoryChildren(): void {
+        if (repositoriesResource.status !== 'ready') { return; }
+        const summaries = repositoriesResource.data;
+        const visibleParentId = activeListContextId();
+        const visibleRepositoryIds = summaries
+            .filter((summary) => visibleParentId
+                ? summary.context.parentId === visibleParentId
+                : !summary.context.parentId)
+            .map((summary) => summary.context.id);
+        for (const contextId of visibleRepositoryIds) {
+            const contextItem = repositories.contexts.find((repoContext) => repoContext.id === contextId);
+            if (contextItem) { void syncChildRepositories(contextItem); }
+        }
+    }
+
+    async function mergeDynamicRepositoryContexts(discoveredContexts: readonly RepoContext[]): Promise<readonly RepoContext[]> {
+        const contextsById = new Map(discoveredContexts.map((repoContext) => [repoContext.id, repoContext]));
+        const dynamicParentIds = new Set([...dynamicRepositoryContexts.values()]
+            .map((repoContext) => repoContext.parentId)
+            .filter((parentId): parentId is string => Boolean(parentId)));
+        const refreshedDynamicContexts = new Map<string, RepoContext>();
+        let parentIdsToScan = [...dynamicParentIds].filter((parentId) => contextsById.has(parentId));
+
+        while (parentIdsToScan.length > 0) {
+            const nextParentIdsToScan: string[] = [];
+            for (const parentId of parentIdsToScan) {
+                const parentContext = contextsById.get(parentId);
+                if (!parentContext) { continue; }
+                for (const childContext of await discoverChildRepositoryContexts(parentContext)) {
+                    refreshedDynamicContexts.set(childContext.id, childContext);
+                    const wasKnownDynamicParent = dynamicParentIds.has(childContext.id);
+                    if (!contextsById.has(childContext.id)) {
+                        contextsById.set(childContext.id, childContext);
+                    }
+                    if (wasKnownDynamicParent) {
+                        nextParentIdsToScan.push(childContext.id);
+                    }
+                }
+            }
+            parentIdsToScan = nextParentIdsToScan;
+        }
+
+        dynamicRepositoryContexts = refreshedDynamicContexts;
+        return [...contextsById.values()];
+    }
+
     async function handleRepositoryChanged(repoContext: RepoContext | undefined): Promise<void> {
-        notifyRepositoriesChanged();
         await vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', Boolean(repoContext));
         if (!repoContext) {
+            activeRuntimeContextId = undefined;
             runtimeRepositories.clear();
+            notifyRepositoriesChanged();
             await refreshAll();
             return;
         }
 
+        activeRuntimeContextId = undefined;
         try {
             await registerRuntimeContextWithRecovery({
                 repositories,
@@ -219,6 +316,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
 
         if (repositories.currentContext?.id !== repoContext.id) { return; }
+        activeRuntimeContextId = repoContext.id;
+        notifyRepositoriesChanged();
         await Promise.all([
             changesProvider.notifyRepoChanged(repoContext),
             commitHistoryProvider.notifyRepoChanged(repoContext),

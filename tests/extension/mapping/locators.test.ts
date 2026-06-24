@@ -40,9 +40,31 @@ describe('repo locators', () => {
             parentRepoId: 'repo',
         });
         expect(toWorktreeLocator(context)).toEqual({
-            repoId: 'repo',
+            repoId: 'sub',
             worktreeId: 'sub',
             path: '/repo/sub',
+        });
+    });
+
+    it('maps a nested main repository worktree to its own repository id', () => {
+        const context = {
+            id: 'child',
+            cwd: '/workspace/parent/child',
+            kind: RepoKind.Main,
+            parentId: 'parent',
+            label: 'child',
+        };
+
+        expect(toRepositoryLocator(context)).toEqual({
+            repoId: 'child',
+            kind: 'main',
+            path: '/workspace/parent/child',
+            parentRepoId: undefined,
+        });
+        expect(toWorktreeLocator(context)).toEqual({
+            repoId: 'child',
+            worktreeId: 'child',
+            path: '/workspace/parent/child',
         });
     });
 

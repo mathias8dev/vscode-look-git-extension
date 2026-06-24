@@ -70,10 +70,10 @@ describe('CommitHistoryViewProvider', () => {
         const view = makeWebviewView();
 
         provider.resolveWebviewView(view);
-        view.messageHandler?.({ type: 'repo/showRepositoryList' });
+        view.messageHandler?.({ type: 'repo/showRepositoryList', contextId: 'repo-child' });
 
         await expect.poll(() => onRepositoryNavigation.mock.calls.length).toBe(1);
-        expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/showRepositoryList' });
+        expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/showRepositoryList', contextId: 'repo-child' });
     });
 });
 

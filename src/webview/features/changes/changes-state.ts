@@ -30,6 +30,7 @@ export enum ChangeSelectionMode {
 export interface ChangesState {
     readonly repositorySummaries: Resource<readonly RepositorySummary[]>;
     readonly activeRepositoryContextId: Resource<string | undefined>;
+    readonly repositoryListContextId: Resource<string | undefined>;
     readonly status: StatusData;
     readonly viewMode: ChangesViewMode;
     readonly sortMode: ChangesSortMode;
@@ -108,12 +109,13 @@ export type ChangesAction =
     | { readonly type: 'requestSubmoduleStatus'; readonly path: string }
     | { readonly type: 'toggleSubmoduleStash'; readonly key: string }
     | { readonly type: 'selectRepositoryContext'; readonly contextId: string }
-    | { readonly type: 'showRepositoryList' };
+    | { readonly type: 'showRepositoryList'; readonly contextId?: string };
 
 export function createInitialChangesState(preferences: ChangesStatePreferences = {}): ChangesState {
     return {
         repositorySummaries: { status: 'ready', data: [] },
         activeRepositoryContextId: { status: 'ready', data: undefined },
+        repositoryListContextId: { status: 'ready', data: undefined },
         status: emptyStatusData(),
         viewMode: preferences.viewMode ?? ChangesViewMode.List,
         sortMode: preferences.sortMode ?? ChangesSortMode.Path,
@@ -217,6 +219,7 @@ export function reduceChangesState(state: ChangesState, action: ChangesAction): 
             return {
                 ...state,
                 activeRepositoryContextId: { status: 'ready', data: undefined },
+                repositoryListContextId: { status: 'ready', data: action.contextId },
             };
         case 'clearError':
             return { ...state, error: undefined };
@@ -419,6 +422,7 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 ...state,
                 repositorySummaries: message.repositories,
                 activeRepositoryContextId: message.activeContextId,
+                repositoryListContextId: message.listContextId,
             };
         case 'ui/fontSizeChanged':
             return state;
@@ -442,6 +446,7 @@ function resetForRepositoryNavigation(state: ChangesState, contextId?: string): 
             commitMessageHistory: state.commitMessageHistory,
         }),
         repositorySummaries: state.repositorySummaries,
+        repositoryListContextId: state.repositoryListContextId,
         activeRepositoryContextId: contextId === undefined
             ? state.activeRepositoryContextId
             : { status: 'ready', data: contextId },

@@ -82,6 +82,7 @@ export interface CommitDetails {
 export interface GraphState {
     readonly repositorySummaries: Resource<readonly RepositorySummary[]>;
     readonly activeRepositoryContextId: Resource<string | undefined>;
+    readonly repositoryListContextId: Resource<string | undefined>;
     readonly selectedRepository: GraphRepositorySelection;
     readonly repository: RepositoryLocator | undefined;
     readonly rows: readonly GraphRow[];
@@ -130,12 +131,13 @@ export type GraphAction =
     | { readonly type: 'refreshRequested' }
     | { readonly type: 'startLoadMore' }
     | { readonly type: 'selectRepositoryContext'; readonly contextId: string }
-    | { readonly type: 'showRepositoryList' };
+    | { readonly type: 'showRepositoryList'; readonly contextId?: string };
 
 export function createInitialGraphState(): GraphState {
     return {
         repositorySummaries: { status: 'ready', data: [] },
         activeRepositoryContextId: { status: 'ready', data: undefined },
+        repositoryListContextId: { status: 'ready', data: undefined },
         selectedRepository: mainGraphRepositorySelection(),
         repository: undefined,
         rows: [],
@@ -238,6 +240,7 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
             return {
                 ...state,
                 activeRepositoryContextId: { status: 'ready', data: undefined },
+                repositoryListContextId: { status: 'ready', data: action.contextId },
             };
         case 'clearFilters':
             return startGraphReload({
@@ -357,6 +360,7 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
                 ...state,
                 repositorySummaries: message.repositories,
                 activeRepositoryContextId: message.activeContextId,
+                repositoryListContextId: message.listContextId,
             };
         case 'ui/fontSizeChanged':
             return state;
@@ -375,6 +379,7 @@ function resetForRepositoryNavigation(state: GraphState, contextId?: string): Gr
     return {
         ...createInitialGraphState(),
         repositorySummaries: state.repositorySummaries,
+        repositoryListContextId: state.repositoryListContextId,
         activeRepositoryContextId: contextId === undefined
             ? state.activeRepositoryContextId
             : { status: 'ready', data: contextId },

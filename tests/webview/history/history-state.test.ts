@@ -224,6 +224,7 @@ describe('historyState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: undefined },
+                listContextId: { status: 'ready', data: undefined },
             },
         });
 

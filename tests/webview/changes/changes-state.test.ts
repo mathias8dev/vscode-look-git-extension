@@ -139,11 +139,13 @@ describe('changesState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: 'repo-a' },
+                listContextId: { status: 'ready', data: 'repo-parent' },
             },
         });
 
         expect(state.repositorySummaries).toEqual({ status: 'ready', data: repositories });
         expect(state.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-a' });
+        expect(state.repositoryListContextId).toEqual({ status: 'ready', data: 'repo-parent' });
     });
 
     it('clears repository data on context changes while preserving navigator resources and preferences', () => {
@@ -160,6 +162,7 @@ describe('changesState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: 'repo-a' },
+                listContextId: { status: 'ready', data: undefined },
             },
         });
         const withStatus = reduceChangesState(withNavigator, {
@@ -206,6 +209,7 @@ describe('changesState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: undefined },
+                listContextId: { status: 'ready', data: undefined },
             },
         });
         const withStatus = reduceChangesState(withNavigator, {

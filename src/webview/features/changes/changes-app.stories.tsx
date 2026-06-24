@@ -161,7 +161,6 @@ function appArgs(state: ChangesState) {
         onSubmoduleStashAction: noop,
         onSubmoduleStashFileDiff: noop,
         onRepositoryNavigate: noop,
-        onRepositoryBack: noop,
         onOpenRepositoryInNewWindow: noop,
     };
 }

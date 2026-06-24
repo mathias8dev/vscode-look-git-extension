@@ -1,5 +1,6 @@
 .repository-navigator {
     flex: 1;
+    height: 100%;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -23,9 +24,14 @@
 .repository-navigator-header-main {
     min-width: 0;
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
+    align-items: center;
     gap: var(--look-git-space-sm);
+}
+
+.repository-navigator-location {
+    min-width: 0;
+    display: grid;
+    gap: 1px;
 }
 
 .repository-navigator-header h2 {
@@ -36,10 +42,39 @@
 }
 
 .repository-navigator-header span,
+.repository-navigator-breadcrumb,
 .repository-navigator-row-path,
 .repository-navigator-detail-label,
 .repository-navigator-row-status {
     color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+.repository-navigator-breadcrumb {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.repository-navigator-breadcrumb-segment,
+.repository-navigator-breadcrumb-count {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.repository-navigator-breadcrumb-segment span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.repository-navigator-breadcrumb-count {
+    flex: 0 0 auto;
+    margin-left: var(--look-git-space-xs);
 }
 
 .repository-navigator-search {

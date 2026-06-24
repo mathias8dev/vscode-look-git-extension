@@ -86,7 +86,6 @@ function appArgs(state: HistoryState, query: string) {
         onShowOperationOutput: noop,
         onDismissOperation: noop,
         onRepositoryNavigate: noop,
-        onRepositoryBack: noop,
         onOpenRepositoryInNewWindow: noop,
     };
 }

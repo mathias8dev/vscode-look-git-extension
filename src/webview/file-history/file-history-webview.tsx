@@ -91,7 +91,6 @@ export function FileHistoryWebview() {
                 }
             }}
             onRepositoryNavigate={() => undefined}
-            onRepositoryBack={() => undefined}
             onOpenRepositoryInNewWindow={() => undefined}
         />
     );

@@ -44,6 +44,9 @@ const scenarios = new Map<string, ScenarioSetup>([
     ['file-context-menu', setupFileContextMenu],
     ['merge-conflicts', setupMergeConflicts],
     ['merge-conflics', setupMergeConflicts],
+    ['multi-repo', setupRepositoryDiscovery],
+    ['multi-repository', setupRepositoryDiscovery],
+    ['multirepo', setupRepositoryDiscovery],
     ['graph-heavy', setupGraphHeavy],
     ['heavy-graph', setupGraphHeavy],
     ['interactive-rebase-conflicts', setupInteractiveRebaseConflicts],
@@ -54,6 +57,7 @@ const scenarios = new Map<string, ScenarioSetup>([
     ['remote-offline', setupRemoteUnavailable],
     ['remote-only', setupRemoteOnly],
     ['remote-unavailable', setupRemoteUnavailable],
+    ['repository-discovery', setupRepositoryDiscovery],
     ['remotes', setupRemote],
     ['semantic-actions', setupSemanticActions],
     ['semantic-git-actions', setupSemanticActions],
@@ -147,6 +151,7 @@ function printHelp(): void {
         '  ./lookGit setup semantic-actions',
         '  ./lookGit setup stash-pop-blocked',
         '  ./lookGit setup rebase-conflicts --output /tmp/look-git-fixtures',
+        '  ./lookGit setup repository-discovery',
         '  ./lookGit setup worktrees',
         '  ./lookGit setup all',
     ].join('\n'));
@@ -157,6 +162,14 @@ function printScenarios(): void {
 }
 
 function printSummary(name: string, target: string): void {
+    if (!isRepositoryRoot(target)) {
+        const repositories = findRepositoryRoots(target);
+        console.log(`Created ${name}: ${target}`);
+        console.log(`  repositories: ${repositories.length}`);
+        console.log(`  code ${target}`);
+        return;
+    }
+
     const branchCount = git(target, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']).split('\n').filter(Boolean).length;
     const remoteCount = git(target, ['remote']).split('\n').filter(Boolean).length;
     const remoteBranchCount = git(target, ['for-each-ref', '--format=%(refname:short)', 'refs/remotes']).split('\n').filter(Boolean).length;
@@ -185,6 +198,7 @@ function uniqueScenarios(): readonly string[] {
         'graph-heavy',
         'interactive-rebase-conflicts',
         'merge-conflicts',
+        'repository-discovery',
         'rebase-conflicts',
         'remote',
         'remote-only',
@@ -203,6 +217,7 @@ function canonicalScenarioName(name: string): string {
     if (name === 'worktree') { return 'worktrees'; }
     if (name === 'remotes') { return 'remote'; }
     if (name === 'heavy-graph') { return 'graph-heavy'; }
+    if (name === 'multi-repo' || name === 'multi-repository' || name === 'multirepo') { return 'repository-discovery'; }
     if (name === 'interactive-rebase-multiple-conflicts') { return 'interactive-rebase-conflicts'; }
     if (name === 'remote-failure' || name === 'remote-offline') { return 'remote-unavailable'; }
     if (name === 'semantic-git-actions') { return 'semantic-actions'; }
@@ -214,6 +229,91 @@ function canonicalScenarioName(name: string): string {
 function resetDir(target: string): void {
     fs.rmSync(target, { recursive: true, force: true });
     fs.mkdirSync(target, { recursive: true });
+}
+
+function setupRepositoryDiscovery(target: string, outputRoot: string): void {
+    const remoteRoot = path.join(outputRoot, '.repository-discovery-remotes');
+    fs.rmSync(remoteRoot, { recursive: true, force: true });
+    fs.mkdirSync(remoteRoot, { recursive: true });
+
+    fs.mkdirSync(target, { recursive: true });
+    fs.writeFileSync(path.join(target, 'README.md'), [
+        '# Repository discovery fixture',
+        '',
+        'Open this folder to test a non-git workspace containing multiple repositories.',
+        '',
+        '- `api` and `web-client` are direct workspace repositories.',
+        '- `parent-with-modules` is a direct workspace repository that contains child repositories.',
+        '- Navigate into `parent-with-modules` from Look Git to discover `direct-child`.',
+        '- Open `parent-with-modules/modules` to verify a module container does not select the ancestor repository.',
+        '- Repositories below `nested/` exercise the filesystem depth limit.',
+        '',
+    ].join('\n'));
+
+    setupRemoteBackedDiscoveryRepo(path.join(target, 'api'), path.join(remoteRoot, 'api.git'), 'api');
+    setupDirtyDiscoveryRepo(path.join(target, 'web-client'), 'web-client');
+    setupDiscoveryParentRepo(path.join(target, 'parent-with-modules'));
+    setupCleanDiscoveryRepo(path.join(target, 'containers', 'nested', 'too-deep'), 'too-deep');
+}
+
+function setupRemoteBackedDiscoveryRepo(repoPath: string, origin: string, name: string): void {
+    initBareRepo(origin);
+    initRepo(repoPath);
+    git(repoPath, ['remote', 'add', 'origin', origin]);
+    write(repoPath, 'README.md', `# ${name}\n\nRemote-backed discovery repository.\n`);
+    commit(repoPath, `docs(${name}): add discovery repo overview`, { author: nextAuthor() });
+    write(repoPath, 'src/api.ts', `export const ${camelIdentifier(name)} = "main";\n`);
+    commit(repoPath, `feat(${name}): add main implementation`, { author: nextAuthor() });
+    git(repoPath, ['push', '-q', '-u', 'origin', 'main']);
+    git(repoPath, ['checkout', '-q', '-b', `feature/${name}-local`]);
+    write(repoPath, `src/${name}-local.ts`, `export const ${camelIdentifier(name)}Local = true;\n`);
+    commit(repoPath, `feat(${name}): add local discovery branch`, { author: nextAuthor() });
+    git(repoPath, ['checkout', '-q', 'main']);
+}
+
+function setupDirtyDiscoveryRepo(repoPath: string, name: string): void {
+    initRepo(repoPath);
+    write(repoPath, 'README.md', `# ${name}\n\nDirty discovery repository.\n`);
+    commit(repoPath, `docs(${name}): add discovery repo overview`, { author: nextAuthor() });
+    write(repoPath, 'src/app.ts', `export const ${camelIdentifier(name)} = "clean";\n`);
+    commit(repoPath, `feat(${name}): add app baseline`, { author: nextAuthor() });
+    git(repoPath, ['checkout', '-q', '-b', `feature/${name}-draft`]);
+    write(repoPath, 'src/draft.ts', `export const ${camelIdentifier(name)}Draft = true;\n`);
+    commit(repoPath, `feat(${name}): add draft branch`, { author: nextAuthor() });
+    git(repoPath, ['checkout', '-q', 'main']);
+    write(repoPath, 'src/staged.ts', `export const ${camelIdentifier(name)}Staged = true;\n`);
+    git(repoPath, ['add', 'src/staged.ts']);
+    write(repoPath, 'src/app.ts', `export const ${camelIdentifier(name)} = "dirty";\n`);
+    write(repoPath, 'notes/local.md', `${name} local note.\n`);
+}
+
+function setupDiscoveryParentRepo(repoPath: string): void {
+    initRepo(repoPath);
+    write(repoPath, '.gitignore', [
+        'direct-child/',
+        'modules/',
+        'nested/',
+        'node_modules/',
+        '',
+    ].join('\n'));
+    write(repoPath, 'README.md', '# Parent with modules\n\nNavigate here to test child repository discovery.\n');
+    commit(repoPath, 'docs(discovery): add parent repository overview', { author: nextAuthor() });
+    write(repoPath, 'src/parent.ts', 'export const parentWithModules = true;\n');
+    commit(repoPath, 'feat(discovery): add parent repository marker', { author: nextAuthor() });
+
+    setupCleanDiscoveryRepo(path.join(repoPath, 'direct-child'), 'direct-child');
+    setupCleanDiscoveryRepo(path.join(repoPath, 'modules', 'module-a'), 'module-a');
+    setupDirtyDiscoveryRepo(path.join(repoPath, 'modules', 'module-b'), 'module-b');
+    setupCleanDiscoveryRepo(path.join(repoPath, 'nested', 'deep-child'), 'deep-child');
+    setupCleanDiscoveryRepo(path.join(repoPath, 'node_modules', 'ignored-dependency'), 'ignored-dependency');
+}
+
+function setupCleanDiscoveryRepo(repoPath: string, name: string): void {
+    initRepo(repoPath);
+    write(repoPath, 'README.md', `# ${name}\n\nRepository discovery fixture.\n`);
+    commit(repoPath, `docs(${name}): add discovery repo overview`, { author: nextAuthor() });
+    write(repoPath, 'src/index.ts', `export const ${camelIdentifier(name)} = true;\n`);
+    commit(repoPath, `feat(${name}): add discovery marker`, { author: nextAuthor() });
 }
 
 function setupBasics(target: string): void {
@@ -1087,6 +1187,46 @@ function configureRepo(cwd: string): void {
     git(cwd, ['config', 'core.eol', 'lf']);
     git(cwd, ['config', 'gc.auto', '0']);
     git(cwd, ['config', 'maintenance.auto', 'false']);
+}
+
+function isRepositoryRoot(cwd: string): boolean {
+    try {
+        return path.normalize(git(cwd, ['rev-parse', '--show-toplevel']).trim()) === path.normalize(cwd);
+    } catch {
+        return false;
+    }
+}
+
+function findRepositoryRoots(root: string): readonly string[] {
+    const repositories: string[] = [];
+    const queue = [root];
+
+    while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current) { break; }
+
+        if (fs.existsSync(path.join(current, '.git'))) {
+            repositories.push(current);
+        }
+
+        for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+            if (!entry.isDirectory() || entry.name === '.git') { continue; }
+            queue.push(path.join(current, entry.name));
+        }
+    }
+
+    return repositories.sort((left, right) => left.localeCompare(right));
+}
+
+function camelIdentifier(name: string): string {
+    return name
+        .split(/[^a-zA-Z0-9]+/)
+        .filter(Boolean)
+        .map((part, index) => {
+            const normalized = part.slice(0, 1).toUpperCase() + part.slice(1);
+            return index === 0 ? normalized.slice(0, 1).toLowerCase() + normalized.slice(1) : normalized;
+        })
+        .join('') || 'fixture';
 }
 
 function write(cwd: string, filePath: string, content: string): void {

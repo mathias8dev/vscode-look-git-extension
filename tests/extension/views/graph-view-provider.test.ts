@@ -18,9 +18,9 @@ describe('GraphViewProvider', () => {
         const view = makeWebviewView();
 
         provider.resolveWebviewView(view);
-        view.messageHandler?.({ type: 'repo/openRepositoryInNewWindow', contextId: 'repo-3' });
+        view.messageHandler?.({ type: 'repo/showRepositoryList', contextId: 'repo-3' });
 
         await expect.poll(() => onRepositoryNavigation.mock.calls.length).toBe(1);
-        expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/openRepositoryInNewWindow', contextId: 'repo-3' });
+        expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/showRepositoryList', contextId: 'repo-3' });
     });
 });

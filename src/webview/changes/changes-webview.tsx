@@ -266,9 +266,9 @@ export function ChangesWebview() {
                 dispatch({ type: 'selectRepositoryContext', contextId });
                 postToExtension({ type: 'repo/selectRepository', contextId });
             }}
-            onRepositoryBack={() => {
-                dispatch({ type: 'showRepositoryList' });
-                postToExtension({ type: 'repo/showRepositoryList' });
+            onRepositoryList={(contextId) => {
+                dispatch({ type: 'showRepositoryList', contextId });
+                postToExtension({ type: 'repo/showRepositoryList', ...(contextId ? { contextId } : {}) });
             }}
             onOpenRepositoryInNewWindow={(contextId) => postToExtension({ type: 'repo/openRepositoryInNewWindow', contextId })}
         />

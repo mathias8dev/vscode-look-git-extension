@@ -70,7 +70,7 @@ interface ChangesAppProps {
     readonly onSubmoduleStashAction: (submodulePath: string, index: number, action: StashEntryAction) => void;
     readonly onSubmoduleStashFileDiff: (submodulePath: string, index: number, file: StashFileEntry) => void;
     readonly onRepositoryNavigate?: (contextId: string) => void;
-    readonly onRepositoryBack?: () => void;
+    readonly onRepositoryList?: (contextId: string | undefined) => void;
     readonly onOpenRepositoryInNewWindow?: (contextId: string) => void;
 }
 
@@ -115,7 +115,7 @@ export function ChangesApp({
     onSubmoduleStashAction,
     onSubmoduleStashFileDiff,
     onRepositoryNavigate = noop,
-    onRepositoryBack = noop,
+    onRepositoryList = noop,
     onOpenRepositoryInNewWindow = noop,
 }: ChangesAppProps) {
     const rawSections = useMemo(() => buildChangeSections(state.status), [state.status]);
@@ -175,9 +175,10 @@ export function ChangesApp({
             <RepositoryNavigator
                 repositories={state.repositorySummaries}
                 activeContextId={state.activeRepositoryContextId}
+                listContextId={state.repositoryListContextId}
                 title="Repositories"
                 onNavigate={onRepositoryNavigate}
-                onBack={onRepositoryBack}
+                onShowRepositoryList={onRepositoryList}
                 onOpenInNewWindow={onOpenRepositoryInNewWindow}
             >
             <ErrorNotice

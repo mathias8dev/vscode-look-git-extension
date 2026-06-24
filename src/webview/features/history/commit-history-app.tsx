@@ -26,7 +26,7 @@ interface CommitHistoryAppProps {
     readonly onDismissOperation?: () => void;
     readonly repositoryNavigatorEnabled?: boolean;
     readonly onRepositoryNavigate?: (contextId: string) => void;
-    readonly onRepositoryBack?: () => void;
+    readonly onRepositoryList?: (contextId: string | undefined) => void;
     readonly onOpenRepositoryInNewWindow?: (contextId: string) => void;
 }
 
@@ -45,7 +45,7 @@ export function CommitHistoryApp({
     onDismissOperation,
     repositoryNavigatorEnabled = true,
     onRepositoryNavigate = noop,
-    onRepositoryBack = noop,
+    onRepositoryList = noop,
     onOpenRepositoryInNewWindow = noop,
 }: CommitHistoryAppProps) {
     const commits = filterHistoryCommits(state.commits, query);
@@ -204,9 +204,10 @@ export function CommitHistoryApp({
                 <RepositoryNavigator
                     repositories={state.repositorySummaries}
                     activeContextId={state.activeRepositoryContextId}
+                    listContextId={state.repositoryListContextId}
                     title="Repositories"
                     onNavigate={onRepositoryNavigate}
-                    onBack={onRepositoryBack}
+                    onShowRepositoryList={onRepositoryList}
                     onOpenInNewWindow={onOpenRepositoryInNewWindow}
                 >
                     {content}
