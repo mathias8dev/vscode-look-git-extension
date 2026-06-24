@@ -1,3 +1,5 @@
+import type { Resource } from '@protocol/shared/base';
+
 export type RepoKind = 'main' | 'worktree' | 'submodule';
 export type RepositoryKind = 'main' | 'submodule';
 
@@ -27,4 +29,23 @@ export interface SerializedRepoContext {
     readonly kind: RepoKind;
     readonly parentId?: string;
     readonly label: string;
+}
+
+export interface RepositorySummary {
+    readonly context: SerializedRepoContext;
+    readonly branch?: string;
+    readonly upstream?: string;
+    readonly hasRemote: boolean;
+    readonly branchCount: number;
+    readonly submoduleCount: number;
+    readonly worktreeCount: number;
+    readonly stagedCount: number;
+    readonly unstagedCount: number;
+    readonly conflictCount: number;
+}
+
+export interface RepositoriesChangedPush {
+    readonly type: 'repo/repositoriesChanged';
+    readonly repositories: Resource<readonly RepositorySummary[]>;
+    readonly activeContextId: Resource<string | undefined>;
 }

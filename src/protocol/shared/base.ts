@@ -24,6 +24,25 @@ export interface Pagination {
     readonly limit: number;
 }
 
+export type Resource<TData> =
+    | LoadingResource
+    | ReadyResource<TData>
+    | FailedResource;
+
+export interface LoadingResource {
+    readonly status: 'loading';
+}
+
+export interface ReadyResource<TData> {
+    readonly status: 'ready';
+    readonly data: TData;
+}
+
+export interface FailedResource {
+    readonly status: 'error';
+    readonly error: ProtocolError;
+}
+
 export interface ErrorMessage {
     readonly type: 'error';
     readonly requestId?: RequestId;

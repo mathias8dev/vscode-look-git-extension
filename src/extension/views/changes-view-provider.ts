@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
 import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush, ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
 import { CommitMode, type ChangesContextTarget, type StatusData } from '@protocol/changes/types';
+import type { RepositoriesChangedPush } from '@protocol/shared/repo';
 import type { RepoContext } from '@core/git/domain/repo-context';
 import { ChangesMessageRouter, buildStatusData, emptyStatusData } from '@extension/messaging/changes-message-router';
 import type { GitStatus } from '@core/git/domain/git-status';
@@ -202,6 +203,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     private refreshAbortController?: AbortController;
     private refreshTimer?: ReturnType<typeof setTimeout>;
     private contextTarget?: ChangesContextTarget;
+    private repositoriesChangedMessage?: RepositoriesChangedPush;
     private viewAsTree = false;
     private readonly refreshDebounceMs = 50;
     private operationSequence = 0;
@@ -233,6 +235,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')],
         };
         this.renderWebviewHtml(webviewView);
+        this.postRepositoriesChangedMessage();
 
         this.router = new ChangesMessageRouter(this.repositories, (msg) => {
             webviewView.webview.postMessage(msg);
@@ -756,6 +759,11 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         this.scheduleRefresh();
     }
 
+    notifyRepositoriesChanged(message: RepositoriesChangedPush): void {
+        this.repositoriesChangedMessage = message;
+        this.postRepositoriesChangedMessage();
+    }
+
     notifyFontSizeChanged(): void {
         void this.view?.webview.postMessage(webviewFontSizeMessage());
     }
@@ -770,6 +778,12 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     private postMessage(message: ChangesExtensionToWebviewMessage): void {
         void this.view?.webview.postMessage(message);
+    }
+
+    private postRepositoriesChangedMessage(): void {
+        if (this.repositoriesChangedMessage) {
+            void this.view?.webview.postMessage(this.repositoriesChangedMessage);
+        }
     }
 
     private nextOperationId(): string {

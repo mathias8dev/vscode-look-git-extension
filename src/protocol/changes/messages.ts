@@ -1,6 +1,6 @@
 import type { RequestId, ErrorMessage, ProtocolError } from '@protocol/shared/base';
 import type { OperationNoticeActionKind, OperationStatus } from '@protocol/shared/operation';
-import type { SerializedRepoContext } from '@protocol/shared/repo';
+import type { RepositoriesChangedPush, SerializedRepoContext } from '@protocol/shared/repo';
 import type { WebviewFontSizeChangedPush } from '@protocol/shared/ui';
 import type { StatusData, CommitMode, StashFileEntry, ConflictState, SubmoduleStatusData, ChangesContextTarget, ChangesSelectionContextTarget } from '@protocol/changes/types';
 
@@ -357,6 +357,7 @@ export interface GetSubmoduleStatusRequest {
 
 export type ChangesExtensionToWebviewMessage =
     | RepoContextChangedPush
+    | RepositoriesChangedPush
     | WebviewFontSizeChangedPush
     | StatusDataPush
     | CommitResultPush

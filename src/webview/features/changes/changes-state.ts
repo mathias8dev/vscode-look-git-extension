@@ -400,6 +400,8 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
             };
         case 'repo/contextChanged':
             return { ...state, selectedItemIds: [], selectionAnchorId: undefined, loading: true };
+        case 'repo/repositoriesChanged':
+            return state;
         case 'ui/fontSizeChanged':
             return state;
     }

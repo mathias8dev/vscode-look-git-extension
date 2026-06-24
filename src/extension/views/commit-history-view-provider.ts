@@ -6,6 +6,7 @@ import type { GitRepository, Worktree } from '@application/ports/git-topology';
 import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
 import type { ErrorCode, Pagination, RequestId } from '@protocol/shared/base';
 import { OperationStatus } from '@protocol/shared/operation';
+import type { RepositoriesChangedPush } from '@protocol/shared/repo';
 import type { RepoContext } from '@core/git/domain/repo-context';
 import type { CommitCommand } from '@protocol/graph/messages';
 import type { HistoryCommitDetails, HistoryCommitRef, HistoryContextTarget, HistoryData } from '@protocol/history/types';
@@ -77,6 +78,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     private view?: vscode.WebviewView;
     private contextTarget?: HistoryContextTarget;
     private contextRepository?: GitRepository;
+    private repositoriesChangedMessage?: RepositoriesChangedPush;
     private selectedHistoryRef: string | undefined;
     private selectedRepositoryScope: HistoryRepositoryScope | undefined;
     private refCache?: HistoryRefCache;
@@ -110,6 +112,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
         void vscode.commands.executeCommand('setContext', 'lookGit.historyFileViewTree', true);
         this.renderWebviewHtml(webviewView);
+        this.postRepositoriesChangedMessage();
     }
 
     registerNativeContextCommands(): readonly vscode.Disposable[] {
@@ -555,12 +558,23 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         await this.refresh();
     }
 
+    notifyRepositoriesChanged(message: RepositoriesChangedPush): void {
+        this.repositoriesChangedMessage = message;
+        this.postRepositoriesChangedMessage();
+    }
+
     notifyFontSizeChanged(): void {
         this.postMessage(webviewFontSizeMessage());
     }
 
     private postMessage(message: HistoryExtensionToWebviewMessage): void {
         void this.view?.webview.postMessage(message);
+    }
+
+    private postRepositoriesChangedMessage(): void {
+        if (this.repositoriesChangedMessage) {
+            void this.view?.webview.postMessage(this.repositoriesChangedMessage);
+        }
     }
 
     private postHistoryDataIfChanged(data: HistoryData): void {

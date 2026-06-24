@@ -336,6 +336,8 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
             return { ...state, loading: false, loadingMore: false, activeGraphRequestId: undefined, error: message.error };
         case 'repo/contextChanged':
             return { ...createInitialGraphState(), repoId: undefined };
+        case 'repo/repositoriesChanged':
+            return state;
         case 'ui/fontSizeChanged':
             return state;
     }

@@ -1,7 +1,7 @@
 import type { RequestId, ErrorMessage, ProtocolError } from '@protocol/shared/base';
 import type { OperationNoticeActionKind, OperationStatus } from '@protocol/shared/operation';
 export { OperationStatus as GraphOperationStatus } from '@protocol/shared/operation';
-import type { RepositoryLocator, SerializedRepoContext, WorktreeLocator } from '@protocol/shared/repo';
+import type { RepositoriesChangedPush, RepositoryLocator, SerializedRepoContext, WorktreeLocator } from '@protocol/shared/repo';
 import type { WebviewFontSizeChangedPush } from '@protocol/shared/ui';
 import type { GraphContextTarget, GraphData, GraphFilters, GraphPage, CommitFileChange, GraphSubmoduleInfo } from '@protocol/graph/types';
 
@@ -266,6 +266,7 @@ export interface GraphRepositoryCommandRequest {
 
 export type GraphExtensionToWebviewMessage =
     | RepoContextChangedPush
+    | RepositoriesChangedPush
     | WebviewFontSizeChangedPush
     | GraphRefreshRequestedPush
     | GraphBranchFilterInvalidatedPush

@@ -3,6 +3,7 @@ import type { RepositorySelectionAccessor } from '@extension/repositories/reposi
 import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, WorktreeCommand } from '@protocol/graph/messages';
 import type { GraphContextTarget } from '@protocol/graph/types';
 import type { RepoContext } from '@core/git/domain/repo-context';
+import type { RepositoriesChangedPush } from '@protocol/shared/repo';
 import { toSerializedRepoContext } from '@extension/mapping/to-protocol';
 import { GraphMessageRouter } from '@extension/messaging/graph-message-router';
 import { getWebviewHtml } from '@extension/views/webview-html';
@@ -83,6 +84,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     private view?: vscode.WebviewView;
     private router?: GraphMessageRouter;
     private contextTarget?: GraphContextTarget;
+    private repositoriesChangedMessage?: RepositoriesChangedPush;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -100,6 +102,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
             localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')],
         };
         this.renderWebviewHtml(webviewView);
+        this.postRepositoriesChangedMessage();
 
         this.router?.dispose();
         this.router = new GraphMessageRouter(this.repositories, (msg) => {
@@ -140,8 +143,19 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         this.view?.webview.postMessage({ type: 'repo/contextChanged', context: toSerializedRepoContext(context) });
     }
 
+    notifyRepositoriesChanged(message: RepositoriesChangedPush): void {
+        this.repositoriesChangedMessage = message;
+        this.postRepositoriesChangedMessage();
+    }
+
     notifyFontSizeChanged(): void {
         void this.view?.webview.postMessage(webviewFontSizeMessage());
+    }
+
+    private postRepositoriesChangedMessage(): void {
+        if (this.repositoriesChangedMessage) {
+            void this.view?.webview.postMessage(this.repositoriesChangedMessage);
+        }
     }
 
     async refresh(): Promise<void> {

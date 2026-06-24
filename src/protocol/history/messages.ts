@@ -1,6 +1,6 @@
 import type { ErrorMessage, Pagination, ProtocolError, RequestId } from '@protocol/shared/base';
 import type { OperationNoticeActionKind, OperationStatus } from '@protocol/shared/operation';
-import type { SerializedRepoContext } from '@protocol/shared/repo';
+import type { RepositoriesChangedPush, SerializedRepoContext } from '@protocol/shared/repo';
 import type { WebviewFontSizeChangedPush } from '@protocol/shared/ui';
 import type { HistoryCommitDetails, HistoryContextTarget, HistoryData } from '@protocol/history/types';
 
@@ -53,6 +53,7 @@ export interface HistoryOperationStatusPush {
 
 export type HistoryExtensionToWebviewMessage =
     | RepoContextChangedPush
+    | RepositoriesChangedPush
     | WebviewFontSizeChangedPush
     | HistoryDataPush
     | HistoryDataResponse

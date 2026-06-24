@@ -8,6 +8,7 @@ import { VscodeGitRemoteRuntime } from '@extension/git/vscode-git-remote-runtime
 import { RepositoryRuntimeRegistrar } from '@extension/repositories/repository-runtime-registrar';
 import { RepositorySelectionStore } from '@extension/repositories/repository-selection-store';
 import { discoverRepositoryContexts } from '@extension/repositories/repository-discovery';
+import { RepositorySummaryService } from '@extension/repositories/repository-summary';
 import { registerRuntimeContextWithRecovery } from '@extension/repositories/runtime-registration-recovery';
 import { ChangesViewProvider } from '@extension/views/changes-view-provider';
 import { CommitHistoryViewProvider } from '@extension/views/commit-history-view-provider';
@@ -20,6 +21,9 @@ import { appendErrorToOutput } from '@extension/messaging/error-output-channel';
 import { migrateLookGitStorage } from '@extension/storage/look-git-storage';
 import { RepositoryWorkingTreeWatcher } from '@extension/watchers/repository-working-tree-watcher';
 import type { RepoContext } from '@core/git/domain/repo-context';
+import type { Resource } from '@protocol/shared/base';
+import type { RepositoriesChangedPush, RepositorySummary } from '@protocol/shared/repo';
+import { createErrorPayload } from '@extension/messaging/error-serialization';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     await migrateLookGitStorage(context);
@@ -43,7 +47,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ]);
     const repositories = new RepositorySelectionStore();
     const runtimeRegistrar = new RepositoryRuntimeRegistrar(new RuntimeRepositoryFactory(gitRuntime));
+    const repositorySummaryService = new RepositorySummaryService(new RuntimeRepositoryFactory(gitRuntime));
     const runtimeRepositories = new RepositoryRegistry();
+    let repositoriesResource: Resource<readonly RepositorySummary[]> = { status: 'loading' };
     const graphRepositoryRefreshers: Array<() => Promise<void>> = [];
     const graphProvider = new GraphViewProvider(context.extensionUri, repositories, async () => {
         await Promise.all(graphRepositoryRefreshers.map((refresh) => refresh()));
@@ -73,19 +79,51 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const workingTreeWatcher = new RepositoryWorkingTreeWatcher(debouncedRefreshAll);
 
+    function repositoriesChangedMessage(): RepositoriesChangedPush {
+        return {
+            type: 'repo/repositoriesChanged',
+            repositories: repositoriesResource,
+            activeContextId: { status: 'ready', data: repositories.currentContext?.id },
+        };
+    }
+
+    function notifyRepositoriesChanged(): void {
+        const message = repositoriesChangedMessage();
+        changesProvider.notifyRepositoriesChanged(message);
+        commitHistoryProvider.notifyRepositoriesChanged(message);
+        graphProvider.notifyRepositoriesChanged(message);
+    }
+
     function syncActiveRepo(): void {
         repositories.selectContextForResource(vscode.window.activeTextEditor?.document.uri.fsPath);
+        notifyRepositoriesChanged();
     }
 
     async function syncDiscoveredRepositories(): Promise<void> {
+        repositoriesResource = { status: 'loading' };
+        notifyRepositoriesChanged();
         const contexts = await discoverRepositoryContexts({
             workspaceFolders: vscode.workspace.workspaceFolders,
         });
         repositories.setContexts(contexts);
         workingTreeWatcher.setContexts(contexts);
+        try {
+            repositoriesResource = { status: 'ready', data: await repositorySummaryService.summarize(contexts) };
+        } catch (error) {
+            repositoriesResource = {
+                status: 'error',
+                error: createErrorPayload(error, {
+                    code: 'gitOperationFailed',
+                    operation: 'repositorySummary',
+                    recoverable: true,
+                }).error,
+            };
+        }
+        notifyRepositoriesChanged();
     }
 
     async function handleRepositoryChanged(repoContext: RepoContext | undefined): Promise<void> {
+        notifyRepositoriesChanged();
         await vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', Boolean(repoContext));
         if (!repoContext) {
             runtimeRepositories.clear();

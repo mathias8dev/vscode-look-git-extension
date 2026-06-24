@@ -3,13 +3,36 @@ import type { GraphExtensionToWebviewMessage, GraphWebviewToExtensionMessage } f
 import type { ChangesExtensionToWebviewMessage, ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
 import type { HistoryExtensionToWebviewMessage, HistoryWebviewToExtensionMessage } from '@protocol/history/messages';
 import type { VisualRebaseExtensionToWebviewMessage, VisualRebaseWebviewToExtensionMessage } from '@protocol/visual-rebase/messages';
+import type { Resource } from '@protocol/shared/base';
+import type { RepositorySummary } from '@protocol/shared/repo';
 
 // Type-level tests: if these compile, the discriminated unions are correct.
 describe('protocol discriminated unions', () => {
+    it('repository navigator resources carry JSON-ready summaries', () => {
+        const resource = {
+            status: 'ready',
+            data: [{
+                context: { id: 'repo', cwd: '/repo', kind: 'main', label: 'repo' },
+                branch: 'main',
+                upstream: 'origin/main',
+                hasRemote: true,
+                branchCount: 3,
+                submoduleCount: 1,
+                worktreeCount: 2,
+                stagedCount: 1,
+                unstagedCount: 2,
+                conflictCount: 0,
+            }],
+        } satisfies Resource<readonly RepositorySummary[]>;
+
+        void resource;
+    });
+
     it('graph extension→webview union is exhaustive', () => {
         const handle = (msg: GraphExtensionToWebviewMessage) => {
             switch (msg.type) {
                 case 'repo/contextChanged': return msg.context.id satisfies string;
+                case 'repo/repositoriesChanged': return msg.repositories.status satisfies string;
                 case 'graph/refreshRequested': return;
                 case 'graph/dataPush': return msg.data.commits satisfies readonly unknown[];
                 case 'graph/dataResponse': return msg.requestId satisfies string;
@@ -50,6 +73,7 @@ describe('protocol discriminated unions', () => {
         const handle = (msg: ChangesExtensionToWebviewMessage) => {
             switch (msg.type) {
                 case 'repo/contextChanged': return msg.context.id satisfies string;
+                case 'repo/repositoriesChanged': return msg.activeContextId.status satisfies string;
                 case 'changes/statusData': return msg.data.staged satisfies readonly unknown[];
                 case 'changes/commitResult': return msg.success satisfies boolean;
                 case 'changes/generatedCommitMessage': return msg.requestId satisfies string;
@@ -74,6 +98,7 @@ describe('protocol discriminated unions', () => {
         const handle = (msg: HistoryExtensionToWebviewMessage) => {
             switch (msg.type) {
                 case 'repo/contextChanged': return msg.context.id satisfies string;
+                case 'repo/repositoriesChanged': return msg.repositories.status satisfies string;
                 case 'history/data': return msg.data.commits satisfies readonly unknown[];
                 case 'history/dataResponse': return msg.requestId satisfies string;
                 case 'history/commitDetailsResponse': return msg.details.files satisfies readonly unknown[];
