@@ -20,6 +20,7 @@ import { RepositoryRegistry } from '@extension/repositories/repository-registry'
 import { appendErrorToOutput } from '@extension/messaging/error-output-channel';
 import { migrateLookGitStorage } from '@extension/storage/look-git-storage';
 import { RepositoryWorkingTreeWatcher } from '@extension/watchers/repository-working-tree-watcher';
+import { RepositoryDiscoveryWatcher } from '@extension/watchers/repository-discovery-watcher';
 import type { RepoContext } from '@core/git/domain/repo-context';
 import type { Resource } from '@protocol/shared/base';
 import type { RepositoriesChangedPush, RepositoryNavigationMessage, RepositorySummary } from '@protocol/shared/repo';
@@ -90,6 +91,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const DEBOUNCE_MS = 150;
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    let repositoryDiscoveryTimer: ReturnType<typeof setTimeout> | undefined;
 
     function debouncedRefreshAll(): void {
         if (debounceTimer) { clearTimeout(debounceTimer); }
@@ -98,7 +100,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }, DEBOUNCE_MS);
     }
 
+    function debouncedSyncDiscoveredRepositories(): void {
+        if (repositoryDiscoveryTimer) { clearTimeout(repositoryDiscoveryTimer); }
+        repositoryDiscoveryTimer = setTimeout(() => {
+            void syncDiscoveredRepositories().then(syncActiveRepo);
+        }, DEBOUNCE_MS);
+    }
+
     const workingTreeWatcher = new RepositoryWorkingTreeWatcher(debouncedRefreshAll);
+    const repositoryDiscoveryWatcher = new RepositoryDiscoveryWatcher(debouncedSyncDiscoveredRepositories);
 
     function repositoriesChangedMessage(): RepositoriesChangedPush {
         return {
@@ -196,6 +206,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         registerReadonlyDiffDocumentProvider(),
         registerGitBlobDocumentProvider(),
         workingTreeWatcher,
+        repositoryDiscoveryWatcher,
         ...changesProvider.registerNativeContextCommands(),
         ...commitHistoryProvider.registerNativeContextCommands(),
         ...graphProvider.registerNativeContextCommands(),
