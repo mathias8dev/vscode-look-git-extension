@@ -167,16 +167,27 @@ function RepositoryNavigatorState({ icon, title, detail }: RepositoryNavigatorSt
 }
 
 function repositoryMatches(repository: RepositorySummary, query: string): boolean {
-    return repository.context.label.toLowerCase().includes(query)
-        || repository.context.cwd.toLowerCase().includes(query)
-        || (repository.branch?.toLowerCase().includes(query) ?? false)
-        || (repository.upstream?.toLowerCase().includes(query) ?? false);
+    return repositorySearchText(repository).includes(query);
+}
+
+function repositorySearchText(repository: RepositorySummary): string {
+    return [
+        repository.context.label,
+        repository.context.cwd,
+        repository.branch ?? 'HEAD',
+        repository.upstream ?? '',
+        repository.hasRemote ? 'remote' : 'local',
+        repository.branchCount > 0 ? `${repository.branchCount} branches` : '',
+        repository.submoduleCount > 0 ? `${repository.submoduleCount} submodules` : '',
+        repository.worktreeCount > 0 ? `${repository.worktreeCount} worktrees` : '',
+        repositoryStatus(repository),
+    ].join(' ').toLowerCase();
 }
 
 function repositoryStatus(repository: RepositorySummary): string {
     const changed = repository.stagedCount + repository.unstagedCount;
     if (repository.conflictCount > 0) {
-        return `${repository.conflictCount} conflicts`;
+        return `${repository.conflictCount} conflict${repository.conflictCount === 1 ? '' : 's'}`;
     }
     if (changed > 0) {
         const staged = repository.stagedCount > 0 ? `${repository.stagedCount} staged` : undefined;

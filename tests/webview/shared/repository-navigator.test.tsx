@@ -36,6 +36,35 @@ describe('RepositoryNavigator', () => {
         expect(screen.queryByText('look-git')).not.toBeInTheDocument();
     });
 
+    it('filters repositories by visible status and repository stats', () => {
+        const { rerender } = renderNavigator();
+
+        fireEvent.change(screen.getByLabelText('Search repositories'), { target: { value: 'changed' } });
+
+        expect(screen.getByText('desktop')).toBeInTheDocument();
+        expect(screen.queryByText('api')).not.toBeInTheDocument();
+        expect(screen.queryByText('look-git')).not.toBeInTheDocument();
+
+        rerender(
+            <RepositoryNavigator
+                repositories={{ status: 'ready', data: repositorySummaries }}
+                activeContextId={{ status: 'ready', data: undefined }}
+                title="Repositories"
+                onNavigate={() => undefined}
+                onBack={() => undefined}
+                onOpenInNewWindow={() => undefined}
+            >
+                <span>Repository content</span>
+            </RepositoryNavigator>,
+        );
+
+        fireEvent.change(screen.getByLabelText('Search repositories'), { target: { value: 'submodules' } });
+
+        expect(screen.getByText('look-git')).toBeInTheDocument();
+        expect(screen.queryByText('api')).not.toBeInTheDocument();
+        expect(screen.queryByText('desktop')).not.toBeInTheDocument();
+    });
+
     it('emits navigate and open-in-new-window actions from repository rows', () => {
         const onNavigate = vi.fn<(contextId: string) => void>();
         const onOpenInNewWindow = vi.fn<(contextId: string) => void>();
