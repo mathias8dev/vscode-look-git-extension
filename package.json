@@ -2526,6 +2526,7 @@
     "test:integration": "npm run compile && npm run compile:tests && node ./out/tests/integration/run-test.js",
     "test:e2e": "npm run compile && npm run compile:tests && node ./out/tests/e2e/run-e2e.js",
     "test:e2e:wdio": "npm run compile && wdio run ./tests/e2e/wdio.conf.ts",
+    "test:e2e:wdio:multirepo": "npm run compile && wdio run ./tests/e2e/wdio-multirepo.conf.ts",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\" \"*.js\" \"*.mjs\" --max-warnings=0",
     "check:duplication": "jscpd src/ --min-lines 5 --min-tokens 50 --threshold 3",
     "publish:ext": "npx @vscode/vsce publish"
