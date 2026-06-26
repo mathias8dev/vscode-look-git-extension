@@ -28,3 +28,4 @@ pnpm-debug.log*
 Thumbs.db
 
 .look-git-fixtures
+.idea

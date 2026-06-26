@@ -1,4 +1,4 @@
-import type { GitRepository } from '../../ports/git-repository';
+import type { GitRepository, Worktree } from '@application/ports/git-topology';
 
 export interface CheckoutBranchInput {
     readonly branch: string;
@@ -6,27 +6,21 @@ export interface CheckoutBranchInput {
 }
 
 export class CheckoutBranchUseCase {
-    async execute(repo: GitRepository, input: CheckoutBranchInput): Promise<void> {
+    async execute(repository: GitRepository, worktree: Worktree, input: CheckoutBranchInput): Promise<void> {
         if (!input.isRemote) {
-            await repo.checkout(input.branch);
+            await worktree.checkout(input.branch, {});
             return;
         }
 
-        const trackingBranch = await localBranchTrackingRemote(repo, input.branch);
+        const branches = await repository.listBranches();
+        const trackingBranch = branches.find(
+            (b) => !b.isRemote && b.upstream === input.branch,
+        );
         if (trackingBranch) {
-            await repo.checkout(trackingBranch);
+            await worktree.checkout(trackingBranch.name, {});
             return;
         }
 
-        await repo.exec(['checkout', '--track', input.branch]);
+        await worktree.checkout(input.branch, {});
     }
-}
-
-async function localBranchTrackingRemote(repo: GitRepository, remoteBranch: string): Promise<string | undefined> {
-    const output = await repo.execRaw(['for-each-ref', '--format=%(refname:short)%00%(upstream:short)', 'refs/heads']);
-    for (const line of output.split('\n')) {
-        const [branch, upstream] = line.split('\0');
-        if (branch && upstream === remoteBranch) { return branch; }
-    }
-    return undefined;
 }

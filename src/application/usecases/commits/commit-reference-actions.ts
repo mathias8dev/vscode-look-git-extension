@@ -1,11 +1,11 @@
-import type { GitRepository } from '../../ports/git-repository';
-import type { ClipboardPort } from '../../ports/clipboard';
-import { TextInputValidationSeverity, type TextInputPort, type TextInputValidationMessage } from '../../ports/text-input';
+import type { GitRepository } from '@application/ports/git-topology';
+import type { ClipboardPort } from '@application/ports/clipboard';
+import { TextInputValidationSeverity, type TextInputPort, type TextInputValidationMessage } from '@application/ports/text-input';
 import {
     BranchNameInputValidationKind,
     branchNameInputValidation,
     normalizeValidBranchNameInput,
-} from '../../../core/git/normalize-branch-name';
+} from '@core/git/normalize-branch-name';
 
 export class CommitReferenceActions {
     constructor(
@@ -23,14 +23,14 @@ export class CommitReferenceActions {
             validateInput: branchNameValidationMessage,
         }));
         if (!name) { return false; }
-        await repo.exec(['branch', name, hash]);
+        await repo.createBranch(name, hash);
         return true;
     }
 
     async createTagAtCommit(repo: GitRepository, hash: string): Promise<boolean> {
         const name = await this.textInput.showInput({ prompt: 'New tag name:' });
         if (!name?.trim()) { return false; }
-        await repo.exec(['tag', name, hash]);
+        await repo.createTag(name, hash, undefined);
         return true;
     }
 }

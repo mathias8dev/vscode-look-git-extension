@@ -71,14 +71,16 @@ jobs:
   release:
     name: Release
     needs: [unit, e2e]
-    # Only release once the whole matrix is green, and only from pushes to a release/* branch
-    # (never on PRs or other branches — those must not create tags/releases).
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')
+    # Only release once the whole matrix is green, and only from pushes to main.
+    # Release branches validate the candidate; main owns the published tag.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -98,7 +100,7 @@ jobs:
           fi
       - name: Package VSIX
         if: steps.meta.outputs.exists == 'false'
-        run: npm run vsix
+        run: npm run vsix -- release
       - name: Create tag and GitHub release
         if: steps.meta.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2

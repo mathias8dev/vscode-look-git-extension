@@ -84,6 +84,22 @@
     background: var(--vscode-sideBar-background, #252526);
 }
 
+.storybook-navigator-content {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    place-content: center;
+    gap: var(--look-git-space-sm);
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+.storybook-navigator-content h2 {
+    margin: 0;
+    color: var(--vscode-foreground, #cccccc);
+    font: inherit;
+    font-weight: 600;
+}
+
 .storybook-graph-frame {
     display: grid;
     grid-template-columns: minmax(14em, 18em) minmax(24em, 1fr) minmax(16em, 22em);

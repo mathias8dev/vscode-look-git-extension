@@ -1,8 +1,8 @@
-import type { RequestId, ErrorMessage, ProtocolError } from '../shared/base';
-import type { OperationNoticeActionKind, OperationStatus } from '../shared/operation';
-import type { SerializedRepoContext } from '../shared/repo';
-import type { WebviewFontSizeChangedPush } from '../shared/ui';
-import type { StatusData, CommitMode, StashFileEntry, ConflictState, SubmoduleStatusData, ChangesContextTarget, ChangesSelectionContextTarget } from './types';
+import type { RequestId, ErrorMessage, ProtocolError } from '@protocol/shared/base';
+import type { OperationNoticeActionKind, OperationStatus } from '@protocol/shared/operation';
+import type { RepositoriesChangedPush, RepositoryNavigationMessage, SerializedRepoContext } from '@protocol/shared/repo';
+import type { WebviewFontSizeChangedPush } from '@protocol/shared/ui';
+import type { StatusData, CommitMode, StashFileEntry, ConflictState, SubmoduleStatusData, ChangesContextTarget, ChangesSelectionContextTarget } from '@protocol/changes/types';
 
 // ── Extension → Webview (push) ──────────────────────────────────────────────
 
@@ -117,7 +117,6 @@ export type ChangesToolbarCommand =
     | 'openGraph'
     | 'pull'
     | 'push'
-    | 'clone'
     | 'checkout'
     | 'fetch'
     | 'applyPatch'
@@ -166,6 +165,10 @@ export interface ChangesContextTargetMessage {
 }
 export interface ExplainSelectionMessage {
     readonly type: 'changes/explainSelection';
+    readonly target: ChangesSelectionContextTarget;
+}
+export interface CreatePatchFromSelectionMessage {
+    readonly type: 'changes/createPatchFromSelection';
     readonly target: ChangesSelectionContextTarget;
 }
 export interface ExplainRepositoryChangesMessage {
@@ -354,6 +357,7 @@ export interface GetSubmoduleStatusRequest {
 
 export type ChangesExtensionToWebviewMessage =
     | RepoContextChangedPush
+    | RepositoriesChangedPush
     | WebviewFontSizeChangedPush
     | StatusDataPush
     | CommitResultPush
@@ -372,7 +376,8 @@ export type ChangesExtensionToWebviewMessage =
     | ErrorMessage;
 
 export type ChangesWebviewToExtensionMessage =
-    | ChangesReadyMessage | ViewModeChangedMessage | ChangesPreferencesChangedMessage | ChangesToolbarCommandMessage | ChangesContextTargetMessage | ExplainSelectionMessage | ExplainRepositoryChangesMessage | SubmoduleToolbarCommandMessage
+    | RepositoryNavigationMessage
+    | ChangesReadyMessage | ViewModeChangedMessage | ChangesPreferencesChangedMessage | ChangesToolbarCommandMessage | ChangesContextTargetMessage | ExplainSelectionMessage | CreatePatchFromSelectionMessage | ExplainRepositoryChangesMessage | SubmoduleToolbarCommandMessage
     | StageFileMessage | UnstageFileMessage | StageFilesMessage | UnstageFilesMessage | StageAllMessage | UnstageAllMessage
     | DiscardFileMessage | DiscardFilesMessage | DiscardAllMessage
     | MarkResolvedMessage | MarkResolvedFilesMessage

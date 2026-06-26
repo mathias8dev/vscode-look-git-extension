@@ -1,0 +1,41 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as Commit History Webview
+participant Router as HistoryMessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as RewriteSelectedCommitsUseCase
+participant Repository as GitRepository
+participant Worktree as Worktree
+participant Plans as OperationPlanRegistry
+
+User->>App: Squash, fixup, or drop selected commits
+App->>Router: rewrite request(repoLocator, worktreeLocator, selectedHashes)
+Router->>Registry: resolveRepository(repoLocator)
+Router->>Registry: resolveWorktree(worktreeLocator)
+Registry-->>Router: Repository and Worktree
+Router->>UseCase: plan(repository, worktree, selectedHashes)
+UseCase->>Repository: getReachableCommitHashes(selectedHashes)
+alt A selected commit is not reachable
+  UseCase-->>Router: validation error
+  Router-->>App: history/error(validationFailed)
+else Selection is reachable
+  UseCase->>Repository: orderCommits(selectedHashes, oldestFirst)
+  UseCase->>Worktree: getInteractiveRebasePlan(baseRef, headRef)
+  UseCase->>Plans: store guarded rewrite plan
+  Router-->>App: guarded operation plan
+  User->>App: Acknowledge rewrite
+  App->>Router: guarded acknowledgement(planId)
+  Router->>Plans: validate acknowledgement
+  alt Squash
+    Router->>UseCase: execute squash plan
+    UseCase->>Worktree: squashCommits(orderedCommits, message)
+  else Fixup
+    Router->>UseCase: execute fixup plan
+    UseCase->>Worktree: fixupCommits(orderedCommits)
+  else Drop one commit
+    Router->>UseCase: execute drop plan
+    UseCase->>Worktree: dropCommit(commit)
+  end
+  Router-->>App: operation success and refresh requested
+end

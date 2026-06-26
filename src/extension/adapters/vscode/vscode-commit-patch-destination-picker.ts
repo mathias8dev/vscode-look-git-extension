@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { CommitPatchDestination, type CommitPatchDestinationPickerPort } from '../../../application/ports/commit-patch-destination';
+import { CommitPatchDestination, type CommitPatchDestinationPickerPort } from '@application/ports/commit-patch-destination';
 
 const COPY_PATCH_LABEL = 'Copy Patch to Clipboard';
 const SAVE_PATCH_LABEL = 'Save Patch to File...';

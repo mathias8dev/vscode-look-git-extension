@@ -2,28 +2,28 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
-import type { GitRepository } from '../../application/ports/git-repository';
-import { CliRemoteCommandKind, type RemoteCommandBackend } from '../../application/ports/remote-command-backend';
-import type { CommitCommand } from '../../protocol/graph/messages';
-import type { CommitReferenceActions } from '../../application/usecases/commits/commit-reference-actions';
-import { defaultCommitReferenceActions } from '../adapters/vscode/default-commit-reference-actions';
-import { CreateCommitPatchResultKind, type CreateCommitPatchUseCase, type CreateCommitPatchResult } from '../../application/usecases/commits/create-commit-patch';
-import { defaultCreateCommitPatch } from '../adapters/vscode/default-create-commit-patch';
-import { type ExplainCommitDiffUseCase } from '../../application/usecases/commits/explain-commit-diff';
-import { defaultExplainCommitDiff } from '../adapters/vscode/default-explain-commit-diff';
-import { GenerateRewordCommitMessageUseCase } from '../../application/usecases/commits/generate-reword-commit-message';
-import { orderSelectedCommits } from '../../application/usecases/commits/order-selected-commits';
-import { getReachableCommitHashes } from '../../application/usecases/commits/get-reachable-commit-hashes';
-import { VscodeLanguageModelRewordCommitMessageGenerator } from '../adapters/vscode/vscode-language-model-reword-commit-message-generator';
-import { defaultRemoteCommandBackend } from '../git/hybrid-remote-command-backend';
-import { showModalWarningMessage } from '../utils/confirmation';
-import { openDiffExplanationDocument, showDiffExplanationError } from '../utils/diff-explanation-document';
-import { isAbortError } from '../messaging/errorSerialization';
-import { withCancellationSignal } from '../utils/vscode-cancellation';
-import { showBranchNameInput } from '../utils/branch-name-input';
-import { assertNoUnmergedFiles, compareRefWithPickedWorktree, openChangesWithWorkingTree, promptNewWorktreePath } from './git-command-helpers';
-import { promptForCommitMessage } from '../utils/commit-message-editor';
-import { openVisualRebasePanel } from '../utils/visual-rebase-panel';
+import type { GitRepository, Worktree } from '@application/ports/git-topology';
+import type { CommitCommand } from '@protocol/graph/messages';
+import type { CommitReferenceActions } from '@application/usecases/commits/commit-reference-actions';
+import { defaultCommitReferenceActions } from '@extension/adapters/vscode/default-commit-reference-actions';
+import { CreateCommitPatchResultKind, type CreateCommitPatchUseCase, type CreateCommitPatchResult } from '@application/usecases/commits/create-commit-patch';
+import { defaultCreateCommitPatch } from '@extension/adapters/vscode/default-create-commit-patch';
+import { type ExplainCommitDiffUseCase } from '@application/usecases/commits/explain-commit-diff';
+import { defaultExplainCommitDiff } from '@extension/adapters/vscode/default-explain-commit-diff';
+import { GenerateRewordCommitMessageUseCase } from '@application/usecases/commits/generate-reword-commit-message';
+import { orderSelectedCommits } from '@application/usecases/commits/order-selected-commits';
+import { getReachableCommitHashes } from '@application/usecases/commits/get-reachable-commit-hashes';
+import { VscodeLanguageModelRewordCommitMessageGenerator } from '@extension/adapters/vscode/vscode-language-model-reword-commit-message-generator';
+import { showModalWarningMessage } from '@extension/utils/confirmation';
+import { openDiffExplanationDocument, showDiffExplanationError } from '@extension/utils/diff-explanation-document';
+import { isAbortError } from '@extension/messaging/error-serialization';
+import { withCancellationSignal } from '@extension/utils/vscode-cancellation';
+import { showBranchNameInput } from '@extension/utils/branch-name-input';
+import { compareRefWithPickedWorktree, openChangesWithWorkingTree, promptNewWorktreePath } from '@extension/commands/git-command-helpers';
+import { promptForCommitMessage } from '@extension/utils/commit-message-editor';
+import { requireRuntimeRepository, requireRuntimeTargets, requireRuntimeWorktree, requireRuntimeWorktrees, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
+import { currentBranchName } from '@extension/git/current-branch';
+import { openVisualRebasePanel } from '@extension/utils/visual-rebase-panel';
 
 export interface CommitCommandDiffExplanationScope {
     readonly label: string;
@@ -32,12 +32,12 @@ export interface CommitCommandDiffExplanationScope {
 
 const defaultGenerateRewordCommitMessage = new GenerateRewordCommitMessageUseCase(new VscodeLanguageModelRewordCommitMessageGenerator());
 
+
 export async function runCommitCommand(
     repo: GitRepository,
     command: CommitCommand,
     hash: string,
     hashes: readonly string[],
-    remoteCommands: RemoteCommandBackend = defaultRemoteCommandBackend,
     commitReferenceActions: CommitReferenceActions = defaultCommitReferenceActions,
     createCommitPatch: CreateCommitPatchUseCase = defaultCreateCommitPatch,
     explainCommitDiffUseCase: ExplainCommitDiffUseCase = defaultExplainCommitDiff,
@@ -45,6 +45,7 @@ export async function runCommitCommand(
     extensionUri?: vscode.Uri,
     storageUri?: vscode.Uri,
     generateRewordCommitMessage: GenerateRewordCommitMessageUseCase = defaultGenerateRewordCommitMessage,
+    runtimeTargets: RuntimeCommandTargets = {},
 ): Promise<boolean> {
     const selected = normalizeSelectedHashes(hash, hashes);
     switch (command) {
@@ -52,69 +53,84 @@ export async function runCommitCommand(
             await commitReferenceActions.copyRevisionNumber(hash);
             return false;
         case 'createPatch':
-            await showCommitPatchNotification(await createCommitPatch.execute(repo, selected));
+            await showCommitPatchNotification(await createCommitPatch.execute(requireRuntimeRepository(runtimeTargets), selected));
             return false;
         case 'explainDiff':
-            await explainCommitDiff(repo, selected, explainCommitDiffUseCase, diffExplanationScope);
+            await explainCommitDiff(requireRuntimeRepository(runtimeTargets), selected, explainCommitDiffUseCase, diffExplanationScope);
             return false;
-        case 'cherryPick':
-            await assertNoUnmergedFiles(repo, 'cherry-picking commits');
-            await assertCherryPickableCommits(repo, selected);
-            await repo.exec(['cherry-pick', ...(await orderSelectedCommits(repo, selected, 'oldestFirst'))]);
+        case 'cherryPick': {
+            const { repository, worktree } = requireRuntimeTargets(runtimeTargets);
+            await assertRuntimeNoUnmergedFiles(worktree, 'cherry-picking commits');
+            await assertCherryPickableCommits(repository, selected);
+            for (const commitHash of await orderSelectedCommits(repository, selected, 'oldestFirst')) {
+                await worktree.cherryPick(commitHash, {});
+            }
             return true;
+        }
         case 'checkoutRevision':
-            await repo.checkout(hash);
+            await requireRuntimeWorktree(runtimeTargets).checkout(hash, { detach: true });
             return true;
         case 'showRepositoryAtRevision':
-            await showRepositoryAtRevision(hash, repo.exec.bind(repo));
+            await showRepositoryAtRevision(hash, requireRuntimeRepository(runtimeTargets));
             return false;
         case 'compareWithLocal':
             await openChangesWithWorkingTree(repo, repo.cwd, hash, `Diff ${hash.substring(0, 7)}..local`);
             return false;
         case 'resetCurrentBranchToHere':
-            await resetCurrentBranchToHere(repo, hash);
+            await resetCurrentBranchToHere(repo, hash, runtimeTargets);
             return true;
-        case 'revertCommit':
-            await assertNoUnmergedFiles(repo, 'reverting commits');
-            await repo.exec(['revert', '--no-edit', ...(await orderSelectedCommits(repo, selected, 'newestFirst'))]);
+        case 'revertCommit': {
+            const { repository, worktree } = requireRuntimeTargets(runtimeTargets);
+            await assertRuntimeNoUnmergedFiles(worktree, 'reverting commits');
+            for (const commitHash of await orderSelectedCommits(repository, selected, 'newestFirst')) {
+                await worktree.revertCommit(commitHash, { noEdit: true });
+            }
             return true;
+        }
         case 'undoCommit':
-            await undoHeadCommit(repo, hash);
+            await undoHeadCommit(repo, hash, runtimeTargets);
             return true;
         case 'editCommitMessage':
-            await editCommitMessage(repo, hash, extensionUri, generateRewordCommitMessage);
+            await editCommitMessage(hash, extensionUri, generateRewordCommitMessage, runtimeTargets);
             return true;
         case 'fixup':
-            await fixupStagedChanges(repo, hash);
+            await fixupStagedChanges(hash, runtimeTargets);
             return true;
         case 'squashInto':
-            await squashSelectedCommits(repo, selected);
+            await squashSelectedCommits(selected, runtimeTargets);
             return true;
         case 'dropCommit':
-            await dropCommits(repo, await orderSelectedCommits(repo, selected, 'newestFirst'));
+            await dropCommits(await orderSelectedCommits(requireRuntimeRepository(runtimeTargets), selected, 'newestFirst'), runtimeTargets);
             return true;
         case 'interactiveRebaseFromHere':
-            if (!extensionUri) { throw new Error('Visual Rebase requires the extension URI.'); }
-            if (!storageUri) { throw new Error('Visual Rebase requires extension storage.'); }
-            await openVisualRebasePanel(repo, extensionUri, storageUri, {
-                upstream: hash,
-                onto: hash,
-                title: `Visual Rebase from ${hash.substring(0, 7)}`,
-            });
+            await interactiveRebaseFromHere(hash, extensionUri, storageUri, runtimeTargets);
             return false;
         case 'pushAllUpToHere':
-            await pushAllUpToHere(repo, hash, remoteCommands);
+            await pushAllUpToHere(hash, runtimeTargets);
             return true;
         case 'newBranch':
-            return commitReferenceActions.createBranchAtCommit(repo, hash);
+            return commitReferenceActions.createBranchAtCommit(requireRuntimeRepository(runtimeTargets), hash);
         case 'newTag':
-            return commitReferenceActions.createTagAtCommit(repo, hash);
+            return commitReferenceActions.createTagAtCommit(requireRuntimeRepository(runtimeTargets), hash);
         case 'newWorktreeFromCommit':
-            return createWorktreeFromCommit(repo, hash);
+            return createWorktreeFromCommit(repo, hash, runtimeTargets);
         case 'compareCommitWithWorktree':
-            await compareRefWithPickedWorktree(repo, hash, `Diff ${hash.substring(0, 7)}`);
+            await compareRefWithPickedWorktree(repo, requireRuntimeWorktrees(runtimeTargets), hash, `Diff ${hash.substring(0, 7)}`);
             return false;
     }
+}
+
+async function interactiveRebaseFromHere(hash: string, extensionUri: vscode.Uri | undefined, storageUri: vscode.Uri | undefined, runtimeTargets: RuntimeCommandTargets): Promise<void> {
+    if (!extensionUri) { throw new Error('Visual Rebase requires the extension URI.'); }
+    if (!storageUri) { throw new Error('Visual Rebase requires extension storage.'); }
+    const { repository, worktree } = requireRuntimeTargets(runtimeTargets);
+    const parents = (await repository.getCommitDetails(hash)).parentHashes;
+    const upstream = parents[0] ?? hash;
+    await openVisualRebasePanel(repository, worktree, extensionUri, storageUri, {
+        upstream,
+        onto: upstream,
+        title: `Visual Rebase from ${hash.substring(0, 7)}`,
+    });
 }
 
 async function explainCommitDiff(
@@ -176,294 +192,131 @@ function normalizeSelectedHashes(hash: string, hashes: readonly string[]): strin
 
 async function showRepositoryAtRevision(
     hash: string,
-    exec: (args: readonly string[]) => Promise<string>,
+    repo: GitRepository,
 ): Promise<void> {
     const parentPath = await fs.mkdtemp(path.join(os.tmpdir(), 'look-git-revision-'));
     const worktreePath = path.join(parentPath, hash.substring(0, 7));
-    await exec(['worktree', 'add', '--detach', worktreePath, hash]);
+    await repo.addDetachedWorktree(worktreePath, hash);
     await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(worktreePath), { forceNewWindow: true });
 }
 
-async function createWorktreeFromCommit(repo: GitRepository, hash: string): Promise<boolean> {
-    const worktreePath = await promptNewWorktreePath(repo, `Worktree path for ${hash.substring(0, 7)}:`);
+async function createWorktreeFromCommit(repo: GitRepository, hash: string, runtimeTargets: RuntimeCommandTargets): Promise<boolean> {
+    const worktreePath = await promptNewWorktreePath(repo.cwd, `Worktree path for ${hash.substring(0, 7)}:`);
     if (!worktreePath) { return false; }
     const branchName = await showBranchNameInput({
         prompt: `New branch name from ${hash.substring(0, 7)}:`,
     });
     if (!branchName) { return false; }
-    await repo.exec(['worktree', 'add', '-b', branchName, worktreePath, hash]);
+    await requireRuntimeRepository(runtimeTargets).addWorktree({ path: worktreePath, branch: branchName, createNew: true, startPoint: hash });
     return true;
 }
 
-async function resetCurrentBranchToHere(repo: GitRepository, hash: string): Promise<void> {
+async function resetCurrentBranchToHere(_repo: GitRepository, hash: string, runtimeTargets: RuntimeCommandTargets): Promise<void> {
     const mode = await vscode.window.showQuickPick(['Soft reset', 'Mixed reset', 'Hard reset', 'Keep reset'], { placeHolder: 'Reset current branch to selected revision' });
     if (!mode) { return; }
     if (mode === 'Hard reset') {
         const choice = await showModalWarningMessage('Hard reset current branch and discard working tree changes?', 'Hard Reset');
         if (choice !== 'Hard Reset') { return; }
     }
-    const flag = mode === 'Soft reset'
-        ? '--soft'
-        : mode === 'Hard reset'
-            ? '--hard'
-            : mode === 'Keep reset'
-                ? '--keep'
-                : '--mixed';
-    await repo.exec(['reset', flag, hash]);
+    const worktree = requireRuntimeWorktree(runtimeTargets);
+    if (mode === 'Soft reset') { await worktree.resetSoft(hash); }
+    else if (mode === 'Hard reset') { await worktree.resetHard(hash); }
+    else if (mode === 'Keep reset') { await worktree.resetKeep(hash); }
+    else { await worktree.resetMixed(hash); }
 }
 
-async function undoHeadCommit(repo: GitRepository, hash: string): Promise<void> {
-    const head = await repo.exec(['rev-parse', 'HEAD']);
+async function undoHeadCommit(_repo: GitRepository, hash: string, runtimeTargets: RuntimeCommandTargets): Promise<void> {
+    const { repository, worktree } = requireRuntimeTargets(runtimeTargets);
+    const head = await repository.resolveRef('HEAD');
     if (head !== hash) { throw new Error('Only the current HEAD commit can be undone.'); }
     const choice = await showModalWarningMessage('Undo the current HEAD commit and keep its changes staged?', 'Undo Commit');
     if (choice !== 'Undo Commit') { return; }
-    await repo.exec(['reset', '--soft', 'HEAD~1']);
+    await worktree.undoLastCommit('soft');
 }
 
 async function editCommitMessage(
-    repo: GitRepository,
     hash: string,
     extensionUri: vscode.Uri | undefined,
     generateRewordCommitMessage: GenerateRewordCommitMessageUseCase,
+    runtimeTargets: RuntimeCommandTargets = {},
 ): Promise<void> {
-    const current = await repo.getCommitMessage(hash);
+    const { repository, worktree } = requireRuntimeTargets(runtimeTargets);
+    const runtimeRepo = repository;
+    const current = await runtimeRepo.getCommitMessage(hash);
     const message = await promptForCommitMessage(current, `Reword commit ${hash.substring(0, 7)}`, extensionUri, {
         generateMessage: async (signal) => {
-            const result = await generateRewordCommitMessage.execute(repo, hash, current, signal);
+            const result = await generateRewordCommitMessage.execute(runtimeRepo, hash, current, signal);
             return result.message;
         },
     });
     if (!message?.trim()) { return; }
-    const messageFile = await writeCommitMessageFile(message);
-    try {
-        await rewriteCommitMessage(repo, hash, messageFile);
-    } finally {
-        await fs.rm(path.dirname(messageFile), { recursive: true, force: true });
-    }
+    await assertRuntimeNoUnmergedFiles(worktree, 'editing commit messages');
+    await worktree.rewordCommit(hash, message.trim());
 }
 
-async function rewriteCommitMessage(repo: GitRepository, hash: string, messageFile: string): Promise<void> {
-    await assertNoUnmergedFiles(repo, 'editing commit messages');
-    const parents = (await repo.exec(['show', '-s', '--format=%P', hash])).split(/\s+/).filter(Boolean);
-    if (parents.length > 1) { throw new Error('Editing merge commit messages is not supported yet.'); }
-    const currentBranch = await repo.getCurrentBranch();
-    const branches = await localBranchesContaining(repo, hash);
-    const head = await repo.exec(['rev-parse', 'HEAD']);
-    if (branches.length === 0 && head !== hash) {
-        throw new Error('Edit Commit Message requires a local branch that contains the selected commit.');
-    }
-    const [authorName, authorEmail, authorDate] = (await repo.exec(['show', '-s', '--format=%an%x00%ae%x00%aI', hash])).split('\0');
-    if (!authorName || !authorEmail || !authorDate) { throw new Error('Could not read commit author metadata.'); }
-    const tree = await repo.exec(['show', '-s', '--format=%T', hash]);
-    const parentArgs = parents[0] ? ['-p', parents[0]] : [];
-    const rewritten = await repo.execWithEnv(
-        ['commit-tree', tree, ...parentArgs, '-F', messageFile],
-        {
-            GIT_AUTHOR_NAME: authorName,
-            GIT_AUTHOR_EMAIL: authorEmail,
-            GIT_AUTHOR_DATE: authorDate,
-        },
-    );
-    if (branches.length === 0) {
-        await repo.exec(['reset', '--soft', rewritten]);
-        return;
-    }
-
-    try {
-        for (const branch of orderBranchesForRewrite(branches, currentBranch)) {
-            await rewriteBranchContainingCommit(repo, branch, hash, rewritten, parents[0]);
-        }
-    } finally {
-        if (currentBranch !== 'HEAD' && await repo.getCurrentBranch().catch(() => 'HEAD') !== currentBranch) {
-            await repo.checkout(currentBranch);
-        }
-    }
+async function fixupStagedChanges(hash: string, runtimeTargets: RuntimeCommandTargets): Promise<void> {
+    const worktree = requireRuntimeWorktree(runtimeTargets);
+    await assertRuntimeNoUnmergedFiles(worktree, 'fixing up commits');
+    await worktree.fixupCommits([hash]);
 }
 
-async function localBranchesContaining(repo: GitRepository, hash: string): Promise<readonly string[]> {
-    const output = await repo.execRaw(['for-each-ref', '--format=%(refname:short)', '--contains', hash, 'refs/heads']);
-    return output.split('\n').map((line) => line.trim()).filter(Boolean);
-}
-
-function orderBranchesForRewrite(branches: readonly string[], currentBranch: string): readonly string[] {
-    if (currentBranch === 'HEAD' || !branches.includes(currentBranch)) { return branches; }
-    return [...branches.filter((branch) => branch !== currentBranch), currentBranch];
-}
-
-async function rewriteBranchContainingCommit(
-    repo: GitRepository,
-    branch: string,
-    hash: string,
-    rewritten: string,
-    parentHash: string | undefined,
-): Promise<void> {
-    const branchTip = await repo.exec(['rev-parse', branch]);
-    const currentBranch = await repo.getCurrentBranch();
-    if (branchTip === hash) {
-        if (branch === currentBranch) {
-            await repo.exec(['reset', '--soft', rewritten]);
-        } else {
-            await repo.exec(['update-ref', `refs/heads/${branch}`, rewritten, hash]);
-        }
-        return;
-    }
-    const rebaseArgs = parentHash
-        ? ['rebase', '--autostash', '--onto', rewritten, hash, branch]
-        : ['rebase', '--autostash', '--onto', rewritten, '--root', branch];
-    await repo.exec(rebaseArgs);
-}
-
-async function writeCommitMessageFile(message: string): Promise<string> {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'look-git-message-'));
-    const filePath = path.join(dir, 'COMMIT_EDITMSG');
-    await fs.writeFile(filePath, message);
-    return filePath;
-}
-
-async function fixupStagedChanges(repo: GitRepository, hash: string): Promise<void> {
-    await assertNoUnmergedFiles(repo, 'fixing up commits');
-    const stagedFiles = await repo.execRaw(['diff', '--cached', '--name-only']);
-    if (!stagedFiles.trim()) { throw new Error('Stage changes before using Fixup.'); }
-    const dirtyUnstaged = await repo.execRaw(['diff', '--name-only']);
-    if (dirtyUnstaged.trim()) { throw new Error('Fixup requires a clean unstaged working tree.'); }
-    const parents = (await repo.exec(['show', '-s', '--format=%P', hash])).split(/\s+/).filter(Boolean);
-    if (parents.length > 1) { throw new Error('Fixup is not supported for merge commits.'); }
-
-    await repo.exec(['commit', '--fixup', hash, '--no-edit']);
-
-    const branch = await repo.getCurrentBranch();
-    const rebaseArgs = parents[0]
-        ? ['rebase', '--autosquash', '--autostash', parents[0], branch]
-        : ['rebase', '--autosquash', '--autostash', '--root', branch];
-    await repo.execWithEnv(rebaseArgs, { GIT_SEQUENCE_EDITOR: 'true', GIT_EDITOR: 'true' });
-}
-
-async function squashSelectedCommits(repo: GitRepository, hashes: readonly string[]): Promise<void> {
-    await assertNoUnmergedFiles(repo, 'squashing commits');
-    const ordered = await orderSelectedCommits(repo, hashes, 'oldestFirst');
+async function squashSelectedCommits(hashes: readonly string[], runtimeTargets: RuntimeCommandTargets = {}): Promise<void> {
+    const { repository, worktree } = requireRuntimeTargets(runtimeTargets);
+    await assertRuntimeNoUnmergedFiles(worktree, 'squashing commits');
+    const ordered = await orderSelectedCommits(repository, hashes, 'oldestFirst');
     if (ordered.length < 2) { throw new Error('Select at least two commits to squash.'); }
+    await validateSquashCommitRange(repository, ordered);
 
-    const range = await validateSquashCommitRange(repo, ordered);
-    const defaultMessage = firstCommitMessageLine(await repo.getCommitMessage(ordered[0]!));
+    const defaultMessage = firstCommitMessageLine(await repository.getCommitMessage(ordered[0]!));
     const message = await vscode.window.showInputBox({
         prompt: `Squash ${ordered.length} commits into one message:`,
         value: defaultMessage,
     });
     if (!message?.trim()) { return; }
 
-    const messageFile = await writeCommitMessageFile(message.trim());
-    try {
-        const rewritten = await createSquashedCommit(repo, ordered[0]!, range.newestHash, range.parentHash, messageFile);
-        await replaceCommitRangeWithSquashedCommit(repo, range.newestHash, rewritten);
-    } finally {
-        await fs.rm(path.dirname(messageFile), { recursive: true, force: true });
-    }
-}
-
-interface SquashCommitRange {
-    readonly parentHash: string | undefined;
-    readonly newestHash: string;
-}
-
-async function validateSquashCommitRange(repo: GitRepository, hashes: readonly string[]): Promise<SquashCommitRange> {
-    let previousHash: string | undefined;
-    let parentHash: string | undefined;
-    for (const [index, hash] of hashes.entries()) {
-        const parents = (await repo.exec(['show', '-s', '--format=%P', hash])).split(/\s+/).filter(Boolean);
-        if (parents.length > 1) { throw new Error('Squash Commits is not supported for merge commits.'); }
-        if (index === 0) {
-            parentHash = parents[0];
-        } else if (parents[0] !== previousHash) {
-            throw new Error('Squash Commits requires a contiguous linear commit selection.');
-        }
-        previousHash = hash;
-    }
-    const newestHash = hashes.at(-1);
-    if (!newestHash) { throw new Error('Select at least two commits to squash.'); }
-    return { parentHash, newestHash };
-}
-
-async function createSquashedCommit(
-    repo: GitRepository,
-    oldestHash: string,
-    newestHash: string,
-    parentHash: string | undefined,
-    messageFile: string,
-): Promise<string> {
-    const tree = await repo.exec(['show', '-s', '--format=%T', newestHash]);
-    const [authorName, authorEmail, authorDate] = (await repo.exec(['show', '-s', '--format=%an%x00%ae%x00%aI', oldestHash])).split('\0');
-    if (!authorName || !authorEmail || !authorDate) { throw new Error('Could not read commit author metadata.'); }
-    const parentArgs = parentHash ? ['-p', parentHash] : [];
-    return repo.execWithEnv(
-        ['commit-tree', tree, ...parentArgs, '-F', messageFile],
-        {
-            GIT_AUTHOR_NAME: authorName,
-            GIT_AUTHOR_EMAIL: authorEmail,
-            GIT_AUTHOR_DATE: authorDate,
-        },
-    );
-}
-
-async function replaceCommitRangeWithSquashedCommit(repo: GitRepository, newestHash: string, rewritten: string): Promise<void> {
-    const currentBranch = await repo.getCurrentBranch();
-    const branches = await localBranchesContaining(repo, newestHash);
-    const head = await repo.exec(['rev-parse', 'HEAD']);
-    if (branches.length === 0 && head !== newestHash) {
-        throw new Error('Squash Commits requires a local branch that contains the selected commits.');
-    }
-    if (branches.length === 0) {
-        await repo.exec(['reset', '--soft', rewritten]);
-        return;
-    }
-
-    try {
-        for (const branch of orderBranchesForRewrite(branches, currentBranch)) {
-            await replaceCommitRangeOnBranch(repo, branch, newestHash, rewritten);
-        }
-    } finally {
-        if (currentBranch !== 'HEAD' && await repo.getCurrentBranch().catch(() => 'HEAD') !== currentBranch) {
-            await repo.checkout(currentBranch);
-        }
-    }
-}
-
-async function replaceCommitRangeOnBranch(repo: GitRepository, branch: string, newestHash: string, rewritten: string): Promise<void> {
-    const branchTip = await repo.exec(['rev-parse', branch]);
-    const currentBranch = await repo.getCurrentBranch();
-    if (branchTip === newestHash) {
-        if (branch === currentBranch) {
-            await repo.exec(['reset', '--soft', rewritten]);
-        } else {
-            await repo.exec(['update-ref', `refs/heads/${branch}`, rewritten, newestHash]);
-        }
-        return;
-    }
-    await repo.exec(['rebase', '--autostash', '--onto', rewritten, newestHash, branch]);
+    await worktree.squashCommits(ordered, message.trim());
 }
 
 function firstCommitMessageLine(message: string): string {
     return message.split(/\r?\n/)[0]?.trim() ?? '';
 }
 
-async function dropCommits(repo: GitRepository, hashes: readonly string[]): Promise<void> {
-    await assertNoUnmergedFiles(repo, 'dropping commits');
+async function dropCommits(hashes: readonly string[], runtimeTargets: RuntimeCommandTargets): Promise<void> {
+    const worktree = requireRuntimeWorktree(runtimeTargets);
+    await assertRuntimeNoUnmergedFiles(worktree, 'dropping commits');
     const choice = await showModalWarningMessage(`Drop ${hashes.length === 1 ? 'this commit' : `${hashes.length} commits`}?`, 'Drop');
     if (choice !== 'Drop') { return; }
     for (const hash of hashes) {
-        await repo.exec(['rebase', '--autostash', '--onto', `${hash}^`, hash]);
+        await worktree.dropCommit(hash);
     }
 }
 
-async function pushAllUpToHere(repo: GitRepository, hash: string, remoteCommands: RemoteCommandBackend): Promise<void> {
-    const remotes = await repo.getRemotes();
+async function pushAllUpToHere(hash: string, runtimeTargets: RuntimeCommandTargets): Promise<void> {
+    const { repository, worktree } = requireRuntimeTargets(runtimeTargets);
+    const remotes = await repository.listRemotes();
     const remote = remotes[0];
     if (!remote) { throw new Error('No Git remote configured.'); }
-    const branch = await repo.getCurrentBranch();
+    const branch = await currentBranchName(repository);
     const choice = await showModalWarningMessage(`Push ${hash.substring(0, 7)} to ${remote}/${branch}?`, 'Push');
     if (choice !== 'Push') { return; }
-    await remoteCommands.runCli(repo, {
-        kind: CliRemoteCommandKind.Args,
-        args: ['push', remote, `${hash}:refs/heads/${branch}`],
-        title: `Look Git Remote: ${branch}`,
-    });
+    await worktree.pushRef(remote, hash, `refs/heads/${branch}`, {});
+}
+
+async function validateSquashCommitRange(repository: GitRepository, hashes: readonly string[]): Promise<void> {
+    let previousHash: string | undefined;
+    for (const [index, hash] of hashes.entries()) {
+        const commit = await repository.getCommitDetails(hash);
+        if (commit.parentHashes.length > 1) { throw new Error('Squash Commits is not supported for merge commits.'); }
+        if (index > 0 && commit.parentHashes[0] !== previousHash) {
+            throw new Error('Squash Commits requires a contiguous linear commit selection.');
+        }
+        previousHash = hash;
+    }
+}
+
+async function assertRuntimeNoUnmergedFiles(worktree: Worktree, operation: string): Promise<void> {
+    const status = await worktree.getStatus();
+    if (status.conflicts.length > 0) {
+        throw new Error(`Resolve existing merge/rebase conflicts before ${operation}.`);
+    }
 }

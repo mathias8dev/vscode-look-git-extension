@@ -1,0 +1,265 @@
+import * as vscode from 'vscode';
+import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
+import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, WorktreeCommand } from '@protocol/graph/messages';
+import type { GraphContextTarget } from '@protocol/graph/types';
+import type { RepoContext } from '@core/git/domain/repo-context';
+import type { RepositoriesChangedPush, RepositoryNavigationMessage } from '@protocol/shared/repo';
+import { toSerializedRepoContext } from '@extension/mapping/to-protocol';
+import { GraphMessageRouter } from '@extension/messaging/graph-message-router';
+import { getWebviewHtml } from '@extension/views/webview-html';
+import { webviewFontSizeMessage } from '@extension/views/webview-font';
+import type { RepositoryRegistry } from '@extension/repositories/repository-registry';
+
+const GRAPH_COMMIT_COMMANDS: readonly { readonly id: string; readonly command: CommitCommand }[] = [
+    { id: 'lookGit.graph.commit.copyRevisionNumber', command: 'copyRevisionNumber' },
+    { id: 'lookGit.graph.commit.createPatch', command: 'createPatch' },
+    { id: 'lookGit.graph.commit.explainDiff', command: 'explainDiff' },
+    { id: 'lookGit.graph.commit.cherryPick', command: 'cherryPick' },
+    { id: 'lookGit.graph.commit.checkoutRevision', command: 'checkoutRevision' },
+    { id: 'lookGit.graph.commit.showRepositoryAtRevision', command: 'showRepositoryAtRevision' },
+    { id: 'lookGit.graph.commit.compareWithLocal', command: 'compareWithLocal' },
+    { id: 'lookGit.graph.commit.newWorktreeFromCommit', command: 'newWorktreeFromCommit' },
+    { id: 'lookGit.graph.commit.compareCommitWithWorktree', command: 'compareCommitWithWorktree' },
+    { id: 'lookGit.graph.commit.resetCurrentBranchToHere', command: 'resetCurrentBranchToHere' },
+    { id: 'lookGit.graph.commit.revertCommit', command: 'revertCommit' },
+    { id: 'lookGit.graph.commit.undoCommit', command: 'undoCommit' },
+    { id: 'lookGit.graph.commit.editCommitMessage', command: 'editCommitMessage' },
+    { id: 'lookGit.graph.commit.fixup', command: 'fixup' },
+    { id: 'lookGit.graph.commit.squashInto', command: 'squashInto' },
+    { id: 'lookGit.graph.commit.dropCommit', command: 'dropCommit' },
+    { id: 'lookGit.graph.commit.interactiveRebaseFromHere', command: 'interactiveRebaseFromHere' },
+    { id: 'lookGit.graph.commit.pushAllUpToHere', command: 'pushAllUpToHere' },
+    { id: 'lookGit.graph.commit.newBranch', command: 'newBranch' },
+    { id: 'lookGit.graph.commit.newTag', command: 'newTag' },
+];
+
+const GRAPH_BRANCH_COMMANDS: readonly { readonly id: string; readonly command: BranchCommand }[] = [
+    { id: 'lookGit.graph.branch.checkout', command: 'checkout' },
+    { id: 'lookGit.graph.branch.newBranchFrom', command: 'newBranchFrom' },
+    { id: 'lookGit.graph.branch.checkoutRebaseOnto', command: 'checkoutRebaseOnto' },
+    { id: 'lookGit.graph.branch.newWorktreeFromBranch', command: 'newWorktreeFromBranch' },
+    { id: 'lookGit.graph.branch.openBranchWorktree', command: 'openBranchWorktree' },
+    { id: 'lookGit.graph.branch.revealBranchWorktree', command: 'revealBranchWorktree' },
+    { id: 'lookGit.graph.branch.compareWithCurrent', command: 'compareWithCurrent' },
+    { id: 'lookGit.graph.branch.showDiffWithWorkingTree', command: 'showDiffWithWorkingTree' },
+    { id: 'lookGit.graph.branch.compareBranchWithWorktree', command: 'compareBranchWithWorktree' },
+    { id: 'lookGit.graph.branch.showDiffWithBranchWorktree', command: 'showDiffWithBranchWorktree' },
+    { id: 'lookGit.graph.branch.rebaseOnto', command: 'rebaseOnto' },
+    { id: 'lookGit.graph.branch.planInteractiveRebaseOnto', command: 'planInteractiveRebaseOnto' },
+    { id: 'lookGit.graph.branch.mergeInto', command: 'mergeInto' },
+    { id: 'lookGit.graph.branch.update', command: 'update' },
+    { id: 'lookGit.graph.branch.push', command: 'push' },
+    { id: 'lookGit.graph.branch.publish', command: 'push' },
+    { id: 'lookGit.graph.branch.pullBranchWorktree', command: 'pullBranchWorktree' },
+    { id: 'lookGit.graph.branch.pushBranchWorktree', command: 'pushBranchWorktree' },
+    { id: 'lookGit.graph.branch.lockBranchWorktree', command: 'lockBranchWorktree' },
+    { id: 'lookGit.graph.branch.unlockBranchWorktree', command: 'unlockBranchWorktree' },
+    { id: 'lookGit.graph.branch.removeBranchWorktree', command: 'removeBranchWorktree' },
+    { id: 'lookGit.graph.branch.rename', command: 'rename' },
+    { id: 'lookGit.graph.branch.delete', command: 'delete' },
+];
+
+const GRAPH_WORKTREE_COMMANDS: readonly { readonly id: string; readonly command: WorktreeCommand }[] = [
+    { id: 'lookGit.graph.worktree.open', command: 'open' },
+    { id: 'lookGit.graph.worktree.openInNewWindow', command: 'openInNewWindow' },
+    { id: 'lookGit.graph.worktree.reveal', command: 'reveal' },
+    { id: 'lookGit.graph.worktree.showDiffWithHead', command: 'showDiffWithHead' },
+    { id: 'lookGit.graph.worktree.showDiffWithMainWorktree', command: 'showDiffWithMainWorktree' },
+    { id: 'lookGit.graph.worktree.fetch', command: 'fetch' },
+    { id: 'lookGit.graph.worktree.pull', command: 'pull' },
+    { id: 'lookGit.graph.worktree.push', command: 'push' },
+    { id: 'lookGit.graph.worktree.commit', command: 'commit' },
+    { id: 'lookGit.graph.worktree.stash', command: 'stash' },
+    { id: 'lookGit.graph.worktree.newBranch', command: 'newBranch' },
+    { id: 'lookGit.graph.worktree.checkoutBranch', command: 'checkoutBranch' },
+    { id: 'lookGit.graph.worktree.lock', command: 'lock' },
+    { id: 'lookGit.graph.worktree.unlock', command: 'unlock' },
+    { id: 'lookGit.graph.worktree.remove', command: 'remove' },
+    { id: 'lookGit.graph.worktree.removeForce', command: 'removeForce' },
+];
+
+export class GraphViewProvider implements vscode.WebviewViewProvider {
+    static readonly viewType = 'lookGit.graphView';
+
+    private view?: vscode.WebviewView;
+    private router?: GraphMessageRouter;
+    private contextTarget?: GraphContextTarget;
+    private repositoriesChangedMessage?: RepositoriesChangedPush;
+
+    constructor(
+        private readonly extensionUri: vscode.Uri,
+        private readonly repositories: RepositorySelectionAccessor,
+        private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
+        private readonly storageUri?: vscode.Uri,
+        private readonly runtimeRepositories?: RepositoryRegistry,
+        private readonly onRepositoryNavigation: (message: RepositoryNavigationMessage) => Promise<void> = async () => {},
+    ) {}
+
+    resolveWebviewView(webviewView: vscode.WebviewView): void {
+        this.view = webviewView;
+
+        webviewView.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')],
+        };
+        this.renderWebviewHtml(webviewView);
+        this.postRepositoriesChangedMessage();
+
+        this.router?.dispose();
+        this.router = new GraphMessageRouter(this.repositories, (msg) => {
+            webviewView.webview.postMessage(msg);
+        }, this.onRepositoryUpdated, undefined, undefined, undefined, this.extensionUri, this.storageUri, this.runtimeRepositories);
+
+        webviewView.webview.onDidReceiveMessage((msg: GraphWebviewToExtensionMessage) => {
+            if (isRepositoryNavigationMessage(msg)) {
+                void this.onRepositoryNavigation(msg);
+                return;
+            }
+            if (msg.type === 'graph/ready') {
+                this.postRepositoriesChangedMessage();
+            }
+            if (msg.type === 'graph/contextTarget') {
+                this.contextTarget = msg.target;
+                return;
+            }
+            void this.router!.handle(msg);
+        });
+
+        webviewView.onDidChangeVisibility(() => {
+            if (webviewView.visible) { void this.router?.refreshGraphData(); }
+        });
+    }
+
+    dispose(): void {
+        this.router?.dispose();
+    }
+
+    registerNativeContextCommands(): readonly vscode.Disposable[] {
+        return [
+            ...GRAPH_COMMIT_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runCommitContextCommand(command))),
+            ...GRAPH_BRANCH_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runBranchContextCommand(command, { allowUnpublishedBranchPush: id === 'lookGit.graph.branch.publish' }))),
+            ...GRAPH_WORKTREE_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runWorktreeContextCommand(command))),
+            vscode.commands.registerCommand('lookGit.graph.commit.goToChildCommit', () => this.selectContextCommit('child')),
+            vscode.commands.registerCommand('lookGit.graph.commit.goToParentCommit', () => this.selectContextCommit('parent')),
+            vscode.commands.registerCommand('lookGit.graph.worktree.showDetails', () => this.selectContextWorktree()),
+        ];
+    }
+
+    /** Called by RepoRegistry when the active repo changes. */
+    async notifyRepoChanged(context: RepoContext): Promise<void> {
+        this.router?.resetRefreshCache();
+        this.view?.webview.postMessage({ type: 'repo/contextChanged', context: toSerializedRepoContext(context) });
+    }
+
+    notifyRepositoriesChanged(message: RepositoriesChangedPush): void {
+        this.repositoriesChangedMessage = message;
+        this.postRepositoriesChangedMessage();
+    }
+
+    notifyFontSizeChanged(): void {
+        void this.view?.webview.postMessage(webviewFontSizeMessage());
+    }
+
+    private postRepositoriesChangedMessage(): void {
+        if (this.repositoriesChangedMessage) {
+            void this.view?.webview.postMessage(this.repositoriesChangedMessage);
+        }
+    }
+
+    async refresh(): Promise<void> {
+        if (!this.view?.visible) { return; }
+        await this.router?.refreshGraphData();
+    }
+
+    private async runCommitContextCommand(command: CommitCommand): Promise<void> {
+        const target = this.contextTarget;
+        if (target?.kind !== 'commit') {
+            await vscode.window.showWarningMessage('No graph commit is selected for this command. Right-click a commit row and try again.');
+            return;
+        }
+        if (command === 'cherryPick' && target.canCherryPick === false) {
+            await vscode.window.showWarningMessage('Cherry-pick is unavailable because the selected commit already exists in the current branch history.');
+            return;
+        }
+        if (command === 'squashInto' && (target.canSquash === false || target.hashes.length < 2)) { return; }
+        await this.router?.handle({
+            type: 'graph/commitCommand',
+            command,
+            hash: target.hash,
+            hashes: target.hashes,
+            ...(target.repository ? { repository: target.repository } : {}),
+        });
+    }
+
+    private async runBranchContextCommand(command: BranchCommand, options: BranchContextCommandOptions = {}): Promise<void> {
+        const target = this.contextTarget;
+        if (target?.kind !== 'branch') { return; }
+        if (command === 'delete' && (target.canDelete === false || target.isCurrent)) {
+            await vscode.window.showWarningMessage('Delete is unavailable because the current branch cannot be deleted.');
+            return;
+        }
+        if (command === 'update' && target.canUpdate !== true) {
+            await vscode.window.showWarningMessage(target.isRemote
+                ? 'Update is unavailable because remote branches cannot be updated directly.'
+                : 'Update is unavailable because this branch has no upstream.');
+            return;
+        }
+        if (command === 'push' && options.allowUnpublishedBranchPush && target.canPublish !== true) {
+            await vscode.window.showWarningMessage('Publish is unavailable for this branch.');
+            return;
+        }
+        if (command === 'push' && !options.allowUnpublishedBranchPush && target.canPush !== true) {
+            await vscode.window.showWarningMessage(target.isRemote
+                ? 'Push is unavailable because remote branches cannot be pushed directly.'
+                : 'Push is unavailable because this branch has no upstream. Use Publish Branch.');
+            return;
+        }
+        await this.router?.handle({
+            type: 'graph/branchCommand',
+            command,
+            branch: target.branch,
+            isRemote: target.isRemote,
+            ...(target.repository ? { repository: target.repository } : {}),
+        });
+    }
+
+    private async runWorktreeContextCommand(command: WorktreeCommand): Promise<void> {
+        const target = this.contextTarget;
+        if (target?.kind !== 'worktree') { return; }
+        await this.router?.handle({
+            type: 'graph/worktreeCommand',
+            command,
+            path: target.path,
+            ...(target.repository ? { repository: target.repository } : {}),
+            ...(target.worktree ? { worktree: target.worktree } : {}),
+        });
+    }
+
+    private selectContextCommit(direction: 'child' | 'parent'): void {
+        const target = this.contextTarget;
+        if (target?.kind !== 'commit') { return; }
+        const hash = direction === 'child' ? target.childHash : target.parentHash;
+        if (hash) { void this.view?.webview.postMessage({ type: 'graph/selectCommit', hash }); }
+    }
+
+    private selectContextWorktree(): void {
+        const target = this.contextTarget;
+        if (target?.kind === 'worktree') {
+            void this.view?.webview.postMessage({ type: 'graph/selectWorktree', path: target.path });
+        }
+    }
+
+    private renderWebviewHtml(webviewView: vscode.WebviewView): void {
+        webviewView.webview.html = getWebviewHtml(webviewView.webview, this.extensionUri, 'graph');
+    }
+}
+
+function isRepositoryNavigationMessage(message: GraphWebviewToExtensionMessage): message is RepositoryNavigationMessage {
+    return message.type === 'repo/selectRepository'
+        || message.type === 'repo/showRepositoryList'
+        || message.type === 'repo/openRepositoryInNewWindow';
+}
+
+interface BranchContextCommandOptions {
+    readonly allowUnpublishedBranchPush?: boolean;
+}

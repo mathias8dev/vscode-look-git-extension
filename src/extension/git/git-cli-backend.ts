@@ -1,16 +1,18 @@
 import { execFile } from 'child_process';
+import * as path from 'path';
 import { promisify } from 'util';
-import type { GitBackend, GitRunOptions } from '../../application/ports/git-backend';
+import type { GitBackend, GitRunOptions } from '@application/ports/git-backend';
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024;
-const DEFAULT_MAX_LOCK_RETRIES = 5;
+const DEFAULT_MAX_LOCK_RETRIES = 8;
 
 export class GitCliBackend implements GitBackend {
     constructor(
         private readonly cwd: string,
         private readonly maxBuffer = DEFAULT_MAX_BUFFER,
         private readonly maxLockRetries = DEFAULT_MAX_LOCK_RETRIES,
+        private readonly gitPath = 'git',
     ) {}
 
     async run(args: readonly string[], options: GitRunOptions = {}): Promise<string> {
@@ -18,7 +20,8 @@ export class GitCliBackend implements GitBackend {
         for (let attempt = 0; ; attempt++) {
             options.signal?.throwIfAborted();
             try {
-                const { stdout } = await execFileAsync('git', [...args], {
+                const invocation = executableInvocation(this.gitPath, args);
+                const { stdout } = await execFileAsync(invocation.command, invocation.args, {
                     cwd: this.cwd,
                     maxBuffer: this.maxBuffer,
                     env: { ...process.env, ...options.env },
@@ -32,6 +35,12 @@ export class GitCliBackend implements GitBackend {
             }
         }
     }
+}
+
+function executableInvocation(command: string, args: readonly string[]): { readonly command: string; readonly args: readonly string[] } {
+    return path.extname(command).toLowerCase() === '.js'
+        ? { command: process.execPath, args: [command, ...args] }
+        : { command, args: [...args] };
 }
 
 function isIndexLockError(error: unknown): boolean {

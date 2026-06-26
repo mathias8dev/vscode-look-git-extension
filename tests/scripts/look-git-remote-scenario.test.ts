@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { removeDirSyncWithRetry } from '../helpers/gitRepo';
+import { removeDirSyncWithRetry } from '@tests/helpers/git-repo';
 
 const roots: string[] = [];
 
@@ -18,7 +18,7 @@ function git(cwd: string, args: readonly string[]): string {
 }
 
 function lines(output: string): string[] {
-    return output.split('\n').filter(Boolean);
+    return output.split(/\r?\n/).filter(Boolean);
 }
 
 function aheadBehind(cwd: string, left: string, right: string): readonly [number, number] {

@@ -589,8 +589,6 @@
     color: var(--vscode-foreground, #cccccc);
     background: transparent;
     font-size: inherit;
-    opacity: 0;
-    transition: opacity var(--look-git-motion-fast) var(--look-git-motion-ease);
 }
 
 .icon-button:hover {
@@ -599,6 +597,13 @@
 
 .icon-button .codicon {
     font-size: inherit;
+}
+
+.change-row .icon-button,
+.change-section-header .icon-button,
+.stash-item-header .icon-button,
+.stash-file-row .icon-button {
+    opacity: 0;
 }
 
 .section-toggle {

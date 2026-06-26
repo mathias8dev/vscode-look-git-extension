@@ -1,32 +1,37 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import type { GitRepository } from '../../application/ports/git-repository';
-import { CliRemoteCommandKind, VscodeRemoteCommand, type RemoteCommandBackend } from '../../application/ports/remote-command-backend';
-import { CheckoutBranchUseCase } from '../../application/usecases/branches/checkout-branch';
-import type { BranchCommand } from '../../protocol/graph/messages';
-import type { GitWorktree } from '../../core/git/domain/GitWorktree';
-import { showModalWarningMessage } from '../utils/confirmation';
-import { showBranchNameInput } from '../utils/branch-name-input';
+import type { GitRepository, Worktree } from '@application/ports/git-topology';
+import { CheckoutBranchUseCase } from '@application/usecases/branches/checkout-branch';
+import type { BranchCommand } from '@protocol/graph/messages';
+import type { GitWorktree } from '@core/git/domain/git-worktree';
+import { showModalWarningMessage } from '@extension/utils/confirmation';
+import { showBranchNameInput } from '@extension/utils/branch-name-input';
 import {
-    assertNoUnmergedFiles,
     compareRefWithPickedWorktree,
     openChangesBetweenMergeBaseAndRef,
     openChangesWithWorkingTree,
     promptNewWorktreePath,
-} from './git-command-helpers';
+} from '@extension/commands/git-command-helpers';
+import { requireRuntimeRepository, requireRuntimeWorktree, requireRuntimeWorktreePath, requireRuntimeWorktrees, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
+import { currentBranchName } from '@extension/git/current-branch';
+import { localBranchNameForRemote, localNameForRemoteBranch, resolveRemoteBranch } from '@extension/git/remote-branch';
+import { openVisualRebasePanel } from '@extension/utils/visual-rebase-panel';
 
 export async function runBranchCommand(
     repo: GitRepository,
     command: BranchCommand,
     branch: string,
     isRemote: boolean,
-    remoteCommands: RemoteCommandBackend,
     checkoutBranch = new CheckoutBranchUseCase(),
+    runtimeTargets: RuntimeCommandTargets = {},
+    extensionUri?: vscode.Uri,
+    storageUri?: vscode.Uri,
 ): Promise<boolean> {
-    const currentBranch = await repo.getCurrentBranch();
+    const runtimeRepository = requireRuntimeRepository(runtimeTargets);
+    const currentBranch = await currentBranchName(runtimeRepository);
     switch (command) {
         case 'checkout':
-            await checkoutBranch.execute(repo, { branch, isRemote });
+            await checkoutBranch.execute(runtimeRepository, requireRuntimeWorktree(runtimeTargets), { branch, isRemote });
             return true;
         case 'newBranchFrom': {
             const name = await showBranchNameInput({
@@ -34,16 +39,16 @@ export async function runBranchCommand(
                 value: isRemote ? localBranchNameForRemote(branch) : undefined,
             });
             if (!name) { return false; }
-            await repo.checkoutNewBranch(name, branch);
+            await requireRuntimeWorktree(runtimeTargets).checkoutNewBranch(name, branch);
             return true;
         }
         case 'checkoutRebaseOnto':
-            await assertNoUnmergedFiles(repo, 'checking out and rebasing branches');
-            await checkoutBranch.execute(repo, { branch, isRemote });
-            await repo.exec(['rebase', currentBranch]);
+            await assertRuntimeNoUnmergedFiles(requireRuntimeWorktree(runtimeTargets), 'checking out and rebasing branches');
+            await checkoutBranch.execute(runtimeRepository, requireRuntimeWorktree(runtimeTargets), { branch, isRemote });
+            await requireRuntimeWorktree(runtimeTargets).rebase(currentBranch, undefined, {});
             return true;
         case 'newWorktreeFromBranch':
-            return createWorktreeFromBranch(repo, branch, isRemote);
+            return createWorktreeFromBranch(repo, branch, isRemote, runtimeTargets);
         case 'openBranchWorktree':
             await openBranchWorktree(repo, branch, isRemote);
             return false;
@@ -57,7 +62,7 @@ export async function runBranchCommand(
             await openChangesWithWorkingTree(repo, repo.cwd, branch, `Diff ${branch}..working tree`);
             return false;
         case 'compareBranchWithWorktree':
-            await compareRefWithPickedWorktree(repo, branch, `Diff ${branch}`);
+            await compareRefWithPickedWorktree(repo, requireRuntimeWorktrees(runtimeTargets), branch, `Diff ${branch}`);
             return false;
         case 'showDiffWithBranchWorktree':
             await showDiffWithBranchWorktree(repo, branch, isRemote);
@@ -68,62 +73,76 @@ export async function runBranchCommand(
             const choice = await showModalWarningMessage(`Delete branch "${branch}"?`, label);
             if (choice !== label) { return false; }
             if (isRemote) {
-                const { remote, branchName } = await resolveRemoteBranch(repo, branch);
-                await repo.deleteRemoteBranch(remote, branchName);
+                const { remote, branchName } = await resolveRemoteBranch(runtimeRepository, branch);
+                await runtimeRepository.deleteRemoteBranch(remote, branchName);
             } else {
-                await repo.deleteBranch(branch);
+                await runtimeRepository.deleteBranch(branch, true);
             }
             return true;
         }
         case 'rename': {
             const name = await showBranchNameInput({ prompt: `Rename "${branch}" to:`, value: branch });
             if (!name || name === branch) { return false; }
-            await repo.renameBranch(branch, name);
+            await runtimeRepository.renameBranch(branch, name);
             return true;
         }
         case 'push':
             if (isRemote) { throw new Error('Push is only available for local branches.'); }
-            await pushBranch(repo, branch, remoteCommands);
+            await pushBranch(runtimeTargets, branch);
             return true;
         case 'pullBranchWorktree':
-            await branchWorktreeGit(repo, branch, isRemote, ['pull'], remoteCommands);
+            await pullBranchWorktree(repo, branch, isRemote, runtimeTargets);
             return true;
         case 'pushBranchWorktree':
-            await pushBranchWorktree(repo, branch, isRemote, remoteCommands);
+            await pushBranchWorktree(repo, branch, isRemote, runtimeTargets);
             return true;
         case 'lockBranchWorktree':
-            await lockBranchWorktree(repo, branch, isRemote);
+            await lockBranchWorktree(repo, branch, isRemote, runtimeRepository);
             return true;
         case 'unlockBranchWorktree':
-            await unlockBranchWorktree(repo, branch, isRemote);
+            await unlockBranchWorktree(repo, branch, isRemote, runtimeRepository);
             return true;
         case 'removeBranchWorktree':
-            return removeBranchWorktree(repo, branch, isRemote);
+            return removeBranchWorktree(repo, branch, isRemote, runtimeTargets);
         case 'update': {
             if (isRemote) { throw new Error('Update selected branch is only available for local branches.'); }
-            await updateSelectedLocalBranch(repo, branch, currentBranch, remoteCommands);
+            await updateSelectedLocalBranch(runtimeRepository, requireRuntimeWorktree(runtimeTargets), runtimeTargets, branch, currentBranch);
             return true;
         }
         case 'rebaseOnto':
-            await assertNoUnmergedFiles(repo, 'rebasing branches');
-            await repo.rebase(branch);
+            await assertRuntimeNoUnmergedFiles(requireRuntimeWorktree(runtimeTargets), 'rebasing branches');
+            await requireRuntimeWorktree(runtimeTargets).rebase(branch, undefined, {});
             return true;
         case 'planInteractiveRebaseOnto':
+            if (isRemote) { throw new Error('Visual Rebase onto a remote branch is not supported.'); }
+            if (!extensionUri) { throw new Error('Visual Rebase requires the extension URI.'); }
+            if (!storageUri) { throw new Error('Visual Rebase requires extension storage.'); }
+            await openVisualRebasePanel(runtimeRepository, requireRuntimeWorktree(runtimeTargets), extensionUri, storageUri, {
+                upstream: branch,
+                onto: branch,
+                title: `Visual Rebase onto ${branch}`,
+            });
             return false;
         case 'mergeInto':
-            await assertNoUnmergedFiles(repo, 'merging branches');
-            await repo.merge(branch);
+            await assertRuntimeNoUnmergedFiles(requireRuntimeWorktree(runtimeTargets), 'merging branches');
+            await requireRuntimeWorktree(runtimeTargets).merge(branch, {});
             return true;
     }
 }
 
-async function createWorktreeFromBranch(repo: GitRepository, branch: string, isRemote: boolean): Promise<boolean> {
-    const worktreePath = await promptNewWorktreePath(repo, `Worktree path for "${branch}":`);
+async function createWorktreeFromBranch(
+    repo: GitRepository,
+    branch: string,
+    isRemote: boolean,
+    runtimeTargets: RuntimeCommandTargets,
+): Promise<boolean> {
+    const runtimeRepository = requireRuntimeRepository(runtimeTargets);
+    const worktreePath = await promptNewWorktreePath(repo.cwd, `Worktree path for "${branch}":`);
     if (!worktreePath) { return false; }
-    const worktrees = await repo.listWorktrees();
+    const worktrees = await runtimeRepository.listWorktrees();
 
     if (isRemote) {
-        return createWorktreeFromRemoteBranch(repo, worktreePath, branch, worktrees);
+        return createWorktreeFromRemoteBranch(repo, worktreePath, branch, worktrees, runtimeTargets);
     }
 
     if (worktreeForBranch(worktrees, branch)) {
@@ -132,11 +151,11 @@ async function createWorktreeFromBranch(repo: GitRepository, branch: string, isR
             value: `${branch}-worktree`,
         });
         if (!branchName) { return false; }
-        await repo.exec(['worktree', 'add', '-b', branchName, worktreePath, branch]);
+        await addWorktree(runtimeTargets, { path: worktreePath, branch: branchName, createNew: true, startPoint: branch });
         return true;
     }
 
-    await repo.exec(['worktree', 'add', worktreePath, branch]);
+    await addWorktree(runtimeTargets, { path: worktreePath, branch });
     return true;
 }
 
@@ -145,13 +164,14 @@ async function createWorktreeFromRemoteBranch(
     worktreePath: string,
     remoteBranch: string,
     worktrees: readonly GitWorktree[],
+    runtimeTargets: RuntimeCommandTargets,
 ): Promise<boolean> {
     const defaultLocalName = localNameForRemoteBranch(remoteBranch);
-    const localBranches = (await repo.getAllBranches()).filter((branch) => !branch.isRemote).map((branch) => branch.name);
+    const localBranches = (await requireRuntimeRepository(runtimeTargets).listBranches()).filter((branch) => !branch.isRemote).map((branch) => branch.name);
 
     if (localBranches.includes(defaultLocalName)) {
         if (!worktreeForBranch(worktrees, defaultLocalName)) {
-            await repo.exec(['worktree', 'add', worktreePath, defaultLocalName]);
+            await addWorktree(runtimeTargets, { path: worktreePath, branch: defaultLocalName });
             return true;
         }
         const branchName = await showBranchNameInput({
@@ -159,7 +179,7 @@ async function createWorktreeFromRemoteBranch(
             value: `${defaultLocalName}-worktree`,
         });
         if (!branchName) { return false; }
-        await repo.exec(['worktree', 'add', '-b', branchName, worktreePath, remoteBranch]);
+        await addWorktree(runtimeTargets, { path: worktreePath, branch: branchName, createNew: true, startPoint: remoteBranch });
         return true;
     }
 
@@ -170,16 +190,18 @@ async function createWorktreeFromRemoteBranch(
     if (!branchName) { return false; }
     if (localBranches.includes(branchName)) {
         if (worktreeForBranch(worktrees, branchName)) { throw new Error(`Branch "${branchName}" is already checked out in another worktree.`); }
-        await repo.exec(['worktree', 'add', worktreePath, branchName]);
+        await addWorktree(runtimeTargets, { path: worktreePath, branch: branchName });
         return true;
     }
-    await repo.exec(['worktree', 'add', '-b', branchName, worktreePath, remoteBranch]);
+    await addWorktree(runtimeTargets, { path: worktreePath, branch: branchName, createNew: true, startPoint: remoteBranch });
     return true;
 }
 
-function localNameForRemoteBranch(branch: string): string {
-    const slashIdx = branch.indexOf('/');
-    return slashIdx === -1 ? branch : branch.substring(slashIdx + 1);
+async function addWorktree(
+    runtimeTargets: RuntimeCommandTargets,
+    input: { readonly path: string; readonly branch: string; readonly createNew?: boolean; readonly startPoint?: string },
+): Promise<void> {
+    await requireRuntimeRepository(runtimeTargets).addWorktree(input);
 }
 
 async function openBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean): Promise<void> {
@@ -199,67 +221,44 @@ async function showDiffWithBranchWorktree(repo: GitRepository, branch: string, i
     await openChangesWithWorkingTree(repo, worktree.path, branch, `Diff ${branch} with ${path.basename(worktree.path)}`);
 }
 
-async function branchWorktreeGit(
+async function pullBranchWorktree(
     repo: GitRepository,
     branch: string,
     isRemote: boolean,
-    args: readonly string[],
-    remoteCommands: RemoteCommandBackend,
+    runtimeTargets: RuntimeCommandTargets,
 ): Promise<void> {
     const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
-    await remoteCommands.runCli(repo, {
-        kind: CliRemoteCommandKind.Args,
-        cwd: worktree.path,
-        args,
-        title: `Look Git Remote: ${branch}`,
-    });
+    await requireRuntimeWorktreePath(runtimeTargets, worktree.path).pull({});
 }
 
 async function pushBranchWorktree(
     repo: GitRepository,
     branch: string,
     isRemote: boolean,
-    remoteCommands: RemoteCommandBackend,
+    runtimeTargets: RuntimeCommandTargets,
 ): Promise<void> {
     const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
-    const upstream = (await repo.execRaw(['-C', worktree.path, 'for-each-ref', '--format=%(upstream:short)', `refs/heads/${branch}`])).trim();
-    if (upstream) {
-        const { remote, branchName } = await resolveRemoteBranch(repo, upstream);
-        await remoteCommands.runCli(repo, {
-            kind: CliRemoteCommandKind.Args,
-            cwd: worktree.path,
-            args: ['push', remote, `${branch}:refs/heads/${branchName}`],
-            title: `Look Git Remote: ${branch}`,
-        });
-        return;
-    }
-    const remote = await defaultRemote(repo);
-    await remoteCommands.runCli(repo, {
-        kind: CliRemoteCommandKind.Args,
-        cwd: worktree.path,
-        args: ['push', '-u', remote, branch],
-        title: `Look Git Remote: ${branch}`,
-    });
+    await requireRuntimeWorktreePath(runtimeTargets, worktree.path).pushBranch(undefined, branch, {});
 }
 
-async function lockBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean): Promise<void> {
+async function lockBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean, runtimeRepository: GitRepository): Promise<void> {
     const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
     if (worktree.isMain) { throw new Error('The main worktree cannot be locked.'); }
-    await repo.exec(['worktree', 'lock', worktree.path]);
+    await runtimeRepository.lockWorktree(worktree.path);
 }
 
-async function unlockBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean): Promise<void> {
+async function unlockBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean, runtimeRepository: GitRepository): Promise<void> {
     const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
     if (worktree.isMain) { throw new Error('The main worktree cannot be unlocked.'); }
-    await repo.exec(['worktree', 'unlock', worktree.path]);
+    await runtimeRepository.unlockWorktree(worktree.path);
 }
 
-async function removeBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean): Promise<boolean> {
+async function removeBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean, runtimeTargets: RuntimeCommandTargets): Promise<boolean> {
     const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
     if (worktree.isMain) { throw new Error('The main worktree cannot be removed.'); }
     const choice = await showModalWarningMessage(`Remove worktree at "${worktree.path}"?`, 'Remove');
     if (choice !== 'Remove') { return false; }
-    await repo.removeWorktree(worktree.path, false);
+    await requireRuntimeRepository(runtimeTargets).removeWorktree(worktree.path, false);
     return true;
 }
 
@@ -278,66 +277,48 @@ function worktreeForBranch(worktrees: readonly GitWorktree[], branch: string): G
     return worktrees.find((candidate) => shortWorktreeBranch(candidate.branch) === branch);
 }
 
-async function pushBranch(repo: GitRepository, branch: string, remoteCommands: RemoteCommandBackend): Promise<void> {
-    const upstream = (await repo.execRaw(['for-each-ref', '--format=%(upstream:short)', `refs/heads/${branch}`])).trim();
-    if (upstream) {
-        const { remote, branchName } = await resolveRemoteBranch(repo, upstream);
-        await remoteCommands.runCli(repo, {
-            kind: CliRemoteCommandKind.Args,
-            args: ['push', remote, `${branch}:refs/heads/${branchName}`],
-            title: `Look Git Remote: ${branch}`,
-        });
-        return;
-    }
-    const remote = await defaultRemote(repo);
-    await remoteCommands.runCli(repo, {
-        kind: CliRemoteCommandKind.Args,
-        args: ['push', '-u', remote, branch],
-        title: `Look Git Remote: ${branch}`,
-    });
-}
-
-async function defaultRemote(repo: GitRepository): Promise<string> {
-    const remotes = await repo.getRemotes();
-    const remote = remotes[0];
-    if (!remote) { throw new Error('No Git remote configured.'); }
-    return remote;
-}
-
-async function resolveRemoteBranch(repo: GitRepository, branch: string): Promise<{ readonly remote: string; readonly branchName: string }> {
-    const slashIdx = branch.indexOf('/');
-    if (slashIdx === -1) {
-        return { remote: await defaultRemote(repo), branchName: branch };
-    }
-    return {
-        remote: branch.substring(0, slashIdx),
-        branchName: branch.substring(slashIdx + 1),
-    };
-}
-
-async function updateTargetForLocalBranch(repo: GitRepository, branch: string): Promise<{ readonly remote: string; readonly branchName: string }> {
-    const upstream = (await repo.execRaw(['for-each-ref', '--format=%(upstream:short)', `refs/heads/${branch}`])).trim();
-    return resolveRemoteBranch(repo, upstream || branch);
+async function pushBranch(runtimeTargets: RuntimeCommandTargets, branch: string): Promise<void> {
+    await requireRuntimeWorktree(runtimeTargets).pushBranch(undefined, branch, {});
 }
 
 async function updateSelectedLocalBranch(
-    repo: GitRepository,
+    repository: GitRepository,
+    worktree: Worktree,
+    runtimeTargets: RuntimeCommandTargets,
     branch: string,
     currentBranch: string,
-    remoteCommands: RemoteCommandBackend,
 ): Promise<void> {
-    const { remote, branchName } = await updateTargetForLocalBranch(repo, branch);
-    await remoteCommands.runVscode(repo, VscodeRemoteCommand.FetchAll);
-    const upstreamRef = `${remote}/${branchName}`;
-    if (branch === currentBranch) {
-        await repo.exec(['merge', '--ff-only', upstreamRef]);
+    const upstream = await repository.getUpstreamBranch(branch);
+    if (!upstream) { throw new Error(`Branch "${branch}" has no upstream.`); }
+    await repository.fetchAll({});
+    if (branch !== currentBranch) {
+        const branchWorktree = runtimeWorktreeForBranch(runtimeTargets.worktrees ?? [], branch);
+        if (branchWorktree) {
+            await branchWorktree.pull({});
+            return;
+        }
+        const { ahead, behind } = await repository.getAheadBehind(branch, upstream);
+        if (behind === 0) { return; }
+        if (ahead > 0) {
+            throw new Error(`Branch "${branch}" and "${upstream}" have diverged. Check out the branch or update its worktree to merge or rebase it.`);
+        }
+        await repository.updateRef(localBranchRef(branch), await repository.resolveRef(upstream));
         return;
     }
-    await repo.exec(['merge-base', '--is-ancestor', branch, upstreamRef]);
-    await repo.exec(['branch', '-f', branch, upstreamRef]);
+    await worktree.merge(upstream, {});
 }
 
-function localBranchNameForRemote(branch: string): string | undefined {
-    const slashIdx = branch.indexOf('/');
-    return slashIdx === -1 ? undefined : branch.substring(slashIdx + 1);
+function runtimeWorktreeForBranch(worktrees: readonly Worktree[], branch: string): Worktree | undefined {
+    return worktrees.find((candidate) => shortWorktreeBranch(candidate.branch) === branch);
+}
+
+function localBranchRef(branch: string): string {
+    return branch.startsWith('refs/heads/') ? branch : `refs/heads/${branch}`;
+}
+
+async function assertRuntimeNoUnmergedFiles(worktree: Worktree, operation: string): Promise<void> {
+    const status = await worktree.getStatus();
+    if (status.conflicts.length > 0) {
+        throw new Error(`Resolve existing conflicts before ${operation}.`);
+    }
 }

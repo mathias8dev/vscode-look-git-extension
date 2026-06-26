@@ -1,142 +1,124 @@
+import { execFileSync } from 'node:child_process';
 import * as assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { GitProcessRepository } from '../../../src/extension/git/GitProcessRepository';
-import { ChangesMessageRouter, buildStatusData } from '../../../src/extension/messaging/ChangesMessageRouter';
-import type { ChangesExtensionToWebviewMessage, SubmoduleStashFilesResponse, SubmoduleStatusResponse } from '../../../src/protocol/changes/messages';
-import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
-import type { ActiveRepositoryAccessor } from '../../../src/extension/repositories/ActiveRepositoryRegistry';
-import { getFixtureRepoPath } from '../../helpers/fixtureRepo';
-import { runTestCases, type TestCase } from '../../helpers/testRunner';
 
-export function run(): Promise<void> {
-    const tests: TestCase[] = [
-        {
-            name: 'activates the extension and contributes commands and views',
-            run: async () => {
-                const extension = vscode.extensions.getExtension('mathias8dev.look-git');
-                assert.ok(extension, 'Expected the Look Git extension to be installed in the test host.');
+export async function run(): Promise<void> {
+    const repo = requiredEnv('LOOK_GIT_SEMANTIC_FIXTURE_REPO');
+    assert.ok(fs.existsSync(path.join(repo, '.git')), `Missing semantic fixture repository at ${repo}`);
 
-                await extension.activate();
-                assert.equal(extension.isActive, true);
+    const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
+    assert.ok(workspaceFolders.some((folder) => samePath(folder.uri.fsPath, repo)), 'Semantic fixture repository is not open in VS Code.');
 
-                const commands = await vscode.commands.getCommands(true);
-                assert.ok(
-                    commands.includes('workbench.view.extension.look-git'),
-                    'Expected the Look Git Activity Bar container command to be registered.',
-                );
-                assert.ok(
-                    commands.includes('lookGit.changesView.focus'),
-                    'Expected the Changes view focus command to be registered.',
-                );
-                assert.ok(
-                    commands.includes('lookGit.commitHistory.focus'),
-                    'Expected the Commit History view focus command to be registered.',
-                );
-                assert.ok(
-                    commands.includes('lookGit.graphView.focus'),
-                    'Expected the Git Graph view focus command to be registered.',
-                );
-            },
-        },
-    ];
+    const gitRepository = await waitForGitRepository(repo, hasSemanticFixtureState);
+    assert.equal(gitRepository.state.HEAD?.name, 'main');
+    assert.equal(gitRepository.state.HEAD?.upstream?.remote, 'origin');
+    assert.equal(gitRepository.state.HEAD?.upstream?.name, 'main');
+    assert.equal(gitRepository.state.HEAD?.ahead, 1);
+    assert.ok(gitRepository.state.indexChanges.length >= 1, 'Expected staged fixture changes.');
+    assert.ok(gitRepository.state.workingTreeChanges.length >= 1, 'Expected unstaged fixture changes.');
 
-    const fixturePath = getFixtureRepoPath();
-    if (!fixturePath) {
-        tests.push({
-            name: 'skips fixture-backed submodule integration tests when fixture repo is absent',
-            run: () => {
-                console.log('  skip fixture-backed tests: set LOOK_GIT_FIXTURE_REPO or create ~/CodeProjects/look-git-fixture-repo');
-            },
-        });
-    } else {
-        tests.push(
-            {
-                name: 'builds complete Changes status data from the dirty fixture submodules',
-                run: async () => {
-                    const repo = new GitProcessRepository(fixturePath);
-                    const [status, stashes, submodules] = await Promise.all([
-                        repo.getStatus(),
-                        repo.stashList(),
-                        repo.getSubmoduleStatus(),
-                    ]);
-                    const data = buildStatusData(status, stashes, submodules).data;
+    await activateLookGit();
 
-                    assert.equal(data.submodules.length, 3);
-                    assert.equal(data.submodules.find((entry) => entry.path === 'modules/auth-kit')?.status, SubmoduleStatus.Dirty);
-                    assert.equal(data.submodules.find((entry) => entry.path === 'modules/billing-core')?.status, SubmoduleStatus.Dirty);
-                    assert.equal(data.submodules.find((entry) => entry.path === 'modules/analytics-adapter')?.status, SubmoduleStatus.Dirty);
-                    assert.ok(data.staged.some((entry) => entry.filePath === 'src/graphFilter.ts'));
-                    assert.ok([...data.staged, ...data.unstaged].some((entry) => entry.filePath === 'README.md'));
-                    assert.ok(data.unstaged.some((entry) => entry.filePath === 'modules/auth-kit' && entry.isSubmodule));
-                },
-            },
-            {
-                name: 'loads staged and unstaged files inside each fixture submodule',
-                run: async () => {
-                    const repo = new GitProcessRepository(fixturePath);
-                    const messages: ChangesExtensionToWebviewMessage[] = [];
-                    const accessor: ActiveRepositoryAccessor = {
-                        currentRepository: repo,
-                        currentContext: undefined,
-                        requireRepository: () => repo,
-                    };
-                    const router = new ChangesMessageRouter(accessor, (message) => { messages.push(message); }, async () => {});
+    const commands = await vscode.commands.getCommands(true);
+    assertCommand(commands, 'lookGit.history.refresh');
+    assertCommand(commands, 'lookGit.changes.refresh');
+    assertCommand(commands, 'lookGit.history.resetCurrentBranchToHere');
+    assertCommand(commands, 'lookGit.history.pushAllUpToHere');
 
-                    await router.handle({ type: 'changes/getSubmoduleStatus', requestId: 'auth', path: 'modules/auth-kit' });
-                    await router.handle({ type: 'changes/getSubmoduleStatus', requestId: 'billing', path: 'modules/billing-core' });
-                    await router.handle({ type: 'changes/getSubmoduleStatus', requestId: 'analytics', path: 'modules/analytics-adapter' });
+    assert.equal(git(repo, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', 'main@{u}']).trim(), 'origin/main');
+    assert.equal(git(repo, ['rev-list', '--left-right', '--count', 'main...origin/main']).trim(), '1\t0');
+    assert.ok(git(repo, ['worktree', 'list', '--porcelain']).includes('branch refs/heads/feature/semantic-worktree'));
+    assert.ok(git(repo, ['stash', 'list', '--format=%s']).includes('wip(semantic): stash action fixture'));
+    assert.ok(git(repo, ['status', '--porcelain', '--ignored', '-uall']).includes('!! build/cache.log'));
 
-                    const auth = submoduleResponse(messages, 'auth');
-                    assertStatusFile(auth.data.unstaged, 'index.ts');
-                    assertStatusFile(auth.data.unstaged, 'LOCAL_NOTES.md');
-                    assert.ok(auth.data.stashes.some((stash) => stash.message.includes('fixture stash for modules/auth-kit')));
+    await vscode.commands.executeCommand('lookGit.history.refresh');
+    await vscode.commands.executeCommand('lookGit.changes.refresh');
+}
 
-                    const billing = submoduleResponse(messages, 'billing');
-                    assertStatusFile(billing.data.staged, 'README.md');
-                    assertStatusFile(billing.data.unstaged, 'experiment.ts');
-                    assert.ok(billing.data.stashes.some((stash) => stash.message.includes('fixture stash for modules/billing-core')));
+interface NativeGitExtension {
+    getAPI(version: 1): NativeGitApi;
+}
 
-                    const analytics = submoduleResponse(messages, 'analytics');
-                    assertStatusFile(analytics.data.unstaged, 'index.ts');
-                    assertStatusFile(analytics.data.unstaged, 'fixtures/local-event.json');
-                    assert.ok(analytics.data.stashes.some((stash) => stash.message.includes('fixture stash for modules/analytics-adapter')));
+interface NativeGitApi {
+    readonly repositories: readonly NativeGitApiRepository[];
+}
 
-                    await router.handle({
-                        type: 'changes/getSubmoduleStashFiles',
-                        requestId: 'auth-stash-files',
-                        submodulePath: 'modules/auth-kit',
-                        index: 0,
-                    });
-                    const stashFiles = submoduleStashFilesResponse(messages, 'auth-stash-files');
-                    assertStatusFile(stashFiles.files, 'STASHED_ONLY.md');
-                },
-            },
-        );
+interface NativeGitApiRepository {
+    readonly rootUri: vscode.Uri;
+    readonly state: {
+        readonly HEAD?: {
+            readonly name?: string;
+            readonly upstream?: {
+                readonly remote?: string;
+                readonly name?: string;
+            };
+            readonly ahead?: number;
+        };
+        readonly indexChanges: readonly unknown[];
+        readonly workingTreeChanges: readonly unknown[];
+    };
+}
+
+async function activateLookGit(): Promise<void> {
+    const extension = vscode.extensions.getExtension('mathias8dev.look-git');
+    assert.ok(extension, 'Look Git extension is not available in the integration host.');
+    await extension.activate();
+}
+
+async function waitForGitRepository(
+    repo: string,
+    isReady: (repository: NativeGitApiRepository) => boolean = (repository) => repository.state.HEAD?.name !== undefined,
+): Promise<NativeGitApiRepository> {
+    const extension = vscode.extensions.getExtension<NativeGitExtension>('vscode.git');
+    assert.ok(extension, 'VS Code Git extension is not available.');
+    const gitApi = extension.isActive ? extension.exports.getAPI(1) : (await extension.activate()).getAPI(1);
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 10_000) {
+        const repository = gitApi.repositories.find((candidate) => samePath(candidate.rootUri.fsPath, repo));
+        if (repository && isReady(repository)) {
+            return repository;
+        }
+        await delay(100);
     }
-
-    return runTestCases('Look Git integration', tests);
+    throw new Error(`VS Code Git extension did not open ${repo}.`);
 }
 
-function submoduleStashFilesResponse(
-    messages: readonly ChangesExtensionToWebviewMessage[],
-    requestId: string,
-): SubmoduleStashFilesResponse {
-    const response = messages.find((message): message is SubmoduleStashFilesResponse =>
-        message.type === 'changes/submoduleStashFiles' && message.requestId === requestId);
-    assert.ok(response, `Expected submodule stash files response for ${requestId}.`);
-    return response;
+function hasSemanticFixtureState(repository: NativeGitApiRepository): boolean {
+    return repository.state.HEAD?.name !== undefined
+        && repository.state.indexChanges.length >= 1
+        && repository.state.workingTreeChanges.length >= 1;
 }
 
-function submoduleResponse(
-    messages: readonly ChangesExtensionToWebviewMessage[],
-    requestId: string,
-): SubmoduleStatusResponse {
-    const response = messages.find((message): message is SubmoduleStatusResponse =>
-        message.type === 'changes/submoduleStatusData' && message.requestId === requestId);
-    assert.ok(response, `Expected submodule status response for ${requestId}.`);
-    return response;
+function assertCommand(commands: readonly string[], command: string): void {
+    assert.ok(commands.includes(command), `Missing command ${command}`);
 }
 
-function assertStatusFile(entries: readonly { readonly filePath: string }[], filePath: string): void {
-    assert.ok(entries.some((entry) => entry.filePath === filePath), `Expected status entry for ${filePath}.`);
+function requiredEnv(name: string): string {
+    const value = process.env[name];
+    assert.ok(value, `Missing environment variable ${name}`);
+    return value;
+}
+
+function git(cwd: string, args: readonly string[]): string {
+    return execFileSync('git', [...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+}
+
+function samePath(left: string, right: string): boolean {
+    return normalizePath(left) === normalizePath(right);
+}
+
+function normalizePath(value: string): string {
+    let resolved = path.resolve(value);
+    try {
+        resolved = fs.realpathSync.native(resolved);
+    } catch {
+        resolved = path.resolve(value);
+    }
+    return resolved.replace(/[\\/]+/g, '/').replace(/^([a-zA-Z]):/, (_match, drive: string) => `${drive.toLowerCase()}:`);
+}
+
+async function delay(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
 }

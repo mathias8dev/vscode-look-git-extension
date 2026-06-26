@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { TextInputValidationSeverity, type TextInputOptions, type TextInputPort } from '../../../application/ports/text-input';
+import { TextInputValidationSeverity, type TextInputOptions, type TextInputPort } from '@application/ports/text-input';
 
 export class VscodeTextInput implements TextInputPort {
     showInput(options: TextInputOptions): Promise<string | undefined> {

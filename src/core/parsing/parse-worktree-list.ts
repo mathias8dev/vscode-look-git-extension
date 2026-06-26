@@ -1,0 +1,47 @@
+import type { GitWorktree } from '@core/git/domain/git-worktree';
+
+export function parseWorktreeList(output: string): GitWorktree[] {
+    if (!output) { return []; }
+    const worktrees: GitWorktree[] = [];
+    const stanzas = output.split(/\r?\n\r?\n+/);
+
+    for (let i = 0; i < stanzas.length; i++) {
+        const stanza = (stanzas[i] ?? '').trim();
+        if (!stanza) { continue; }
+
+        let wtPath = '';
+        let head = '';
+        let branch: string | undefined;
+        let isDetached = false;
+        let isLocked = false;
+        let isPrunable = false;
+        let lockReason: string | undefined;
+        let pruneReason: string | undefined;
+
+        for (const line of stanza.split(/\r?\n/)) {
+            if (line.startsWith('worktree '))       { wtPath = line.slice('worktree '.length); }
+            else if (line.startsWith('HEAD '))       { head = line.slice('HEAD '.length); }
+            else if (line.startsWith('branch '))     { branch = line.slice('branch '.length); }
+            else if (line === 'detached')            { isDetached = true; }
+            else if (line === 'locked')              { isLocked = true; }
+            else if (line.startsWith('locked '))      { isLocked = true; lockReason = line.slice('locked '.length); }
+            else if (line === 'prunable')            { isPrunable = true; }
+            else if (line.startsWith('prunable '))    { isPrunable = true; pruneReason = line.slice('prunable '.length); }
+        }
+
+        if (!wtPath) { continue; }
+        worktrees.push({
+            path: wtPath,
+            head,
+            branch,
+            isMain: i === 0,
+            isDetached,
+            isLocked,
+            lockReason,
+            isPrunable,
+            pruneReason,
+        } satisfies GitWorktree);
+    }
+
+    return worktrees;
+}

@@ -1,0 +1,31 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as History or Graph Webview
+participant Router as Feature Message Router
+participant Registry as RepositoryRegistry
+participant UseCase as ResetCurrentBranchUseCase
+participant Plans as OperationPlanRegistry
+participant Worktree as Worktree
+participant Runtime as HybridGitRuntime
+
+User->>App: Reset current branch to commit
+App->>Router: reset request(worktreeLocator, targetCommit)
+Router->>Registry: resolveWorktree(worktreeLocator)
+Registry-->>Router: Worktree
+Router->>UseCase: plan(Worktree, targetCommit)
+UseCase->>Worktree: getStatus()
+UseCase->>Worktree: getReflog(first page)
+UseCase->>Plans: store resetHard plan with preview hash
+Plans-->>Router: planId
+Router-->>App: guarded operation plan
+User->>App: Acknowledge destructive preview
+App->>Router: guarded acknowledgement(planId)
+Router->>Plans: validate acknowledgement
+Plans-->>Router: validated plan
+Router->>UseCase: execute(validated plan)
+UseCase->>Worktree: resetHard(targetCommit)
+Worktree->>Runtime: resetHard(context, targetCommit)
+Runtime-->>Worktree: success
+UseCase-->>Router: recovery hint with previous HEAD
+Router-->>App: operation success and refresh requested

@@ -1,9 +1,9 @@
-import type { RequestId, ErrorMessage, ProtocolError } from '../shared/base';
-import type { OperationNoticeActionKind, OperationStatus } from '../shared/operation';
-export { OperationStatus as GraphOperationStatus } from '../shared/operation';
-import type { SerializedRepoContext } from '../shared/repo';
-import type { WebviewFontSizeChangedPush } from '../shared/ui';
-import type { GraphContextTarget, GraphData, GraphFilters, GraphPage, CommitFileChange, GraphRepositoryScope, GraphSubmoduleInfo } from './types';
+import type { RequestId, ErrorMessage, ProtocolError } from '@protocol/shared/base';
+import type { OperationNoticeActionKind, OperationStatus } from '@protocol/shared/operation';
+export { OperationStatus as GraphOperationStatus } from '@protocol/shared/operation';
+import type { RepositoriesChangedPush, RepositoryLocator, RepositoryNavigationMessage, SerializedRepoContext, WorktreeLocator } from '@protocol/shared/repo';
+import type { WebviewFontSizeChangedPush } from '@protocol/shared/ui';
+import type { GraphContextTarget, GraphData, GraphFilters, GraphPage, CommitFileChange, GraphSubmoduleInfo } from '@protocol/graph/types';
 
 // ── Extension → Webview (push — no requestId) ──────────────────────────────
 
@@ -21,7 +21,7 @@ export interface GraphDataPush {
 export interface GraphSubmodulesPush {
     readonly type: 'graph/submodulesPush';
     readonly repoId: string;
-    readonly repositoryScope: GraphRepositoryScope;
+    readonly repository?: RepositoryLocator;
     readonly submodules: readonly GraphSubmoduleInfo[];
 }
 
@@ -32,7 +32,7 @@ export interface GraphRefreshRequestedPush {
 export interface GraphBranchFilterInvalidatedPush {
     readonly type: 'graph/branchFilterInvalidated';
     readonly branch: string;
-    readonly repositoryScope?: GraphRepositoryScope;
+    readonly repository?: RepositoryLocator;
 }
 
 export interface GraphErrorPush {
@@ -67,7 +67,7 @@ export interface GraphOperationStatusPush {
     readonly command: GraphRepositoryCommand | BranchCommand | WorktreeCommand | CommitCommand;
     readonly target?: string;
     readonly background?: boolean;
-    readonly repositoryScope?: GraphRepositoryScope;
+    readonly repository?: RepositoryLocator;
     readonly actions?: readonly OperationNoticeActionKind[];
 }
 
@@ -101,19 +101,19 @@ export interface WorktreeDetailsResponse {
 export interface GraphDataRequest {
     readonly type: 'graph/dataRequest';
     readonly requestId: RequestId;
-    readonly repoId: string;
+    readonly repoId?: string;
+    readonly repository?: RepositoryLocator;
     readonly filters: GraphFilters;
     readonly page: GraphPage;
-    readonly repositoryScope?: GraphRepositoryScope;
 }
 
 export interface LoadMoreGraphRequest {
     readonly type: 'graph/loadMore';
     readonly requestId: RequestId;
-    readonly repoId: string;
+    readonly repoId?: string;
+    readonly repository?: RepositoryLocator;
     readonly filters: GraphFilters;
     readonly page: GraphPage;
-    readonly repositoryScope?: GraphRepositoryScope;
 }
 
 export interface CommitDetailsRequest {
@@ -121,14 +121,15 @@ export interface CommitDetailsRequest {
     readonly requestId: RequestId;
     readonly hash: string;
     readonly selectedHashes?: readonly string[];
-    readonly repositoryScope?: GraphRepositoryScope;
+    readonly repository?: RepositoryLocator;
 }
 
 export interface WorktreeDetailsRequest {
     readonly type: 'graph/worktreeDetailsRequest';
     readonly requestId: RequestId;
     readonly path: string;
-    readonly repositoryScope?: GraphRepositoryScope;
+    readonly repository?: RepositoryLocator;
+    readonly worktree?: WorktreeLocator;
 }
 
 // ── Webview → Extension (commands — no response expected) ──────────────────
@@ -154,7 +155,7 @@ export interface BranchCommandRequest {
     readonly command: BranchCommand;
     readonly branch: string;
     readonly isRemote: boolean;
-    readonly repositoryScope?: GraphRepositoryScope;
+    readonly repository?: RepositoryLocator;
 }
 
 export type WorktreeCommand =
@@ -180,7 +181,8 @@ export interface WorktreeCommandRequest {
     readonly type: 'graph/worktreeCommand';
     readonly command: WorktreeCommand;
     readonly path?: string;
-    readonly repositoryScope?: GraphRepositoryScope;
+    readonly repository?: RepositoryLocator;
+    readonly worktree?: WorktreeLocator;
 }
 
 export type CommitCommand =
@@ -210,7 +212,7 @@ export interface CommitCommandRequest {
     readonly command: CommitCommand;
     readonly hash: string;
     readonly hashes: readonly string[];
-    readonly repositoryScope?: GraphRepositoryScope;
+    readonly repository?: RepositoryLocator;
 }
 
 export interface OpenDiffRequest {
@@ -221,7 +223,7 @@ export interface OpenDiffRequest {
     readonly origPath?: string;
     readonly parentHash?: string;
     readonly isSubmodule?: boolean;
-    readonly repositoryScope?: GraphRepositoryScope;
+    readonly repository?: RepositoryLocator;
 }
 
 export interface OpenWorktreeDiffRequest {
@@ -231,7 +233,8 @@ export interface OpenWorktreeDiffRequest {
     readonly status: string;
     readonly origPath?: string;
     readonly isSubmodule?: boolean;
-    readonly repositoryScope?: GraphRepositoryScope;
+    readonly repository?: RepositoryLocator;
+    readonly worktree?: WorktreeLocator;
 }
 
 export interface GraphReadyMessage {
@@ -256,13 +259,14 @@ export type GraphRepositoryCommand = 'fetch';
 export interface GraphRepositoryCommandRequest {
     readonly type: 'graph/repositoryCommand';
     readonly command: GraphRepositoryCommand;
-    readonly repositoryScope?: GraphRepositoryScope;
+    readonly repository?: RepositoryLocator;
 }
 
 // ── Union types ─────────────────────────────────────────────────────────────
 
 export type GraphExtensionToWebviewMessage =
     | RepoContextChangedPush
+    | RepositoriesChangedPush
     | WebviewFontSizeChangedPush
     | GraphRefreshRequestedPush
     | GraphBranchFilterInvalidatedPush
@@ -278,6 +282,7 @@ export type GraphExtensionToWebviewMessage =
     | ErrorMessage;
 
 export type GraphWebviewToExtensionMessage =
+    | RepositoryNavigationMessage
     | GraphReadyMessage
     | GraphRefreshMessage
     | GraphShowOutputMessage
