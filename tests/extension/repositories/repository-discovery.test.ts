@@ -156,6 +156,22 @@ describe('repository discovery', () => {
         expect(samePath(contexts[0]?.cwd ?? '', fixture.parent.cwd)).toBe(true);
     });
 
+    it('does not list registered submodules whose paths contain spaces', async () => {
+        const child = tempRepo();
+        child.commitFile('child.txt', 'child content\n', 'init child');
+        const parent = tempRepo();
+        parent.commitFile('root.txt', 'root\n', 'init parent');
+        parent.git(['-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', child.cwd, 'auth kit']);
+        parent.git(['commit', '-q', '-m', 'add spaced submodule']);
+
+        const contexts = await discoverRepositoryContexts({
+            workspaceFolders: [workspaceFolder(parent.cwd)],
+        });
+
+        expect(contexts).toHaveLength(1);
+        expect(samePath(contexts[0]?.cwd ?? '', parent.cwd)).toBe(true);
+    });
+
     it('ignores dependency folders while scanning workspace repositories', async () => {
         const root = tempRoot();
         const app = initRepoAt(path.join(root, 'app'));

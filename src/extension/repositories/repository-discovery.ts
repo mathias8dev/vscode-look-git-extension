@@ -120,21 +120,16 @@ function cachedRegisteredSubmodulePaths(parentContext: RepoContext, cache: Map<s
 
 async function registeredSubmodulePaths(cwd: string): Promise<readonly string[]> {
     try {
-        const output = await new GitCliBackend(cwd).run(['config', '--file', '.gitmodules', '--get-regexp', 'path']);
-        return output
-            .split(/\r?\n/)
-            .map(submodulePathFromConfigLine)
-            .filter((submodulePath): submodulePath is string => Boolean(submodulePath))
+        const git = new GitCliBackend(cwd);
+        const output = await git.run(['config', '--file', '.gitmodules', '--null', '--name-only', '--get-regexp', '^submodule\\..*\\.path$']);
+        const keys = output.split('\0').filter(Boolean);
+        const submodulePaths = await Promise.all(keys.map(async (key) => (await git.run(['config', '--file', '.gitmodules', '--get', key])).trim()));
+        return submodulePaths
+            .filter(Boolean)
             .map((submodulePath) => path.resolve(cwd, submodulePath));
     } catch {
         return [];
     }
-}
-
-function submodulePathFromConfigLine(line: string): string | undefined {
-    const separatorIndex = line.search(/\s/);
-    if (separatorIndex < 0) { return undefined; }
-    return line.slice(separatorIndex).trim();
 }
 
 async function hasGitMarker(dirPath: string): Promise<boolean> {

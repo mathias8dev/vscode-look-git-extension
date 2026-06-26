@@ -40,6 +40,14 @@ describe('parseSubmoduleStatus', () => {
         expect(result).toHaveLength(3);
         expect(result.map((s) => s.path)).toEqual(['modules/a', 'modules/b', 'modules/c']);
     });
+
+    it('parses CRLF-separated submodule status output', () => {
+        const output = ' abc123 modules/a (v1.0)\r\n+def456 modules/b\r\n';
+        const result = parseSubmoduleStatus(output);
+
+        expect(result).toHaveLength(2);
+        expect(result.map((s) => s.path)).toEqual(['modules/a', 'modules/b']);
+    });
 });
 
 describe('parseSubmodulePaths', () => {

@@ -129,7 +129,6 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     undoLastCommit: (input) => ({ args: ['reset', `--${requiredStringField(input, 'mode')}`, 'HEAD~1'] }),
     cleanUntracked: (input) => ({ args: cleanArgs('cleanUntracked', input) }),
     cleanIgnored: (input) => ({ args: cleanArgs('cleanIgnored', input) }),
-    previewClean: (input) => ({ args: ['clean', '-n', ...cleanPathArgs(input)] }),
     pull: (input) => ({ args: pullArgs(input) }),
     pushRef: (input) => ({ args: ['push', requiredStringField(input, 'remote'), `${stringField(input, 'sourceRef')}:${requiredStringField(input, 'destinationRef')}`] }),
     pushTags: (input) => ({ args: ['push', requiredStringField(input, 'remote'), '--tags'] }),
@@ -248,6 +247,13 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
     },
     reverseApplyPatch: async (input, runProcess, context, signal) => {
         await applyPatchContent(runProcess, context, requiredStringField(input, 'patch'), [...patchApplyArgs(input, false), '--reverse'], signal);
+    },
+    previewClean: async (input, runProcess, context, signal) => {
+        const output = await runProcess(['clean', '-n', ...cleanPathArgs(input)], context, {
+            signal,
+            env: { LC_ALL: 'C', LANG: 'C' },
+        });
+        return resultFor('previewClean', output.trim());
     },
     getCommitGraph: handleCommitGraph,
     getCommitDetails: async (input, runProcess, context, signal) => {
@@ -546,7 +552,7 @@ async function localBranchesContaining(
     signal?: AbortSignal,
 ): Promise<readonly string[]> {
     const output = await runRaw(runProcess, context, ['for-each-ref', '--format=%(refname:short)', '--contains', commit, 'refs/heads'], signal);
-    return output.split('\n').map((line) => line.trim()).filter(Boolean);
+    return output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 }
 
 async function readCurrentBranch(runProcess: CliGitRuntimeProcess, context: GitExecutionContext, signal?: AbortSignal): Promise<string> {
@@ -917,12 +923,16 @@ async function diffUntrackedFile(
     signal?: AbortSignal,
 ): Promise<string> {
     try {
-        return await runRaw(runProcess, context, ['diff', '--binary', '--no-index', '--', '/dev/null', filePath], signal);
+        return await runRaw(runProcess, context, ['diff', '--binary', '--no-index', '--', nullDevicePath(), filePath], signal);
     } catch (error) {
         const stdout = stdoutFromExecError(error);
         if (stdout !== undefined) { return stdout; }
         throw error;
     }
+}
+
+function nullDevicePath(): string {
+    return process.platform === 'win32' ? 'NUL' : '/dev/null';
 }
 
 async function applyPatchContent(
@@ -962,9 +972,9 @@ function singlePath(paths: readonly string[], label: string): string {
 function resultFor(operation: SemanticGitOperation, output: string): unknown {
     switch (operation) {
         case 'listRemotes':
-            return output ? output.split('\n').filter(Boolean) : [];
+            return output ? output.split(/\r?\n/).filter(Boolean) : [];
         case 'previewClean':
-            return output ? output.split('\n').map(cleanPreviewPath).filter(Boolean) : [];
+            return output ? output.split(/\r?\n/).map(cleanPreviewPath).filter(Boolean) : [];
         default:
             return output;
     }

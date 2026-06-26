@@ -5,7 +5,7 @@ export function parseSubmoduleStatus(output: string): GitSubmodule[] {
     if (!output) { return []; }
     const result: GitSubmodule[] = [];
 
-    for (const line of output.split('\n')) {
+    for (const line of output.split(/\r?\n/)) {
         if (!line) { continue; }
         // Format: [+-U ]<sha> <path> [(<desc>)]
         const match = line.match(/^([ +\-U])[0-9a-f]+ (.+?)( \(.*\))?$/);

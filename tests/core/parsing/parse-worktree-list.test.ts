@@ -52,6 +52,23 @@ describe('parseWorktreeList', () => {
         expect(result.filter((w) => w.isMain)).toHaveLength(1);
     });
 
+    it('parses CRLF-separated porcelain output', () => {
+        const output = [
+            'worktree C:/repo',
+            'HEAD abc1234567890abcdef',
+            'branch refs/heads/main',
+            '',
+            'worktree C:/wt/feature',
+            'HEAD def456',
+            'branch refs/heads/feature',
+            '',
+        ].join('\r\n');
+        const result = parseWorktreeList(output);
+
+        expect(result).toHaveLength(2);
+        expect(expectItem(result, 1).path).toBe('C:/wt/feature');
+    });
+
     it('parses locked worktrees with a reason', () => {
         const output = MAIN_STANZA + '\n\nworktree /wt/locked\nHEAD def456\nbranch refs/heads/locked\nlocked needs review\n\n';
         const result = parseWorktreeList(output);

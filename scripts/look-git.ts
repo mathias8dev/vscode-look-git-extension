@@ -170,11 +170,11 @@ function printSummary(name: string, target: string): void {
         return;
     }
 
-    const branchCount = git(target, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']).split('\n').filter(Boolean).length;
-    const remoteCount = git(target, ['remote']).split('\n').filter(Boolean).length;
-    const remoteBranchCount = git(target, ['for-each-ref', '--format=%(refname:short)', 'refs/remotes']).split('\n').filter(Boolean).length;
+    const branchCount = lines(git(target, ['for-each-ref', '--format=%(refname:short)', 'refs/heads'])).length;
+    const remoteCount = lines(git(target, ['remote'])).length;
+    const remoteBranchCount = lines(git(target, ['for-each-ref', '--format=%(refname:short)', 'refs/remotes'])).length;
     const commitCount = git(target, ['rev-list', '--all', '--count']).trim();
-    const worktreeCount = git(target, ['worktree', 'list', '--porcelain']).split('\n').filter((line) => line.startsWith('worktree ')).length;
+    const worktreeCount = lines(git(target, ['worktree', 'list', '--porcelain'])).filter((line) => line.startsWith('worktree ')).length;
     console.log(`Created ${name}: ${target}`);
     console.log(`  branches: ${branchCount}`);
     if (remoteCount > 0) {
@@ -1281,6 +1281,10 @@ function git(cwd: string, args: readonly string[], options: CommitOptions = {}):
             GIT_COMMITTER_DATE: date,
         },
     });
+}
+
+function lines(output: string): readonly string[] {
+    return output.split(/\r?\n/).filter(Boolean);
 }
 
 function expectGitFailure(cwd: string, args: readonly string[]): void {

@@ -7,7 +7,7 @@ export function parseCommitLog(output: string): GitCommit[] {
     if (!output) { return []; }
     return output
         .split(LOG_RECORD_SEP)
-        .map((r) => r.replace(/^\n/, '').replace(/\n$/, ''))
+        .map(trimGitRecordNewline)
         .filter(Boolean)
         .map((record) => {
             const parts = record.split(LOG_FIELD_SEP);
@@ -27,7 +27,7 @@ export function parseGraphLog(output: string): GitGraphCommit[] {
     if (!output) { return []; }
     return output
         .split(LOG_RECORD_SEP)
-        .map((r) => r.replace(/^\n/, '').replace(/\n$/, ''))
+        .map(trimGitRecordNewline)
         .filter(Boolean)
         .map((record) => {
             const parts = record.split(LOG_FIELD_SEP);
@@ -45,4 +45,8 @@ export function parseGraphLog(output: string): GitGraphCommit[] {
                 refs,
             };
         });
+}
+
+function trimGitRecordNewline(record: string): string {
+    return record.replace(/^\r?\n/, '').replace(/\r?\n$/, '');
 }
