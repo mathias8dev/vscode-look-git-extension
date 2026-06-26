@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { openReadonlyMarkdownDocument } from './readonly-diff-documents';
+import { openReadonlyMarkdownDocument } from '@extension/utils/readonly-diff-documents';
 
 export interface DiffExplanationDocument {
     readonly title: string;

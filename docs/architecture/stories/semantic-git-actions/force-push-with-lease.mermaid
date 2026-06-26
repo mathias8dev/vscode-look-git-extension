@@ -1,0 +1,42 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as Graph or History Webview
+participant Router as Feature Message Router
+participant Registry as RepositoryRegistry
+participant UseCase as ForcePushWithLeaseUseCase
+participant Repository as GitRepository
+participant Worktree as Worktree
+participant Plans as OperationPlanRegistry
+participant Runtime as HybridGitRuntime
+participant VscodeRuntime as VscodeGitRuntime
+participant CliRuntime as CliGitRuntime
+
+User->>App: Force push with lease
+App->>Router: push request(repoLocator, worktreeLocator, branch)
+Router->>Registry: resolve repository and worktree
+Registry-->>Router: Repository and Worktree
+Router->>UseCase: plan(repository, worktree, branch)
+UseCase->>Repository: getUpstreamBranch(branch)
+UseCase->>Repository: fetch(remote, { prune: true })
+UseCase->>Repository: getAheadBehind(branch, upstream)
+UseCase->>Plans: store high-risk remote plan with expected remote ref
+Router-->>App: guarded operation plan
+User->>App: Acknowledge lease preview
+App->>Router: guarded acknowledgement(planId)
+Router->>Plans: validate acknowledgement
+alt Preview is stale
+  Plans-->>Router: validation error
+  Router-->>App: plan expired error
+else Preview is current
+  Router->>UseCase: execute(validated plan)
+  UseCase->>Worktree: forcePushWithLease(remote, branch)
+  Worktree->>Runtime: forcePushWithLease(context, input)
+  alt VS Code runtime supports credentials
+    Runtime->>VscodeRuntime: forcePushWithLease(context, input)
+  else VS Code runtime cannot support context
+    Runtime->>CliRuntime: forcePushWithLease(context, input)
+  end
+  Runtime-->>Worktree: success
+  Router-->>App: operation success and refresh requested
+end

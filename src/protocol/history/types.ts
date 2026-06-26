@@ -1,4 +1,4 @@
-import type { Pagination } from '../shared/base';
+import type { Pagination } from '@protocol/shared/base';
 
 export interface HistoryCommit {
     readonly hash: string;

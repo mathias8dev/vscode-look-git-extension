@@ -1,0 +1,36 @@
+sequenceDiagram
+autonumber
+actor User
+participant App as Look Graph Webview
+participant Router as GraphMessageRouter
+participant Registry as RepositoryRegistry
+participant UseCase as RemoveWorktreeUseCase
+participant Repository as GitRepository
+participant Worktree as Worktree
+participant Plans as OperationPlanRegistry
+
+User->>App: Remove linked worktree
+App->>Router: remove request(repoLocator, worktreeLocator)
+Router->>Registry: resolve repository and worktree
+Registry-->>Router: Repository and Worktree
+Router->>UseCase: plan(repository, worktree)
+alt Worktree is main checkout
+  UseCase-->>Router: validation error
+  Router-->>App: graph/error(validationFailed)
+else Linked worktree
+  UseCase->>Repository: listWorktrees()
+  UseCase->>Worktree: getStatus()
+  UseCase->>Plans: store removeWorktree plan with dirty preview
+  Router-->>App: guarded operation plan
+  alt User chooses repair stale metadata
+    App->>Router: repair request(repoLocator, path)
+    Router->>Repository: repairWorktree(path)
+    Router-->>App: refresh requested
+  else User confirms removal
+    App->>Router: guarded acknowledgement(planId)
+    Router->>Plans: validate acknowledgement
+    Router->>UseCase: execute(validated plan)
+    UseCase->>Repository: removeWorktree(path, force)
+    Router-->>App: operation success and refresh requested
+  end
+end

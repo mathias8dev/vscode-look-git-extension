@@ -1,5 +1,5 @@
-import type { DiffExplainer, DiffExplainerInput } from '../../../application/ports/diff-explainer';
-import { requestVscodeLanguageModel } from './vscode-language-model-request';
+import type { DiffExplainer, DiffExplainerInput } from '@application/ports/diff-explainer';
+import { requestVscodeLanguageModel } from '@extension/adapters/vscode/vscode-language-model-request';
 
 export class VscodeLanguageModelDiffExplainer implements DiffExplainer {
     explainDiff(input: DiffExplainerInput, signal?: AbortSignal): Promise<string> {

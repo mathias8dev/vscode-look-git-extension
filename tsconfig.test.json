@@ -2,10 +2,10 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "module": "CommonJS",
-    "moduleResolution": "Node",
+    "moduleResolution": "node10",
     "outDir": "out",
     "rootDir": ".",
-    "types": ["node", "vscode"]
+    "types": ["node", "vscode", "@wdio/globals/types", "@wdio/mocha-framework", "expect-webdriverio", "wdio-vscode-service"]
   },
   "include": [
     "tests/**/*.ts",

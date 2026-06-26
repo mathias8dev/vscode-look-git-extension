@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { removeDirSyncWithRetry } from '../helpers/gitRepo';
+import { removeDirSyncWithRetry } from '@tests/helpers/git-repo';
 
 const roots: string[] = [];
 

@@ -1,11 +1,9 @@
-import type { GitRepository } from '../../ports/git-repository';
-import type { GitGraphCommit } from '../../../core/git/domain/GitCommit';
-import type { GitBranch, GitTag } from '../../../core/git/domain/GitStatus';
-import type { GitSubmodule, GitWorktree } from '../../../core/git/domain/GitWorktree';
-import { summarizePorcelainStatus } from '../../../core/parsing/parseStatus';
-import { queryAllBranches, queryCurrentBranch } from '../../../core/queries/queryGraph';
-import { queryWorktrees } from '../../../core/queries/queryWorktrees';
-import { getReachableCommitHashes } from '../commits/get-reachable-commit-hashes';
+import type { GitRepository } from '@application/ports/git-topology';
+import { settleOptional } from '@core/shared/async';
+import type { GitGraphCommit } from '@core/git/domain/git-commit';
+import type { GitBranch, GitTag } from '@core/git/domain/git-status';
+import type { GitSubmodule, GitWorktree } from '@core/git/domain/git-worktree';
+import { getReachableCommitHashes } from '@application/usecases/commits/get-reachable-commit-hashes';
 
 export interface GraphDataFilters {
     readonly search?: string;
@@ -67,6 +65,8 @@ export interface GraphDataResult {
 
 export interface GraphDataOptions {
     readonly includeSubmoduleRepositories?: boolean;
+    readonly resolveWorktreeWips?: (worktrees: readonly GitWorktree[], signal?: AbortSignal) => Promise<readonly GraphWorktreeWip[]>;
+    readonly resolveSubmoduleRepositories?: (submodules: readonly GitSubmodule[], signal?: AbortSignal) => Promise<GraphSubmoduleRepositoriesResult>;
 }
 
 export class GetGraphDataUseCase {
@@ -80,30 +80,35 @@ export class GetGraphDataUseCase {
         const search = filters.search?.trim();
         const usesPrefixPagination = Boolean(search);
         const maxCount = usesPrefixPagination ? page.offset + page.limit + 1 : page.limit + 1;
-        const [rawCommits, branches, tags, currentUser, remotesResult, worktreesResult, submodulesResult] = await Promise.all([
-            repo.getGraphLog(maxCount, filters.branches, filters.path, {
-                search,
-                authors: filters.authors,
-                dateFrom: filters.dateFrom,
-                dateTo: filters.dateTo,
-                skip: usesPrefixPagination ? 0 : page.offset,
-            }, signal),
-            repo.getAllBranches(signal),
-            repo.getAllTags(signal),
+        const skip = usesPrefixPagination ? 0 : page.offset;
+        const graphPage = await repo.getCommitGraph(
+            { search, branches: filters.branches, path: filters.path, authors: filters.authors, dateFrom: filters.dateFrom, dateTo: filters.dateTo },
+            { limit: maxCount, encodedCursor: skip > 0 ? String(skip) : undefined },
+            signal,
+        );
+        const rawCommits = graphPage.items as readonly GitGraphCommit[];
+        const [branches, tags, currentUser, remotesResult, worktreesResult, submodulesResult] = await Promise.all([
+            repo.listBranches(signal),
+            repo.listTags(signal),
             repo.getUserName(signal),
-            settleOptional('graph/listRemotes', repo.getRemotes(signal)),
+            settleOptional('graph/listRemotes', repo.listRemotes(signal)),
             settleOptional('graph/listWorktrees', repo.listWorktrees(signal)),
-            settleOptional('graph/listSubmodules', repo.getSubmoduleStatus(signal)),
+            settleOptional('graph/listSubmodules', repo.listSubmodules(signal)),
         ]);
 
         const warnings: GraphDataWarning[] = [];
         const remotes = optionalValue(remotesResult, warnings);
         const worktrees = optionalValue(worktreesResult, warnings);
         const submoduleStatuses = optionalValue(submodulesResult, warnings);
-        const worktreeWips = await this.getWorktreeWips(repo, worktrees, warnings, signal);
+
+        const worktreeWips = options.resolveWorktreeWips
+            ? await safeResolve('graph/worktreeWipStatus', () => options.resolveWorktreeWips!(worktrees, signal), warnings, signal)
+            : [];
         const submoduleRepositories = options.includeSubmoduleRepositories === false
-            ? { submodules: submoduleStatuses.map(toSubmoduleRepositorySummary), warnings: [] }
-            : await this.getSubmoduleRepositories(repo, submoduleStatuses, signal);
+            ? { submodules: submoduleStatuses.map(toSubmoduleRepositorySummary), warnings: [] as GraphDataWarning[] }
+            : options.resolveSubmoduleRepositories
+                ? await options.resolveSubmoduleRepositories(submoduleStatuses, signal)
+                : { submodules: submoduleStatuses.map(toSubmoduleRepositorySummary), warnings: [] as GraphDataWarning[] };
         warnings.push(...submoduleRepositories.warnings);
 
         const commits = usesPrefixPagination
@@ -132,39 +137,6 @@ export class GetGraphDataUseCase {
         };
     }
 
-    async getSubmoduleRepositories(
-        repo: GitRepository,
-        submodules: readonly GitSubmodule[],
-        signal?: AbortSignal,
-    ): Promise<GraphSubmoduleRepositoriesResult> {
-        const warnings: GraphDataWarning[] = [];
-        const repositories = await this.loadSubmoduleRepositories(repo, submodules, warnings, signal);
-        return { submodules: repositories, warnings };
-    }
-
-    private async getWorktreeWips(
-        repo: GitRepository,
-        worktrees: readonly GitWorktree[],
-        warnings: GraphDataWarning[],
-        signal?: AbortSignal,
-    ): Promise<readonly GraphWorktreeWip[]> {
-        const wips = await Promise.all(worktrees.map(async (worktree): Promise<GraphWorktreeWip | undefined> => {
-            try {
-                const raw = await repo.execRaw(['-C', worktree.path, 'status', '--porcelain=v1', '-z', '-u'], signal);
-                const counts = summarizePorcelainStatus(raw);
-                const total = counts.staged + counts.unstaged + counts.untracked + counts.conflicts;
-                return total > 0
-                    ? { path: worktree.path, head: worktree.head, branch: worktree.branch, ...counts }
-                    : undefined;
-            } catch (error) {
-                signal?.throwIfAborted();
-                warnings.push({ operation: 'graph/worktreeWipStatus', error });
-                return undefined;
-            }
-        }));
-        return wips.filter((wip): wip is GraphWorktreeWip => wip !== undefined);
-    }
-
     private async getCurrentBranchCommitHashes(
         repo: GitRepository,
         commits: readonly GitGraphCommit[],
@@ -180,33 +152,6 @@ export class GetGraphDataUseCase {
             return [];
         }
     }
-
-    private async loadSubmoduleRepositories(
-        repo: GitRepository,
-        submodules: readonly GitSubmodule[],
-        warnings: GraphDataWarning[],
-        signal?: AbortSignal,
-    ): Promise<readonly GraphSubmoduleRepository[]> {
-        return mapLimited(submodules, 4, async (submodule) => {
-            if (submodule.status === '-') {
-                return { path: submodule.path, status: submodule.status, branches: [], worktrees: [] };
-            }
-
-            const execSubmoduleRaw = (args: readonly string[], s?: AbortSignal) => repo.execRaw(['-C', submodule.path, ...args], s);
-            const execSubmodule = (args: readonly string[], s?: AbortSignal) => repo.exec(['-C', submodule.path, ...args], s);
-            const [branchesResult, worktreesResult] = await Promise.all([
-                settleOptional(`graph/submoduleBranches:${submodule.path}`, queryAllBranches(execSubmoduleRaw, (s) => queryCurrentBranch(execSubmodule, s), signal)),
-                settleOptional(`graph/submoduleWorktrees:${submodule.path}`, queryWorktrees(execSubmoduleRaw, signal)),
-            ]);
-
-            return {
-                path: submodule.path,
-                status: submodule.status,
-                branches: optionalValue(branchesResult, warnings),
-                worktrees: optionalValue(worktreesResult, warnings),
-            };
-        });
-    }
 }
 
 function toSubmoduleRepositorySummary(submodule: GitSubmodule): GraphSubmoduleRepository {
@@ -218,28 +163,6 @@ function toSubmoduleRepositorySummary(submodule: GitSubmodule): GraphSubmoduleRe
     };
 }
 
-async function mapLimited<T, R>(
-    items: readonly T[],
-    limit: number,
-    mapper: (item: T) => Promise<R>,
-): Promise<readonly R[]> {
-    const results: R[] = [];
-    for (let index = 0; index < items.length; index += limit) {
-        results.push(...await Promise.all(items.slice(index, index + limit).map(mapper)));
-    }
-    return results;
-}
-
-async function settleOptional<T>(
-    operation: string,
-    promise: Promise<readonly T[]>,
-): Promise<{ readonly operation: string; readonly status: 'fulfilled'; readonly value: readonly T[] } | { readonly operation: string; readonly status: 'rejected'; readonly reason: unknown }> {
-    try {
-        return { operation, status: 'fulfilled', value: await promise };
-    } catch (error) {
-        return { operation, status: 'rejected', reason: error };
-    }
-}
 
 function optionalValue<T>(
     result: { readonly operation: string; readonly status: 'fulfilled'; readonly value: readonly T[] } | { readonly operation: string; readonly status: 'rejected'; readonly reason: unknown },
@@ -248,4 +171,19 @@ function optionalValue<T>(
     if (result.status === 'fulfilled') { return result.value; }
     warnings.push({ operation: result.operation, error: result.reason });
     return [];
+}
+
+async function safeResolve<T>(
+    operation: string,
+    fn: () => Promise<readonly T[]>,
+    warnings: GraphDataWarning[],
+    signal?: AbortSignal,
+): Promise<readonly T[]> {
+    try {
+        return await fn();
+    } catch (error) {
+        signal?.throwIfAborted();
+        warnings.push({ operation, error });
+        return [];
+    }
 }

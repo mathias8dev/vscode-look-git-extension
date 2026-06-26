@@ -1,3 +1,5 @@
+import { isRecord } from '@core/shared/type-guards';
+
 export function normalizeGeneratedCommitMessage(rawMessage: string): string {
     const withoutFence = stripCodeFence(rawMessage.trim());
     const fromJson = commitMessageFromJson(withoutFence);
@@ -46,8 +48,4 @@ function normalizeCommitLines(value: string): string {
 function findConventionalCommitStart(value: string): number {
     const lines = value.split('\n');
     return lines.findIndex((line) => /^(feat|fix|refactor|test|docs|build|chore)(\([^)]+\))?!?:\s+\S/.test(line.trim()));
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
 }

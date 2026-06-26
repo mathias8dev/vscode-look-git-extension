@@ -1,5 +1,5 @@
-import type { CommitMessageGenerator, CommitMessageGeneratorInput } from '../../../application/ports/commit-message-generator';
-import { requestVscodeLanguageModel } from './vscode-language-model-request';
+import type { CommitMessageGenerator, CommitMessageGeneratorInput } from '@application/ports/commit-message-generator';
+import { requestVscodeLanguageModel } from '@extension/adapters/vscode/vscode-language-model-request';
 
 export class VscodeLanguageModelCommitMessageGenerator implements CommitMessageGenerator {
     generateCommitMessage(input: CommitMessageGeneratorInput, signal?: AbortSignal): Promise<string> {

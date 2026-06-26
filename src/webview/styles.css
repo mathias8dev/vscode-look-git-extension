@@ -3,8 +3,9 @@
 @import "./styles/changes.css";
 @import "./styles/commit-message.css";
 @import "./styles/history.css";
-@import "./styles/visual-rebase.css";
+@import "./styles/repository-navigator.css";
 @import "./styles/submodules.css";
 @import "./styles/graph.css";
+@import "./styles/visual-rebase.css";
 @import "./styles/motion.css";
 @import "./styles/density.css";

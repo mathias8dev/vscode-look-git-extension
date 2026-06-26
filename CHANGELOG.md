@@ -4,6 +4,11 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+### Added
+
+#### Multi-Repo
+- Discover repositories inside non-Git workspace folders and expose repository navigation in Changes, Commit History, and Look Graph
+
 ## [1.1.3] - 2026-06-22
 
 ### Fixed

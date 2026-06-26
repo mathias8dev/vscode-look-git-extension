@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { GitCliBackend } from '../../../src/extension/git/git-cli-backend';
-import { createTempGitRepo, type TempGitRepo } from '../../helpers/gitRepo';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { GitCliBackend } from '@extension/git/git-cli-backend';
+import { createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
 
 describe('GitCliBackend', () => {
     const repos: TempGitRepo[] = [];
@@ -20,6 +22,26 @@ describe('GitCliBackend', () => {
         const backend = new GitCliBackend(r.cwd);
 
         await expect(backend.run(['rev-parse', '--show-toplevel'])).resolves.toBe(`${r.cwd}\n`);
+    });
+
+    it('uses a configured git executable path', async () => {
+        const r = repo();
+        const gitWrapperPath = path.join(r.cwd, 'git-wrapper.js');
+        const markerPath = path.join(r.cwd, 'git-wrapper-called.txt');
+        fs.writeFileSync(gitWrapperPath, [
+            '#!/usr/bin/env node',
+            "const childProcess = require('node:child_process');",
+            "const fs = require('node:fs');",
+            `fs.writeFileSync(${JSON.stringify(markerPath)}, process.argv.slice(2).join('\\n'));`,
+            "const result = childProcess.spawnSync('git', process.argv.slice(2), { stdio: 'inherit' });",
+            'process.exitCode = result.status ?? 1;',
+            '',
+        ].join('\n'));
+        fs.chmodSync(gitWrapperPath, 0o755);
+        const backend = new GitCliBackend(r.cwd, undefined, undefined, gitWrapperPath);
+
+        await expect(backend.run(['rev-parse', '--show-toplevel'])).resolves.toBe(`${r.cwd}\n`);
+        expect(fs.readFileSync(markerPath, 'utf8')).toContain('rev-parse');
     });
 
     it('merges custom environment variables into git process execution', async () => {

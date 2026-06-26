@@ -1,7 +1,6 @@
-import * as path from 'path';
 import * as vscode from 'vscode';
-import type { GitRepository } from '../../application/ports/git-repository';
-import { gitBlobUri } from './git-blob-documents';
+import type { GitRepository } from '@application/ports/git-topology';
+import { gitBlobUri } from '@extension/utils/git-blob-documents';
 
 type CommitDiffFile = {
     readonly commitHash: string;
@@ -16,31 +15,7 @@ type DiffUris = {
     readonly right: vscode.Uri;
 };
 
-export async function commitFileDiffUris(cwd: string, file: CommitDiffFile): Promise<DiffUris> {
-    const fileUri = vscode.Uri.file(path.join(cwd, file.filePath));
-    const origUri = file.origPath ? vscode.Uri.file(path.join(cwd, file.origPath)) : fileUri;
-    const parentRef = file.parentHash ?? `${file.commitHash}~1`;
-    const status = file.status.charAt(0);
-
-    if (status === 'A') {
-        return {
-            left: emptyDiffUri(file.commitHash, file.filePath, 'parent'),
-            right: toGitUri(fileUri, file.commitHash),
-        };
-    }
-
-    if (status === 'D') {
-        return {
-            left: toGitUri(origUri, parentRef),
-            right: emptyDiffUri(file.commitHash, file.filePath, 'commit'),
-        };
-    }
-
-    return {
-        left: toGitUri(origUri, parentRef),
-        right: toGitUri(fileUri, file.commitHash),
-    };
-}
+export type BlobContentReader = (ref: string, filePath: string) => Promise<string>;
 
 export async function commitFileTempDiffUris(repo: GitRepository, cwd: string, file: CommitDiffFile): Promise<DiffUris> {
     const parentRef = file.parentHash ?? `${file.commitHash}~1`;
@@ -73,15 +48,21 @@ export function emptyDiffUri(namespace: string, filePath: string, side: string):
 
 export async function refBlobUri(
     repo: GitRepository,
-    cwd: string,
+    _cwd: string,
     ref: string,
     filePath: string,
     side: string,
 ): Promise<vscode.Uri> {
-    const content = await repo.execRaw(['-C', cwd, 'show', `${ref}:${filePath}`]);
+    const content = await repo.getFileAtRevision(filePath, ref);
     return gitBlobUri(ref, filePath, side, content);
 }
 
-export function toGitUri(uri: vscode.Uri, ref: string): vscode.Uri {
-    return uri.with({ scheme: 'git', query: JSON.stringify({ path: uri.fsPath, ref }) });
+export async function refBlobUriFrom(
+    readBlob: BlobContentReader,
+    ref: string,
+    filePath: string,
+    side: string,
+): Promise<vscode.Uri> {
+    const content = await readBlob(ref, filePath);
+    return gitBlobUri(ref, filePath, side, content);
 }

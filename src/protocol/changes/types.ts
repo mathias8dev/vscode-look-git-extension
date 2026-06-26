@@ -1,4 +1,4 @@
-import type { SubmoduleStatus } from '../shared/repo';
+import type { SubmoduleStatus } from '@protocol/shared/repo';
 
 export interface SubmoduleEntry {
     readonly path: string;

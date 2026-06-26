@@ -1,4 +1,4 @@
-import type { GenerateCommitMessageRequest, GenerateSubmoduleCommitMessageRequest } from '../../../protocol/changes/messages';
+import type { GenerateCommitMessageRequest, GenerateSubmoduleCommitMessageRequest } from '@protocol/changes/messages';
 
 let requestCounter = 0;
 

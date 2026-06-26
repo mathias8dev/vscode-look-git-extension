@@ -244,3 +244,85 @@ h1 {
 .operation-notice-conflict .codicon {
     color: var(--vscode-inputValidation-warningBorder, #cca700);
 }
+
+.look-git-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 400;
+    background: var(--vscode-panel-dropBackground, rgba(0, 0, 0, 0.5));
+}
+
+.look-git-modal-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 401;
+    display: grid;
+    place-items: center;
+    min-width: 0;
+    padding: var(--look-git-space-lg);
+}
+
+.look-git-modal {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    width: min(42em, 100%);
+    max-height: min(38em, calc(100vh - 2 * var(--look-git-space-lg)));
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--vscode-panel-border, #3c3c3c);
+    border-radius: 6px;
+    color: var(--vscode-foreground, #cccccc);
+    background: var(--vscode-sideBar-background, var(--vscode-editor-background, #1e1e1e));
+    box-shadow: 0 1.2em 3em var(--vscode-widget-shadow, rgba(0, 0, 0, 0.35));
+}
+
+.look-git-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--look-git-space-md);
+    min-width: 0;
+    padding: var(--look-git-space-md) var(--look-git-space-lg);
+    border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
+}
+
+.look-git-modal-header h2 {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    font-size: 1em;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.look-git-modal-close {
+    display: inline-grid;
+    place-items: center;
+    width: var(--look-git-toolbar-button-size);
+    height: var(--look-git-toolbar-button-size);
+    flex-shrink: 0;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--vscode-foreground, #cccccc);
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+}
+
+.look-git-modal-close:hover {
+    background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
+}
+
+.look-git-modal-close:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder, #007fd4);
+    outline-offset: 1px;
+}
+
+.look-git-modal-content {
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    padding: var(--look-git-space-lg);
+}

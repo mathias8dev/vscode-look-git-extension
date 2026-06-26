@@ -1,4 +1,4 @@
-import type { GraphCommit } from '../../../../protocol/graph/types';
+import type { GraphCommit } from '@protocol/graph/types';
 
 export interface GraphRow {
     readonly commit: GraphCommit;

@@ -4,7 +4,7 @@ import {
     branchNameInputValidation,
     normalizeBranchNameInput,
     normalizeValidBranchNameInput,
-} from '../../../src/core/git/normalize-branch-name';
+} from '@core/git/normalize-branch-name';
 
 describe('normalizeBranchNameInput', () => {
     it('trims branch names and replaces whitespace with dashes', () => {

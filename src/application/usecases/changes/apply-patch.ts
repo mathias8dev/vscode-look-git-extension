@@ -1,4 +1,4 @@
-import type { GitRepository } from '../../ports/git-repository';
+import type { Worktree } from '@application/ports/git-topology';
 
 export enum ApplyPatchMode {
     WorkingTree,
@@ -15,27 +15,21 @@ export interface ApplyPatchResult {
 }
 
 export class ApplyPatchUseCase {
-    async preflight(repo: GitRepository, patchFilePath: string, mode: ApplyPatchMode): Promise<void> {
-        await repo.exec(applyPatchArgs(patchFilePath, mode, true));
+    async preflight(worktree: Worktree, patch: string, _mode: ApplyPatchMode): Promise<void> {
+        if (!await worktree.checkPatch(patch)) { throw new Error('Patch cannot be applied cleanly.'); }
     }
 
-    async execute(repo: GitRepository, patchFilePath: string, mode: ApplyPatchMode): Promise<ApplyPatchResult> {
-        await repo.exec(applyPatchArgs(patchFilePath, mode, false));
-        const status = await repo.getStatus();
+    async execute(worktree: Worktree, patch: string, mode: ApplyPatchMode): Promise<ApplyPatchResult> {
+        if (mode === ApplyPatchMode.Index) {
+            await worktree.applyPatchToIndex(patch, { threeWay: true });
+        } else {
+            await worktree.applyPatch(patch, {});
+        }
+        const status = await worktree.getStatus();
         return {
             kind: status.conflicts.length > 0
                 ? ApplyPatchResultKind.AppliedWithConflicts
                 : ApplyPatchResultKind.Applied,
         };
     }
-}
-
-function applyPatchArgs(patchFilePath: string, mode: ApplyPatchMode, check: boolean): readonly string[] {
-    return [
-        'apply',
-        ...(check ? ['--check'] : []),
-        '--3way',
-        ...(mode === ApplyPatchMode.Index ? ['--index'] : []),
-        patchFilePath,
-    ];
 }

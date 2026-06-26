@@ -2,17 +2,17 @@
 
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { SubmoduleStatusData } from '../../../src/protocol/changes/types';
-import { ConflictState } from '../../../src/protocol/changes/types';
-import { SubmoduleStatus } from '../../../src/protocol/shared/repo';
-import { ChangeRow } from '../../../src/webview/features/changes/ChangeRow';
-import type { ChangeListItem, ChangeTreeNode } from '../../../src/webview/features/changes/changeTree';
-import { ChangeSectionId } from '../../../src/webview/features/changes/changeTree';
-import { changesSelectionContext } from '../../../src/webview/features/changes/context-menu-model';
-import { SubmoduleItem } from '../../../src/webview/features/changes/SubmoduleItem';
-import { StashFileRow } from '../../../src/webview/features/changes/StashFileRow';
-import { StashItem } from '../../../src/webview/features/changes/StashItem';
-import { TreeNodeView } from '../../../src/webview/features/changes/TreeNodeView';
+import type { SubmoduleStatusData } from '@protocol/changes/types';
+import { ConflictState } from '@protocol/changes/types';
+import { SubmoduleStatus } from '@protocol/shared/repo';
+import { ChangeRow } from '@webview/features/changes/change-row';
+import type { ChangeListItem, ChangeTreeNode } from '@webview/features/changes/change-tree';
+import { ChangeSectionId } from '@webview/features/changes/change-tree';
+import { changesSelectionContext } from '@webview/features/changes/context-menu-model';
+import { SubmoduleItem } from '@webview/features/changes/submodule-item';
+import { StashFileRow } from '@webview/features/changes/stash-file-row';
+import { StashItem } from '@webview/features/changes/stash-item';
+import { TreeNodeView } from '@webview/features/changes/tree-node-view';
 
 describe('changes native context menu targets', () => {
     it('exposes the explain diff flag on selected change rows', () => {
