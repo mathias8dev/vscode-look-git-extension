@@ -46,7 +46,7 @@ export class GenerateCommitMessageUseCase {
 async function readRecentCommitSubjects(repo: GitRepository, signal?: AbortSignal): Promise<readonly string[]> {
     try {
         const page = await repo.getCommitGraph({}, { limit: RECENT_COMMIT_COUNT }, signal);
-        return page.items.map((commit) => commit.message.split('\n')[0]?.trim() ?? '').filter((line) => line.length > 0);
+        return page.items.map((commit) => commit.message.split(/\r?\n/)[0]?.trim() ?? '').filter((line) => line.length > 0);
     } catch (error) {
         if (isAbortError(error)) { throw error; }
         return [];

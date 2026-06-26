@@ -279,17 +279,17 @@ describe('semantic git runtime exhaustive coverage', () => {
         try {
             const { worktree } = fixture;
             await worktree.checkout('feature/rewrite-stack', {});
-            const commits = fixture.git(['rev-list', '--reverse', 'semantic-reset-base..HEAD']).trim().split('\n');
+            const commits = fixture.git(['rev-list', '--reverse', 'semantic-reset-base..HEAD']).trim().split(/\r?\n/);
             expect(commits).toHaveLength(3);
 
             await worktree.rewordCommit(commits[0]!, 'feat(core): reword runtime rewrite target');
             expect(fixture.git(['log', '--format=%s', '--reverse', 'semantic-reset-base..HEAD'])).toContain('feat(core): reword runtime rewrite target');
 
-            const afterReword = fixture.git(['rev-list', '--reverse', 'semantic-reset-base..HEAD']).trim().split('\n');
+            const afterReword = fixture.git(['rev-list', '--reverse', 'semantic-reset-base..HEAD']).trim().split(/\r?\n/);
             await worktree.squashCommits(afterReword.slice(0, 2), 'feat(core): squash runtime rewrite target');
             expect(fixture.git(['log', '--format=%s', '--reverse', 'semantic-reset-base..HEAD'])).toContain('feat(core): squash runtime rewrite target');
 
-            const afterSquash = fixture.git(['rev-list', '--reverse', 'semantic-reset-base..HEAD']).trim().split('\n');
+            const afterSquash = fixture.git(['rev-list', '--reverse', 'semantic-reset-base..HEAD']).trim().split(/\r?\n/);
             await worktree.dropCommit(afterSquash.at(-1)!);
             expect(fixture.git(['rev-list', '--count', 'semantic-reset-base..HEAD']).trim()).toBe('1');
 

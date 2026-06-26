@@ -3,7 +3,7 @@ import type { GitWorktree } from '@core/git/domain/git-worktree';
 export function parseWorktreeList(output: string): GitWorktree[] {
     if (!output) { return []; }
     const worktrees: GitWorktree[] = [];
-    const stanzas = output.split(/\n\n+/);
+    const stanzas = output.split(/\r?\n\r?\n+/);
 
     for (let i = 0; i < stanzas.length; i++) {
         const stanza = (stanzas[i] ?? '').trim();
@@ -18,7 +18,7 @@ export function parseWorktreeList(output: string): GitWorktree[] {
         let lockReason: string | undefined;
         let pruneReason: string | undefined;
 
-        for (const line of stanza.split('\n')) {
+        for (const line of stanza.split(/\r?\n/)) {
             if (line.startsWith('worktree '))       { wtPath = line.slice('worktree '.length); }
             else if (line.startsWith('HEAD '))       { head = line.slice('HEAD '.length); }
             else if (line.startsWith('branch '))     { branch = line.slice('branch '.length); }

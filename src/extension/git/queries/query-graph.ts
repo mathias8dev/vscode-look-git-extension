@@ -100,7 +100,7 @@ export async function queryAllBranches(
     ]);
     if (!output) { return []; }
 
-    return output.split('\n').filter(Boolean).flatMap((line) => {
+    return output.split(/\r?\n/).filter(Boolean).flatMap((line) => {
         const parts = line.split('\0');
         const refName = parts[0] ?? '';
         const isRemote = refName.startsWith('refs/remotes/');
@@ -123,7 +123,7 @@ export async function queryAllTags(execRawReadonly: GitExec, signal?: AbortSigna
     const format = '%(refname:short)%00%(objectname)';
     const output = await execRawReadonly(['tag', `--format=${format}`], signal);
     if (!output) { return []; }
-    return output.split('\n').filter(Boolean).map((line) => {
+    return output.split(/\r?\n/).filter(Boolean).map((line) => {
         const parts = line.split('\0');
         return { name: parts[0] ?? '', hash: parts[1] ?? '' };
     });
@@ -141,7 +141,7 @@ export async function queryUserName(execReadonly: GitExec, signal?: AbortSignal)
 
 export async function queryRemotes(execReadonly: GitExec, signal?: AbortSignal): Promise<string[]> {
     const output = await execReadonly(['remote'], signal);
-    return output ? output.split('\n').filter(Boolean) : [];
+    return output ? output.split(/\r?\n/).filter(Boolean) : [];
 }
 
 export async function queryCommitFiles(

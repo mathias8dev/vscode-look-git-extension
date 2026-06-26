@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { RepoContext } from '@core/git/domain/repo-context';
+import { normalizePathForComparison } from '@extension/utils/path-compare';
 
 export class RepositoryWorkingTreeWatcher implements vscode.Disposable {
     private readonly watchers = new Map<string, vscode.Disposable>();
@@ -10,14 +11,14 @@ export class RepositoryWorkingTreeWatcher implements vscode.Disposable {
     ) {}
 
     setContexts(contexts: readonly RepoContext[]): void {
-        const nextKeys = new Set(contexts.map((context) => normalizedPath(context.cwd)));
+        const nextKeys = new Set(contexts.map((context) => normalizePathForComparison(context.cwd)));
         for (const [key, disposable] of this.watchers) {
             if (nextKeys.has(key)) { continue; }
             disposable.dispose();
             this.watchers.delete(key);
         }
         for (const context of contexts) {
-            const key = normalizedPath(context.cwd);
+            const key = normalizePathForComparison(context.cwd);
             if (this.watchers.has(key)) { continue; }
             this.watchers.set(key, this.watchContext(context.cwd));
         }
@@ -48,11 +49,7 @@ export class RepositoryWorkingTreeWatcher implements vscode.Disposable {
 }
 
 export function isWorkingTreeChangePath(cwd: string, resourcePath: string): boolean {
-    const relativePath = path.relative(normalizedPath(cwd), normalizedPath(resourcePath));
+    const relativePath = path.relative(normalizePathForComparison(cwd), normalizePathForComparison(resourcePath));
     if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) { return false; }
     return !relativePath.split(/[\\/]+/).includes('.git');
-}
-
-function normalizedPath(value: string): string {
-    return path.normalize(value);
 }

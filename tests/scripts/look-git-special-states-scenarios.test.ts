@@ -36,7 +36,7 @@ function gitSucceeds(cwd: string, args: readonly string[]): boolean {
 }
 
 function lines(output: string): string[] {
-    return output.split('\n').filter(Boolean);
+    return output.split(/\r?\n/).filter(Boolean);
 }
 
 function aheadBehind(cwd: string, left: string, right: string): readonly [number, number] {

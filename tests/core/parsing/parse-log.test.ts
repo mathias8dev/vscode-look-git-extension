@@ -57,6 +57,16 @@ describe('parseCommitLog', () => {
         const result = parseCommitLog(output);
         expect(result).toHaveLength(1);
     });
+
+    it('trims CRLF separators around records', () => {
+        const output = `${makeLogRecord(['aaa', 'aaa', 'first', 'A', 'a@a.com', '2024-01-01T00:00:00Z', ''])}\r\n${LOG_RECORD_SEP}\r\n${makeLogRecord(['bbb', 'bbb', 'second', 'B', 'b@b.com', '2024-01-02T00:00:00Z', 'aaa'])}\r\n${LOG_RECORD_SEP}`;
+        const result = parseCommitLog(output);
+
+        expect(result).toHaveLength(2);
+        expect(expectItem(result, 0).hash).toBe('aaa');
+        expect(expectItem(result, 1).hash).toBe('bbb');
+        expect(expectItem(result, 1).parentHashes).toEqual(['aaa']);
+    });
 });
 
 describe('parseGraphLog', () => {
@@ -74,5 +84,13 @@ describe('parseGraphLog', () => {
         ]);
         const result = parseGraphLog(output);
         expect(expectItem(result, 0).refs).toEqual([]);
+    });
+
+    it('trims CRLF separators around graph records', () => {
+        const output = `\r\n${makeLogRecord(['abc', 'abc', 'msg', 'A', 'a@a.com', '2024-01-01T00:00:00Z', '', 'HEAD -> main'])}\r\n${LOG_RECORD_SEP}`;
+        const result = parseGraphLog(output);
+
+        expect(expectItem(result, 0).hash).toBe('abc');
+        expect(expectItem(result, 0).refs).toEqual(['HEAD -> main']);
     });
 });

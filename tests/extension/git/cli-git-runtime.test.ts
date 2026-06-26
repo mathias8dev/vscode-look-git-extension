@@ -47,13 +47,16 @@ describe('CliGitRuntime', () => {
     });
 
     it('returns semantic output for listRemotes and previewClean', async () => {
-        const runtime = new CliGitRuntime(async (args) => {
+        const previewEnvs: Array<Readonly<Record<string, string>> | undefined> = [];
+        const runtime = new CliGitRuntime(async (args, _context, options) => {
             if (args[0] === 'remote') { return 'origin\nupstream\n'; }
+            if (args[0] === 'clean') { previewEnvs.push(options.env); }
             return 'Would remove tmp.txt\nWould remove build/out.js\n';
         });
 
         await expect(runtime.execute('listRemotes', context, undefined)).resolves.toEqual(['origin', 'upstream']);
         await expect(runtime.execute('previewClean', context, { paths: [] })).resolves.toEqual(['tmp.txt', 'build/out.js']);
+        expect(previewEnvs).toEqual([{ LC_ALL: 'C', LANG: 'C' }]);
     });
 
     it('pushes a branch to its upstream remote when no remote is provided', async () => {
@@ -388,7 +391,7 @@ describe('CliGitRuntime', () => {
 
         expect(calls[0]).toEqual(['diff', '--cached', '--binary', '--', 'src/staged.ts']);
         expect(calls[1]).toEqual(['diff', '--binary', '--', 'src/app.ts']);
-        expect(calls[2]).toEqual(['diff', '--binary', '--no-index', '--', '/dev/null', 'src/new.ts']);
+        expect(calls[2]).toEqual(['diff', '--binary', '--no-index', '--', process.platform === 'win32' ? 'NUL' : '/dev/null', 'src/new.ts']);
         expect(calls[3]?.slice(0, -1)).toEqual(['apply', '--check', '--3way']);
         expect(calls[4]?.slice(0, -1)).toEqual(['apply', '--3way', '--index']);
         expect(calls[3]?.at(-1)).toMatch(/patch\.diff$/);
