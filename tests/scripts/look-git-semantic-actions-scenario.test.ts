@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createLookGitScenarioFixture, type LookGitScenarioFixture } from '@tests/helpers/look-git-scenario';
+import { normalizePathForCompare } from '@tests/helpers/git-repo';
 
 const fixtures: LookGitScenarioFixture[] = [];
 
@@ -68,10 +69,11 @@ describe('lookGit semantic-actions setup scenario', () => {
         expect(Number(git(repo, ['rev-list', '--count', 'semantic-reset-base..feature/rewrite-stack']).trim())).toBe(3);
 
         const worktreeList = git(repo, ['worktree', 'list', '--porcelain']);
+        const worktreePaths = worktreePathsFromPorcelain(worktreeList);
         expect(worktreeList).toContain('branch refs/heads/feature/semantic-worktree');
         expect(worktreeList).toContain('detached');
-        expect(worktreeList).toContain(path.join(outputRoot, '.semantic-actions-worktrees', 'semantic-review'));
-        expect(worktreeList).toContain(path.join(outputRoot, '.semantic-actions-worktrees', 'semantic-detached'));
+        expect(includesPath(worktreePaths, path.join(outputRoot, '.semantic-actions-worktrees', 'semantic-review'))).toBe(true);
+        expect(includesPath(worktreePaths, path.join(outputRoot, '.semantic-actions-worktrees', 'semantic-detached'))).toBe(true);
 
         expect(git(repo, ['stash', 'list', '--format=%s'])).toContain('wip(semantic): stash action fixture');
         const status = git(repo, ['status', '--porcelain', '--ignored', '-uall']);
@@ -87,3 +89,14 @@ describe('lookGit semantic-actions setup scenario', () => {
         git(repo, ['cherry-pick', '--abort']);
     }, 120_000);
 });
+
+function worktreePathsFromPorcelain(output: string): readonly string[] {
+    return lines(output)
+        .filter((line) => line.startsWith('worktree '))
+        .map((line) => line.slice('worktree '.length));
+}
+
+function includesPath(paths: readonly string[], expected: string): boolean {
+    const normalizedExpected = normalizePathForCompare(expected);
+    return paths.some((candidate) => normalizePathForCompare(candidate) === normalizedExpected);
+}

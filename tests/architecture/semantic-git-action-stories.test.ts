@@ -31,7 +31,7 @@ describe('semantic git action stories', () => {
 });
 
 function semanticActionsFromReadme(): readonly string[] {
-    const source = fs.readFileSync(STORIES_README, 'utf8');
+    const source = storiesReadme();
     return [...source.matchAll(/^Semantic actions: (.+)$/gm)]
         .flatMap((match) => [...operationLine(match).matchAll(/`([^`]+)`/g)])
         .map((operationMatch) => operationMatch[1])
@@ -43,19 +43,23 @@ function operationLine(match: RegExpMatchArray): string {
 }
 
 function implementationLinksFromReadme(): readonly string[] {
-    const source = fs.readFileSync(STORIES_README, 'utf8');
+    const source = storiesReadme();
     return [...source.matchAll(/^Implementation: \[.+?\]\((.+?\.mermaid)\)$/gm)]
         .map((match) => match[1])
         .filter((link): link is string => link !== undefined);
 }
 
 function storySections(): readonly { readonly title: string; readonly body: string }[] {
-    const source = fs.readFileSync(STORIES_README, 'utf8');
+    const source = storiesReadme();
     const chunks = source.split(/^## Story: /gm).slice(1);
     return chunks.map((chunk) => {
         const [title = '', ...bodyLines] = chunk.split('\n');
         return { title, body: bodyLines.join('\n') };
     });
+}
+
+function storiesReadme(): string {
+    return fs.readFileSync(STORIES_README, 'utf8').replace(/\r\n/g, '\n');
 }
 
 function hasSemanticActions(body: string): boolean {

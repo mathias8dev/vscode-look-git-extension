@@ -26,12 +26,15 @@ describe('GitCliBackend', () => {
 
     it('uses a configured git executable path', async () => {
         const r = repo();
-        const gitWrapperPath = path.join(r.cwd, 'git-wrapper.sh');
+        const gitWrapperPath = path.join(r.cwd, 'git-wrapper.js');
         const markerPath = path.join(r.cwd, 'git-wrapper-called.txt');
         fs.writeFileSync(gitWrapperPath, [
-            '#!/usr/bin/env sh',
-            `printf '%s\\n' "$@" > ${JSON.stringify(markerPath)}`,
-            'exec git "$@"',
+            '#!/usr/bin/env node',
+            "const childProcess = require('node:child_process');",
+            "const fs = require('node:fs');",
+            `fs.writeFileSync(${JSON.stringify(markerPath)}, process.argv.slice(2).join('\\n'));`,
+            "const result = childProcess.spawnSync('git', process.argv.slice(2), { stdio: 'inherit' });",
+            'process.exitCode = result.status ?? 1;',
             '',
         ].join('\n'));
         fs.chmodSync(gitWrapperPath, 0o755);

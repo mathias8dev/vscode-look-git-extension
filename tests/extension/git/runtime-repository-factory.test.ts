@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { describe, expect, it } from 'vitest';
 import { RuntimeRepositoryFactory } from '@extension/git/runtime-repository-factory';
 import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
@@ -21,7 +22,7 @@ describe('RuntimeRepositoryFactory', () => {
         expect(repository).toMatchObject({
             repoId: 'repo',
             cwd: '/repo',
-            gitDir: '/repo/.git',
+            gitDir: path.join('/repo', '.git'),
             kind: 'main',
             label: 'repo',
             runtime,

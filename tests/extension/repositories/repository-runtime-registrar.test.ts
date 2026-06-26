@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import * as path from 'path';
 import type { GitBranch, GitStatus } from '@core/git/domain/git-status';
 import type { GitSubmodule, GitWorktree } from '@core/git/domain/git-worktree';
 import type { GitExecutionContext, GitRuntime } from '@application/ports/git-runtime';
@@ -22,7 +23,7 @@ describe('RepositoryRuntimeRegistrar', () => {
 
         expect(registry.repositories().map((repo) => repo.repoId)).toEqual([
             context.id,
-            stableRepoContextId('/repo/modules/auth-kit'),
+            stableRepoContextId(path.resolve(context.cwd, 'modules/auth-kit')),
         ]);
     });
 });

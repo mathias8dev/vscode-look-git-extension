@@ -113,7 +113,8 @@ async function packageVsix(out: string): Promise<void> {
     const command = process.env.LOOK_GIT_VSCE_CLI;
     const args = ['package', '--no-dependencies', '--allow-missing-repository', '--no-rewrite-relative-links', '--out', out];
     if (command) {
-        childProcess.execFileSync(command, args, {
+        const invocation = executableInvocation(command, args);
+        childProcess.execFileSync(invocation.command, invocation.args, {
             cwd: repoRoot,
             stdio: 'inherit',
         });
@@ -123,6 +124,12 @@ async function packageVsix(out: string): Promise<void> {
         cwd: repoRoot,
         stdio: 'inherit',
     });
+}
+
+function executableInvocation(command: string, args: readonly string[]): { readonly command: string; readonly args: readonly string[] } {
+    return path.extname(command).toLowerCase() === '.js'
+        ? { command: process.execPath, args: [command, ...args] }
+        : { command, args };
 }
 
 async function withPackagedManifest(overrides: Pick<PackageManifest, 'version' | 'displayName'>, run: () => Promise<void>): Promise<void> {

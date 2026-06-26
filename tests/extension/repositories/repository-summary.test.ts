@@ -6,6 +6,7 @@ import type { SemanticGitOperation } from '@application/ports/git-operation';
 import { RuntimeRepositoryFactory } from '@extension/git/runtime-repository-factory';
 import { createRepoContext } from '@extension/repositories/repo-context-factory';
 import { RepositorySummaryService } from '@extension/repositories/repository-summary';
+import { samePath } from '@tests/helpers/git-repo';
 
 describe('RepositorySummaryService', () => {
     it('summarizes repository state for the navigator overview', async () => {
@@ -96,7 +97,7 @@ function recordingRuntime(state: RuntimeState): GitRuntime {
 }
 
 function worktreesForContext(worktrees: readonly GitWorktree[], cwd: string): readonly GitWorktree[] {
-    return worktrees.some((worktree) => worktree.path === cwd)
+    return worktrees.some((worktree) => samePath(worktree.path, cwd))
         ? worktrees
         : [worktree(cwd)];
 }

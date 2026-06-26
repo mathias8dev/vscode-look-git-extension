@@ -1,4 +1,5 @@
 import { execFile } from 'child_process';
+import * as path from 'path';
 import { promisify } from 'util';
 import type { GitBackend, GitRunOptions } from '@application/ports/git-backend';
 
@@ -19,7 +20,8 @@ export class GitCliBackend implements GitBackend {
         for (let attempt = 0; ; attempt++) {
             options.signal?.throwIfAborted();
             try {
-                const { stdout } = await execFileAsync(this.gitPath, [...args], {
+                const invocation = executableInvocation(this.gitPath, args);
+                const { stdout } = await execFileAsync(invocation.command, invocation.args, {
                     cwd: this.cwd,
                     maxBuffer: this.maxBuffer,
                     env: { ...process.env, ...options.env },
@@ -33,6 +35,12 @@ export class GitCliBackend implements GitBackend {
             }
         }
     }
+}
+
+function executableInvocation(command: string, args: readonly string[]): { readonly command: string; readonly args: readonly string[] } {
+    return path.extname(command).toLowerCase() === '.js'
+        ? { command: process.execPath, args: [command, ...args] }
+        : { command, args: [...args] };
 }
 
 function isIndexLockError(error: unknown): boolean {
