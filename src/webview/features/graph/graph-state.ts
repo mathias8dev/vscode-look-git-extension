@@ -344,10 +344,15 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
         case 'graph/operationStatus':
             return reduceGraphOperationStatus(state, message);
         case 'graph/error':
-            if (!isExpectedGraphError(state, message.requestId)) { return state; }
-            return message.requestId
-                ? { ...state, loading: false, loadingMore: false, activeGraphRequestId: undefined, error: message.error }
-                : { ...state, error: message.error };
+            if (isExpectedGraphError(state, message.requestId)) {
+                return message.requestId
+                    ? { ...state, loading: false, loadingMore: false, activeGraphRequestId: undefined, error: message.error }
+                    : { ...state, error: message.error };
+            }
+            if (isDetailsError(message.error) && state.detailsLoading) {
+                return { ...state, detailsLoading: false, commitDetails: undefined, error: message.error };
+            }
+            return state;
         case 'error':
             return { ...state, loading: false, loadingMore: false, activeGraphRequestId: undefined, error: message.error };
         case 'repo/contextChanged':
@@ -434,6 +439,12 @@ function isExpectedGraphResponse(state: GraphState, requestId: string): boolean 
 function isExpectedGraphError(state: GraphState, requestId: string | undefined): boolean {
     if (!requestId) { return true; }
     return state.activeGraphRequestId === requestId;
+}
+
+const DETAILS_OPERATIONS = new Set(['graph/commitDetailsRequest', 'graph/worktreeDetailsRequest']);
+
+function isDetailsError(error: ProtocolError): boolean {
+    return Boolean(error.operation) && DETAILS_OPERATIONS.has(error.operation!);
 }
 
 function applyGraphData(state: GraphState, data: GraphData, repoId: string | undefined): GraphState {

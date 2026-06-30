@@ -10,6 +10,11 @@ export class RepositoryRuntimeRegistrar {
         private readonly runtimeRepositoryFactory = new RuntimeRepositoryFactory(),
     ) {}
 
+    async refreshWorktrees(registry: RepositoryRegistry, context: RepoContext): Promise<void> {
+        const worktrees = await this.runtimeRepositoryFactory.createWorktrees(context);
+        registry.replaceWorktrees(context.id, worktrees);
+    }
+
     async registerContext(registry: RepositoryRegistry, context: RepoContext): Promise<void> {
         const [repository, worktrees] = await Promise.all([
             this.runtimeRepositoryFactory.createRepository(context),

@@ -136,7 +136,7 @@ function CommitHistoryFileRow({
     return (
         <button
             type="button"
-            className={`history-file-tree-row history-file-leaf-row history-file-entry-clickable${file.isSubmodule ? ' history-file-entry-submodule' : ''}`}
+            className={`history-file-tree-row history-file-leaf-row history-file-entry-clickable${file.origPath ? ' history-file-leaf-renamed' : ''}${file.isSubmodule ? ' history-file-entry-submodule' : ''}`}
             style={depthStyle(depth)}
             title={`Open diff for ${file.filePath}`}
             data-vscode-context={JSON.stringify({

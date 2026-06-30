@@ -214,6 +214,10 @@
 }
 
 .history-file-leaf-row {
+    grid-template-columns: 16px 18px 16px minmax(0, 1fr);
+}
+
+.history-file-leaf-renamed {
     grid-template-columns: 16px 18px 16px minmax(0, 1fr) minmax(0, 0.6fr);
 }
 

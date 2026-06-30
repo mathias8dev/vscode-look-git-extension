@@ -48,6 +48,22 @@ describe('RepositoryRegistry', () => {
             .toThrow(RepositoryResolutionError);
     });
 
+    it('replaces worktrees without touching the repository', () => {
+        const registry = new RepositoryRegistry();
+        const main = worktreeModel('repo', 'main');
+        const linked = worktreeModel('repo', 'linked');
+        const newLinked = worktreeModel('repo', 'new-linked');
+
+        registry.replaceRepository(repositoryModel('repo'), [main, linked]);
+        registry.replaceWorktrees('repo', [main, newLinked]);
+
+        expect(registry.worktrees('repo')).toEqual([main, newLinked]);
+        expect(registry.resolveRepository({ repoId: 'repo', kind: 'main', path: '/repo' })).toBeDefined();
+        expect(() => registry.resolveWorktree({ repoId: 'repo', worktreeId: 'linked', path: '/linked' }))
+            .toThrow(RepositoryResolutionError);
+        expect(registry.resolveWorktree({ repoId: 'repo', worktreeId: 'new-linked', path: '/new-linked' })).toBe(newLinked);
+    });
+
     it('rejects missing repositories and kind mismatches', () => {
         const registry = new RepositoryRegistry();
         registry.registerRepository(repositoryModel('repo'));

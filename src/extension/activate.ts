@@ -98,6 +98,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     async function refreshAll(): Promise<void> {
         if (!isRuntimeReadyForCurrentContext()) { return; }
+        const currentContext = repositories.currentContext;
+        if (currentContext) {
+            try {
+                await runtimeRegistrar.refreshWorktrees(runtimeRepositories, currentContext);
+            } catch { /* best-effort: view refresh proceeds even if worktree re-registration fails */ }
+        }
         await Promise.all([
             changesProvider.refresh(),
             commitHistoryProvider.refresh(),
