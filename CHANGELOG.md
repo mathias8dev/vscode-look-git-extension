@@ -4,6 +4,19 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.2.1] - 2026-06-30
+
+### Fixed
+
+#### Look Graph
+- Fix infinite loader when clicking a newly created worktree in the graph panel
+- Re-register worktrees on file-watcher refresh so new worktrees are resolvable at runtime
+- Distinguish details request errors from stale graph errors using `error.operation`
+- Widen graph toolbar input and add ellipsis overflow for long filter values
+
+#### Commit History
+- Fix file path truncation in the commit history file list when no rename is present
+
 ## [1.2.0] - 2026-06-26
 
 ### Added

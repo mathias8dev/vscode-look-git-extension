@@ -20,6 +20,17 @@ export class RepositoryRegistry {
     replaceRepository(repository: GitRepository, worktrees: readonly Worktree[]): void {
         this.unregisterRepository(repository.repoId);
         this.registerRepository(repository);
+        this.replaceWorktrees(repository.repoId, worktrees);
+    }
+
+    replaceWorktrees(repositoryId: string, worktrees: readonly Worktree[]): void {
+        const existingIds = this.worktreeIdsByRepositoryId.get(repositoryId);
+        if (existingIds) {
+            for (const id of existingIds) {
+                this.worktreesById.delete(id);
+            }
+            existingIds.clear();
+        }
         for (const worktree of worktrees) {
             this.registerWorktree(worktree);
         }

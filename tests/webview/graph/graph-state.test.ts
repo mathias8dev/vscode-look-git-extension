@@ -608,6 +608,83 @@ describe('graphState', () => {
         expect(cleared.error).toBeUndefined();
     });
 
+    it('clears detailsLoading when a worktree details request fails', () => {
+        const selected = reduceGraphState(createInitialGraphState(), { type: 'selectWorktree', path: '/repo/.worktrees/new-wt' });
+        expect(selected.detailsLoading).toBe(true);
+
+        const errored = reduceGraphState(selected, {
+            type: 'message',
+            message: {
+                type: 'graph/error',
+                requestId: 'graph-req-1',
+                message: 'No runtime worktree available.',
+                error: {
+                    code: 'gitOperationFailed',
+                    message: 'No runtime worktree available.',
+                    operation: 'graph/worktreeDetailsRequest',
+                    recoverable: true,
+                },
+            },
+        });
+
+        expect(errored.detailsLoading).toBe(false);
+        expect(errored.error?.message).toBe('No runtime worktree available.');
+        expect(errored.loading).toBe(true);
+        expect(errored.activeGraphRequestId).toBe(graphRequestId(0, 'replace'));
+    });
+
+    it('clears detailsLoading when a commit details request fails', () => {
+        const selected = reduceGraphState(createInitialGraphState(), { type: 'selectCommit', hash: 'abc123' });
+        expect(selected.detailsLoading).toBe(true);
+
+        const errored = reduceGraphState(selected, {
+            type: 'message',
+            message: {
+                type: 'graph/error',
+                requestId: 'graph-req-2',
+                message: 'No runtime repository available.',
+                error: {
+                    code: 'gitOperationFailed',
+                    message: 'No runtime repository available.',
+                    operation: 'graph/commitDetailsRequest',
+                    recoverable: true,
+                },
+            },
+        });
+
+        expect(errored.detailsLoading).toBe(false);
+        expect(errored.error?.message).toBe('No runtime repository available.');
+        expect(errored.loading).toBe(true);
+        expect(errored.activeGraphRequestId).toBe(graphRequestId(0, 'replace'));
+    });
+
+    it('does not clear detailsLoading for a stale graph error that happens while details are loading', () => {
+        const initial = createInitialGraphState();
+        const reloaded = reduceGraphState(initial, { type: 'refreshRequested' });
+        const staleGraphRequestId = initial.activeGraphRequestId!;
+
+        const selected = reduceGraphState(reloaded, { type: 'selectCommit', hash: 'abc123' });
+        expect(selected.detailsLoading).toBe(true);
+
+        const errored = reduceGraphState(selected, {
+            type: 'message',
+            message: {
+                type: 'graph/error',
+                requestId: staleGraphRequestId,
+                message: 'Stale graph error',
+                error: {
+                    code: 'gitOperationFailed',
+                    message: 'Stale graph error',
+                    operation: 'graph/dataRequest',
+                    recoverable: true,
+                },
+            },
+        });
+
+        expect(errored.detailsLoading).toBe(true);
+        expect(errored.error).toBeUndefined();
+    });
+
     it('keeps graph loading active for optional uncorrelated warnings', () => {
         const warned = reduceGraphState(createInitialGraphState(), {
             type: 'message',
