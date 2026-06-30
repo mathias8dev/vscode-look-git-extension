@@ -4,6 +4,8 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.2.1] - 2026-06-30
+
 ### Fixed
 
 #### Look Graph
