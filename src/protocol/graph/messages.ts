@@ -47,6 +47,12 @@ export interface GraphSelectCommitPush {
     readonly hash: string;
 }
 
+export interface GraphRevealCommitPush {
+    readonly type: 'graph/revealCommit';
+    readonly hash: string;
+    readonly branch?: string;
+}
+
 export interface GraphSelectWorktreePush {
     readonly type: 'graph/selectWorktree';
     readonly path: string;
@@ -276,6 +282,7 @@ export type GraphExtensionToWebviewMessage =
     | CommitDetailsResponse
     | WorktreeDetailsResponse
     | GraphSelectCommitPush
+    | GraphRevealCommitPush
     | GraphSelectWorktreePush
     | GraphOperationStatusPush
     | GraphErrorPush

@@ -339,6 +339,16 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
             };
         case 'graph/selectCommit':
             return selectCommit(state, message.hash, [message.hash], message.hash);
+        case 'graph/revealCommit':
+            return selectCommit(startGraphReload({
+                ...state,
+                selectedBranchFilter: message.branch,
+                filters: {
+                    ...state.filters,
+                    branches: message.branch ? [message.branch] : undefined,
+                },
+                loadedCount: 0,
+            }, state.refreshVersion + 1), message.hash, [message.hash], message.hash);
         case 'graph/selectWorktree':
             return selectWorktree(state, message.path);
         case 'graph/operationStatus':

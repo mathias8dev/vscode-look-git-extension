@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { registerGitBlameAnnotationsCommand } from '@extension/commands/git-blame-annotations-command';
 import { registerResetExtensionStateCommand } from '@extension/commands/reset-extension-state-command';
 import { CliGitRuntime } from '@extension/git/cli-git-runtime';
 import { GitCliBackend } from '@extension/git/git-cli-backend';
@@ -341,6 +342,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         ...changesProvider.registerNativeContextCommands(),
         ...commitHistoryProvider.registerNativeContextCommands(),
         ...graphProvider.registerNativeContextCommands(),
+        registerGitBlameAnnotationsCommand({ repositories }),
         vscode.window.registerWebviewViewProvider(ChangesViewProvider.viewType, changesProvider, { webviewOptions: { retainContextWhenHidden: true } }),
         vscode.window.registerWebviewViewProvider(CommitHistoryViewProvider.viewType, commitHistoryProvider, { webviewOptions: { retainContextWhenHidden: true } }),
         vscode.window.registerWebviewViewProvider(GraphViewProvider.viewType, graphProvider, { webviewOptions: { retainContextWhenHidden: true } }),

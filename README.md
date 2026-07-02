@@ -43,6 +43,7 @@ A modern, React-based Git extension for Visual Studio Code — featuring a visua
 - **Repository scope** — switch Commit History between the main repository and submodule scopes when submodules are available
 - **File history** — open a floating paginated history window for a file from the editor or Explorer Look Git context menu
 - **Selection history** — right-click a selected line range in the editor and choose Look Git → Show History for Selection... to open the commits that touched those lines
+- **Git blame annotations** — use the editor Look Git context menu or `Look Git Blame` commands to toggle inline blame for the active line or full-file blame annotations, with configurable date and author display
 - **File tree mode** — changed files shown as a navigable folder tree
 - **Search** — filter the commit list in real time by message, author, hash, or date
 - **Load more** — incremental pagination, 50 commits at a time
@@ -85,6 +86,14 @@ First-class submodule and worktree support, plus the modern conflicts editor for
 
 - Visual Studio Code 1.85 or later
 - A Git repository opened in VS Code
+
+## Git Blame Settings
+
+- `lookGit.inlineBlame.enabled` — automatically show inline blame on the active editor line
+- `lookGit.blame.mergeCommitLines` — show full-file blame text only on the first line of each commit block
+- `lookGit.blame.highlightChangedLines` — highlight all lines belonging to the commit under the cursor
+- `lookGit.blame.dateFormatStyle` — choose `date`, `dateTime`, `time`, `relative`, or `iso`
+- `lookGit.blame.authorNameStyle` — choose `full`, `first`, or `last`
 
 ## Known Limitations
 
