@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
+import type { GitRepository } from '@application/ports/git-topology';
+import type { GitBranch } from '@core/git/domain/git-status';
 import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, WorktreeCommand } from '@protocol/graph/messages';
 import type { GraphContextTarget } from '@protocol/graph/types';
 import type { RepoContext } from '@core/git/domain/repo-context';
@@ -9,6 +11,7 @@ import { GraphMessageRouter } from '@extension/messaging/graph-message-router';
 import { getWebviewHtml } from '@extension/views/webview-html';
 import { webviewFontSizeMessage } from '@extension/views/webview-font';
 import type { RepositoryRegistry } from '@extension/repositories/repository-registry';
+import { requireRuntimeLocator } from '@extension/repositories/runtime-repository-locator';
 
 const GRAPH_COMMIT_COMMANDS: readonly { readonly id: string; readonly command: CommitCommand }[] = [
     { id: 'lookGit.graph.commit.copyRevisionNumber', command: 'copyRevisionNumber' },
@@ -77,6 +80,7 @@ const GRAPH_WORKTREE_COMMANDS: readonly { readonly id: string; readonly command:
     { id: 'lookGit.graph.worktree.remove', command: 'remove' },
     { id: 'lookGit.graph.worktree.removeForce', command: 'removeForce' },
 ];
+const REVEAL_GRAPH_COMMIT_COMMAND = 'lookGit.graph.revealCommit';
 
 export class GraphViewProvider implements vscode.WebviewViewProvider {
     static readonly viewType = 'lookGit.graphView';
@@ -139,6 +143,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
             ...GRAPH_COMMIT_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runCommitContextCommand(command))),
             ...GRAPH_BRANCH_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runBranchContextCommand(command, { allowUnpublishedBranchPush: id === 'lookGit.graph.branch.publish' }))),
             ...GRAPH_WORKTREE_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runWorktreeContextCommand(command))),
+            vscode.commands.registerCommand(REVEAL_GRAPH_COMMIT_COMMAND, (hash: unknown) => this.revealCommit(hash)),
             vscode.commands.registerCommand('lookGit.graph.commit.goToChildCommit', () => this.selectContextCommit('child')),
             vscode.commands.registerCommand('lookGit.graph.commit.goToParentCommit', () => this.selectContextCommit('parent')),
             vscode.commands.registerCommand('lookGit.graph.worktree.showDetails', () => this.selectContextWorktree()),
@@ -242,6 +247,17 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         if (hash) { void this.view?.webview.postMessage({ type: 'graph/selectCommit', hash }); }
     }
 
+    private async revealCommit(hash: unknown): Promise<void> {
+        if (typeof hash !== 'string' || !hash) { return; }
+        await vscode.commands.executeCommand(`${GraphViewProvider.viewType}.focus`);
+        const branch = await branchContainingCommit(this.requireRuntimeRepository(), hash);
+        void this.view?.webview.postMessage({ type: 'graph/revealCommit', hash, branch: branch?.name });
+    }
+
+    private requireRuntimeRepository(): GitRepository {
+        return requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext).repository();
+    }
+
     private selectContextWorktree(): void {
         const target = this.contextTarget;
         if (target?.kind === 'worktree') {
@@ -251,6 +267,27 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
 
     private renderWebviewHtml(webviewView: vscode.WebviewView): void {
         webviewView.webview.html = getWebviewHtml(webviewView.webview, this.extensionUri, 'graph');
+    }
+}
+
+async function branchContainingCommit(repo: GitRepository, hash: string): Promise<GitBranch | undefined> {
+    const branches = await repo.listBranches();
+    const currentBranch = branches.find((branch) => branch.isCurrent);
+    if (currentBranch && await branchContainsCommit(repo, currentBranch, hash)) { return currentBranch; }
+    for (const branch of branches.filter((candidate) => !candidate.isRemote && !candidate.isCurrent)) {
+        if (await branchContainsCommit(repo, branch, hash)) { return branch; }
+    }
+    for (const branch of branches.filter((candidate) => candidate.isRemote)) {
+        if (await branchContainsCommit(repo, branch, hash)) { return branch; }
+    }
+    return undefined;
+}
+
+async function branchContainsCommit(repo: GitRepository, branch: GitBranch, hash: string): Promise<boolean> {
+    try {
+        return await repo.getMergeBase(hash, branch.hash) === hash;
+    } catch {
+        return false;
     }
 }
 

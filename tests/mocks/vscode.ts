@@ -8,6 +8,7 @@ export const ProgressLocation = { Notification: 15 } as const;
 export const InputBoxValidationSeverity = { Info: 1, Warning: 2, Error: 3 } as const;
 export const ViewColumn = { Active: -1, Beside: -2, One: 1 } as const;
 export const FileType = { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 } as const;
+export const DecorationRangeBehavior = { ClosedClosed: 0 } as const;
 
 export class TreeItem {
     public description: unknown;
@@ -40,6 +41,8 @@ export class ThemeColor {
 }
 
 export class MarkdownString {
+    public isTrusted = false;
+    public supportThemeIcons = false;
     constructor(public value: string) {}
 }
 
@@ -49,6 +52,15 @@ export class Position {
 
 export class Selection {
     constructor(public anchor: Position, public active: Position) {}
+}
+
+export class Range {
+    constructor(
+        public startLine: number,
+        public startCharacter: number,
+        public endLine: number,
+        public endCharacter: number,
+    ) {}
 }
 
 export class TabInputText {
@@ -159,6 +171,24 @@ type MockTextDocument = {
     save(): Promise<boolean>;
 };
 
+type MockDecorationType = {
+    readonly options: unknown;
+    disposed: boolean;
+    dispose(): void;
+};
+
+type MockDecorationCall = {
+    readonly type: MockDecorationType;
+    readonly ranges: readonly unknown[];
+};
+
+export type MockTextEditor = {
+    readonly document: MockTextDocument;
+    selection: Selection;
+    decorations: MockDecorationCall[];
+    setDecorations(type: MockDecorationType, ranges: readonly unknown[]): void;
+};
+
 interface MockExtension<T> {
     readonly isActive: boolean;
     readonly exports: T;
@@ -245,7 +275,7 @@ type MockProgress = {
 };
 
 export const window = {
-    activeTextEditor: undefined as { readonly document: MockTextDocument; selection?: Selection } | undefined,
+    activeTextEditor: undefined as MockTextEditor | undefined,
     errorMessages: [] as string[],
     infoMessages: [] as string[],
     warningMessages: [] as Array<{ message: string; items: string[] }>,
@@ -262,6 +292,8 @@ export const window = {
     errorChoice: undefined as string | undefined,
     warningChoice: undefined as string | undefined,
     warningChoices: [] as string[],
+    selectionEmitter: new EventEmitter<{ readonly textEditor: MockTextEditor }>(),
+    activeEditorEmitter: new EventEmitter<MockTextEditor | undefined>(),
     shownDocuments: [] as unknown[],
     tabGroups: {
         all: [] as Array<{ tabs: Array<{ input: TabInputText }> }>,
@@ -313,6 +345,7 @@ export const window = {
         };
         dispose(): void;
     }>,
+    decorationTypes: [] as MockDecorationType[],
     showErrorMessage(message: string, ..._items: string[]) { this.errorMessages.push(message); return Promise.resolve(this.errorChoice); },
     showInformationMessage(message: string) { this.infoMessages.push(message); return Promise.resolve(undefined); },
     showWarningMessage(message: string, _opts?: unknown, ...items: string[]) {
@@ -328,14 +361,44 @@ export const window = {
     showSaveDialog(options: unknown) { this.saveDialogOptions.push(options); return Promise.resolve(this.saveDialogValue); },
     showTextDocument(document: MockTextDocument) {
         this.shownDocuments.push(document);
-        const editor = { document, selection: undefined as Selection | undefined };
+        const editor: MockTextEditor = {
+            document,
+            selection: new Selection(new Position(0, 0), new Position(0, 0)),
+            decorations: [],
+            setDecorations(type: MockDecorationType, ranges: readonly unknown[]) {
+                this.decorations.push({ type, ranges });
+            },
+        };
         this.activeTextEditor = editor;
+        this.activeEditorEmitter.fire(editor);
         const tab = { input: new TabInputText(document.uri) };
         if (this.tabGroups.all.length === 0) {
             this.tabGroups.all.push({ tabs: [] });
         }
         this.tabGroups.all[0]?.tabs.push(tab);
         return Promise.resolve(editor);
+    },
+    createTextEditorDecorationType(options: unknown) {
+        const decorationType: MockDecorationType = {
+            options,
+            disposed: false,
+            dispose() { this.disposed = true; },
+        };
+        this.decorationTypes.push(decorationType);
+        return decorationType;
+    },
+    onDidChangeTextEditorSelection(listener: (event: { readonly textEditor: MockTextEditor }) => unknown) {
+        return this.selectionEmitter.event(listener);
+    },
+    fireDidChangeTextEditorSelection(editor: MockTextEditor): void {
+        this.selectionEmitter.fire({ textEditor: editor });
+    },
+    onDidChangeActiveTextEditor(listener: (editor: MockTextEditor | undefined) => unknown) {
+        return this.activeEditorEmitter.event(listener);
+    },
+    fireDidChangeActiveTextEditor(editor: MockTextEditor | undefined): void {
+        this.activeTextEditor = editor;
+        this.activeEditorEmitter.fire(editor);
     },
     createOutputChannel(name: string) {
         const channel = {
@@ -423,11 +486,16 @@ export const window = {
         this.errorChoice = undefined;
         this.warningChoice = undefined;
         this.warningChoices = [];
+        this.selectionEmitter.dispose();
+        this.selectionEmitter = new EventEmitter<{ readonly textEditor: MockTextEditor }>();
+        this.activeEditorEmitter.dispose();
+        this.activeEditorEmitter = new EventEmitter<MockTextEditor | undefined>();
         this.shownDocuments = [];
         this.tabGroups.reset();
         this.outputChannels = [];
         this.terminals = [];
         this.webviewPanels = [];
+        this.decorationTypes = [];
     },
 };
 

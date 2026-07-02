@@ -2,7 +2,7 @@
   "name": "look-git",
   "displayName": "Look Git",
   "description": "A modern Git extension with visual commit graph, changes panel, stash management, and commit history.",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "publisher": "mathias8dev",
   "engines": {
     "vscode": "^1.88.0"
@@ -81,6 +81,55 @@
           ],
           "default": "window",
           "markdownDescription": "Controls how Look Git edits commit messages when rewording a commit. `window` opens a floating editor, `editor` opens an editor tab, and `input` uses the single-line input box."
+        },
+        "lookGit.inlineBlame.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Controls whether Look Git automatically shows inline Git blame annotations for the active editor line."
+        },
+        "lookGit.blame.mergeCommitLines": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Controls whether Look Git shows a blame annotation only on the first line of each commit block."
+        },
+        "lookGit.blame.highlightChangedLines": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Controls whether Look Git highlights all lines from the same commit as the cursor when blame annotations are visible."
+        },
+        "lookGit.blame.dateFormatStyle": {
+          "type": "string",
+          "enum": [
+            "date",
+            "dateTime",
+            "time",
+            "relative",
+            "iso"
+          ],
+          "enumDescriptions": [
+            "Show dates as YYYY-MM-DD.",
+            "Show dates as YYYY-MM-DD HH:mm:ss.",
+            "Show only HH:mm:ss.",
+            "Show relative dates such as 2d ago.",
+            "Show full ISO 8601 timestamps."
+          ],
+          "default": "date",
+          "markdownDescription": "Controls the date format used by Look Git blame annotations and inline blame."
+        },
+        "lookGit.blame.authorNameStyle": {
+          "type": "string",
+          "enum": [
+            "full",
+            "first",
+            "last"
+          ],
+          "enumDescriptions": [
+            "Show the full commit author name.",
+            "Show only the first author name token.",
+            "Show only the last author name token."
+          ],
+          "default": "full",
+          "markdownDescription": "Controls how Look Git displays commit author names in blame annotations and inline blame."
         }
       }
     },
@@ -230,6 +279,36 @@
         "title": "Show History for Selection...",
         "category": "Look Git",
         "icon": "$(history)"
+      },
+      {
+        "command": "lookGit.file.toggleInlineBlame",
+        "title": "Inline Git Blame",
+        "category": "Look Git",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "lookGit.file.toggleBlameAnnotations",
+        "title": "Annotate with Git Blame",
+        "category": "Look Git",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "lookGit.blame.toggle",
+        "title": "Toggle Annotations",
+        "category": "Look Git Blame",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "lookGit.blame.show",
+        "title": "Annotate with Git Blame",
+        "category": "Look Git Blame",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "lookGit.blame.hide",
+        "title": "Close Annotations",
+        "category": "Look Git Blame",
+        "icon": "$(close)"
       },
       {
         "command": "lookGit.history.selectRepositoryScope",
@@ -1320,6 +1399,18 @@
         "label": "Tags"
       }
     ],
+    "keybindings": [
+      {
+        "command": "lookGit.blame.toggle",
+        "key": "ctrl+alt+b",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "lookGit.blame.hide",
+        "key": "escape",
+        "when": "editorTextFocus && lookGit.blame.annotationsVisible"
+      }
+    ],
     "menus": {
       "explorer/context": [
         {
@@ -1340,6 +1431,16 @@
           "command": "lookGit.file.showHistory",
           "when": "resourceScheme == file",
           "group": "1_local_history@1"
+        },
+        {
+          "command": "lookGit.file.toggleInlineBlame",
+          "when": "resourceScheme == file",
+          "group": "1_local_history@3"
+        },
+        {
+          "command": "lookGit.file.toggleBlameAnnotations",
+          "when": "resourceScheme == file",
+          "group": "1_local_history@4"
         },
         {
           "command": "lookGit.history.push",
@@ -1367,6 +1468,16 @@
           "command": "lookGit.file.showHistoryForSelection",
           "when": "resourceScheme == file && editorHasSelection",
           "group": "1_local_history@2"
+        },
+        {
+          "command": "lookGit.file.toggleInlineBlame",
+          "when": "resourceScheme == file",
+          "group": "1_local_history@3"
+        },
+        {
+          "command": "lookGit.file.toggleBlameAnnotations",
+          "when": "resourceScheme == file",
+          "group": "1_local_history@4"
         },
         {
           "command": "lookGit.history.push",

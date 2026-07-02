@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 interface PackageJson {
     readonly contributes?: {
         readonly commands?: readonly { readonly command: string; readonly title?: string; readonly enablement?: string }[];
+        readonly keybindings?: readonly { readonly command: string; readonly key: string; readonly when?: string }[];
         readonly submenus?: readonly { readonly id: string; readonly label: string }[];
         readonly menus?: {
             readonly [menuId: string]: readonly MenuContribution[] | undefined;
@@ -46,6 +47,18 @@ const lookGitFileContextMenuFixture = {
             command: 'lookGit.file.showHistory',
             title: 'Show History...',
             group: '1_local_history@1',
+            when: 'resourceScheme == file',
+        },
+        {
+            command: 'lookGit.file.toggleInlineBlame',
+            title: 'Inline Git Blame',
+            group: '1_local_history@3',
+            when: 'resourceScheme == file',
+        },
+        {
+            command: 'lookGit.file.toggleBlameAnnotations',
+            title: 'Annotate with Git Blame',
+            group: '1_local_history@4',
             when: 'resourceScheme == file',
         },
         {
@@ -104,6 +117,32 @@ describe('Commit History native context menu manifest', () => {
         expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.history.goToParentCommit')).toMatchObject({
             enablement: 'historyCanGoToParent',
         });
+        expect(pkg.contributes?.commands).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                command: 'lookGit.blame.toggle',
+                title: 'Toggle Annotations',
+            }),
+            expect.objectContaining({
+                command: 'lookGit.blame.show',
+                title: 'Annotate with Git Blame',
+            }),
+            expect.objectContaining({
+                command: 'lookGit.blame.hide',
+                title: 'Close Annotations',
+            }),
+        ]));
+        expect(pkg.contributes?.keybindings).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                command: 'lookGit.blame.toggle',
+                key: 'ctrl+alt+b',
+                when: 'editorTextFocus',
+            }),
+            expect.objectContaining({
+                command: 'lookGit.blame.hide',
+                key: 'escape',
+                when: 'editorTextFocus && lookGit.blame.annotationsVisible',
+            }),
+        ]));
         expect(webviewContextMenu).toEqual(expect.arrayContaining([
             expect.objectContaining({
                 command: 'lookGit.history.copyRevisionNumber',

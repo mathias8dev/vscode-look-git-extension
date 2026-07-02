@@ -4,6 +4,14 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.2.3] - 2026-07-02
+
+### Added
+
+#### Git Blame
+- Add editor Git blame commands for inline blame, full-file annotations, and reveal-in-history/graph links from blame hovers
+- Add blame display settings for merged commit blocks, changed-line highlighting, date format, and author name format
+
 ## [1.2.2] - 2026-07-02
 
 ### Fixed

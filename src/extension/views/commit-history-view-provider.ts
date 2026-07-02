@@ -71,6 +71,7 @@ const HISTORY_FILE_VIEW_COMMANDS: readonly { readonly id: string; readonly mode:
 ];
 const SHOW_FILE_HISTORY_COMMAND = 'lookGit.file.showHistory';
 const SHOW_FILE_HISTORY_FOR_SELECTION_COMMAND = 'lookGit.file.showHistoryForSelection';
+const REVEAL_HISTORY_COMMIT_COMMAND = 'lookGit.history.revealCommit';
 
 export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     static readonly viewType = 'lookGit.commitHistory';
@@ -123,6 +124,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             ...HISTORY_FILE_VIEW_COMMANDS.map(({ id, mode }) => vscode.commands.registerCommand(id, () => this.applyFileViewMode(mode))),
             vscode.commands.registerCommand(SHOW_FILE_HISTORY_COMMAND, (uri?: vscode.Uri) => this.showFileHistory(uri)),
             vscode.commands.registerCommand(SHOW_FILE_HISTORY_FOR_SELECTION_COMMAND, () => this.showFileHistoryForSelection()),
+            vscode.commands.registerCommand(REVEAL_HISTORY_COMMIT_COMMAND, (hash: unknown) => this.revealCommit(hash)),
             vscode.commands.registerCommand('lookGit.history.refresh', () => this.refresh()),
             vscode.commands.registerCommand('lookGit.history.goToChildCommit', () => this.selectContextCommit('child')),
             vscode.commands.registerCommand('lookGit.history.goToParentCommit', () => this.selectContextCommit('parent')),
@@ -259,6 +261,15 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         } catch (error) {
             this.postHistoryError(error, 'history/goToCurrent', 'gitOperationFailed');
         }
+    }
+
+    private async revealCommit(hash: unknown): Promise<void> {
+        if (typeof hash !== 'string' || !hash) { return; }
+        await vscode.commands.executeCommand(`${CommitHistoryViewProvider.viewType}.focus`);
+        const branch = await branchContainingCommit(this.requireRuntimeRepository(), hash);
+        this.selectedHistoryRef = branch?.isCurrent ? undefined : branch?.name;
+        await this.refresh();
+        this.postMessage({ type: 'history/selectCommit', hash });
     }
 
     private async runRuntimeGitToolbarOperation(operation: 'fetchAll' | 'pull' | 'push', uri?: vscode.Uri): Promise<void> {
@@ -934,6 +945,27 @@ async function loadCommitDetails(repo: GitRepository, hash: string): Promise<His
         fullMessage,
         files: files.map(toHistoryCommitFile),
     };
+}
+
+async function branchContainingCommit(repo: GitRepository, hash: string): Promise<GitBranch | undefined> {
+    const branches = await repo.listBranches();
+    const currentBranch = branches.find((branch) => branch.isCurrent);
+    if (currentBranch && await branchContainsCommit(repo, currentBranch, hash)) { return currentBranch; }
+    for (const branch of branches.filter((candidate) => !candidate.isRemote && !candidate.isCurrent)) {
+        if (await branchContainsCommit(repo, branch, hash)) { return branch; }
+    }
+    for (const branch of branches.filter((candidate) => candidate.isRemote)) {
+        if (await branchContainsCommit(repo, branch, hash)) { return branch; }
+    }
+    return undefined;
+}
+
+async function branchContainsCommit(repo: GitRepository, branch: GitBranch, hash: string): Promise<boolean> {
+    try {
+        return await repo.getMergeBase(hash, branch.hash) === hash;
+    } catch {
+        return false;
+    }
 }
 
 async function openHistoryDiff(repo: GitRepository, message: HistoryOpenDiffRequest): Promise<void> {
