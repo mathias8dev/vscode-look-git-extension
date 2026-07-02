@@ -182,7 +182,7 @@ type MockDecorationCall = {
     readonly ranges: readonly unknown[];
 };
 
-type MockTextEditor = {
+export type MockTextEditor = {
     readonly document: MockTextDocument;
     selection: Selection;
     decorations: MockDecorationCall[];
