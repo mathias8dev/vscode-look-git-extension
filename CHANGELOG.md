@@ -4,6 +4,11 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+#### Commit History
+- Preserve the floating file history panel context while hidden so pending commit details continue resolving when switching tabs or windows
+
 ## [1.2.1] - 2026-06-30
 
 ### Fixed

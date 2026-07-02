@@ -10,7 +10,7 @@ import { RuntimeWorktree } from '@extension/git/runtime-worktree';
 import { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import { CommitHistoryViewProvider } from '@extension/views/commit-history-view-provider';
 import { makeWebviewView, resetVscodeMock } from '@tests/helpers/provider-runtime';
-import { setQuickPickValue } from '@tests/mocks/vscode';
+import { setQuickPickValue, window } from '@tests/mocks/vscode';
 
 describe('CommitHistoryViewProvider', () => {
     afterEach(() => {
@@ -74,6 +74,16 @@ describe('CommitHistoryViewProvider', () => {
 
         await expect.poll(() => onRepositoryNavigation.mock.calls.length).toBe(1);
         expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/showRepositoryList', contextId: 'repo-child' });
+    });
+
+    it('keeps file history panels alive while hidden so pending commit details can resolve', async () => {
+        const provider = providerFor(historyRuntime([]));
+
+        await provider.showFileHistory(vscode.Uri.file('/repo/src/app.ts'));
+
+        const panel = window.webviewPanels.find((candidate) => candidate.viewType === 'lookGit.fileHistory');
+        expect(panel).toBeDefined();
+        expect(isRecord(panel?.options) && panel.options.retainContextWhenHidden).toBe(true);
     });
 });
 

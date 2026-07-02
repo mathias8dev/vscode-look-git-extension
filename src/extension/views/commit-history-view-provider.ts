@@ -433,6 +433,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             {
                 enableScripts: true,
                 localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')],
+                retainContextWhenHidden: true,
             },
         );
         new FileHistoryPanelController(
