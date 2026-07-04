@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { BranchInfo, GraphContextTarget } from '@protocol/graph/types';
 import type { GraphRow } from '@webview/features/graph/layout/graph-lane-model';
 import { GraphColumnHeader } from '@webview/features/graph/graph-column-header';
+import { sameResourcePath } from '@webview/shared/resource-path';
 import { GraphCommitRow, type CommitSelectMode } from '@webview/features/graph/graph-row';
 import { GraphWIPRow } from '@webview/features/graph/graph-wip-row';
 import { ROW_HEIGHT, rowHeightForFontSize } from '@webview/features/graph/graph-row-sizing';
@@ -163,7 +164,7 @@ export function GraphTable({
                                         laneData={displayRow.laneData}
                                         style={rowStyle}
                                         rowHeight={rowHeight}
-                                        selected={displayRow.wip.path === selectedWorktreePath}
+                                        selected={sameResourcePath(displayRow.wip.path, selectedWorktreePath)}
                                         onSelect={onSelectWorktree}
                                     />
                                 );

@@ -34,6 +34,7 @@ import { ResizablePanel } from '@webview/shared/resizable-panel';
 import { ResizeAxis } from '@webview/shared/resize-axis';
 import { ResizeHandleSide } from '@webview/shared/resize-handle-side';
 import { applyWebviewFontSize, isWebviewFontSizeMessage } from '@webview/platform/font-size';
+import { sameResourcePath } from '@webview/shared/resource-path';
 
 const PAGE_LIMIT = 300;
 const ERROR_NOTICE_TIMEOUT_MS = 8000;
@@ -81,7 +82,7 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
 
     useEffect(() => {
         if (!state.selectedWorktreePath) { return; }
-        const worktree = state.worktrees.find((candidate) => candidate.path === state.selectedWorktreePath)?.locator;
+        const worktree = state.worktrees.find((candidate) => sameResourcePath(candidate.path, state.selectedWorktreePath))?.locator;
         sendMessage(messageForWorktreeDetails(state.selectedWorktreePath, state.repository, worktree));
     }, [sendMessage, state.repository, state.selectedWorktreePath, state.worktrees]);
 
@@ -129,7 +130,7 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
 
     const handleDiff = useCallback((file: CommitFileChange) => {
         if (state.commitDetails?.kind === 'worktree' && state.commitDetails.path) {
-            const worktree = state.worktrees.find((candidate) => candidate.path === state.commitDetails?.path)?.locator;
+            const worktree = state.worktrees.find((candidate) => sameResourcePath(candidate.path, state.commitDetails?.path))?.locator;
             sendMessage(messageForOpenWorktreeDiff(
                 state.commitDetails.path,
                 file.filePath,
@@ -240,7 +241,7 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                             onBranchCommand={(command, branch, isRemote) => sendMessage(messageForBranchCommand(command, branch, isRemote, state.repository))}
                             onFetch={() => sendMessage(messageForGraphRepositoryCommand('fetch', state.repository))}
                             onSelectWorktree={handleSelectWorktree}
-                            onOpenWorktree={(path) => sendMessage(messageForWorktreeCommand('openInNewWindow', path, state.repository, state.worktrees.find((worktree) => worktree.path === path)?.locator))}
+                            onOpenWorktree={(path) => sendMessage(messageForWorktreeCommand('openInNewWindow', path, state.repository, state.worktrees.find((worktree) => sameResourcePath(worktree.path, path))?.locator))}
                             onAddWorktree={() => sendMessage(messageForWorktreeCommand('add', undefined, state.repository))}
                             onContextTarget={handleContextTarget}
                         />

@@ -76,7 +76,7 @@ export async function runBranchCommand(
                 const { remote, branchName } = await resolveRemoteBranch(runtimeRepository, branch);
                 await runtimeRepository.deleteRemoteBranch(remote, branchName);
             } else {
-                await runtimeRepository.deleteBranch(branch, true);
+                await deleteLocalBranch(runtimeRepository, branch);
             }
             return true;
         }
@@ -314,6 +314,25 @@ function runtimeWorktreeForBranch(worktrees: readonly Worktree[], branch: string
 
 function localBranchRef(branch: string): string {
     return branch.startsWith('refs/heads/') ? branch : `refs/heads/${branch}`;
+}
+
+async function deleteLocalBranch(repository: GitRepository, branch: string): Promise<void> {
+    try {
+        // Safe delete: git refuses (-d) when the branch has commits not reachable from HEAD/upstream.
+        await repository.deleteBranch(branch, false);
+    } catch (error) {
+        if (!isBranchNotFullyMergedError(error)) { throw error; }
+        const choice = await showModalWarningMessage(
+            `Branch "${branch}" is not fully merged. Deleting it will discard its unmerged commits. Delete anyway?`,
+            'Delete',
+        );
+        if (choice !== 'Delete') { return; }
+        await repository.deleteBranch(branch, true);
+    }
+}
+
+function isBranchNotFullyMergedError(error: unknown): boolean {
+    return (error instanceof Error ? error.message : String(error)).includes('not fully merged');
 }
 
 async function assertRuntimeNoUnmergedFiles(worktree: Worktree, operation: string): Promise<void> {
