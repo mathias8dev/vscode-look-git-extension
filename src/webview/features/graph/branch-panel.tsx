@@ -9,6 +9,7 @@ import { GraphSubmoduleNode } from '@webview/features/graph/graph-submodule-node
 import { IconButton } from '@webview/shared/icon-button';
 import { SearchInput } from '@webview/shared/search-input';
 import { selectBranchFilter } from '@webview/features/graph/graph-branch-selection';
+import { sameResourcePath } from '@webview/shared/resource-path';
 
 interface BranchPanelProps {
     readonly style?: CSSProperties;
@@ -338,7 +339,7 @@ export function BranchPanel({
                                     key={worktree.path}
                                     role="button"
                                     tabIndex={0}
-                                    aria-selected={worktree.path === selectedWorktreePath}
+                                    aria-selected={sameResourcePath(worktree.path, selectedWorktreePath)}
                                     data-vscode-context={JSON.stringify({
                                         webviewSection: 'graphWorktree',
                                         graphWorktreeIsMain: worktree.isMain,

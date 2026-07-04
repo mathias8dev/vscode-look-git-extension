@@ -59,7 +59,13 @@ async function readDirectoryOrEmpty(uri: vscode.Uri): Promise<readonly [string, 
     }
 }
 
+function isVscodeFileSystemError(error: unknown): error is vscode.FileSystemError {
+    return typeof vscode.FileSystemError === 'function' && error instanceof vscode.FileSystemError;
+}
 function isMissingDirectoryError(error: unknown): boolean {
+    if (isVscodeFileSystemError(error) && error.code === 'FileNotFound') { return true; }
+    const code = (error as { readonly code?: unknown } | null | undefined)?.code;
+    if (code === 'FileNotFound' || code === 'ENOENT') { return true; }
     const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
     return message.includes('filenotfound')
         || message.includes('enoent')

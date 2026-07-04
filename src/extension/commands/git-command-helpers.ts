@@ -5,6 +5,7 @@ import type { GitRepository, Worktree } from '@application/ports/git-topology';
 import type { GitFileChange } from '@core/git/domain/git-commit';
 import { openReadonlyDiffDocument } from '@extension/utils/readonly-diff-documents';
 import { emptyDiffUri, refBlobUriFrom } from '@extension/utils/diff-uris';
+import { samePath } from '@extension/utils/path-compare';
 
 type ChangesResource = readonly [vscode.Uri, vscode.Uri, vscode.Uri];
 
@@ -20,7 +21,7 @@ export async function promptNewWorktreePath(repoCwd: string, prompt: string): Pr
     if (!input?.trim()) { return undefined; }
     const worktreePath = input.trim();
     if (!path.isAbsolute(worktreePath)) { throw new Error('Worktree path must be absolute.'); }
-    if (path.resolve(worktreePath) === path.resolve(repoCwd)) { throw new Error('Worktree path already exists.'); }
+    if (samePath(worktreePath, repoCwd)) { throw new Error('Worktree path already exists.'); }
     if (await pathExists(worktreePath)) { throw new Error('Worktree path already exists.'); }
     return worktreePath;
 }
@@ -55,7 +56,7 @@ async function pathExists(filePath: string): Promise<boolean> {
 async function pickWorktree(worktrees: readonly Worktree[], placeHolder: string): Promise<Worktree | undefined> {
     const paths = worktrees.map((worktree) => worktree.path);
     const selectedPath = await vscode.window.showQuickPick(paths, { placeHolder });
-    return selectedPath ? worktrees.find((worktree) => worktree.path === selectedPath) : undefined;
+    return selectedPath ? worktrees.find((worktree) => samePath(worktree.path, selectedPath)) : undefined;
 }
 
 async function openChangesBetweenRefs(repo: GitRepository, leftRef: string, rightRef: string, title: string): Promise<void> {
