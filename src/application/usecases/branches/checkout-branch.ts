@@ -21,6 +21,24 @@ export class CheckoutBranchUseCase {
             return;
         }
 
-        await worktree.checkout(input.branch, {});
+        const localName = localNameForRemoteBranch(input.branch);
+        const localBranch = branches.find(
+            (b) => !b.isRemote && b.name === localName,
+        );
+        if (localBranch) {
+            await worktree.checkout(localBranch.name, {});
+            return;
+        }
+
+        await worktree.checkoutNewBranch(localName, input.branch);
+        await repository.setUpstream(localName, input.branch);
     }
+}
+
+function localNameForRemoteBranch(branch: string): string {
+    const slashIdx = branch.indexOf('/');
+    if (slashIdx === -1 || slashIdx === branch.length - 1) {
+        throw new Error(`Expected remote branch name, got "${branch}".`);
+    }
+    return branch.substring(slashIdx + 1);
 }

@@ -15,6 +15,7 @@ import { confirmTypedPhrase, showModalWarningMessage } from '@extension/utils/co
 import { createReadonlyDocumentUri, openReadonlyDiffDocument } from '@extension/utils/readonly-diff-documents';
 import { toProtocolSubmoduleStatus } from '@extension/mapping/to-protocol';
 import { GenerateCommitMessageUseCase } from '@application/usecases/changes/generate-commit-message';
+import { CheckoutBranchUseCase } from '@application/usecases/branches/checkout-branch';
 import { VscodeLanguageModelCommitMessageGenerator } from '@extension/adapters/vscode/vscode-language-model-commit-message-generator';
 import { createErrorPayload, isAbortError } from '@extension/messaging/error-serialization';
 import { notifyRuntimeConflictsDetected, openAllRuntimeThreeWayMergeEditors, openRuntimeThreeWayMergeEditor } from '@extension/utils/runtime-merge-editor';
@@ -972,9 +973,11 @@ export class ChangesMessageRouter {
                 });
                 return;
             case 'checkout': {
-                const branch = await pickBranch('Checkout branch', requireRuntimeRepository());
+                const repository = requireRuntimeRepository();
+                const branch = await pickBranch('Checkout branch', repository);
                 if (!branch) { return; }
-                await requireRuntimeWorktree().checkout(branch, {});
+                const branchInfo = (await repository.listBranches()).find((candidate) => candidate.name === branch);
+                await new CheckoutBranchUseCase().execute(repository, requireRuntimeWorktree(), { branch, isRemote: branchInfo?.isRemote ?? false });
                 await this.refresh();
                 return;
             }
