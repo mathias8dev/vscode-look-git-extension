@@ -106,7 +106,7 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     restorePaths: (input) => ({ args: restorePathsArgs(input) }),
     restoreStaged: (input) => ({ args: ['restore', '--staged', '--', ...requiredStringArrayField(input, 'paths')] }),
     restoreWorkingTree: (input) => ({ args: ['restore', '--', ...requiredStringArrayField(input, 'paths')] }),
-    merge: (input) => ({ args: ['merge', requiredStringField(input, 'ref')] }),
+    merge: (input) => ({ args: mergeArgs(input) }),
     continueMerge: () => ({ args: ['-c', 'core.editor=true', 'merge', '--continue'] }),
     abortMerge: () => ({ args: ['merge', '--abort'] }),
     quitMerge: () => ({ args: ['merge', '--quit'] }),
@@ -1141,6 +1141,15 @@ function restorePathsArgs(input: unknown): readonly string[] {
     const paths = requiredStringArrayField(input, 'paths');
     const sourceRef = optionalStringField(input, 'sourceRef');
     return sourceRef ? ['restore', '--source', sourceRef, '--', ...paths] : ['restore', '--', ...paths];
+}
+
+function mergeArgs(input: unknown): readonly string[] {
+    const args = ['merge'];
+    const options = objectField(input, 'options');
+    if (booleanOption(options, 'squash')) { args.push('--squash'); }
+    if (booleanOption(options, 'noCommit')) { args.push('--no-commit'); }
+    args.push(requiredStringField(input, 'ref'));
+    return args;
 }
 
 function rebaseArgs(input: unknown): readonly string[] {

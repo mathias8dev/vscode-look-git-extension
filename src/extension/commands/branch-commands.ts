@@ -14,6 +14,7 @@ import {
 } from '@extension/commands/git-command-helpers';
 import { requireRuntimeRepository, requireRuntimeWorktree, requireRuntimeWorktreePath, requireRuntimeWorktrees, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
 import { currentBranchName } from '@extension/git/current-branch';
+import { pickMergeOptions } from '@extension/git/reference-pickers';
 import { localBranchNameForRemote, localNameForRemoteBranch, resolveRemoteBranch } from '@extension/git/remote-branch';
 import { openVisualRebasePanel } from '@extension/utils/visual-rebase-panel';
 
@@ -124,9 +125,7 @@ export async function runBranchCommand(
             });
             return false;
         case 'mergeInto':
-            await assertRuntimeNoUnmergedFiles(requireRuntimeWorktree(runtimeTargets), 'merging branches');
-            await requireRuntimeWorktree(runtimeTargets).merge(branch, {});
-            return true;
+            return mergeBranchIntoCurrent(branch, runtimeTargets);
     }
 }
 
@@ -279,6 +278,15 @@ function worktreeForBranch(worktrees: readonly GitWorktree[], branch: string): G
 
 async function pushBranch(runtimeTargets: RuntimeCommandTargets, branch: string): Promise<void> {
     await requireRuntimeWorktree(runtimeTargets).pushBranch(undefined, branch, {});
+}
+
+async function mergeBranchIntoCurrent(branch: string, runtimeTargets: RuntimeCommandTargets): Promise<boolean> {
+    const worktree = requireRuntimeWorktree(runtimeTargets);
+    await assertRuntimeNoUnmergedFiles(worktree, 'merging branches');
+    const options = await pickMergeOptions(branch);
+    if (!options) { return false; }
+    await worktree.merge(branch, options);
+    return true;
 }
 
 async function updateSelectedLocalBranch(

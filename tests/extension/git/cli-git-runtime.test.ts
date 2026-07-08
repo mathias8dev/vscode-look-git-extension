@@ -131,6 +131,19 @@ describe('CliGitRuntime', () => {
         ]);
     });
 
+    it('passes merge options to git merge', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(recordingProcess(calls));
+
+        await runtime.execute('merge', context, { ref: 'feature/ui', options: {} });
+        await runtime.execute('merge', context, { ref: 'feature/api', options: { squash: true } });
+
+        expect(calls).toEqual([
+            ['merge', 'feature/ui'],
+            ['merge', '--squash', 'feature/api'],
+        ]);
+    });
+
     it('returns typed status data from git status output', async () => {
         const runtime = new CliGitRuntime(async (args) => {
             if (args[0] === 'status') { return ' M file.txt\0'; }

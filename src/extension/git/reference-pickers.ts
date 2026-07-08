@@ -1,6 +1,10 @@
 import * as vscode from 'vscode';
+import type { MergeOptions } from '@application/ports/git-capabilities';
 import type { GitRepository, Worktree } from '@application/ports/git-topology';
 import { showBranchNameInput } from '@extension/utils/branch-name-input';
+
+const REGULAR_MERGE = 'Regular Merge';
+const SQUASH_MERGE = 'Squash Merge';
 
 export async function inputText(placeHolder: string, value?: string): Promise<string | undefined> {
     const input = await vscode.window.showInputBox({ placeHolder, value });
@@ -58,6 +62,14 @@ export async function pickRef(placeHolder: string, repository: GitRepository): P
 export async function pickTag(placeHolder: string, repository: GitRepository): Promise<string | undefined> {
     const tags = await repository.listTags();
     return vscode.window.showQuickPick(tags.map((tag) => tag.name), { placeHolder });
+}
+
+export async function pickMergeOptions(ref: string): Promise<MergeOptions | undefined> {
+    const choice = await vscode.window.showQuickPick([REGULAR_MERGE, SQUASH_MERGE], {
+        placeHolder: `Merge "${ref}"`,
+    });
+    if (!choice) { return undefined; }
+    return { squash: choice === SQUASH_MERGE };
 }
 
 export async function pickStash(placeHolder: string, worktree: Worktree): Promise<number | undefined> {

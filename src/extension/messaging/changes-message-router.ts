@@ -23,7 +23,7 @@ import { operationActionsForStatus } from '@extension/utils/operation-feedback';
 import { requireRuntimeLocator } from '@extension/repositories/runtime-repository-locator';
 import { currentLocalBranchName } from '@extension/git/current-branch';
 import { requireRemoteBranchName } from '@extension/git/remote-branch';
-import { inputBranchName, inputText, pickBranch, pickLocalBranch, pickRef, pickRemote, pickRemoteBranch, pickStash, pickTag } from '@extension/git/reference-pickers';
+import { inputBranchName, inputText, pickBranch, pickLocalBranch, pickMergeOptions, pickRef, pickRemote, pickRemoteBranch, pickStash, pickTag } from '@extension/git/reference-pickers';
 
 type PostMessage = (msg: ChangesExtensionToWebviewMessage) => void;
 type RefreshCallback = () => Promise<void>;
@@ -998,8 +998,10 @@ export class ChangesMessageRouter {
             case 'mergeBranch': {
                 const branch = await pickBranch('Merge branch', requireRuntimeRepository());
                 if (!branch) { return; }
+                const options = await pickMergeOptions(branch);
+                if (!options) { return; }
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => requireRuntimeWorktree().merge(branch, {}), 'Merge stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => requireRuntimeWorktree().merge(branch, options), 'Merge stopped with conflicts.'));
                 return;
             }
             case 'rebaseBranch': {

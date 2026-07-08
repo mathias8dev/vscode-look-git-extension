@@ -55,6 +55,21 @@ describe('CommitHistoryViewProvider', () => {
         expect(calls).not.toContainEqual(expect.objectContaining({ operation: 'push' }));
     });
 
+    it('scopes the default history load to the current branch instead of all refs', async () => {
+        const calls: RuntimeCall[] = [];
+        const provider = providerFor(historyRuntime(calls));
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'history/ready' });
+
+        await expect.poll(() => calls.some((call) => call.operation === 'getCommitGraph')).toBe(true);
+        const graphCalls = calls.filter((call) => call.operation === 'getCommitGraph');
+        for (const call of graphCalls) {
+            expect(isRecord(call.input) && isRecord(call.input.query) ? call.input.query.branches : undefined).toEqual(['HEAD']);
+        }
+    });
+
     it('routes repository navigation messages through the navigation callback', async () => {
         const onRepositoryNavigation = vi.fn(async () => {});
         const context = repoContext();
