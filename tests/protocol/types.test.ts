@@ -77,8 +77,10 @@ describe('protocol discriminated unions', () => {
                 case 'changes/statusData': return msg.data.staged satisfies readonly unknown[];
                 case 'changes/commitResult': return msg.success satisfies boolean;
                 case 'changes/generatedCommitMessage': return msg.requestId satisfies string;
+                case 'changes/commitMessagePreset': return msg.presetId satisfies string;
                 case 'changes/submoduleCommitResult': return msg.path satisfies string;
                 case 'changes/submoduleGeneratedCommitMessage': return msg.path satisfies string;
+                case 'changes/submoduleCommitMessagePreset': return msg.path satisfies string;
                 case 'changes/stashFiles': return msg.files satisfies readonly unknown[];
                 case 'changes/submoduleStatusData': return msg.data.unstaged satisfies readonly unknown[];
                 case 'changes/submoduleStashFiles': return msg.path satisfies string;

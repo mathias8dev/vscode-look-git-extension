@@ -313,6 +313,24 @@ describe('changesState', () => {
         });
     });
 
+    it('applies commit message presets without a generation request', () => {
+        const state = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: {
+                type: 'changes/commitMessagePreset',
+                presetId: 'squash-merge-1',
+                message: 'Squashed commit of the following:',
+            },
+        });
+
+        expect(state.commitMessageGenerationRequestId).toBeUndefined();
+        expect(state.commitMessageGenerationError).toBeUndefined();
+        expect(state.generatedCommitMessage).toEqual({
+            requestId: 'squash-merge-1',
+            message: 'Squashed commit of the following:',
+        });
+    });
+
     it('keeps language model generation errors near the commit composer', () => {
         const requested = reduceChangesState(createInitialChangesState(), {
             type: 'requestCommitMessageGeneration',
@@ -367,6 +385,31 @@ describe('changesState', () => {
         expect(received.generatedSubmoduleCommitMessageByPath['modules/lib']).toEqual({
             requestId: 'sub-generate-1',
             message: 'fix(lib): update module',
+        });
+    });
+
+    it('applies submodule commit message presets without a generation request', () => {
+        const withStatus = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: statusDataMessage({
+                submodules: [{ path: 'modules/lib', name: 'lib', status: SubmoduleStatus.Dirty }],
+            }),
+        });
+        const state = reduceChangesState(withStatus, {
+            type: 'message',
+            message: {
+                type: 'changes/submoduleCommitMessagePreset',
+                path: 'modules/lib',
+                presetId: 'submodule-squash-merge-1',
+                message: 'Squashed commit of the following:',
+            },
+        });
+
+        expect(state.submoduleCommitMessageGenerationRequestIdByPath).toEqual({});
+        expect(state.submoduleCommitMessageGenerationErrorByPath).toEqual({});
+        expect(state.generatedSubmoduleCommitMessageByPath['modules/lib']).toEqual({
+            requestId: 'submodule-squash-merge-1',
+            message: 'Squashed commit of the following:',
         });
     });
 

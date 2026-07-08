@@ -106,6 +106,7 @@ export const SEMANTIC_GIT_OPERATIONS = [
     'restoreStaged',
     'restoreWorkingTree',
     'merge',
+    'getSquashMergeMessage',
     'continueMerge',
     'abortMerge',
     'quitMerge',

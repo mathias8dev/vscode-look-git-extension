@@ -143,6 +143,7 @@ Worktree-scoped operations require a concrete checkout.
 ### Merge
 
 - `merge(ref, options, signal)`: merge a ref into the current branch.
+- `getSquashMergeMessage(signal)`: read Git's generated squash merge commit message for the current worktree.
 - `continueMerge(signal)`: continue after conflicts are resolved.
 - `abortMerge(signal)`: abort an in-progress merge.
 - `quitMerge(signal)`: quit merge state without resetting worktree when supported.

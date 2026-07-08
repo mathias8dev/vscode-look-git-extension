@@ -224,6 +224,9 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
     getPatch: async (input, runProcess, context, signal) => {
         return getPatch(input, runProcess, context, signal);
     },
+    getSquashMergeMessage: async (_input, runProcess, context, signal) => {
+        return readSquashMergeMessage(runProcess, context, signal);
+    },
     push: async (input, runProcess, context, signal) => {
         await push(input, runProcess, context, signal);
     },
@@ -761,6 +764,22 @@ function quoteArg(value: string): string {
     return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
+async function readSquashMergeMessage(
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    signal?: AbortSignal,
+): Promise<string | undefined> {
+    const messagePath = await runTrimmed(runProcess, context, ['rev-parse', '--path-format=absolute', '--git-path', 'SQUASH_MSG'], signal);
+    try {
+        const message = await fs.readFile(messagePath, 'utf8');
+        const trimmed = message.trim();
+        return trimmed || undefined;
+    } catch (error) {
+        if (isNotFoundError(error)) { return undefined; }
+        throw error;
+    }
+}
+
 function rebaseOptions(input: unknown): RebaseOptions {
     const options = objectField(input, 'options');
     if (options === undefined) { return {}; }
@@ -1060,6 +1079,13 @@ function isAbortError(error: unknown): boolean {
         && error !== null
         && 'name' in error
         && (error as { readonly name?: unknown }).name === 'AbortError';
+}
+
+function isNotFoundError(error: unknown): boolean {
+    return typeof error === 'object'
+        && error !== null
+        && 'code' in error
+        && (error as { readonly code?: unknown }).code === 'ENOENT';
 }
 
 async function runRaw(

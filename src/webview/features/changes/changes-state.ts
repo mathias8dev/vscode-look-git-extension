@@ -307,6 +307,17 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                     message: message.message,
                 },
             };
+        case 'changes/commitMessagePreset':
+            return {
+                ...state,
+                error: undefined,
+                commitMessageGenerationRequestId: undefined,
+                commitMessageGenerationError: undefined,
+                generatedCommitMessage: {
+                    requestId: message.presetId,
+                    message: message.message,
+                },
+            };
         case 'changes/submoduleGeneratedCommitMessage':
             if (state.submoduleCommitMessageGenerationRequestIdByPath[message.path] !== message.requestId) { return state; }
             return {
@@ -318,6 +329,21 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                     ...state.generatedSubmoduleCommitMessageByPath,
                     [message.path]: {
                         requestId: message.requestId,
+                        message: message.message,
+                    },
+                },
+            };
+        case 'changes/submoduleCommitMessagePreset':
+            if (!isKnownSubmodulePath(state.status, message.path)) { return state; }
+            return {
+                ...state,
+                error: undefined,
+                submoduleCommitMessageGenerationRequestIdByPath: withoutKey(state.submoduleCommitMessageGenerationRequestIdByPath, message.path),
+                submoduleCommitMessageGenerationErrorByPath: withoutKey(state.submoduleCommitMessageGenerationErrorByPath, message.path),
+                generatedSubmoduleCommitMessageByPath: {
+                    ...state.generatedSubmoduleCommitMessageByPath,
+                    [message.path]: {
+                        requestId: message.presetId,
                         message: message.message,
                     },
                 },

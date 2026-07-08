@@ -251,6 +251,10 @@ export class RuntimeWorktree implements Worktree {
         return this.execute('merge', { ref, options }, signal);
     }
 
+    getSquashMergeMessage(signal?: AbortSignal): Promise<string | undefined> {
+        return this.execute('getSquashMergeMessage', undefined, signal);
+    }
+
     continueMerge(signal?: AbortSignal): Promise<void> {
         return this.execute('continueMerge', undefined, signal);
     }

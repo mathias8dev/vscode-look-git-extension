@@ -42,7 +42,9 @@ export class ChangesMessageRouter {
     private knownSubmodulePaths: ReadonlySet<string> | undefined;
     private commitMessageGenerationAbortController: AbortController | undefined;
     private readonly submoduleCommitMessageGenerationAbortControllers = new Map<string, AbortController>();
+    private readonly submoduleSquashMessagePresetByWorktreeId = new Map<string, string>();
     private operationSequence = 0;
+    private submoduleCommitMessagePresetSequence = 0;
 
     constructor(
         private readonly repositories: RepositorySelectionAccessor,
@@ -753,6 +755,7 @@ export class ChangesMessageRouter {
                         stashes: stashPage.items,
                     },
                 });
+                await this.postSubmoduleSquashMergeMessagePresetIfNeeded(msg.path, runtimeSubmoduleWorktree);
                 break;
             }
 
@@ -1000,8 +1003,9 @@ export class ChangesMessageRouter {
                 if (!branch) { return; }
                 const options = await pickMergeOptions(branch);
                 if (!options) { return; }
+                const worktree = requireRuntimeWorktree();
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => requireRuntimeWorktree().merge(branch, options), 'Merge stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(worktree, () => worktree.merge(branch, options), 'Merge stopped with conflicts.'));
                 return;
             }
             case 'rebaseBranch': {
@@ -1251,6 +1255,22 @@ export class ChangesMessageRouter {
             });
             throw error;
         }
+    }
+
+    private async postSubmoduleSquashMergeMessagePresetIfNeeded(path: string, worktree: Worktree): Promise<void> {
+        const message = await worktree.getSquashMergeMessage();
+        if (!message) {
+            this.submoduleSquashMessagePresetByWorktreeId.delete(worktree.worktreeId);
+            return;
+        }
+        if (this.submoduleSquashMessagePresetByWorktreeId.get(worktree.worktreeId) === message) { return; }
+        this.submoduleSquashMessagePresetByWorktreeId.set(worktree.worktreeId, message);
+        this.postMessage({
+            type: 'changes/submoduleCommitMessagePreset',
+            path,
+            presetId: `submodule-squash-merge-${++this.submoduleCommitMessagePresetSequence}`,
+            message,
+        });
     }
 
     private async runRepositoryMutationWithConflictNotice(
