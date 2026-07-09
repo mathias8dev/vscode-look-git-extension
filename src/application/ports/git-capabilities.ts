@@ -268,6 +268,7 @@ export interface GitCheckoutOperations {
 
 export interface GitMergeOperations {
     merge(ref: string, options: MergeOptions, signal?: AbortSignal): Promise<void>;
+    getSquashMergeMessage(signal?: AbortSignal): Promise<string | undefined>;
     continueMerge(signal?: AbortSignal): Promise<void>;
     abortMerge(signal?: AbortSignal): Promise<void>;
     quitMerge(signal?: AbortSignal): Promise<void>;

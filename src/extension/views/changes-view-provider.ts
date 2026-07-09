@@ -212,6 +212,8 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         statusDataEqual,
         DISTINCT_MESSAGE_LAST_VALUE_ONLY,
     );
+    private readonly squashMessagePresetByWorktreeId = new Map<string, string>();
+    private commitMessagePresetSequence = 0;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -700,10 +702,11 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 }
                 if (!await this.beforeRefresh()) { continue; }
 
-                const { status, stashes, submodules, currentBranch } = await this.loadChangesStatus(controller.signal);
+                const { status, stashes, submodules, currentBranch, worktree } = await this.loadChangesStatus(controller.signal);
                 this.router?.setKnownSubmodulePaths(submodules.map((submodule) => submodule.path));
                 this.updateBadge(status.staged.length + status.unstaged.length + status.conflicts.length);
                 this.postStatusDataIfChanged(buildStatusData(status, stashes, submodules, currentBranch));
+                await this.postSquashMergeMessagePresetIfNeeded(worktree, controller.signal);
             } catch (error) {
                 if (isAbortError(error)) { continue; }
                 this.updateBadge(0);
@@ -733,13 +736,15 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         this.statusDataPoster.postIfChanged(ACTIVE_STATUS_DATA_KEY, message.data, message);
     }
 
-    private async loadChangesStatus(signal?: AbortSignal): Promise<RuntimeChangesStatusResult> {
+    private async loadChangesStatus(signal?: AbortSignal): Promise<RuntimeChangesStatusResult & { readonly worktree: Worktree }> {
         const locator = requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext);
-        return await this.getRuntimeChangesStatus.execute(
+        const worktree = locator.worktree();
+        const result = await this.getRuntimeChangesStatus.execute(
             locator.repository(),
-            locator.worktree(),
+            worktree,
             signal,
         );
+        return { ...result, worktree };
     }
 
     private requireCurrentRuntimeWorktree(): Worktree {
@@ -772,6 +777,21 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     notifyFontSizeChanged(): void {
         void this.view?.webview.postMessage(webviewFontSizeMessage());
+    }
+
+    private async postSquashMergeMessagePresetIfNeeded(worktree: Worktree, signal?: AbortSignal): Promise<void> {
+        const message = await worktree.getSquashMergeMessage(signal);
+        if (!message) {
+            this.squashMessagePresetByWorktreeId.delete(worktree.worktreeId);
+            return;
+        }
+        if (this.squashMessagePresetByWorktreeId.get(worktree.worktreeId) === message) { return; }
+        this.squashMessagePresetByWorktreeId.set(worktree.worktreeId, message);
+        this.view?.webview.postMessage({
+            type: 'changes/commitMessagePreset',
+            presetId: `squash-merge-${++this.commitMessagePresetSequence}`,
+            message,
+        });
     }
 
     private postChangesOperation(operation: Omit<ChangesOperationStatusPush, 'type'>): void {

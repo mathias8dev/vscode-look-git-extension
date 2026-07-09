@@ -106,7 +106,7 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     restorePaths: (input) => ({ args: restorePathsArgs(input) }),
     restoreStaged: (input) => ({ args: ['restore', '--staged', '--', ...requiredStringArrayField(input, 'paths')] }),
     restoreWorkingTree: (input) => ({ args: ['restore', '--', ...requiredStringArrayField(input, 'paths')] }),
-    merge: (input) => ({ args: ['merge', requiredStringField(input, 'ref')] }),
+    merge: (input) => ({ args: mergeArgs(input) }),
     continueMerge: () => ({ args: ['-c', 'core.editor=true', 'merge', '--continue'] }),
     abortMerge: () => ({ args: ['merge', '--abort'] }),
     quitMerge: () => ({ args: ['merge', '--quit'] }),
@@ -223,6 +223,9 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
     },
     getPatch: async (input, runProcess, context, signal) => {
         return getPatch(input, runProcess, context, signal);
+    },
+    getSquashMergeMessage: async (_input, runProcess, context, signal) => {
+        return readSquashMergeMessage(runProcess, context, signal);
     },
     push: async (input, runProcess, context, signal) => {
         await push(input, runProcess, context, signal);
@@ -761,6 +764,22 @@ function quoteArg(value: string): string {
     return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
+async function readSquashMergeMessage(
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    signal?: AbortSignal,
+): Promise<string | undefined> {
+    const messagePath = await runTrimmed(runProcess, context, ['rev-parse', '--path-format=absolute', '--git-path', 'SQUASH_MSG'], signal);
+    try {
+        const message = await fs.readFile(messagePath, 'utf8');
+        const trimmed = message.trim();
+        return trimmed || undefined;
+    } catch (error) {
+        if (isNotFoundError(error)) { return undefined; }
+        throw error;
+    }
+}
+
 function rebaseOptions(input: unknown): RebaseOptions {
     const options = objectField(input, 'options');
     if (options === undefined) { return {}; }
@@ -1062,6 +1081,13 @@ function isAbortError(error: unknown): boolean {
         && (error as { readonly name?: unknown }).name === 'AbortError';
 }
 
+function isNotFoundError(error: unknown): boolean {
+    return typeof error === 'object'
+        && error !== null
+        && 'code' in error
+        && (error as { readonly code?: unknown }).code === 'ENOENT';
+}
+
 async function runRaw(
     runProcess: CliGitRuntimeProcess,
     context: GitExecutionContext,
@@ -1141,6 +1167,15 @@ function restorePathsArgs(input: unknown): readonly string[] {
     const paths = requiredStringArrayField(input, 'paths');
     const sourceRef = optionalStringField(input, 'sourceRef');
     return sourceRef ? ['restore', '--source', sourceRef, '--', ...paths] : ['restore', '--', ...paths];
+}
+
+function mergeArgs(input: unknown): readonly string[] {
+    const args = ['merge'];
+    const options = objectField(input, 'options');
+    if (booleanOption(options, 'squash')) { args.push('--squash'); }
+    if (booleanOption(options, 'noCommit')) { args.push('--no-commit'); }
+    args.push(requiredStringField(input, 'ref'));
+    return args;
 }
 
 function rebaseArgs(input: unknown): readonly string[] {

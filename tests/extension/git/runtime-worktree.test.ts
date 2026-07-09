@@ -96,6 +96,7 @@ describe('RuntimeWorktree', () => {
             'cleanIgnored',
             'pushRef',
             'forcePushWithLease',
+            'getSquashMergeMessage',
         ]));
 
         await worktree.squashCommits(['a1', 'b2'], 'feat: squashed');
@@ -108,6 +109,7 @@ describe('RuntimeWorktree', () => {
         await worktree.cleanIgnored(['dist'], { directories: true, force: true });
         await worktree.pushRef('upstream', 'HEAD', 'refs/heads/main', { forceWithLease: true });
         await worktree.forcePushWithLease('upstream', 'main', signal);
+        await worktree.getSquashMergeMessage(signal);
 
         expect(calls.map((call) => call.input)).toEqual([
             { commits: ['a1', 'b2'], message: 'feat: squashed' },
@@ -120,6 +122,7 @@ describe('RuntimeWorktree', () => {
             { paths: ['dist'], options: { directories: true, force: true } },
             { remote: 'upstream', sourceRef: 'HEAD', destinationRef: 'refs/heads/main', options: { forceWithLease: true } },
             { remote: 'upstream', branch: 'main' },
+            undefined,
         ]);
         expect(calls.at(-1)?.signal).toBe(signal);
     });

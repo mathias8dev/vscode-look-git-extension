@@ -3,6 +3,7 @@ import { RepoKind } from '@core/git/domain/repo-context';
 import type { GitBranch } from '@core/git/domain/git-status';
 import type { GitTag } from '@core/git/domain/git-status';
 import type { GitGraphCommit } from '@core/git/domain/git-commit';
+import type { GitWorktree } from '@core/git/domain/git-worktree';
 import type { GitExecutionContext, GitRuntime } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
 import type { GraphExtensionToWebviewMessage } from '@protocol/graph/messages';
@@ -105,6 +106,131 @@ describe('GraphMessageRouter', () => {
         expect(executeGraphData).toHaveBeenCalledTimes(2);
     });
 
+    it('resolves worktree WIPs for dirty registered worktrees through the runtime registry', async () => {
+        const registry = new RepositoryRegistry();
+        registerRuntimeRepository(registry, statusRuntime());
+        registry.registerWorktree(new RuntimeWorktree({
+            repoId: 'repo-id',
+            worktreeId: 'clean-worktree-id',
+            path: '/repo-clean',
+            gitDir: '/repo-clean/.git',
+            repositoryKind: 'main',
+            isMain: false,
+            head: 'def456',
+            branch: 'feature/clean',
+            dirty: false,
+        }, statusRuntime()));
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const getGraphData = new GetGraphDataUseCase();
+        const executeGraphData = vi.spyOn(getGraphData, 'execute').mockResolvedValue(graphDataResult());
+        const router = new GraphMessageRouter(
+            { currentContext: { id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' } },
+            (message) => { messages.push(message); },
+            async () => {},
+            getGraphData,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            registry,
+        );
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph:replace:0:0',
+            repoId: 'repo-id',
+            filters: {},
+            page: { offset: 0, limit: 300 },
+        });
+
+        const options = executeGraphData.mock.calls[0]?.[4];
+        expect(options?.resolveWorktreeWips).toBeDefined();
+        const wips = await options!.resolveWorktreeWips!([
+            gitWorktree({ path: '/repo', head: 'abc123', branch: 'main', isMain: true }),
+            gitWorktree({ path: '/repo-clean', head: 'def456', branch: 'feature/clean' }),
+            gitWorktree({ path: '/repo-unregistered', head: '0123abc', branch: 'feature/orphan' }),
+        ]);
+
+        expect(wips).toEqual([{
+            path: '/repo',
+            head: 'abc123',
+            branch: 'main',
+            staged: 1,
+            unstaged: 1,
+            untracked: 1,
+            conflicts: 1,
+        }]);
+    });
+
+    it('resolves worktree WIPs for a submodule repository locator', async () => {
+        const registry = new RepositoryRegistry();
+        const runtime = statusRuntime('/repo/modules/auth-kit');
+        registry.registerRepository(new RuntimeGitRepository({
+            repoId: 'submodule-id',
+            cwd: '/repo/modules/auth-kit',
+            gitDir: '/repo/modules/auth-kit/.git',
+            kind: 'submodule',
+            label: 'auth-kit',
+            parentRepositoryId: 'repo-id',
+        }, runtime));
+        registry.registerWorktree(new RuntimeWorktree({
+            repoId: 'submodule-id',
+            worktreeId: 'submodule-worktree-id',
+            path: '/repo/modules/auth-kit',
+            gitDir: '/repo/modules/auth-kit/.git',
+            repositoryKind: 'submodule',
+            parentRepositoryId: 'repo-id',
+            isMain: true,
+            head: 'sub123',
+            branch: 'main',
+            dirty: true,
+        }, runtime));
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const getGraphData = new GetGraphDataUseCase();
+        const executeGraphData = vi.spyOn(getGraphData, 'execute').mockResolvedValue(graphDataResult());
+        const router = new GraphMessageRouter(
+            { currentContext: { id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' } },
+            (message) => { messages.push(message); },
+            async () => {},
+            getGraphData,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            registry,
+        );
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph:replace:0:0',
+            repoId: 'repo-id',
+            repository: {
+                repoId: 'submodule-id',
+                kind: 'submodule',
+                path: '/repo/modules/auth-kit',
+                parentRepoId: 'repo-id',
+            },
+            filters: {},
+            page: { offset: 0, limit: 300 },
+        });
+
+        const options = executeGraphData.mock.calls[0]?.[4];
+        expect(options?.resolveWorktreeWips).toBeDefined();
+        const wips = await options!.resolveWorktreeWips!([
+            gitWorktree({ path: '/repo/modules/auth-kit', head: 'sub123', branch: 'main', isMain: true }),
+        ]);
+
+        expect(wips).toEqual([{
+            path: '/repo/modules/auth-kit',
+            head: 'sub123',
+            branch: 'main',
+            staged: 1,
+            unstaged: 1,
+            untracked: 1,
+            conflicts: 1,
+        }]);
+    });
+
     it('pushes graph data when a silent refresh returns a changed snapshot', async () => {
         const registry = new RepositoryRegistry();
         registerRuntimeRepository(registry, neverRuntime());
@@ -146,6 +272,39 @@ function commitFromInput(input: unknown): string {
         return input.commit;
     }
     throw new Error('Expected commit input.');
+}
+
+function statusRuntime(dirtyCwd = '/repo'): GitRuntime {
+    return {
+        supports: () => true,
+        async execute<TInput = unknown, TResult = unknown>(operation: SemanticGitOperation, context: GitExecutionContext, _input: TInput): Promise<TResult> {
+            if (operation !== 'getStatus') { throw new Error(`Unexpected operation ${operation}`); }
+            if (context.cwd === dirtyCwd) {
+                return {
+                    staged: [statusEntry('M', ' ', 'staged.txt')],
+                    unstaged: [statusEntry(' ', 'M', 'modified.txt'), statusEntry('?', '?', 'untracked.txt')],
+                    conflicts: [statusEntry('U', 'U', 'conflict.txt')],
+                    conflictState: 'merge',
+                } as TResult;
+            }
+            return { staged: [], unstaged: [], conflicts: [], conflictState: 'none' } as TResult;
+        },
+    };
+}
+
+function statusEntry(indexStatus: string, workTreeStatus: string, filePath: string) {
+    return { indexStatus, workTreeStatus, filePath };
+}
+
+function gitWorktree(overrides: { path: string; head: string; branch: string | undefined; isMain?: boolean }): GitWorktree {
+    return {
+        path: overrides.path,
+        head: overrides.head,
+        branch: overrides.branch,
+        isMain: overrides.isMain ?? false,
+        isDetached: false,
+        isLocked: false,
+    };
 }
 
 function neverRuntime(): GitRuntime {

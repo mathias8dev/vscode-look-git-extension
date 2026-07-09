@@ -16,8 +16,10 @@ import type { GraphData, GraphFilters, GraphSubmoduleInfo } from '@protocol/grap
 import type { ErrorCode, RequestId } from '@protocol/shared/base';
 import type { RepositoryLocator, WorktreeLocator } from '@protocol/shared/repo';
 import type { GitStatus } from '@core/git/domain/git-status';
+import type { GitWorktree } from '@core/git/domain/git-worktree';
+import { summarizeStatusEntries } from '@core/parsing/parse-status';
 import type { GitRepository } from '@application/ports/git-topology';
-import { GetGraphDataUseCase, type GraphDataResult } from '@application/usecases/graph/get-graph-data';
+import { GetGraphDataUseCase, type GraphDataResult, type GraphWorktreeWip } from '@application/usecases/graph/get-graph-data';
 import { GetCommitDetailsUseCase } from '@application/usecases/graph/get-commit-details';
 import { GetWorktreeDetailsUseCase } from '@application/usecases/graph/get-worktree-details';
 import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
@@ -327,7 +329,10 @@ export class GraphMessageRouter {
         includeSubmoduleRepositories = true,
     ): Promise<GraphData> {
         const runtimeRepo = this.requireRuntimeRepositoryForRequest(repository);
-        const result = await this.getGraphData.execute(runtimeRepo, filters, { offset, limit }, signal, { includeSubmoduleRepositories });
+        const result = await this.getGraphData.execute(runtimeRepo, filters, { offset, limit }, signal, {
+            includeSubmoduleRepositories,
+            resolveWorktreeWips: (worktrees, wipSignal) => this.resolveWorktreeWips(repository, worktrees, wipSignal),
+        });
         for (const warning of result.warnings) {
             this.postGraphError(warning.error, {
                 operation: warning.operation,
@@ -416,6 +421,26 @@ export class GraphMessageRouter {
         const targets = this.runtimeTargetsForRepository(repository);
         if (!targets.repository) { throw new Error('Runtime repository is not available.'); }
         return targets.repository;
+    }
+
+    private async resolveWorktreeWips(
+        repository: RepositoryLocator | undefined,
+        worktrees: readonly GitWorktree[],
+        signal?: AbortSignal,
+    ): Promise<readonly GraphWorktreeWip[]> {
+        const runtimeWorktrees = this.runtimeTargetsForRepository(repository).worktrees ?? [];
+        const wips = await Promise.all(worktrees.map(async (worktree): Promise<GraphWorktreeWip | undefined> => {
+            const runtimeWorktree = runtimeWorktrees.find((candidate) => samePath(candidate.path, worktree.path));
+            if (!runtimeWorktree) { return undefined; }
+            try {
+                return toGraphWorktreeWip(worktree, await runtimeWorktree.getStatus(signal));
+            } catch (error) {
+                // One unreadable worktree (locked, pruned mid-refresh) must not hide the others' WIP rows.
+                if (isAbortError(error)) { throw error; }
+                return undefined;
+            }
+        }));
+        return wips.filter((wip): wip is GraphWorktreeWip => wip !== undefined);
     }
 
     private async handleRepositoryCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/repositoryCommand' }>): Promise<void> {
@@ -593,6 +618,17 @@ function toProtocolGraphData(result: GraphDataResult, repository: RepositoryLoca
             submodule,
             submoduleRepositoryLocator(repository, submodule.path, submodule.status),
         )),
+    };
+}
+
+function toGraphWorktreeWip(worktree: GitWorktree, status: GitStatus): GraphWorktreeWip | undefined {
+    const summary = summarizeStatusEntries(status);
+    if (summary.staged + summary.unstaged + summary.untracked + summary.conflicts === 0) { return undefined; }
+    return {
+        path: worktree.path,
+        head: worktree.head,
+        branch: worktree.branch,
+        ...summary,
     };
 }
 

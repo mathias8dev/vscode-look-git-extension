@@ -931,7 +931,7 @@ async function loadHistoryCommits(
         const page = await repo.getFileHistory(pathFilter, {}, pageRequest);
         return page.items;
     }
-    const page = await repo.getCommitGraph({}, pageRequest);
+    const page = await repo.getCommitGraph({ branches: ['HEAD'] }, pageRequest);
     return page.items;
 }
 

@@ -15,6 +15,7 @@ import { confirmTypedPhrase, showModalWarningMessage } from '@extension/utils/co
 import { createReadonlyDocumentUri, openReadonlyDiffDocument } from '@extension/utils/readonly-diff-documents';
 import { toProtocolSubmoduleStatus } from '@extension/mapping/to-protocol';
 import { GenerateCommitMessageUseCase } from '@application/usecases/changes/generate-commit-message';
+import { CheckoutBranchUseCase } from '@application/usecases/branches/checkout-branch';
 import { VscodeLanguageModelCommitMessageGenerator } from '@extension/adapters/vscode/vscode-language-model-commit-message-generator';
 import { createErrorPayload, isAbortError } from '@extension/messaging/error-serialization';
 import { notifyRuntimeConflictsDetected, openAllRuntimeThreeWayMergeEditors, openRuntimeThreeWayMergeEditor } from '@extension/utils/runtime-merge-editor';
@@ -22,7 +23,7 @@ import { operationActionsForStatus } from '@extension/utils/operation-feedback';
 import { requireRuntimeLocator } from '@extension/repositories/runtime-repository-locator';
 import { currentLocalBranchName } from '@extension/git/current-branch';
 import { requireRemoteBranchName } from '@extension/git/remote-branch';
-import { inputBranchName, inputText, pickBranch, pickLocalBranch, pickRef, pickRemote, pickRemoteBranch, pickStash, pickTag } from '@extension/git/reference-pickers';
+import { inputBranchName, inputText, pickBranch, pickLocalBranch, pickMergeOptions, pickRef, pickRemote, pickRemoteBranch, pickStash, pickTag } from '@extension/git/reference-pickers';
 
 type PostMessage = (msg: ChangesExtensionToWebviewMessage) => void;
 type RefreshCallback = () => Promise<void>;
@@ -41,7 +42,9 @@ export class ChangesMessageRouter {
     private knownSubmodulePaths: ReadonlySet<string> | undefined;
     private commitMessageGenerationAbortController: AbortController | undefined;
     private readonly submoduleCommitMessageGenerationAbortControllers = new Map<string, AbortController>();
+    private readonly submoduleSquashMessagePresetByWorktreeId = new Map<string, string>();
     private operationSequence = 0;
+    private submoduleCommitMessagePresetSequence = 0;
 
     constructor(
         private readonly repositories: RepositorySelectionAccessor,
@@ -752,6 +755,7 @@ export class ChangesMessageRouter {
                         stashes: stashPage.items,
                     },
                 });
+                await this.postSubmoduleSquashMergeMessagePresetIfNeeded(msg.path, runtimeSubmoduleWorktree);
                 break;
             }
 
@@ -972,9 +976,11 @@ export class ChangesMessageRouter {
                 });
                 return;
             case 'checkout': {
-                const branch = await pickBranch('Checkout branch', requireRuntimeRepository());
+                const repository = requireRuntimeRepository();
+                const branch = await pickBranch('Checkout branch', repository);
                 if (!branch) { return; }
-                await requireRuntimeWorktree().checkout(branch, {});
+                const branchInfo = (await repository.listBranches()).find((candidate) => candidate.name === branch);
+                await new CheckoutBranchUseCase().execute(repository, requireRuntimeWorktree(), { branch, isRemote: branchInfo?.isRemote ?? false });
                 await this.refresh();
                 return;
             }
@@ -995,8 +1001,11 @@ export class ChangesMessageRouter {
             case 'mergeBranch': {
                 const branch = await pickBranch('Merge branch', requireRuntimeRepository());
                 if (!branch) { return; }
+                const options = await pickMergeOptions(branch);
+                if (!options) { return; }
+                const worktree = requireRuntimeWorktree();
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => requireRuntimeWorktree().merge(branch, {}), 'Merge stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(worktree, () => worktree.merge(branch, options), 'Merge stopped with conflicts.'));
                 return;
             }
             case 'rebaseBranch': {
@@ -1246,6 +1255,22 @@ export class ChangesMessageRouter {
             });
             throw error;
         }
+    }
+
+    private async postSubmoduleSquashMergeMessagePresetIfNeeded(path: string, worktree: Worktree): Promise<void> {
+        const message = await worktree.getSquashMergeMessage();
+        if (!message) {
+            this.submoduleSquashMessagePresetByWorktreeId.delete(worktree.worktreeId);
+            return;
+        }
+        if (this.submoduleSquashMessagePresetByWorktreeId.get(worktree.worktreeId) === message) { return; }
+        this.submoduleSquashMessagePresetByWorktreeId.set(worktree.worktreeId, message);
+        this.postMessage({
+            type: 'changes/submoduleCommitMessagePreset',
+            path,
+            presetId: `submodule-squash-merge-${++this.submoduleCommitMessagePresetSequence}`,
+            message,
+        });
     }
 
     private async runRepositoryMutationWithConflictNotice(

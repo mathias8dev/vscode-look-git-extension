@@ -68,6 +68,9 @@ const scenarios = new Map<string, ScenarioSetup>([
     ['unpublished-branch', setupUnpublishedBranch],
     ['worktree', setupWorktrees],
     ['worktrees', setupWorktrees],
+    ['repo-with-subrepos', setupRepoWithSubrepos],
+    ['subrepos', setupRepoWithSubrepos],
+    ['nested-repos', setupRepoWithSubrepos],
 ]);
 
 let commitIndex = 0;
@@ -153,6 +156,7 @@ function printHelp(): void {
         '  ./lookGit setup rebase-conflicts --output /tmp/look-git-fixtures',
         '  ./lookGit setup repository-discovery',
         '  ./lookGit setup worktrees',
+        '  ./lookGit setup repo-with-subrepos',
         '  ./lookGit setup all',
     ].join('\n'));
 }
@@ -208,6 +212,7 @@ function uniqueScenarios(): readonly string[] {
         'submodules',
         'unpublished-branch',
         'worktrees',
+        'repo-with-subrepos',
     ];
 }
 
@@ -215,6 +220,7 @@ function canonicalScenarioName(name: string): string {
     if (name === 'empty') { return 'empty-repo'; }
     if (name === 'file-context') { return 'file-context-menu'; }
     if (name === 'worktree') { return 'worktrees'; }
+    if (name === 'subrepos' || name === 'nested-repos') { return 'repo-with-subrepos'; }
     if (name === 'remotes') { return 'remote'; }
     if (name === 'heavy-graph') { return 'graph-heavy'; }
     if (name === 'multi-repo' || name === 'multi-repository' || name === 'multirepo') { return 'repository-discovery'; }
@@ -227,8 +233,57 @@ function canonicalScenarioName(name: string): string {
 }
 
 function resetDir(target: string): void {
-    fs.rmSync(target, { recursive: true, force: true });
+    removeDir(target);
     fs.mkdirSync(target, { recursive: true });
+}
+
+function removeDir(target: string): void {
+    if (!fs.existsSync(target)) { return; }
+    try {
+        fs.rmSync(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 });
+        return;
+    } catch (error) {
+        if (!isPermissionOrBusyError(error)) { throw error; }
+    }
+
+    chmodTreeWritable(target);
+    try {
+        fs.rmSync(target, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
+        return;
+    } catch (error) {
+        if (!isPermissionOrBusyError(error)) { throw error; }
+    }
+
+    const staleTarget = `${target}.stale-${Date.now()}`;
+    try {
+        fs.renameSync(target, staleTarget);
+    } catch (error) {
+        if (!isPermissionOrBusyError(error)) { throw error; }
+        fail(`Could not reset ${target}. Close VS Code windows, terminals, or Git processes using that fixture, then run the command again.`);
+    }
+}
+
+function chmodTreeWritable(target: string): void {
+    try {
+        fs.chmodSync(target, 0o700);
+    } catch {}
+    if (!fs.existsSync(target)) { return; }
+    for (const entry of fs.readdirSync(target, { withFileTypes: true })) {
+        const entryPath = path.join(target, entry.name);
+        if (entry.isDirectory()) {
+            chmodTreeWritable(entryPath);
+            continue;
+        }
+        try {
+            fs.chmodSync(entryPath, 0o600);
+        } catch {}
+    }
+}
+
+function isPermissionOrBusyError(error: unknown): boolean {
+    if (!(error instanceof Error)) { return false; }
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === 'EPERM' || code === 'EBUSY' || code === 'ENOTEMPTY';
 }
 
 function setupRepositoryDiscovery(target: string, outputRoot: string): void {
@@ -1019,7 +1074,7 @@ function setupSubmodules(target: string, outputRoot: string): void {
 
 function setupWorktrees(target: string, outputRoot: string): void {
     const worktreeRoot = path.join(outputRoot, '.worktrees');
-    fs.rmSync(worktreeRoot, { recursive: true, force: true });
+    removeDir(worktreeRoot);
     fs.mkdirSync(worktreeRoot, { recursive: true });
 
     initRepo(target);
@@ -1074,6 +1129,61 @@ function setupWorktrees(target: string, outputRoot: string): void {
     write(target, 'src/main-local.ts', 'export const mainLocal = true;\n');
 }
 
+function setupRepoWithSubrepos(target: string, outputRoot: string): void {
+    const worktreeRoot = path.join(outputRoot, '.repo-with-subrepos-worktrees');
+    removeDir(worktreeRoot);
+    fs.mkdirSync(worktreeRoot, { recursive: true });
+
+    initRepo(target);
+    write(target, 'README.md', '# Repo with subrepos fixture\n\nOpen this outer repository to test nested independent repos and linked worktrees.\n');
+    write(target, '.gitignore', 'auth-kit/\nnested-tool/\n');
+    write(target, 'src/app.ts', 'export const app = "outer";\n');
+    write(target, 'docs/notes.md', 'Initial notes.\n');
+    commit(target, 'feat(core): initialize outer repository', { author: nextAuthor() });
+    write(target, 'src/app.ts', 'export const app = "outer";\nexport const mainOnly = true;\n');
+    commit(target, 'feat(core): add main branch change', { author: nextAuthor() });
+
+    git(target, ['checkout', '-q', '-b', 'feature/graph-worktree']);
+    write(target, 'src/feature.ts', 'export const feature = "graph-worktree";\n');
+    commit(target, 'feat(graph): add worktree branch', { author: nextAuthor() });
+    git(target, ['checkout', '-q', 'main']);
+
+    git(target, ['checkout', '-q', '-b', 'feature/spaced-worktree']);
+    write(target, 'src/spaced.ts', 'export const spaced = true;\n');
+    commit(target, 'feat(graph): add spaced worktree branch', { author: nextAuthor() });
+    git(target, ['checkout', '-q', 'main']);
+
+    const nestedTool = path.join(target, 'nested-tool');
+    initRepo(nestedTool);
+    write(nestedTool, 'package.json', '{"name":"nested-tool","private":true}\n');
+    write(nestedTool, 'src/index.ts', 'export const nested = true;\n');
+    commit(nestedTool, 'feat(core): initialize nested tool', { author: nextAuthor() });
+
+    const authKit = path.join(target, 'auth-kit');
+    initRepo(authKit);
+    write(authKit, 'README.md', '# Auth Kit\n\nIndependent nested repository, not a submodule.\n');
+    write(authKit, 'src/auth.ts', 'export const authVersion = 1;\n');
+    commit(authKit, 'feat(auth): initialize auth kit', { author: nextAuthor() });
+    git(authKit, ['checkout', '-q', '-b', 'feature/token-refresh']);
+    write(authKit, 'src/auth.ts', 'export const authVersion = 1;\nexport const tokenRefresh = true;\n');
+    commit(authKit, 'feat(auth): add token refresh', { author: nextAuthor() });
+    git(authKit, ['checkout', '-q', 'main']);
+
+    const topicWorktree = path.join(worktreeRoot, 'topic-worktree');
+    const spacedWorktree = path.join(worktreeRoot, 'worktree with spaces');
+    git(target, ['worktree', 'add', '-q', topicWorktree, 'feature/graph-worktree']);
+    write(topicWorktree, 'src/feature.ts', 'export const feature = "graph-worktree";\nexport const dirtyWorktree = true;\n');
+    write(topicWorktree, 'src/new-in-worktree.ts', 'export const newInWorktree = true;\n');
+    git(topicWorktree, ['add', 'src/new-in-worktree.ts']);
+    git(target, ['worktree', 'add', '-q', spacedWorktree, 'feature/spaced-worktree']);
+    write(spacedWorktree, 'src/spaced.ts', 'export const spaced = true;\nexport const dirtySpacedWorktree = true;\n');
+
+    write(target, 'README.md', '# Repo with subrepos fixture\n\nOpen this outer repository to test nested independent repos and linked worktrees.\n\nUnstaged change in outer repo.\n');
+    write(target, 'docs/staged.md', 'This file is staged in the outer repo.\n');
+    git(target, ['add', 'docs/staged.md']);
+    write(authKit, 'README.md', '# Auth Kit\n\nIndependent nested repository, not a submodule.\n\nDirty nested repository change.\n');
+    write(nestedTool, 'src/index.ts', 'export const nested = true;\nexport const nestedDirty = true;\n');
+}
 function setupSubmoduleSource(source: string, moduleName: string): void {
     initRepo(source);
     write(source, 'README.md', `# ${moduleName}\n`);

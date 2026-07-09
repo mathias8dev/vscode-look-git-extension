@@ -6,6 +6,7 @@ import { branchesEqual, graphCommitsEqual, graphSubmodulesEqual, tagsEqual, work
 import { mainGraphRepositorySelection, sameRepositoryLocator, submoduleGraphRepositorySelection, type GraphRepositorySelection } from '@webview/features/graph/graph-repository-selection';
 import type { GraphRow, LaneData, LineDef } from '@webview/features/graph/layout/graph-lane-model';
 import { layoutGraphRowsV4, type GraphLayoutStateV4 } from '@webview/features/graph/layout/layout-graph-rows-v4';
+import { sameResourcePath } from '@webview/shared/resource-path';
 
 export type DisplayRow =
     | { readonly kind: 'commit'; readonly row: GraphRow }
@@ -278,8 +279,8 @@ function selectWorktree(state: GraphState, path: string): GraphState {
         selectedWorktreePath: path,
         selectedHashes: [],
         selectionAnchorHash: undefined,
-        detailsLoading: path !== state.selectedWorktreePath || state.commitDetails === undefined,
-        commitDetails: path === state.selectedWorktreePath ? state.commitDetails : undefined,
+        detailsLoading: !sameResourcePath(path, state.selectedWorktreePath) || state.commitDetails === undefined,
+        commitDetails: sameResourcePath(path, state.selectedWorktreePath) ? state.commitDetails : undefined,
     };
 }
 
@@ -324,7 +325,7 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
                 },
             };
         case 'graph/worktreeDetailsResponse':
-            if (message.path !== state.selectedWorktreePath) { return state; }
+            if (!sameResourcePath(message.path, state.selectedWorktreePath)) { return state; }
             return {
                 ...state,
                 detailsLoading: false,
@@ -419,9 +420,11 @@ function reduceGraphSubmodulesPush(
 ): GraphState {
     if (state.activeGraphRequestId) { return state; }
     if (!matchesSelectedRuntimeRepository(repository, state.repository)) { return state; }
+    const hydratedSubmodules = hydrateKnownSubmodules(state.submodules, submodules);
+    if (hydratedSubmodules === state.submodules) { return state; }
     return {
         ...state,
-        submodules,
+        submodules: hydratedSubmodules,
         repoId: repoId ?? state.repoId,
     };
 }
@@ -612,6 +615,22 @@ function mergeSubmoduleSummaries(
         if (submodule.branches.length > 0 || submodule.worktrees.length > 0) { return submodule; }
         return existing;
     });
+}
+
+function hydrateKnownSubmodules(
+    current: readonly GraphSubmoduleInfo[],
+    hydrated: readonly GraphSubmoduleInfo[],
+): readonly GraphSubmoduleInfo[] {
+    if (current.length === 0 || hydrated.length === 0) { return current; }
+    const hydratedByPath = new Map(hydrated.map((submodule) => [submodule.path, submodule]));
+    let changed = false;
+    const next = current.map((submodule) => {
+        const match = hydratedByPath.get(submodule.path);
+        if (!match || graphSubmodulesEqual([submodule], [match])) { return submodule; }
+        changed = true;
+        return match;
+    });
+    return changed ? next : current;
 }
 
 function worktreeWipsEqual(displayRows: readonly DisplayRow[], wips: readonly WorktreeWip[]): boolean {

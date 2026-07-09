@@ -255,7 +255,9 @@ async function execGraphLog(
     try {
         return await execRawReadonly(args, signal);
     } catch (error) {
-        if (!usesDefaultRefs || !isUnbornHeadHistoryError(error)) { throw error; }
+        if (!isUnbornHeadHistoryError(error)) { throw error; }
+        // An explicitly requested unborn HEAD has no commits; only default refs can fall back to the remaining refs.
+        if (!usesDefaultRefs) { return ''; }
         return execRawReadonly(removeFirstHeadRevision(args), signal);
     }
 }

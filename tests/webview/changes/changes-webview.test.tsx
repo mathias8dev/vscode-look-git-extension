@@ -299,7 +299,7 @@ describe('ChangesWebview', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Show changes' }));
 
         await waitFor(() => expect(submoduleStatusRequests(api.messages).length).toBe(1));
-        sendToWebview({
+        act(() => sendToWebview({
             type: 'changes/submoduleStatusData',
             requestId: 'changes:submodule-status:modules/lib',
             path: 'modules/lib',
@@ -310,7 +310,7 @@ describe('ChangesWebview', () => {
                 conflictState: ConflictState.None,
                 stashes: [],
             },
-        });
+        }));
 
         await waitFor(() => expect(screen.getByTitle('src/inner.ts')).toBeInTheDocument());
         sendStatusDataWithSubmodule();
@@ -407,6 +407,22 @@ describe('ChangesWebview', () => {
         await waitFor(() => expect(screen.getByLabelText('Commit message')).toHaveValue('fix(changes): generate commit messages'));
     });
 
+    it('applies a preset commit message after a squash merge', async () => {
+        createMockVsCodeApi();
+        const { ChangesWebview } = await import('@webview/changes/changes-webview');
+
+        render(<ChangesWebview />);
+        sendStatusDataWithStagedChange();
+
+        act(() => sendToWebview({
+            type: 'changes/commitMessagePreset',
+            presetId: 'squash-merge-1',
+            message: 'Squashed commit of the following:\n\ncommit abc123',
+        }));
+
+        await waitFor(() => expect(screen.getByLabelText('Commit message')).toHaveValue('Squashed commit of the following:\n\ncommit abc123'));
+    });
+
     it('requests and applies a generated commit message inside a submodule composer', async () => {
         const api = createMockVsCodeApi();
         const { ChangesWebview } = await import('@webview/changes/changes-webview');
@@ -417,7 +433,7 @@ describe('ChangesWebview', () => {
         await waitFor(() => expect(screen.getByText('lib')).toBeInTheDocument());
         fireEvent.click(screen.getByRole('button', { name: 'Show changes' }));
         await waitFor(() => expect(submoduleStatusRequests(api.messages).length).toBe(1));
-        sendToWebview({
+        act(() => sendToWebview({
             type: 'changes/submoduleStatusData',
             requestId: 'changes:submodule-status:modules/lib',
             path: 'modules/lib',
@@ -429,7 +445,7 @@ describe('ChangesWebview', () => {
                 currentBranch: 'feature/lib',
                 stashes: [],
             },
-        });
+        }));
 
         await waitFor(() => expect(screen.getByTitle('src/inner.ts')).toBeInTheDocument());
         expect(screen.getByPlaceholderText('Message (Ctrl+Enter to commit on "feature/lib")')).toBeInTheDocument();
@@ -458,6 +474,38 @@ describe('ChangesWebview', () => {
                 message: 'fix(lib): update inner module',
             },
         });
+    });
+
+    it('applies a preset commit message inside a submodule composer', async () => {
+        createMockVsCodeApi();
+        const { ChangesWebview } = await import('@webview/changes/changes-webview');
+
+        render(<ChangesWebview />);
+        sendStatusDataWithSubmodule();
+
+        await waitFor(() => expect(screen.getByText('lib')).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Show changes' }));
+        act(() => sendToWebview({
+            type: 'changes/submoduleStatusData',
+            requestId: 'changes:submodule-status:modules/lib',
+            path: 'modules/lib',
+            data: {
+                staged: [{ indexStatus: 'M', workTreeStatus: ' ', filePath: 'src/inner.ts' }],
+                unstaged: [],
+                conflicts: [],
+                conflictState: ConflictState.None,
+                currentBranch: 'feature/lib',
+                stashes: [],
+            },
+        }));
+        act(() => sendToWebview({
+            type: 'changes/submoduleCommitMessagePreset',
+            path: 'modules/lib',
+            presetId: 'submodule-squash-merge-1',
+            message: 'Squashed commit of the following:\n\ncommit def456',
+        }));
+
+        await waitFor(() => expect(screen.getAllByLabelText('Commit message').at(1)).toHaveValue('Squashed commit of the following:\n\ncommit def456'));
     });
 
     it('posts targeted submodule toolbar messages and native context targets from submodule header actions', async () => {

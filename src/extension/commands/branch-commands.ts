@@ -14,6 +14,7 @@ import {
 } from '@extension/commands/git-command-helpers';
 import { requireRuntimeRepository, requireRuntimeWorktree, requireRuntimeWorktreePath, requireRuntimeWorktrees, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
 import { currentBranchName } from '@extension/git/current-branch';
+import { pickMergeOptions } from '@extension/git/reference-pickers';
 import { localBranchNameForRemote, localNameForRemoteBranch, resolveRemoteBranch } from '@extension/git/remote-branch';
 import { openVisualRebasePanel } from '@extension/utils/visual-rebase-panel';
 
@@ -76,7 +77,7 @@ export async function runBranchCommand(
                 const { remote, branchName } = await resolveRemoteBranch(runtimeRepository, branch);
                 await runtimeRepository.deleteRemoteBranch(remote, branchName);
             } else {
-                await runtimeRepository.deleteBranch(branch, true);
+                await deleteLocalBranch(runtimeRepository, branch);
             }
             return true;
         }
@@ -124,9 +125,7 @@ export async function runBranchCommand(
             });
             return false;
         case 'mergeInto':
-            await assertRuntimeNoUnmergedFiles(requireRuntimeWorktree(runtimeTargets), 'merging branches');
-            await requireRuntimeWorktree(runtimeTargets).merge(branch, {});
-            return true;
+            return mergeBranchIntoCurrent(branch, runtimeTargets);
     }
 }
 
@@ -281,6 +280,15 @@ async function pushBranch(runtimeTargets: RuntimeCommandTargets, branch: string)
     await requireRuntimeWorktree(runtimeTargets).pushBranch(undefined, branch, {});
 }
 
+async function mergeBranchIntoCurrent(branch: string, runtimeTargets: RuntimeCommandTargets): Promise<boolean> {
+    const worktree = requireRuntimeWorktree(runtimeTargets);
+    await assertRuntimeNoUnmergedFiles(worktree, 'merging branches');
+    const options = await pickMergeOptions(branch);
+    if (!options) { return false; }
+    await worktree.merge(branch, options);
+    return true;
+}
+
 async function updateSelectedLocalBranch(
     repository: GitRepository,
     worktree: Worktree,
@@ -314,6 +322,25 @@ function runtimeWorktreeForBranch(worktrees: readonly Worktree[], branch: string
 
 function localBranchRef(branch: string): string {
     return branch.startsWith('refs/heads/') ? branch : `refs/heads/${branch}`;
+}
+
+async function deleteLocalBranch(repository: GitRepository, branch: string): Promise<void> {
+    try {
+        // Safe delete: git refuses (-d) when the branch has commits not reachable from HEAD/upstream.
+        await repository.deleteBranch(branch, false);
+    } catch (error) {
+        if (!isBranchNotFullyMergedError(error)) { throw error; }
+        const choice = await showModalWarningMessage(
+            `Branch "${branch}" is not fully merged. Deleting it will discard its unmerged commits. Delete anyway?`,
+            'Delete',
+        );
+        if (choice !== 'Delete') { return; }
+        await repository.deleteBranch(branch, true);
+    }
+}
+
+function isBranchNotFullyMergedError(error: unknown): boolean {
+    return (error instanceof Error ? error.message : String(error)).includes('not fully merged');
 }
 
 async function assertRuntimeNoUnmergedFiles(worktree: Worktree, operation: string): Promise<void> {

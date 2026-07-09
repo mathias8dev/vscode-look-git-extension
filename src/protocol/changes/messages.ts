@@ -29,10 +29,23 @@ export interface GeneratedCommitMessageResponse {
     readonly message: string;
 }
 
+export interface CommitMessagePresetPush {
+    readonly type: 'changes/commitMessagePreset';
+    readonly presetId: string;
+    readonly message: string;
+}
+
 export interface SubmoduleGeneratedCommitMessageResponse {
     readonly type: 'changes/submoduleGeneratedCommitMessage';
     readonly requestId: RequestId;
     readonly path: string;
+    readonly message: string;
+}
+
+export interface SubmoduleCommitMessagePresetPush {
+    readonly type: 'changes/submoduleCommitMessagePreset';
+    readonly path: string;
+    readonly presetId: string;
     readonly message: string;
 }
 
@@ -361,9 +374,11 @@ export type ChangesExtensionToWebviewMessage =
     | WebviewFontSizeChangedPush
     | StatusDataPush
     | CommitResultPush
+    | CommitMessagePresetPush
     | GeneratedCommitMessageResponse
     | SubmoduleCommitResultPush
     | SubmoduleGeneratedCommitMessageResponse
+    | SubmoduleCommitMessagePresetPush
     | StashFilesResponse
     | SubmoduleStatusResponse
     | SubmoduleStashFilesResponse

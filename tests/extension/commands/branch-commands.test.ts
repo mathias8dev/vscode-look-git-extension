@@ -6,12 +6,14 @@ import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
 import { RuntimeWorktree } from '@extension/git/runtime-worktree';
 import { createRemoteWorkflowFixture, type RemoteWorkflowFixture } from '@tests/helpers/git-repo';
+import { resetMockVscode, setQuickPickValue } from '@tests/mocks/vscode';
 
 describe('runBranchCommand', () => {
     const fixtures: RemoteWorkflowFixture[] = [];
 
     afterEach(() => {
         while (fixtures.length) { fixtures.pop()!.cleanup(); }
+        resetMockVscode();
     });
 
     it('updates a non-current local branch by fast-forwarding its ref to the fetched upstream', async () => {
@@ -45,6 +47,18 @@ describe('runBranchCommand', () => {
 
         expect(fixture.local.gitTrim(['rev-parse', '--abbrev-ref', 'HEAD'])).toBe('main');
         expect(fixture.local.gitTrim(['rev-parse', 'feature/nested'])).toBe(originalFeatureHead);
+    });
+
+    it('prompts for merge mode and runs a squash merge when selected', async () => {
+        const fixture = track(createRemoteWorkflowFixture());
+        const targets = runtimeTargetsFor(fixture);
+        setQuickPickValue('Squash Merge');
+
+        await runBranchCommand(targets.repository, 'mergeInto', 'origin/feature/nested', true, undefined, targets);
+
+        expect(fixture.local.gitTrim(['rev-parse', '--abbrev-ref', 'HEAD'])).toBe('main');
+        expect(fixture.local.gitTrim(['status', '--porcelain'])).toContain('A  feature.txt');
+        expect(() => fixture.local.gitTrim(['rev-parse', '--verify', 'MERGE_HEAD'])).toThrow();
     });
 
     function track(fixture: RemoteWorkflowFixture): RemoteWorkflowFixture {

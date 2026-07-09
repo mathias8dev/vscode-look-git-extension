@@ -54,11 +54,18 @@ export function parsePorcelainStatus(output: string, submodulePaths: ReadonlySet
 }
 
 export function summarizePorcelainStatus(output: string): PorcelainStatusSummary {
-    const { staged, unstaged, conflicts } = parsePorcelainStatus(output);
+    return summarizeStatusEntries(parsePorcelainStatus(output));
+}
+
+export function summarizeStatusEntries(status: {
+    readonly staged: readonly GitStatusEntry[];
+    readonly unstaged: readonly GitStatusEntry[];
+    readonly conflicts: readonly GitStatusEntry[];
+}): PorcelainStatusSummary {
     let untracked = 0;
     let trackedUnstaged = 0;
 
-    for (const entry of unstaged) {
+    for (const entry of status.unstaged) {
         if (entry.indexStatus === '?' && entry.workTreeStatus === '?') {
             untracked++;
         } else {
@@ -67,10 +74,10 @@ export function summarizePorcelainStatus(output: string): PorcelainStatusSummary
     }
 
     return {
-        staged: staged.length,
+        staged: status.staged.length,
         unstaged: trackedUnstaged,
         untracked,
-        conflicts: conflicts.length,
+        conflicts: status.conflicts.length,
     };
 }
 

@@ -166,6 +166,39 @@ describe('ChangesViewProvider', () => {
         vi.clearAllTimers();
     });
 
+    it('posts a commit message preset when git has a squash merge message', async () => {
+        const context = {
+            id: 'repo-1',
+            cwd: '/repo',
+            kind: RepoKind.Main,
+            label: 'repo',
+        } satisfies RepoContext;
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry(context, changesRuntime(statusWithStagedFile('src/app.ts'), 'Squashed commit of the following:\n\ncommit abc123')),
+        );
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        await provider.refresh();
+        await provider.refresh();
+
+        expect(view.messages.filter((message) => isMessageType(message, 'changes/commitMessagePreset'))).toEqual([
+            {
+                type: 'changes/commitMessagePreset',
+                presetId: 'squash-merge-1',
+                message: 'Squashed commit of the following:\n\ncommit abc123',
+            },
+        ]);
+        vi.clearAllTimers();
+    });
+
     it('routes repository navigation messages through the navigation callback', async () => {
         const onRepositoryNavigation = vi.fn(async () => {});
         const provider = new ChangesViewProvider(
@@ -220,11 +253,11 @@ function repositoryKindForTest(context: RepoContext): RepositoryKind {
     return context.kind === RepoKind.Submodule ? 'submodule' : 'main';
 }
 
-function changesRuntime(status: GitStatus): GitRuntime {
-    return sequentialChangesRuntime([status]);
+function changesRuntime(status: GitStatus, squashMergeMessage?: string): GitRuntime {
+    return sequentialChangesRuntime([status], squashMergeMessage);
 }
 
-function sequentialChangesRuntime(statuses: readonly GitStatus[]): GitRuntime {
+function sequentialChangesRuntime(statuses: readonly GitStatus[], squashMergeMessage?: string): GitRuntime {
     let statusIndex = 0;
     return {
         supports: () => true,
@@ -237,6 +270,7 @@ function sequentialChangesRuntime(statuses: readonly GitStatus[]): GitRuntime {
             if (operation === 'listStashes') { return new Page([], false) as TResult; }
             if (operation === 'listSubmodules') { return [] as TResult; }
             if (operation === 'listBranches') { return [currentBranch()] as TResult; }
+            if (operation === 'getSquashMergeMessage') { return squashMergeMessage as TResult; }
             throw new Error(`Unexpected operation ${operation}`);
         },
     };
@@ -246,6 +280,15 @@ function statusWithUnstagedFile(...filePaths: readonly string[]): GitStatus {
     return {
         staged: [],
         unstaged: filePaths.map((filePath) => ({ indexStatus: ' ', workTreeStatus: 'M', filePath })),
+        conflicts: [],
+        conflictState: 'none',
+    };
+}
+
+function statusWithStagedFile(...filePaths: readonly string[]): GitStatus {
+    return {
+        staged: filePaths.map((filePath) => ({ indexStatus: 'A', workTreeStatus: ' ', filePath })),
+        unstaged: [],
         conflicts: [],
         conflictState: 'none',
     };

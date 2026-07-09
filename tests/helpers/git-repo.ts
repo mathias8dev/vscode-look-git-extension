@@ -136,6 +136,8 @@ export function createTempGitRepo(): TempGitRepo {
         git(['config', 'core.eol', 'lf']);
         git(['config', 'gc.auto', '0']);
         git(['config', 'maintenance.auto', 'false']);
+        git(['config', 'rerere.enabled', 'false']);
+        git(['config', 'rerere.autoupdate', 'false']);
         // Pin cwd to git's canonical path (forward slashes, long names, resolved symlinks) so fixture
         // paths compare equal to git output cross-platform (macOS /private/var, Windows C:/.../long-name).
         cwd = gitTrim(['rev-parse', '--show-toplevel']);

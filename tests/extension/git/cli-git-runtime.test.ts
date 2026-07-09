@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { UnsupportedGitOperationError } from '@application/ports/git-runtime';
 import { CliGitRuntime } from '@extension/git/cli-git-runtime';
 import type { GitExecutionContext } from '@application/ports/git-runtime';
 import type { CliGitRuntimeProcess } from '@extension/git/cli-git-runtime';
+import { removeDirSyncWithRetry } from '@tests/helpers/git-repo';
 
 const context = {
     cwd: '/repo',
@@ -129,6 +133,38 @@ describe('CliGitRuntime', () => {
             ['rev-parse', '--abbrev-ref', 'main@{upstream}'],
             ['push', '--force-with-lease'],
         ]);
+    });
+
+    it('passes merge options to git merge', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(recordingProcess(calls));
+
+        await runtime.execute('merge', context, { ref: 'feature/ui', options: {} });
+        await runtime.execute('merge', context, { ref: 'feature/api', options: { squash: true } });
+
+        expect(calls).toEqual([
+            ['merge', 'feature/ui'],
+            ['merge', '--squash', 'feature/api'],
+        ]);
+    });
+
+    it('reads the current squash merge message from git state', async () => {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-squash-message-'));
+        try {
+            const squashMessagePath = path.join(tempDir, 'SQUASH_MSG');
+            fs.writeFileSync(squashMessagePath, 'Squashed commit of the following:\n\ncommit abc123\n', 'utf8');
+            const runtime = new CliGitRuntime(async (args) => {
+                if (args.join(' ') === 'rev-parse --path-format=absolute --git-path SQUASH_MSG') {
+                    return `${squashMessagePath}\n`;
+                }
+                throw new Error(`Unexpected args: ${args.join(' ')}`);
+            });
+
+            await expect(runtime.execute('getSquashMergeMessage', context, undefined))
+                .resolves.toBe('Squashed commit of the following:\n\ncommit abc123');
+        } finally {
+            removeDirSyncWithRetry(tempDir);
+        }
     });
 
     it('returns typed status data from git status output', async () => {

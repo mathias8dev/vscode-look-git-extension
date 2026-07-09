@@ -125,7 +125,7 @@ Special cases:
 
 As a developer, I want merge and rebase lifecycle actions to be semantic operations so that in-progress states, conflict recovery, and abort flows are consistent.
 
-Semantic actions: `merge`, `continueMerge`, `abortMerge`, `quitMerge`, `rebase`, `continueRebase`, `abortRebase`, `skipRebase`, `quitRebase`
+Semantic actions: `merge`, `getSquashMergeMessage`, `continueMerge`, `abortMerge`, `quitMerge`, `rebase`, `continueRebase`, `abortRebase`, `skipRebase`, `quitRebase`
 
 Special cases:
 
