@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { GitBranch } from '@core/git/domain/git-status';
 import type { GitRepository, Worktree } from '@application/ports/git-topology';
-import type { GitRuntime } from '@application/ports/git-runtime';
+import type { GitExecutionContext, GitRuntime } from '@application/ports/git-runtime';
+import type { SemanticGitOperation } from '@application/ports/git-operation';
 import { CheckoutBranchUseCase } from '@application/usecases/branches/checkout-branch';
 
 describe('CheckoutBranchUseCase', () => {
@@ -93,7 +94,7 @@ function repositoryDouble(branches: readonly GitBranch[], calls: CheckoutCalls):
         label: 'repo',
         runtime: runtimeDouble,
         listBranches: async () => branches,
-        setUpstream: async (branchName, upstream) => {
+        setUpstream: async (branchName: string, upstream: string) => {
             calls.setUpstream.push({ branch: branchName, upstream });
         },
     } as unknown as GitRepository; // Test double only implements CheckoutBranchUseCase collaborators.
@@ -108,18 +109,22 @@ function worktreeDouble(calls: CheckoutCalls): Worktree {
         head: 'abc123',
         dirty: false,
         runtime: runtimeDouble,
-        checkout: async (ref) => {
+        checkout: async (ref: string) => {
             calls.checkout.push(ref);
         },
-        checkoutNewBranch: async (name, startPoint) => {
+        checkoutNewBranch: async (name: string, startPoint: string | undefined) => {
             calls.checkoutNewBranch.push({ name, startPoint });
         },
     } as unknown as Worktree; // Test double only implements CheckoutBranchUseCase collaborators.
 }
 
 const runtimeDouble = {
-    supports: () => false,
-    async execute(): Promise<unknown> {
+    supports: (_operation: SemanticGitOperation, _context: GitExecutionContext) => false,
+    async execute<TInput = unknown, TResult = unknown>(
+        _operation: SemanticGitOperation,
+        _context: GitExecutionContext,
+        _input: TInput,
+    ): Promise<TResult> {
         throw new Error('Unexpected runtime call.');
     },
 } satisfies GitRuntime;
