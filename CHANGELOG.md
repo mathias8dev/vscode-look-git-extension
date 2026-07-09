@@ -4,6 +4,25 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.2.4] - 2026-07-09
+
+### Added
+
+#### Changes Panel
+- Prompt for regular or squash merge when merging branches from Look Git
+- Prefill the commit composer with Git's generated squash merge message after squash merges, including submodule commit composers
+
+### Changed
+
+### Fixed
+
+#### Look Graph
+- Restore worktree WIP rows in graph data after status parsing changes
+- Compare repository, worktree, and submodule paths consistently across platforms
+
+#### Branches
+- Avoid detached checkouts when checking out remote branches from Look Git actions
+
 ## [1.2.3] - 2026-07-02
 
 ### Added
