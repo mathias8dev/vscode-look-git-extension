@@ -5,6 +5,16 @@ Read it entirely before writing any code.
 
 ---
 
+## Analysis And Decision-Making
+
+- Before changing code, analyze the problem calmly and step by step. Identify the expected behavior, constraints, and existing local patterns first.
+- Prefer verifying assumptions in code, tests, and documentation over guessing. For library, platform, API, browser, mobile, or framework behavior that may vary by version, check the current docs or source, and search the internet when local context is not enough.
+- Compare viable alternatives briefly, choose the simplest controlled and testable approach, and keep the tradeoffs explicit.
+- Avoid quick patches based on hope. Make long-running work observable with progress, state, errors, and retry paths when the UX requires it.
+- Before finalizing, do a critical review for side effects, regressions, missing tests, and behavior that could fail in production.
+
+---
+
 ## Project Goal
 
 A VS Code extension providing a full git UI with:
