@@ -4,6 +4,11 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+### Added
+
+#### Documentation
+- Add animated README demos for Commit History and Git blame workflows
+
 ## [1.2.4] - 2026-07-09
 
 ### Added

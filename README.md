@@ -75,6 +75,18 @@ The Changes panel and Commit History live in the sidebar, while the Look Graph o
 
 First-class submodule and worktree support, plus the modern conflicts editor for resolving merges in place.
 
+### Commit History
+
+![Look Git commit history — expand commits, inspect changed files, and open commit actions](https://raw.githubusercontent.com/mathias8dev/vscode-look-git-extension/main/docs/look-git/history.gif)
+
+Expand commits in place, inspect changed files, open diffs, and run history actions without leaving the sidebar.
+
+### Git Blame
+
+![Look Git blame annotations — inline and full-file blame context inside the editor](https://raw.githubusercontent.com/mathias8dev/vscode-look-git-extension/main/docs/look-git/blame.gif)
+
+Toggle inline blame or full-file annotations from Look Git commands and jump from blame context back into history or the graph.
+
 ## Getting Started
 
 1. Open a folder or workspace containing one or more Git repositories in VS Code
