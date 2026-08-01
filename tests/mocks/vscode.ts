@@ -88,7 +88,7 @@ export class CancellationTokenSource {
     }
 }
 
-class TestUri {
+export class TestUri {
     constructor(
         public scheme: string,
         public path: string,
@@ -137,6 +137,42 @@ export const Uri = {
         return new TestUri(components.scheme, pathValue, fsPath, query);
     },
 };
+
+export class RelativePattern {
+    readonly baseUri: TestUri;
+
+    constructor(base: TestUri | { readonly uri: TestUri } | string, readonly pattern: string) {
+        this.baseUri = typeof base === 'string'
+            ? Uri.file(base)
+            : 'uri' in base ? base.uri : base;
+    }
+}
+
+export class MockFileSystemWatcher {
+    private readonly changeEmitter = new EventEmitter<TestUri>();
+    private readonly createEmitter = new EventEmitter<TestUri>();
+    private readonly deleteEmitter = new EventEmitter<TestUri>();
+    readonly onDidChange = this.changeEmitter.event;
+    readonly onDidCreate = this.createEmitter.event;
+    readonly onDidDelete = this.deleteEmitter.event;
+    readonly ignoreChangeEvents = false;
+    readonly ignoreCreateEvents = false;
+    readonly ignoreDeleteEvents = false;
+    disposed = false;
+
+    constructor(readonly pattern: unknown) {}
+
+    fireDidChange(uri: TestUri): void { this.changeEmitter.fire(uri); }
+    fireDidCreate(uri: TestUri): void { this.createEmitter.fire(uri); }
+    fireDidDelete(uri: TestUri): void { this.deleteEmitter.fire(uri); }
+
+    dispose(): void {
+        this.disposed = true;
+        this.changeEmitter.dispose();
+        this.createEmitter.dispose();
+        this.deleteEmitter.dispose();
+    }
+}
 
 export const commands = {
     calls: [] as Array<{ command: string; args: unknown[] }>,
@@ -585,6 +621,9 @@ export const workspace = {
     values: new Map<string, unknown>(),
     documents: [] as MockTextDocument[],
     contentProviders: new Map<string, TextDocumentContentProvider>(),
+    workspaceFolders: undefined as readonly { readonly uri: TestUri; readonly name: string; readonly index: number }[] | undefined,
+    fileSystemWatchers: [] as MockFileSystemWatcher[],
+    workspaceFoldersEmitter: new EventEmitter<void>(),
     configurationEmitter: new EventEmitter<MockConfigurationChangeEvent>(),
     closeEmitter: new EventEmitter<MockTextDocument>(),
     get textDocuments(): readonly MockTextDocument[] {
@@ -644,6 +683,22 @@ export const workspace = {
     onDidChangeConfiguration(listener: (event: MockConfigurationChangeEvent) => unknown) {
         return this.configurationEmitter.event(listener);
     },
+    onDidChangeWorkspaceFolders(listener: () => unknown) {
+        return this.workspaceFoldersEmitter.event(listener);
+    },
+    createFileSystemWatcher(pattern: unknown) {
+        const watcher = new MockFileSystemWatcher(pattern);
+        this.fileSystemWatchers.push(watcher);
+        return watcher;
+    },
+    setWorkspaceFolders(paths: readonly string[]): void {
+        this.workspaceFolders = paths.map((folderPath, index) => ({
+            uri: Uri.file(folderPath),
+            name: folderPath.split(/[\\/]/).at(-1) ?? folderPath,
+            index,
+        }));
+        this.workspaceFoldersEmitter.fire();
+    },
     onDidCloseTextDocument(listener: (document: MockTextDocument) => unknown) {
         return this.closeEmitter.event(listener);
     },
@@ -681,6 +736,11 @@ export const workspace = {
         this.values = new Map();
         this.documents = [];
         this.contentProviders = new Map();
+        this.workspaceFolders = undefined;
+        this.fileSystemWatchers.forEach((watcher) => watcher.dispose());
+        this.fileSystemWatchers = [];
+        this.workspaceFoldersEmitter.dispose();
+        this.workspaceFoldersEmitter = new EventEmitter<void>();
         this.configurationEmitter.dispose();
         this.configurationEmitter = new EventEmitter<MockConfigurationChangeEvent>();
         this.closeEmitter.dispose();

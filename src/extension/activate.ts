@@ -10,6 +10,7 @@ import { RepositoryRuntimeRegistrar } from '@extension/repositories/repository-r
 import { RepositorySelectionStore } from '@extension/repositories/repository-selection-store';
 import { discoverChildRepositoryContexts, discoverRepositoryContexts } from '@extension/repositories/repository-discovery';
 import { RepositorySummaryService } from '@extension/repositories/repository-summary';
+import { RepositoryRefreshCoordinator } from '@extension/repositories/repository-refresh-coordinator';
 import { registerRuntimeContextWithRecovery } from '@extension/repositories/runtime-registration-recovery';
 import { ChangesViewProvider } from '@extension/views/changes-view-provider';
 import { CommitHistoryViewProvider } from '@extension/views/commit-history-view-provider';
@@ -20,7 +21,7 @@ import { registerWebviewFontSizeSync } from '@extension/views/webview-font';
 import { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import { appendErrorToOutput } from '@extension/messaging/error-output-channel';
 import { migrateLookGitStorage } from '@extension/storage/look-git-storage';
-import { RepositoryWorkingTreeWatcher } from '@extension/watchers/repository-working-tree-watcher';
+import { RepositoryGitWatcher } from '@extension/watchers/repository-git-watcher';
 import { RepositoryDiscoveryWatcher } from '@extension/watchers/repository-discovery-watcher';
 import type { RepoContext } from '@core/git/domain/repo-context';
 import type { Resource } from '@protocol/shared/base';
@@ -57,7 +58,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     let activeRuntimeContextId: string | undefined;
     let repositoryStateGeneration = 0;
     let dynamicRepositoryContexts = new Map<string, RepoContext>();
-    const graphRepositoryRefreshers: Array<() => Promise<void>> = [];
     const childDiscoveryInFlight = new Set<string>();
     async function handleRepositoryNavigation(message: RepositoryNavigationMessage): Promise<void> {
         switch (message.type) {
@@ -89,28 +89,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
         }
     }
-    const graphProvider = new GraphViewProvider(context.extensionUri, repositories, async () => {
-        await Promise.all(graphRepositoryRefreshers.map((refresh) => refresh()));
-    }, context.globalStorageUri, runtimeRepositories, handleRepositoryNavigation);
-    const refreshGraph = () => graphProvider.refresh();
-    const changesProvider = new ChangesViewProvider(context.extensionUri, repositories, refreshGraph, undefined, undefined, undefined, undefined, runtimeRepositories, undefined, async () => isRuntimeReadyForCurrentContext(), handleRepositoryNavigation);
-    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshGraph, context.globalStorageUri, undefined, runtimeRepositories, handleRepositoryNavigation);
-    graphRepositoryRefreshers.push(() => changesProvider.refresh(), () => commitHistoryProvider.refresh());
-
-    async function refreshAll(): Promise<void> {
-        if (!isRuntimeReadyForCurrentContext()) { return; }
-        const currentContext = repositories.currentContext;
-        if (currentContext) {
-            try {
-                await runtimeRegistrar.refreshWorktrees(runtimeRepositories, currentContext);
-            } catch { /* best-effort: view refresh proceeds even if worktree re-registration fails */ }
-        }
-        await Promise.all([
-            changesProvider.refresh(),
-            commitHistoryProvider.refresh(),
-            graphProvider.refresh(),
-        ]);
+    function refreshAll(): Promise<void> {
+        return repositoryRefreshCoordinator.refresh();
     }
+    const graphProvider = new GraphViewProvider(context.extensionUri, repositories, refreshAll, context.globalStorageUri, runtimeRepositories, handleRepositoryNavigation);
+    const changesProvider = new ChangesViewProvider(context.extensionUri, repositories, refreshAll, undefined, undefined, undefined, undefined, runtimeRepositories, undefined, async () => isRuntimeReadyForCurrentContext(), handleRepositoryNavigation);
+    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshAll, context.globalStorageUri, undefined, runtimeRepositories, handleRepositoryNavigation);
+    const repositoryRefreshCoordinator = new RepositoryRefreshCoordinator({
+        isReady: isRuntimeReadyForCurrentContext,
+        refreshRuntime: async () => {
+            const currentContext = repositories.currentContext;
+            if (currentContext) {
+                try {
+                    await runtimeRegistrar.refreshWorktrees(runtimeRepositories, currentContext);
+                } catch (error) {
+                    appendErrorToOutput(createErrorPayload(error, {
+                        code: 'gitOperationFailed',
+                        operation: 'runtimeRepositoryRefresh',
+                        recoverable: true,
+                    }).error, 'runtimeRepositoryRefresh');
+                }
+            }
+        },
+        refreshViews: async () => {
+            await Promise.all([
+                changesProvider.refresh(),
+                commitHistoryProvider.refresh(),
+                graphProvider.refresh(),
+            ]);
+        },
+    });
 
     const DEBOUNCE_MS = 150;
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -130,7 +138,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }, DEBOUNCE_MS);
     }
 
-    const workingTreeWatcher = new RepositoryWorkingTreeWatcher(debouncedRefreshAll);
+    const gitWatcher = new RepositoryGitWatcher(debouncedRefreshAll);
     const repositoryDiscoveryWatcher = new RepositoryDiscoveryWatcher(debouncedSyncDiscoveredRepositories);
 
     function repositoriesChangedMessage(): RepositoriesChangedPush {
@@ -197,7 +205,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (listedRepositoryContextId && !contexts.some((repoContext) => repoContext.id === listedRepositoryContextId)) {
             listedRepositoryContextId = undefined;
         }
-        workingTreeWatcher.setContexts(contexts);
+        gitWatcher.setContexts(contexts);
+        repositoryDiscoveryWatcher.setContexts(contexts);
         const nextRepositoriesResource = await loadRepositorySummaries(contexts);
         if (generation !== repositoryStateGeneration) { return; }
         repositoriesResource = nextRepositoriesResource;
@@ -236,7 +245,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
             const contexts = [...repositories.contexts, ...missingContexts];
             repositories.setContexts(contexts);
-            workingTreeWatcher.setContexts(contexts);
+            gitWatcher.setContexts(contexts);
+            repositoryDiscoveryWatcher.setContexts(contexts);
             const nextRepositoriesResource = await loadRepositorySummaries(contexts);
             if (generation !== repositoryStateGeneration) { return; }
             repositoriesResource = nextRepositoriesResource;
@@ -299,7 +309,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             activeRuntimeContextId = undefined;
             runtimeRepositories.clear();
             notifyRepositoriesChanged();
-            await refreshAll();
+            await Promise.all([
+                changesProvider.notifyRepoChanged(undefined),
+                commitHistoryProvider.notifyRepoChanged(undefined),
+                graphProvider.notifyRepoChanged(undefined),
+            ]);
             return;
         }
 
@@ -337,7 +351,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         repositories,
         registerReadonlyDiffDocumentProvider(),
         registerGitBlobDocumentProvider(),
-        workingTreeWatcher,
+        gitWatcher,
         repositoryDiscoveryWatcher,
         ...changesProvider.registerNativeContextCommands(),
         ...commitHistoryProvider.registerNativeContextCommands(),
@@ -364,23 +378,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             syncActiveRepo();
         }),
     );
-
-    const gitMetadataPatterns = [
-        '**/.git/HEAD', '**/.git/index',
-        '**/.git/MERGE_HEAD', '**/.git/REBASE_HEAD',
-        '**/.git/CHERRY_PICK_HEAD',
-        '**/.git/packed-refs', '**/.git/refs/**',
-        '**/.git/worktrees/*/HEAD', '**/.git/worktrees/*/gitdir',
-    ];
-    for (const pattern of gitMetadataPatterns) {
-        const watcher = vscode.workspace.createFileSystemWatcher(pattern);
-        context.subscriptions.push(
-            watcher,
-            watcher.onDidChange(debouncedRefreshAll),
-            watcher.onDidCreate(debouncedRefreshAll),
-            watcher.onDidDelete(debouncedRefreshAll),
-        );
-    }
 
     await syncDiscoveredRepositories();
     syncActiveRepo();

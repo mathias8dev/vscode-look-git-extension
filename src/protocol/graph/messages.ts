@@ -9,7 +9,7 @@ import type { GraphContextTarget, GraphData, GraphFilters, GraphPage, CommitFile
 
 export interface RepoContextChangedPush {
     readonly type: 'repo/contextChanged';
-    readonly context: SerializedRepoContext;
+    readonly context?: SerializedRepoContext;
 }
 
 export interface GraphDataPush {

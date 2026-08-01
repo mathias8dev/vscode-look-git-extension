@@ -23,4 +23,25 @@ describe('GraphViewProvider', () => {
         await expect.poll(() => onRepositoryNavigation.mock.calls.length).toBe(1);
         expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/showRepositoryList', contextId: 'repo-3' });
     });
+
+    it('refreshes graph data when repository state changes while VS Code reports the view as hidden', async () => {
+        resetVscodeMock();
+        const provider = new GraphViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: undefined },
+            async () => {},
+        );
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messages.length = 0;
+        view.visible = false;
+
+        await provider.refresh();
+
+        expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'graph/dataPush',
+            repoId: '',
+        }));
+    });
 });

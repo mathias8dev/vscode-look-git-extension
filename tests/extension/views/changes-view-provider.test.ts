@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { Page } from '@core/git/domain/page';
 import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
@@ -6,16 +6,27 @@ import type { GitBranch, GitStatus } from '@core/git/domain/git-status';
 import type { GitExecutionContext, GitRuntime, RepositoryKind } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
 import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
+import { CliGitRuntime } from '@extension/git/cli-git-runtime';
+import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
 import { RuntimeWorktree } from '@extension/git/runtime-worktree';
 import { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import { ChangesViewProvider } from '@extension/views/changes-view-provider';
 import { makeWebviewView, resetVscodeMock } from '@tests/helpers/provider-runtime';
+import { createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
+import { CommitMode, RepositoryState } from '@protocol/changes/types';
 
 describe('ChangesViewProvider', () => {
+    const repos: TempGitRepo[] = [];
+
     beforeEach(() => {
         resetVscodeMock();
         vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        while (repos.length) { repos.pop()!.cleanup(); }
+        vi.clearAllTimers();
     });
 
     it('does not post a refresh error while the runtime repository is not ready', async () => {
@@ -199,6 +210,154 @@ describe('ChangesViewProvider', () => {
         vi.clearAllTimers();
     });
 
+    it('posts empty available status data for an initialized repository without commits', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        const context = {
+            id: 'repo-id',
+            cwd: repo.cwd,
+            kind: RepoKind.Main,
+            label: 'repo',
+        } satisfies RepoContext;
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistryForUnbornContext(context),
+        );
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        await provider.refresh();
+
+        expect(view.messages).toContainEqual({
+            type: 'changes/statusData',
+            data: expect.objectContaining({
+                repositoryState: RepositoryState.Available,
+                staged: [],
+                unstaged: [],
+                conflicts: [],
+                stashes: [],
+                submodules: [],
+            }),
+        });
+        expect(view.messages.some((message) => isMessageType(message, 'changes/error'))).toBe(false);
+        vi.clearAllTimers();
+    });
+
+    it('notifies the repository refresh coordinator after a commit', async () => {
+        const context = {
+            id: 'repo-id',
+            cwd: '/repo',
+            kind: RepoKind.Main,
+            label: 'repo',
+        } satisfies RepoContext;
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            onRepositoryUpdated,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry(context, commitChangesRuntime()),
+        );
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'changes/commit', message: 'feat: commit', mode: CommitMode.Commit });
+
+        await vi.waitFor(() => {
+            expect(onRepositoryUpdated).toHaveBeenCalledOnce();
+        });
+        vi.clearAllTimers();
+    });
+
+    it('posts empty available status data for an initialized worktree context without commits', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        const context = {
+            id: 'worktree-id',
+            cwd: repo.cwd,
+            kind: RepoKind.Worktree,
+            parentId: 'repo-id',
+            label: 'repo-worktree',
+        } satisfies RepoContext;
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistryForUnbornContext(context),
+        );
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        await provider.refresh();
+
+        expect(view.messages).toContainEqual({
+            type: 'changes/statusData',
+            data: expect.objectContaining({
+                repositoryState: RepositoryState.Available,
+                staged: [],
+                unstaged: [],
+                conflicts: [],
+                stashes: [],
+                submodules: [],
+            }),
+        });
+        expect(view.messages.some((message) => isMessageType(message, 'changes/error'))).toBe(false);
+        vi.clearAllTimers();
+    });
+
+    it('posts empty available status data for an initialized submodule context without commits', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        const context = {
+            id: 'submodule-id',
+            cwd: repo.cwd,
+            kind: RepoKind.Submodule,
+            parentId: 'repo-id',
+            label: 'auth-kit',
+        } satisfies RepoContext;
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistryForUnbornContext(context),
+        );
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        await provider.refresh();
+
+        expect(view.messages).toContainEqual({
+            type: 'changes/statusData',
+            data: expect.objectContaining({
+                repositoryState: RepositoryState.Available,
+                staged: [],
+                unstaged: [],
+                conflicts: [],
+                stashes: [],
+                submodules: [],
+            }),
+        });
+        expect(view.messages.some((message) => isMessageType(message, 'changes/error'))).toBe(false);
+        vi.clearAllTimers();
+    });
+
     it('routes repository navigation messages through the navigation callback', async () => {
         const onRepositoryNavigation = vi.fn(async () => {});
         const provider = new ChangesViewProvider(
@@ -249,6 +408,34 @@ function runtimeRegistry(context: RepoContext, runtime: GitRuntime): RepositoryR
     return registry;
 }
 
+function runtimeRegistryForUnbornContext(context: RepoContext): RepositoryRegistry {
+    const runtime = new CliGitRuntime((args, runtimeContext, options) => new GitCliBackend(runtimeContext.cwd).run(args, options));
+    const registry = new RepositoryRegistry();
+    const repoId = context.kind === RepoKind.Worktree ? context.parentId ?? context.id : context.id;
+    const repositoryKind = repositoryKindForTest(context);
+    registry.registerRepository(new RuntimeGitRepository({
+        repoId,
+        cwd: context.cwd,
+        gitDir: `${context.cwd}/.git`,
+        kind: repositoryKind,
+        label: context.label,
+        parentRepositoryId: context.kind === RepoKind.Submodule ? context.parentId : undefined,
+    }, runtime));
+    registry.registerWorktree(new RuntimeWorktree({
+        repoId,
+        worktreeId: context.id,
+        path: context.cwd,
+        gitDir: `${context.cwd}/.git`,
+        repositoryKind,
+        parentRepositoryId: context.kind === RepoKind.Submodule ? context.parentId : undefined,
+        isMain: context.kind !== RepoKind.Worktree,
+        head: 'HEAD',
+        branch: undefined,
+        dirty: false,
+    }, runtime));
+    return registry;
+}
+
 function repositoryKindForTest(context: RepoContext): RepositoryKind {
     return context.kind === RepoKind.Submodule ? 'submodule' : 'main';
 }
@@ -271,6 +458,21 @@ function sequentialChangesRuntime(statuses: readonly GitStatus[], squashMergeMes
             if (operation === 'listSubmodules') { return [] as TResult; }
             if (operation === 'listBranches') { return [currentBranch()] as TResult; }
             if (operation === 'getSquashMergeMessage') { return squashMergeMessage as TResult; }
+            throw new Error(`Unexpected operation ${operation}`);
+        },
+    };
+}
+
+function commitChangesRuntime(): GitRuntime {
+    return {
+        supports: () => true,
+        async execute<TInput = unknown, TResult = unknown>(operation: SemanticGitOperation, _context: GitExecutionContext, _input: TInput): Promise<TResult> {
+            if (operation === 'commit') { return undefined as TResult; }
+            if (operation === 'getStatus') { return statusWithStagedFile('src/app.ts') as TResult; }
+            if (operation === 'listStashes') { return new Page([], false) as TResult; }
+            if (operation === 'listSubmodules') { return [] as TResult; }
+            if (operation === 'listBranches') { return [currentBranch()] as TResult; }
+            if (operation === 'getSquashMergeMessage') { return undefined as TResult; }
             throw new Error(`Unexpected operation ${operation}`);
         },
     };

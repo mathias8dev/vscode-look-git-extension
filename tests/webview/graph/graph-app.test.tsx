@@ -345,6 +345,47 @@ describe('GraphApp', () => {
         expect(screen.getByText('Create the initial commit from the Changes panel.')).toBeInTheDocument();
     });
 
+    it('shows the default branch and WIP for an initialized repository without commits', async () => {
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('@webview/graph/graph-app');
+
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
+        await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
+        const initialRequest = latestGraphDataRequest(api.messages);
+
+        await act(async () => sendToWebview({
+            type: 'graph/dataResponse',
+            requestId: initialRequest.requestId,
+            data: {
+                ...graphData([]),
+                branches: [{ name: 'main', isRemote: false, isCurrent: true, hash: 'HEAD' }],
+                currentBranch: 'main',
+                worktrees: [{
+                    path: '/repo',
+                    head: 'HEAD',
+                    branch: 'main',
+                    isMain: true,
+                    isDetached: false,
+                    isLocked: false,
+                }],
+                worktreeWips: [{
+                    path: '/repo',
+                    head: 'HEAD',
+                    branch: 'main',
+                    staged: 0,
+                    unstaged: 0,
+                    untracked: 1,
+                    conflicts: 0,
+                }],
+            },
+        }));
+
+        expect(await screen.findByText('WIP')).toBeInTheDocument();
+        expect(screen.getByTitle('1 untracked')).toHaveTextContent('U1');
+        expect(screen.getByText('HEAD (Current Branch)')).toBeInTheDocument();
+        expect(screen.queryByText('No commits yet')).not.toBeInTheDocument();
+    });
+
     it('clears graph filters from the filtered empty state', async () => {
         const api = createMockVsCodeApi();
         const { GraphApp } = await import('@webview/graph/graph-app');

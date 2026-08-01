@@ -4,6 +4,7 @@ import type { GitBranch, GitTag } from '@core/git/domain/git-status';
 import { parseGraphLog, parseCommitLog, LOG_FIELD_SEP, LOG_RECORD_SEP } from '@core/parsing/parse-log';
 import { parseNameStatusZ } from '@core/parsing/parse-name-status';
 import { parseTrackingStatus } from '@core/parsing/parse-tracking-status';
+import { gitErrorText, isUnbornHeadError } from '@extension/git/git-error';
 
 export interface GraphLogFilters {
     readonly search?: string;
@@ -31,7 +32,7 @@ export async function queryGraphLog(
     const { args, usesDefaultRefs } = buildGraphLogArgs(maxCount, branches, pathFilter, filters, {
         skip: filters.skip,
     });
-    const output = await execGraphLog(execRawReadonly, args, usesDefaultRefs, signal);
+    const output = await execGraphLog(execRawReadonly, args, usesDefaultRefs, branches, signal);
     return parseGraphLog(output).slice(0, maxCount);
 }
 
@@ -54,6 +55,10 @@ export async function queryCommitLog(
         output = await execRawReadonly(args, signal);
     } catch (error) {
         if (isUnbornCommitHistoryError(error, ref)) { return []; }
+        if (ref && isMissingRevisionError(error)
+            && (await requestedUnbornCurrentBranchRefs(execRawReadonly, [ref], signal)).length > 0) {
+            return [];
+        }
         throw error;
     }
     return parseCommitLog(output);
@@ -98,9 +103,7 @@ export async function queryAllBranches(
         execRawReadonly(['for-each-ref', `--format=${format}`, 'refs/heads', 'refs/remotes'], signal),
         getCurrentBranch(signal).catch(() => 'HEAD'),
     ]);
-    if (!output) { return []; }
-
-    return output.split(/\r?\n/).filter(Boolean).flatMap((line) => {
+    const branches = output.split(/\r?\n/).filter(Boolean).flatMap((line) => {
         const parts = line.split('\0');
         const refName = parts[0] ?? '';
         const isRemote = refName.startsWith('refs/remotes/');
@@ -117,6 +120,16 @@ export async function queryAllBranches(
             isRemote,
         }];
     });
+    if (currentBranch === 'HEAD' || branches.some((branch) => branch.isCurrent)) { return branches; }
+    return [{
+        name: currentBranch,
+        isCurrent: true,
+        hash: '',
+        upstream: undefined,
+        ahead: 0,
+        behind: 0,
+        isRemote: false,
+    }, ...branches];
 }
 
 export async function queryAllTags(execRawReadonly: GitExec, signal?: AbortSignal): Promise<GitTag[]> {
@@ -130,8 +143,11 @@ export async function queryAllTags(execRawReadonly: GitExec, signal?: AbortSigna
 }
 
 export async function queryCurrentBranch(execReadonly: GitExec, signal?: AbortSignal): Promise<string> {
-    try { return await execReadonly(['rev-parse', '--abbrev-ref', 'HEAD'], signal); }
-    catch { return 'HEAD'; }
+    try { return await execReadonly(['symbolic-ref', '--quiet', '--short', 'HEAD'], signal); }
+    catch {
+        try { return await execReadonly(['rev-parse', '--abbrev-ref', 'HEAD'], signal); }
+        catch { return 'HEAD'; }
+    }
 }
 
 export async function queryUserName(execReadonly: GitExec, signal?: AbortSignal): Promise<string> {
@@ -207,10 +223,13 @@ function markSubmodules(files: GitFileChange[], paths: Set<string>): GitFileChan
     return files.map((f) => paths.has(f.filePath) ? { ...f, isSubmodule: true } : f);
 }
 
-function removeFirstHeadRevision(args: readonly string[]): string[] {
-    const headIndex = args.indexOf('HEAD');
-    if (headIndex < 0) { return [...args]; }
-    return [...args.slice(0, headIndex), ...args.slice(headIndex + 1)];
+function removeRevisions(args: readonly string[], revisions: ReadonlySet<string>): string[] {
+    const remaining = [...args];
+    for (const revision of revisions) {
+        const index = remaining.indexOf(revision);
+        if (index >= 0) { remaining.splice(index, 1); }
+    }
+    return remaining;
 }
 
 interface BuildGraphLogArgsOptions {
@@ -250,15 +269,23 @@ async function execGraphLog(
     execRawReadonly: GitExec,
     args: readonly string[],
     usesDefaultRefs: boolean,
+    requestedRefs: readonly string[] | undefined,
     signal?: AbortSignal,
 ): Promise<string> {
     try {
         return await execRawReadonly(args, signal);
     } catch (error) {
-        if (!isUnbornHeadHistoryError(error)) { throw error; }
-        // An explicitly requested unborn HEAD has no commits; only default refs can fall back to the remaining refs.
-        if (!usesDefaultRefs) { return ''; }
-        return execRawReadonly(removeFirstHeadRevision(args), signal);
+        if (!isMissingRevisionError(error)) { throw error; }
+        const removableRefs = new Set<string>();
+        if (isUnbornHeadError(error) && (usesDefaultRefs || requestedRefs?.some((ref) => ref.toUpperCase() === 'HEAD'))) {
+            removableRefs.add('HEAD');
+        }
+        for (const ref of await requestedUnbornCurrentBranchRefs(execRawReadonly, requestedRefs, signal)) {
+            removableRefs.add(ref);
+        }
+        if (removableRefs.size === 0) { throw error; }
+        if (requestedRefs && requestedRefs.every((ref) => removableRefs.has(ref))) { return ''; }
+        return execRawReadonly(removeRevisions(args, removableRefs), signal);
     }
 }
 
@@ -335,7 +362,7 @@ async function queryGraphLogVariant(
         extraArgs,
         skip: skipOverride ?? filters.skip,
     });
-    return parseGraphLog(await execGraphLog(execRawReadonly, args, usesDefaultRefs, signal));
+    return parseGraphLog(await execGraphLog(execRawReadonly, args, usesDefaultRefs, branches, signal));
 }
 
 async function queryHashSearchCandidate(
@@ -438,32 +465,33 @@ function isMissingRevisionError(error: unknown): boolean {
         || text.includes('ambiguous argument');
 }
 
+async function requestedUnbornCurrentBranchRefs(
+    execRawReadonly: GitExec,
+    requestedRefs: readonly string[] | undefined,
+    signal?: AbortSignal,
+): Promise<readonly string[]> {
+    if (!requestedRefs?.length) { return []; }
+    let currentBranch: string;
+    try {
+        currentBranch = (await execRawReadonly(['symbolic-ref', '--quiet', '--short', 'HEAD'], signal)).trim();
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') { throw error; }
+        return [];
+    }
+    if (!currentBranch) { return []; }
+    const fullRef = `refs/heads/${currentBranch}`;
+    const existingRefs = (await execRawReadonly(['for-each-ref', '--format=%(refname)', fullRef], signal))
+        .split(/\r?\n/)
+        .filter(Boolean);
+    if (existingRefs.includes(fullRef)) { return []; }
+    return requestedRefs.filter((ref) => ref === currentBranch || ref === fullRef);
+}
+
 function isUnbornCommitHistoryError(error: unknown, ref: string | undefined): boolean {
     const text = gitErrorText(error).toLowerCase();
     if (text.includes('does not have any commits yet')) { return true; }
     if (ref && ref.toUpperCase() !== 'HEAD') { return false; }
-    return isUnbornHeadHistoryError(error);
-}
-
-function isUnbornHeadHistoryError(error: unknown): boolean {
-    const text = gitErrorText(error).toLowerCase();
-    return text.includes("ambiguous argument 'head'")
-        && text.includes('unknown revision or path not in the working tree');
-}
-
-function gitErrorText(error: unknown): string {
-    return [
-        error instanceof Error ? error.message : String(error),
-        stringErrorProperty(error, 'stderr'),
-        stringErrorProperty(error, 'stdout'),
-    ].filter((part) => part.length > 0).join('\n');
-}
-
-function stringErrorProperty(error: unknown, propertyName: 'stderr' | 'stdout'): string {
-    if (typeof error !== 'object' || error === null) { return ''; }
-    const descriptor = Object.getOwnPropertyDescriptor(error, propertyName);
-    const value: unknown = descriptor?.value;
-    return typeof value === 'string' ? value : '';
+    return isUnbornHeadError(error);
 }
 
 function commitMatchesSearch(commit: GitGraphCommit, search: string): boolean {

@@ -305,10 +305,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                     }
                 }
             }
-            await Promise.all([
-                this.onRepositoryUpdated(),
-                this.refresh(),
-            ]);
+            await this.onRepositoryUpdated();
             if (existingConflicts && conflictWorktree && await hasNewConflicts(conflictWorktree, existingConflicts)) {
                 if (nativeFileContext) {
                     await vscode.window.showWarningMessage(`${historyOperationLabel(operation)} stopped with conflicts.`);
@@ -323,7 +320,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         } catch (error) {
             if (operation === 'pull') {
                 try {
-                    await Promise.all([this.onRepositoryUpdated(), this.refresh()]);
+                    await this.onRepositoryUpdated();
                     if (conflictWorktree && await hasAnyConflicts(conflictWorktree)) {
                         if (nativeFileContext) {
                             await vscode.window.showWarningMessage('Pull stopped with conflicts.');
@@ -567,13 +564,16 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         return `history-op-${this.operationSequence}`;
     }
 
-    async notifyRepoChanged(context: RepoContext): Promise<void> {
+    async notifyRepoChanged(context: RepoContext | undefined): Promise<void> {
         this.selectedHistoryRef = undefined;
         this.selectedRepositoryScope = undefined;
         this.contextRepository = undefined;
         this.refCache = undefined;
         this.historyDataPoster.clear();
-        this.view?.webview.postMessage({ type: 'repo/contextChanged', context: toSerializedRepoContext(context) });
+        this.view?.webview.postMessage({
+            type: 'repo/contextChanged',
+            ...(context ? { context: toSerializedRepoContext(context) } : {}),
+        });
         await this.refresh();
     }
 

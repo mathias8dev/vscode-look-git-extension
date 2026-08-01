@@ -104,7 +104,10 @@ function reduceMessage(state: HistoryState, message: HistoryExtensionToWebviewMe
         case 'error':
             return { ...state, loading: false, loadingMore: false, detailsLoadingHash: undefined, error: message.error };
         case 'repo/contextChanged':
-            return resetForRepositoryNavigation(state);
+            return {
+                ...resetForRepositoryNavigation(state),
+                activeRepositoryContextId: { status: 'ready', data: message.context?.id },
+            };
         case 'repo/repositoriesChanged':
             return {
                 ...state,

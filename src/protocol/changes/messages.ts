@@ -8,7 +8,7 @@ import type { StatusData, CommitMode, StashFileEntry, ConflictState, SubmoduleSt
 
 export interface RepoContextChangedPush {
     readonly type: 'repo/contextChanged';
-    readonly context: SerializedRepoContext;
+    readonly context?: SerializedRepoContext;
 }
 
 export interface StatusDataPush {

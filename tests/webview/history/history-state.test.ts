@@ -212,7 +212,7 @@ describe('historyState', () => {
         expect(state).toEqual({
             ...createInitialHistoryState(),
             repositorySummaries: { status: 'ready', data: repositories },
-            activeRepositoryContextId: { status: 'ready', data: 'repo-a' },
+            activeRepositoryContextId: { status: 'ready', data: 'repo-2' },
         });
     });
 

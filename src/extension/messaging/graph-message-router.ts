@@ -285,6 +285,11 @@ export class GraphMessageRouter {
     }
 
     async refreshGraphData(): Promise<void> {
+        if (!this.repositories.currentContext) {
+            this.resetRefreshCache();
+            this.postEmptyGraphDataIfChanged();
+            return;
+        }
         if (!this.lastGraphDataRequest) {
             this.requestGraphRefresh();
             return;
@@ -316,6 +321,8 @@ export class GraphMessageRouter {
     }
 
     resetRefreshCache(): void {
+        for (const ctrl of this.pending.values()) { ctrl.abort(); }
+        this.pending.clear();
         this.graphDataPoster.clear();
         this.lastGraphDataRequest = undefined;
     }
@@ -627,7 +634,7 @@ function toGraphWorktreeWip(worktree: GitWorktree, status: GitStatus): GraphWork
     return {
         path: worktree.path,
         head: worktree.head,
-        branch: worktree.branch,
+        branch: worktree.branch?.replace(/^refs\/heads\//, ''),
         ...summary,
     };
 }

@@ -1,14 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { GitBranch, GitStatus } from '@core/git/domain/git-status';
 import type { GitSubmodule, GitWorktree } from '@core/git/domain/git-worktree';
+import { RepoKind } from '@core/git/domain/repo-context';
 import type { GitExecutionContext, GitRuntime } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
+import { CliGitRuntime } from '@extension/git/cli-git-runtime';
+import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { RuntimeRepositoryFactory } from '@extension/git/runtime-repository-factory';
 import { createRepoContext } from '@extension/repositories/repo-context-factory';
 import { RepositorySummaryService } from '@extension/repositories/repository-summary';
-import { samePath } from '@tests/helpers/git-repo';
+import { createTempGitRepo, samePath, type TempGitRepo } from '@tests/helpers/git-repo';
 
 describe('RepositorySummaryService', () => {
+    const repos: TempGitRepo[] = [];
+
+    afterEach(() => {
+        while (repos.length) { repos.pop()!.cleanup(); }
+    });
+
     it('summarizes repository state for the navigator overview', async () => {
         const context = createRepoContext('/repo');
         const service = new RepositorySummaryService(new RuntimeRepositoryFactory(recordingRuntime({
@@ -61,6 +70,81 @@ describe('RepositorySummaryService', () => {
 
         expect(summaries.map((summary) => summary.context.id)).toEqual([first.id, second.id]);
         expect(summaries.map((summary) => summary.hasRemote)).toEqual([false, false]);
+    });
+
+    it('summarizes an initialized repository without commits', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        const context = createRepoContext(repo.cwd);
+        const runtime = new CliGitRuntime((args, runtimeContext, options) => new GitCliBackend(runtimeContext.cwd).run(args, options));
+        const service = new RepositorySummaryService(new RuntimeRepositoryFactory(runtime));
+
+        await expect(service.summarize([context])).resolves.toEqual([{
+            context: { id: context.id, cwd: context.cwd, kind: 'main', label: context.label, parentId: undefined },
+            branch: 'main',
+            upstream: undefined,
+            hasRemote: false,
+            branchCount: 1,
+            submoduleCount: 0,
+            worktreeCount: 1,
+            stagedCount: 0,
+            unstagedCount: 0,
+            conflictCount: 0,
+        }]);
+    });
+
+    it('summarizes an initialized worktree context without commits', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        const context = {
+            id: 'worktree-id',
+            cwd: repo.cwd,
+            kind: RepoKind.Worktree,
+            parentId: 'repo-id',
+            label: 'repo-worktree',
+        };
+        const runtime = new CliGitRuntime((args, runtimeContext, options) => new GitCliBackend(runtimeContext.cwd).run(args, options));
+        const service = new RepositorySummaryService(new RuntimeRepositoryFactory(runtime));
+
+        await expect(service.summarize([context])).resolves.toEqual([{
+            context: { id: context.id, cwd: context.cwd, kind: 'worktree', label: context.label, parentId: 'repo-id' },
+            branch: 'main',
+            upstream: undefined,
+            hasRemote: false,
+            branchCount: 1,
+            submoduleCount: 0,
+            worktreeCount: 1,
+            stagedCount: 0,
+            unstagedCount: 0,
+            conflictCount: 0,
+        }]);
+    });
+
+    it('summarizes an initialized submodule context without commits', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        const context = {
+            id: 'submodule-id',
+            cwd: repo.cwd,
+            kind: RepoKind.Submodule,
+            parentId: 'repo-id',
+            label: 'auth-kit',
+        };
+        const runtime = new CliGitRuntime((args, runtimeContext, options) => new GitCliBackend(runtimeContext.cwd).run(args, options));
+        const service = new RepositorySummaryService(new RuntimeRepositoryFactory(runtime));
+
+        await expect(service.summarize([context])).resolves.toEqual([{
+            context: { id: context.id, cwd: context.cwd, kind: 'submodule', label: context.label, parentId: 'repo-id' },
+            branch: 'main',
+            upstream: undefined,
+            hasRemote: false,
+            branchCount: 1,
+            submoduleCount: 0,
+            worktreeCount: 1,
+            stagedCount: 0,
+            unstagedCount: 0,
+            conflictCount: 0,
+        }]);
     });
 });
 

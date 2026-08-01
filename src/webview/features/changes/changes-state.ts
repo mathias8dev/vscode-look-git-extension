@@ -244,6 +244,7 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 ...state,
                 status: message.data,
                 loading: false,
+                error: message.data.repositoryState === RepositoryState.Missing ? undefined : state.error,
                 showConflictsOnly: message.data.conflicts.length > 0 ? state.showConflictsOnly : false,
                 generatedCommitMessage: undefined,
                 commitMessageGenerationError: undefined,
@@ -442,7 +443,10 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 },
             };
         case 'repo/contextChanged':
-            return resetForRepositoryNavigation(state);
+            return {
+                ...resetForRepositoryNavigation(state),
+                activeRepositoryContextId: { status: 'ready', data: message.context?.id },
+            };
         case 'repo/repositoriesChanged':
             return {
                 ...state,
