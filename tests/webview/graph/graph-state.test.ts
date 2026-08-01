@@ -99,6 +99,41 @@ describe('graphState', () => {
         expect(reset.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-a' });
     });
 
+    it('clears graph content and pending requests when the active repository closes', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: graphData([commit('a', [])], 1, false),
+            },
+        });
+        const failed = reduceGraphState(loaded, {
+            type: 'message',
+            message: {
+                type: 'graph/error',
+                message: 'Runtime repository is not available.',
+                error: {
+                    code: 'refreshFailed',
+                    message: 'Runtime repository is not available.',
+                    operation: 'graph/refresh',
+                    recoverable: true,
+                },
+            },
+        });
+
+        const closed = reduceGraphState(failed, {
+            type: 'message',
+            message: { type: 'repo/contextChanged' },
+        });
+
+        expect(closed.rows).toEqual([]);
+        expect(closed.error).toBeUndefined();
+        expect(closed.activeRepositoryContextId).toEqual({ status: 'ready', data: undefined });
+        expect(closed.activeGraphRequestId).toBeUndefined();
+        expect(closed.loading).toBe(false);
+    });
+
     it('optimistically opens repository detail without sending graph requests before context confirmation', () => {
         const repositories = [repositorySummary('repo-a'), repositorySummary('repo-b')];
         const loaded = reduceGraphState(createInitialGraphState(), {
@@ -1134,6 +1169,24 @@ describe('graphState', () => {
         expect(displayRows.filter((displayRow) => displayRow.kind === 'wip').map((displayRow) => displayRow.wip.path)).toEqual([
             '/repo/worktrees/a',
             '/repo/worktrees/b',
+        ]);
+    });
+
+    it('keeps an unborn worktree WIP when there is no commit row', () => {
+        const unbornWip = {
+            ...wip('/repo', 'HEAD'),
+            branch: 'main',
+            staged: 0,
+            untracked: 1,
+        } satisfies WorktreeWip;
+
+        const displayRows = buildDisplayRows([], [unbornWip]);
+
+        expect(displayRows).toEqual([
+            expect.objectContaining({
+                kind: 'wip',
+                wip: unbornWip,
+            }),
         ]);
     });
 

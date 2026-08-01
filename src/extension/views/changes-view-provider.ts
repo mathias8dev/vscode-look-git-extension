@@ -590,7 +590,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 return;
             }
             const result = await this.applyPatch.execute(worktree, patchContent, mode);
-            await Promise.all([this.refresh(), this.onRepositoryUpdated()]);
+            await this.onRepositoryUpdated();
             if (result.kind === ApplyPatchResultKind.AppliedWithConflicts) {
                 this.postChangesOperation({ operationId, status: OperationStatus.Conflict, command: 'applyPatch' });
                 const status = await worktree.getStatus();
@@ -762,11 +762,14 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     }
 
     /** Called by RepoRegistry when the active repo changes. */
-    async notifyRepoChanged(context: RepoContext): Promise<void> {
+    async notifyRepoChanged(context: RepoContext | undefined): Promise<void> {
         this.contextTarget = undefined;
         this.statusDataPoster.clear();
         this.router?.setKnownSubmodulePaths([]);
-        this.view?.webview.postMessage({ type: 'repo/contextChanged', context: toSerializedRepoContext(context) });
+        this.view?.webview.postMessage({
+            type: 'repo/contextChanged',
+            ...(context ? { context: toSerializedRepoContext(context) } : {}),
+        });
         this.scheduleRefresh();
     }
 

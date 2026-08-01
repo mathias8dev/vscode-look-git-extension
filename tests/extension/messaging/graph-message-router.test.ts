@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import { RepoKind } from '@core/git/domain/repo-context';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
 import type { GitBranch } from '@core/git/domain/git-status';
 import type { GitTag } from '@core/git/domain/git-status';
 import type { GitGraphCommit } from '@core/git/domain/git-commit';
@@ -8,13 +8,22 @@ import type { GitExecutionContext, GitRuntime } from '@application/ports/git-run
 import type { SemanticGitOperation } from '@application/ports/git-operation';
 import type { GraphExtensionToWebviewMessage } from '@protocol/graph/messages';
 import type { RepositoryLocator } from '@protocol/shared/repo';
+import { CliGitRuntime } from '@extension/git/cli-git-runtime';
+import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { GetGraphDataUseCase, type GraphDataResult } from '@application/usecases/graph/get-graph-data';
 import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
 import { RuntimeWorktree } from '@extension/git/runtime-worktree';
 import { GraphMessageRouter } from '@extension/messaging/graph-message-router';
 import { RepositoryRegistry } from '@extension/repositories/repository-registry';
+import { createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
 
 describe('GraphMessageRouter', () => {
+    const repos: TempGitRepo[] = [];
+
+    afterEach(() => {
+        while (repos.length) { repos.pop()!.cleanup(); }
+    });
+
     it('resolves commit detail requests through repository locators', async () => {
         const calls: GitExecutionContext[] = [];
         const runtime: GitRuntime = {
@@ -104,6 +113,154 @@ describe('GraphMessageRouter', () => {
         expect(messages.filter((message) => message.type === 'graph/dataResponse')).toHaveLength(1);
         expect(messages.filter((message) => message.type === 'graph/dataPush')).toHaveLength(0);
         expect(executeGraphData).toHaveBeenCalledTimes(2);
+    });
+
+    it('responds with the default branch and WIP for an initialized repository without commits', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        repo.write('test.py', 'print("hello world")\n');
+        const context = repoContext({ id: 'repo-id', cwd: repo.cwd, kind: RepoKind.Main, label: 'repo' });
+        const registry = runtimeRegistryForUnbornContext(context);
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(
+            { currentContext: context },
+            (message) => { messages.push(message); },
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            registry,
+        );
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph-empty-main',
+            repoId: context.id,
+            filters: {},
+            page: { offset: 0, limit: 300 },
+        });
+
+        expect(messages).toContainEqual(expect.objectContaining({
+            type: 'graph/dataResponse',
+            requestId: 'graph-empty-main',
+            data: expect.objectContaining({
+                commits: [],
+                currentBranch: 'main',
+                branches: expect.arrayContaining([
+                    expect.objectContaining({ name: 'main', isCurrent: true, isRemote: false }),
+                ]),
+                worktreeWips: expect.arrayContaining([
+                    expect.objectContaining({
+                        path: repo.cwd,
+                        branch: 'main',
+                        staged: 0,
+                        unstaged: 0,
+                        untracked: 1,
+                        conflicts: 0,
+                    }),
+                ]),
+                hasMore: false,
+                loadedCount: 0,
+                totalCount: 0,
+            }),
+        }));
+        expect(messages.some((message) => message.type === 'graph/error')).toBe(false);
+    });
+
+    it('responds with empty graph data for an initialized worktree context without commits', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        const context = repoContext({ id: 'worktree-id', cwd: repo.cwd, kind: RepoKind.Worktree, parentId: 'repo-id', label: 'repo-worktree' });
+        const registry = runtimeRegistryForUnbornContext(context);
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(
+            { currentContext: context },
+            (message) => { messages.push(message); },
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            registry,
+        );
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph-empty-worktree',
+            repoId: context.id,
+            filters: {},
+            page: { offset: 0, limit: 300 },
+        });
+
+        expect(messages).toContainEqual(expect.objectContaining({
+            type: 'graph/dataResponse',
+            requestId: 'graph-empty-worktree',
+            data: expect.objectContaining({
+                commits: [],
+                currentBranch: 'main',
+                branches: expect.arrayContaining([
+                    expect.objectContaining({ name: 'main', isCurrent: true, isRemote: false }),
+                ]),
+                hasMore: false,
+                loadedCount: 0,
+                totalCount: 0,
+            }),
+        }));
+        expect(messages.some((message) => message.type === 'graph/error')).toBe(false);
+    });
+
+    it('responds with empty graph data for an initialized submodule context without commits', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        const context = repoContext({ id: 'submodule-id', cwd: repo.cwd, kind: RepoKind.Submodule, parentId: 'repo-id', label: 'auth-kit' });
+        const registry = runtimeRegistryForUnbornContext(context);
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const repository = {
+            repoId: context.id,
+            kind: 'submodule',
+            path: context.cwd,
+            parentRepoId: context.parentId,
+        } satisfies RepositoryLocator;
+        const router = new GraphMessageRouter(
+            { currentContext: repoContext({ id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' }) },
+            (message) => { messages.push(message); },
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            registry,
+        );
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph-empty-submodule',
+            repoId: 'repo-id',
+            repository,
+            filters: {},
+            page: { offset: 0, limit: 300 },
+        });
+
+        expect(messages).toContainEqual(expect.objectContaining({
+            type: 'graph/dataResponse',
+            requestId: 'graph-empty-submodule',
+            data: expect.objectContaining({
+                repository,
+                commits: [],
+                currentBranch: 'main',
+                branches: expect.arrayContaining([
+                    expect.objectContaining({ name: 'main', isCurrent: true, isRemote: false }),
+                ]),
+                hasMore: false,
+                loadedCount: 0,
+                totalCount: 0,
+            }),
+        }));
+        expect(messages.some((message) => message.type === 'graph/error')).toBe(false);
     });
 
     it('resolves worktree WIPs for dirty registered worktrees through the runtime registry', async () => {
@@ -265,6 +422,92 @@ describe('GraphMessageRouter', () => {
         expect(messages.filter((message) => message.type === 'graph/dataResponse')).toHaveLength(1);
         expect(messages.filter((message) => message.type === 'graph/dataPush')).toHaveLength(1);
     });
+
+    it('pushes empty graph data instead of a runtime error after the active repository closes', async () => {
+        const context = { id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' } satisfies RepoContext;
+        const repositories: { currentContext: RepoContext | undefined } = { currentContext: context };
+        const registry = new RepositoryRegistry();
+        registerRuntimeRepository(registry, neverRuntime());
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const getGraphData = new GetGraphDataUseCase();
+        vi.spyOn(getGraphData, 'execute').mockResolvedValue(graphDataResult());
+        const router = new GraphMessageRouter(
+            repositories,
+            (message) => { messages.push(message); },
+            async () => {},
+            getGraphData,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            registry,
+        );
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph:replace:0:0',
+            repoId: context.id,
+            filters: {},
+            page: { offset: 0, limit: 300 },
+        });
+        repositories.currentContext = undefined;
+        registry.clear();
+
+        await router.refreshGraphData();
+
+        expect(messages).toContainEqual(expect.objectContaining({
+            type: 'graph/dataPush',
+            repoId: '',
+            data: expect.objectContaining({ commits: [], branches: [], worktrees: [] }),
+        }));
+        expect(messages.some((message) => message.type === 'graph/error')).toBe(false);
+    });
+
+    it('cancels graph requests when the repository refresh cache is reset', async () => {
+        const context = { id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' } satisfies RepoContext;
+        const registry = new RepositoryRegistry();
+        registerRuntimeRepository(registry, neverRuntime());
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const getGraphData = new GetGraphDataUseCase();
+        let markRequestStarted: (() => void) | undefined;
+        const requestStarted = new Promise<void>((resolve) => { markRequestStarted = resolve; });
+        vi.spyOn(getGraphData, 'execute').mockImplementation(async (_repository, _filters, _page, signal) => {
+            markRequestStarted?.();
+            return new Promise<GraphDataResult>((_resolve, reject) => {
+                signal?.addEventListener('abort', () => {
+                    const error = new Error('Graph request was cancelled.');
+                    error.name = 'AbortError';
+                    reject(error);
+                }, { once: true });
+            });
+        });
+        const router = new GraphMessageRouter(
+            { currentContext: context },
+            (message) => { messages.push(message); },
+            async () => {},
+            getGraphData,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            registry,
+        );
+
+        const request = router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph:replace:0:0',
+            repoId: context.id,
+            filters: {},
+            page: { offset: 0, limit: 300 },
+        });
+        await requestStarted;
+
+        router.resetRefreshCache();
+        await request;
+
+        expect(messages.some((message) => message.type === 'graph/dataResponse')).toBe(false);
+        expect(messages.some((message) => message.type === 'graph/error')).toBe(false);
+    });
 });
 
 function commitFromInput(input: unknown): string {
@@ -335,6 +578,38 @@ function registerRuntimeRepository(registry: RepositoryRegistry, runtime: GitRun
         branch: 'main',
         dirty: false,
     }, runtime));
+}
+
+function runtimeRegistryForUnbornContext(context: RepoContext): RepositoryRegistry {
+    const registry = new RepositoryRegistry();
+    const runtime = new CliGitRuntime((args, runtimeContext, options) => new GitCliBackend(runtimeContext.cwd).run(args, options));
+    const repoId = context.kind === RepoKind.Worktree ? context.parentId ?? context.id : context.id;
+    const repositoryKind = context.kind === RepoKind.Submodule ? 'submodule' : 'main';
+    registry.registerRepository(new RuntimeGitRepository({
+        repoId,
+        cwd: context.cwd,
+        gitDir: `${context.cwd}/.git`,
+        kind: repositoryKind,
+        label: context.label,
+        parentRepositoryId: context.kind === RepoKind.Submodule ? context.parentId : undefined,
+    }, runtime));
+    registry.registerWorktree(new RuntimeWorktree({
+        repoId,
+        worktreeId: context.id,
+        path: context.cwd,
+        gitDir: `${context.cwd}/.git`,
+        repositoryKind,
+        parentRepositoryId: context.kind === RepoKind.Submodule ? context.parentId : undefined,
+        isMain: context.kind !== RepoKind.Worktree,
+        head: 'HEAD',
+        branch: undefined,
+        dirty: false,
+    }, runtime));
+    return registry;
+}
+
+function repoContext(context: RepoContext): RepoContext {
+    return context;
 }
 
 function graphDataResult(overrides: Partial<GraphDataResult> = {}): GraphDataResult {

@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { RuntimeRepositoryFactory } from '@extension/git/runtime-repository-factory';
 import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
 import type { GitExecutionContext, GitRuntime } from '@application/ports/git-runtime';
@@ -7,8 +7,17 @@ import type { SemanticGitOperation } from '@application/ports/git-operation';
 import type { GitStatus } from '@core/git/domain/git-status';
 import type { GitWorktree } from '@core/git/domain/git-worktree';
 import { stableRepoContextId } from '@extension/repositories/repo-context-id';
+import { CliGitRuntime } from '@extension/git/cli-git-runtime';
+import { GitCliBackend } from '@extension/git/git-cli-backend';
+import { createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
 
 describe('RuntimeRepositoryFactory', () => {
+    const repos: TempGitRepo[] = [];
+
+    afterEach(() => {
+        while (repos.length) { repos.pop()!.cleanup(); }
+    });
+
     it('creates runtime repositories from repository contexts', async () => {
         const runtime = runtimeWith();
         const factory = new RuntimeRepositoryFactory(runtime);
@@ -56,6 +65,83 @@ describe('RuntimeRepositoryFactory', () => {
             head: 'abc123',
             branch: 'main',
             dirty: true,
+            runtime,
+        });
+    });
+
+    it('creates the main runtime worktree for an initialized repository without commits', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        const runtime = new CliGitRuntime((args, runtimeContext, options) => new GitCliBackend(runtimeContext.cwd).run(args, options));
+        const factory = new RuntimeRepositoryFactory(runtime);
+
+        const worktree = await factory.createMainWorktree({
+            id: 'repo',
+            cwd: repo.cwd,
+            kind: RepoKind.Main,
+            label: 'repo',
+        });
+
+        expect(worktree).toMatchObject({
+            repoId: 'repo',
+            worktreeId: 'repo',
+            path: repo.cwd,
+            isMain: true,
+            head: 'HEAD',
+            branch: 'main',
+            dirty: false,
+            runtime,
+        });
+    });
+
+    it('creates the main runtime worktree for an initialized worktree context without commits', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        const runtime = new CliGitRuntime((args, runtimeContext, options) => new GitCliBackend(runtimeContext.cwd).run(args, options));
+        const factory = new RuntimeRepositoryFactory(runtime);
+
+        const worktree = await factory.createMainWorktree({
+            id: 'worktree-id',
+            cwd: repo.cwd,
+            kind: RepoKind.Worktree,
+            parentId: 'repo-id',
+            label: 'repo-worktree',
+        });
+
+        expect(worktree).toMatchObject({
+            repoId: 'repo-id',
+            worktreeId: 'worktree-id',
+            path: repo.cwd,
+            isMain: false,
+            head: 'HEAD',
+            branch: 'main',
+            dirty: false,
+            runtime,
+        });
+    });
+
+    it('creates the main runtime worktree for an initialized submodule context without commits', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        const runtime = new CliGitRuntime((args, runtimeContext, options) => new GitCliBackend(runtimeContext.cwd).run(args, options));
+        const factory = new RuntimeRepositoryFactory(runtime);
+
+        const worktree = await factory.createMainWorktree({
+            id: 'submodule-id',
+            cwd: repo.cwd,
+            kind: RepoKind.Submodule,
+            parentId: 'repo-id',
+            label: 'auth-kit',
+        });
+
+        expect(worktree).toMatchObject({
+            repoId: 'submodule-id',
+            worktreeId: 'submodule-id',
+            path: repo.cwd,
+            isMain: true,
+            head: 'HEAD',
+            branch: 'main',
+            dirty: false,
             runtime,
         });
     });

@@ -31,7 +31,7 @@ describe('protocol discriminated unions', () => {
     it('graph extension→webview union is exhaustive', () => {
         const handle = (msg: GraphExtensionToWebviewMessage) => {
             switch (msg.type) {
-                case 'repo/contextChanged': return msg.context.id satisfies string;
+                case 'repo/contextChanged': return msg.context?.id satisfies string | undefined;
                 case 'repo/repositoriesChanged': return msg.listContextId.status satisfies string;
                 case 'graph/refreshRequested': return;
                 case 'graph/dataPush': return msg.data.commits satisfies readonly unknown[];
@@ -72,7 +72,7 @@ describe('protocol discriminated unions', () => {
     it('changes extension→webview union is exhaustive', () => {
         const handle = (msg: ChangesExtensionToWebviewMessage) => {
             switch (msg.type) {
-                case 'repo/contextChanged': return msg.context.id satisfies string;
+                case 'repo/contextChanged': return msg.context?.id satisfies string | undefined;
                 case 'repo/repositoriesChanged': return msg.listContextId.status satisfies string;
                 case 'changes/statusData': return msg.data.staged satisfies readonly unknown[];
                 case 'changes/commitResult': return msg.success satisfies boolean;
@@ -99,7 +99,7 @@ describe('protocol discriminated unions', () => {
     it('history extension→webview union is exhaustive', () => {
         const handle = (msg: HistoryExtensionToWebviewMessage) => {
             switch (msg.type) {
-                case 'repo/contextChanged': return msg.context.id satisfies string;
+                case 'repo/contextChanged': return msg.context?.id satisfies string | undefined;
                 case 'repo/repositoriesChanged': return msg.listContextId.status satisfies string;
                 case 'history/data': return msg.data.commits satisfies readonly unknown[];
                 case 'history/dataResponse': return msg.requestId satisfies string;

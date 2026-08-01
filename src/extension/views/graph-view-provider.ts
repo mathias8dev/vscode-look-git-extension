@@ -151,9 +151,13 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     }
 
     /** Called by RepoRegistry when the active repo changes. */
-    async notifyRepoChanged(context: RepoContext): Promise<void> {
+    async notifyRepoChanged(context: RepoContext | undefined): Promise<void> {
         this.router?.resetRefreshCache();
-        this.view?.webview.postMessage({ type: 'repo/contextChanged', context: toSerializedRepoContext(context) });
+        this.view?.webview.postMessage({
+            type: 'repo/contextChanged',
+            ...(context ? { context: toSerializedRepoContext(context) } : {}),
+        });
+        if (!context) { await this.router?.pushGraphData(undefined, undefined); }
     }
 
     notifyRepositoriesChanged(message: RepositoriesChangedPush): void {
@@ -172,7 +176,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     }
 
     async refresh(): Promise<void> {
-        if (!this.view?.visible) { return; }
+        if (!this.view) { return; }
         await this.router?.refreshGraphData();
     }
 

@@ -5,15 +5,21 @@ import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
 import type { GitBranch, GitStatus } from '@core/git/domain/git-status';
 import type { GitExecutionContext, GitRuntime } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
+import { CliGitRuntime } from '@extension/git/cli-git-runtime';
+import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
 import { RuntimeWorktree } from '@extension/git/runtime-worktree';
 import { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import { CommitHistoryViewProvider } from '@extension/views/commit-history-view-provider';
 import { makeWebviewView, resetVscodeMock } from '@tests/helpers/provider-runtime';
+import { createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
 import { setQuickPickValue, window } from '@tests/mocks/vscode';
 
 describe('CommitHistoryViewProvider', () => {
+    const repos: TempGitRepo[] = [];
+
     afterEach(() => {
+        while (repos.length) { repos.pop()!.cleanup(); }
         resetVscodeMock();
     });
 
@@ -70,6 +76,92 @@ describe('CommitHistoryViewProvider', () => {
         }
     });
 
+    it('responds with empty history data for an initialized repository without commits', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        const context = {
+            id: 'repo-id',
+            cwd: repo.cwd,
+            kind: RepoKind.Main,
+            label: 'repo',
+        } satisfies RepoContext;
+        const provider = providerForUnbornContext(context);
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/dataRequest', requestId: 'history-empty-main', page: { offset: 0, limit: 50 } });
+
+        await expect.poll(() => view.messages.some((message) => isMessageType(message, 'history/dataResponse'))).toBe(true);
+        expect(view.messages).toContainEqual({
+            type: 'history/dataResponse',
+            requestId: 'history-empty-main',
+            data: {
+                commits: [],
+                page: { offset: 0, limit: 50 },
+                hasMore: false,
+            },
+        });
+        expect(view.messages.some((message) => isMessageType(message, 'history/error'))).toBe(false);
+    });
+
+    it('responds with empty history data for an initialized worktree context without commits', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        const context = {
+            id: 'worktree-id',
+            cwd: repo.cwd,
+            kind: RepoKind.Worktree,
+            parentId: 'repo-id',
+            label: 'repo-worktree',
+        } satisfies RepoContext;
+        const provider = providerForUnbornContext(context);
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/dataRequest', requestId: 'history-empty-worktree', page: { offset: 0, limit: 50 } });
+
+        await expect.poll(() => view.messages.some((message) => isMessageType(message, 'history/dataResponse'))).toBe(true);
+        expect(view.messages).toContainEqual({
+            type: 'history/dataResponse',
+            requestId: 'history-empty-worktree',
+            data: {
+                commits: [],
+                page: { offset: 0, limit: 50 },
+                hasMore: false,
+            },
+        });
+        expect(view.messages.some((message) => isMessageType(message, 'history/error'))).toBe(false);
+    });
+
+    it('responds with empty history data for an initialized submodule context without commits', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        const context = {
+            id: 'submodule-id',
+            cwd: repo.cwd,
+            kind: RepoKind.Submodule,
+            parentId: 'repo-id',
+            label: 'auth-kit',
+        } satisfies RepoContext;
+        const provider = providerForUnbornContext(context);
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/dataRequest', requestId: 'history-empty-submodule', page: { offset: 0, limit: 50 } });
+
+        await expect.poll(() => view.messages.some((message) => isMessageType(message, 'history/dataResponse'))).toBe(true);
+        expect(view.messages).toContainEqual({
+            type: 'history/dataResponse',
+            requestId: 'history-empty-submodule',
+            data: {
+                commits: [],
+                page: { offset: 0, limit: 50 },
+                hasMore: false,
+            },
+        });
+        expect(view.messages.some((message) => isMessageType(message, 'history/error'))).toBe(false);
+    });
+
     it('routes repository navigation messages through the navigation callback', async () => {
         const onRepositoryNavigation = vi.fn(async () => {});
         const context = repoContext();
@@ -120,6 +212,18 @@ function providerFor(runtime: GitRuntime): CommitHistoryViewProvider {
     );
 }
 
+function providerForUnbornContext(context: RepoContext): CommitHistoryViewProvider {
+    const runtime = new CliGitRuntime((args, runtimeContext, options) => new GitCliBackend(runtimeContext.cwd).run(args, options));
+    return new CommitHistoryViewProvider(
+        vscode.Uri.file('/extension'),
+        { currentContext: context },
+        async () => {},
+        undefined,
+        undefined,
+        runtimeRegistryForUnbornContext(context, runtime),
+    );
+}
+
 function repoContext(): RepoContext {
     return {
         id: 'repo-id',
@@ -147,6 +251,33 @@ function runtimeRegistry(context: RepoContext, runtime: GitRuntime): RepositoryR
         isMain: true,
         head: 'main-head',
         branch: 'main',
+        dirty: false,
+    }, runtime));
+    return registry;
+}
+
+function runtimeRegistryForUnbornContext(context: RepoContext, runtime: GitRuntime): RepositoryRegistry {
+    const registry = new RepositoryRegistry();
+    const repoId = context.kind === RepoKind.Worktree ? context.parentId ?? context.id : context.id;
+    const repositoryKind = context.kind === RepoKind.Submodule ? 'submodule' : 'main';
+    registry.registerRepository(new RuntimeGitRepository({
+        repoId,
+        cwd: context.cwd,
+        gitDir: `${context.cwd}/.git`,
+        kind: repositoryKind,
+        label: context.label,
+        parentRepositoryId: context.kind === RepoKind.Submodule ? context.parentId : undefined,
+    }, runtime));
+    registry.registerWorktree(new RuntimeWorktree({
+        repoId,
+        worktreeId: context.id,
+        path: context.cwd,
+        gitDir: `${context.cwd}/.git`,
+        repositoryKind,
+        parentRepositoryId: context.kind === RepoKind.Submodule ? context.parentId : undefined,
+        isMain: context.kind !== RepoKind.Worktree,
+        head: 'HEAD',
+        branch: undefined,
         dirty: false,
     }, runtime));
     return registry;
@@ -209,6 +340,10 @@ async function waitForSelectedFeatureBranch(calls: readonly RuntimeCall[]): Prom
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
     return typeof value === 'object' && value !== null;
+}
+
+function isMessageType(message: unknown, type: string): boolean {
+    return typeof message === 'object' && message !== null && 'type' in message && message.type === type;
 }
 
 function runtimeResult<TResult>(value: unknown): TResult {

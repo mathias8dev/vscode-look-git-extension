@@ -190,7 +190,7 @@ describe('changesState', () => {
         });
 
         expect(reset.repositorySummaries).toEqual({ status: 'ready', data: repositories });
-        expect(reset.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-a' });
+        expect(reset.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-b' });
         expect(reset.status).toEqual(createStatusData());
         expect(reset.selectedItemIds).toEqual([]);
         expect(reset.loading).toBe(true);
@@ -239,11 +239,30 @@ describe('changesState', () => {
         });
         const refreshed = reduceChangesState(failed, {
             type: 'message',
-            message: statusDataMessage(),
+            message: statusDataMessage({ repositoryState: RepositoryState.Available }),
         });
 
         expect(refreshed.loading).toBe(false);
         expect(refreshed.error?.message).toBe('Stash pop failed');
+    });
+
+    it('clears repository errors when status reports that the repository is missing', () => {
+        const failed = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: {
+                type: 'changes/error',
+                message: 'Not a git repository',
+                error: { code: 'refreshFailed', message: 'Not a git repository', recoverable: true },
+            },
+        });
+
+        const unavailable = reduceChangesState(failed, {
+            type: 'message',
+            message: statusDataMessage({ repositoryState: RepositoryState.Missing }),
+        });
+
+        expect(unavailable.status.repositoryState).toBe(RepositoryState.Missing);
+        expect(unavailable.error).toBeUndefined();
     });
 
     it('stores commit feedback from commit result messages', () => {

@@ -8,6 +8,7 @@ import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
 import { RuntimeWorktree } from '@extension/git/runtime-worktree';
 import { stableRepoContextId } from '@extension/repositories/repo-context-id';
 import { currentBranchNameOrUndefined } from '@extension/git/current-branch';
+import { isUnbornHeadError } from '@extension/git/git-error';
 import { samePath } from '@extension/utils/path-compare';
 
 export class RuntimeRepositoryFactory {
@@ -35,7 +36,7 @@ export class RuntimeRepositoryFactory {
             isMain: context.kind !== RepoKind.Worktree,
         });
         const [head, currentBranch, status] = await Promise.all([
-            repository.resolveRef('HEAD'),
+            resolveHead(repository),
             currentBranchNameOrUndefined(repository),
             baseWorktree.getStatus(),
         ]);
@@ -123,4 +124,13 @@ function defaultGitDir(cwd: string): string {
 
 function isDirty(status: GitStatus): boolean {
     return status.staged.length > 0 || status.unstaged.length > 0 || status.conflicts.length > 0;
+}
+
+async function resolveHead(repository: RuntimeGitRepository): Promise<string> {
+    try {
+        return await repository.resolveRef('HEAD');
+    } catch (error) {
+        if (!isUnbornHeadError(error)) { throw error; }
+        return 'HEAD';
+    }
 }

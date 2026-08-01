@@ -14,7 +14,9 @@ export type DisplayRow =
 
 export function buildDisplayRows(rows: readonly GraphRow[], wips: readonly WorktreeWip[]): readonly DisplayRow[] {
     const wipsByHead = groupWipsByHead(wips);
-    const result: DisplayRow[] = [];
+    const result: DisplayRow[] = wips
+        .filter((wip) => isUnbornHead(wip.head))
+        .map((wip) => ({ kind: 'wip', wip, laneData: unbornWipLaneData() }));
     for (const row of rows) {
         const rowWips = wipsByHead.get(row.commit.hash) ?? [];
         rowWips.forEach((wip, index) => {
@@ -27,6 +29,19 @@ export function buildDisplayRows(rows: readonly GraphRow[], wips: readonly Workt
         }
     }
     return result;
+}
+
+function isUnbornHead(head: string): boolean {
+    return head === 'HEAD' || /^0+$/.test(head);
+}
+
+function unbornWipLaneData(): LaneData {
+    return {
+        lane: 0,
+        color: 'var(--vscode-gitDecoration-untrackedResourceForeground, #73c991)',
+        lines: [],
+        isPrimary: true,
+    };
 }
 
 function groupWipsByHead(wips: readonly WorktreeWip[]): ReadonlyMap<string, readonly WorktreeWip[]> {
@@ -369,7 +384,9 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
         case 'repo/contextChanged':
             return {
                 ...resetForRepositoryNavigation(state),
-                activeGraphRequestId: graphRequestId(0, 'replace'),
+                activeRepositoryContextId: { status: 'ready', data: message.context?.id },
+                activeGraphRequestId: message.context ? graphRequestId(0, 'replace') : undefined,
+                loading: Boolean(message.context),
             };
         case 'repo/repositoriesChanged':
             return {

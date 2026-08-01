@@ -13,7 +13,8 @@ describe('package-vsix', () => {
         expect(result.capturedArgs).toContain('--out');
         expect(result.capturedArgs).toMatch(new RegExp(`${String(result.manifest.name)}-${String(result.manifest.version)}-\\d{14}\\.vsix`));
         expect(result.capturedArgs).not.toContain('experimental');
-        expect(fs.readFileSync(result.packageJsonPath, 'utf8')).toBe(result.originalPackageJson);
+        expect(result.restoredPackageJson).toBe(result.originalPackageJson);
+        expect(result.sourcePackageJsonAfter).toBe(result.sourcePackageJsonBefore);
     });
 
     it('packages experimental display name and timestamped version without mutating package.json', () => {
@@ -21,37 +22,45 @@ describe('package-vsix', () => {
         expect(result.capturedManifest.displayName).toBe('Look Git Experimental');
         expect(result.capturedManifest.version).toMatch(new RegExp(`${String(result.manifest.version)}-experimental-\\d{14}`));
         expect(result.capturedArgs).toMatch(new RegExp(`${String(result.manifest.name)}-${String(result.manifest.version)}-experimental-\\d{14}\\.vsix`));
-        expect(fs.readFileSync(result.packageJsonPath, 'utf8')).toBe(result.originalPackageJson);
+        expect(result.restoredPackageJson).toBe(result.originalPackageJson);
+        expect(result.sourcePackageJsonAfter).toBe(result.sourcePackageJsonBefore);
     });
 });
 
 function runPackageVsix(args: readonly string[]): {
-    readonly packageJsonPath: string;
     readonly originalPackageJson: string;
+    readonly restoredPackageJson: string;
+    readonly sourcePackageJsonBefore: string;
+    readonly sourcePackageJsonAfter: string;
     readonly manifest: Record<string, unknown>;
     readonly capturedManifest: Record<string, unknown>;
     readonly capturedArgs: string;
 } {
-    const repoRoot = process.cwd();
-    const packageJsonPath = path.join(repoRoot, 'package.json');
-    const originalPackageJson = fs.readFileSync(packageJsonPath, 'utf8');
+    const sourceRoot = process.cwd();
+    const sourcePackageJsonPath = path.join(sourceRoot, 'package.json');
+    const sourcePackageJsonBefore = fs.readFileSync(sourcePackageJsonPath, 'utf8');
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-package-vsix-'));
+    const workspaceRoot = path.join(root, 'workspace');
+    const scriptsPath = path.join(workspaceRoot, 'scripts');
+    const packageJsonPath = path.join(workspaceRoot, 'package.json');
+    const packageScriptPath = path.join(scriptsPath, 'package-vsix.ts');
     const vsceCliPath = path.join(root, 'vsce-test.js');
     const capturedManifestPath = path.join(root, 'captured-package.json');
     const capturedArgsPath = path.join(root, 'captured-vsce-args.txt');
 
     try {
+        fs.mkdirSync(scriptsPath, { recursive: true });
+        fs.writeFileSync(packageJsonPath, sourcePackageJsonBefore);
+        fs.copyFileSync(path.join(sourceRoot, 'scripts', 'package-vsix.ts'), packageScriptPath);
         fs.writeFileSync(vsceCliPath, [
-            '#!/usr/bin/env node',
             "const fs = require('node:fs');",
             "fs.copyFileSync('package.json', process.env.LOOK_GIT_CAPTURE_MANIFEST);",
             "fs.writeFileSync(process.env.LOOK_GIT_CAPTURE_ARGS, process.argv.slice(2).join('\\n'));",
             '',
         ].join('\n'));
-        fs.chmodSync(vsceCliPath, 0o755);
 
-        execFileSync('node', ['scripts/package-vsix.ts', ...args], {
-            cwd: repoRoot,
+        execFileSync(process.execPath, [packageScriptPath, ...args], {
+            cwd: workspaceRoot,
             env: {
                 ...process.env,
                 LOOK_GIT_VSCE_CLI: vsceCliPath,
@@ -62,14 +71,15 @@ function runPackageVsix(args: readonly string[]): {
         });
 
         return {
-            packageJsonPath,
-            originalPackageJson,
+            originalPackageJson: sourcePackageJsonBefore,
+            restoredPackageJson: fs.readFileSync(packageJsonPath, 'utf8'),
+            sourcePackageJsonBefore,
+            sourcePackageJsonAfter: fs.readFileSync(sourcePackageJsonPath, 'utf8'),
             manifest: readJsonObject(packageJsonPath),
             capturedManifest: readJsonObject(capturedManifestPath),
             capturedArgs: fs.readFileSync(capturedArgsPath, 'utf8'),
         };
     } finally {
-        fs.writeFileSync(packageJsonPath, originalPackageJson);
         fs.rmSync(root, { recursive: true, force: true });
     }
 }

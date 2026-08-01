@@ -190,7 +190,7 @@ describe('CliGitRuntime', () => {
                     'refs/remotes/origin/main\0def456\0\0',
                 ].join('\n');
             }
-            if (args[0] === 'rev-parse') { return 'main\n'; }
+            if (args[0] === 'symbolic-ref') { return 'main\n'; }
             if (args[0] === 'tag') { return 'v1.0.0\0abc123\n'; }
             throw new Error(`Unexpected args: ${args.join(' ')}`);
         });
