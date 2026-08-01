@@ -12,7 +12,7 @@ import { RepositoryRegistry } from '@extension/repositories/repository-registry'
 import { RepositoryRuntimeRegistrar } from '@extension/repositories/repository-runtime-registrar';
 import { createRepoContext } from '@extension/repositories/repo-context-factory';
 import { stableRepoContextId } from '@extension/repositories/repo-context-id';
-import { createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
+import { createTempGitRepo, samePath, type TempGitRepo } from '@tests/helpers/git-repo';
 
 describe('RepositoryRuntimeRegistrar', () => {
     const repos: TempGitRepo[] = [];
@@ -66,12 +66,12 @@ describe('RepositoryRuntimeRegistrar', () => {
 
         await registrar.registerContext(registry, context);
 
-        expect(registry.resolveRepository({ repoId: context.id, kind: 'main', path: repo.cwd }).cwd).toBe(repo.cwd);
+        expect(registry.resolveRepository({ repoId: context.id, kind: 'main', path: repo.cwd }).cwd).toBe(context.cwd);
         expect(registry.worktrees(context.id)).toEqual([
             expect.objectContaining({
                 repoId: context.id,
                 worktreeId: context.id,
-                path: repo.cwd,
+                path: context.cwd,
                 head: 'HEAD',
                 branch: 'main',
                 dirty: false,
@@ -139,10 +139,13 @@ describe('RepositoryRuntimeRegistrar', () => {
 
     it('registers initialized submodule repositories without commits from the parent context', async () => {
         const registry = new RepositoryRegistry();
-        const registrar = new RepositoryRuntimeRegistrar(new RuntimeRepositoryFactory(runtimeWithUnbornSubmodule('modules/auth-kit')));
         const context = createRepoContext('/repo');
-        const submodulePath = path.resolve(context.cwd, 'modules/auth-kit');
+        const relativeSubmodulePath = 'modules/auth-kit';
+        const submodulePath = path.resolve(context.cwd, relativeSubmodulePath);
         const submoduleId = stableRepoContextId(submodulePath);
+        const registrar = new RepositoryRuntimeRegistrar(new RuntimeRepositoryFactory(
+            runtimeWithUnbornSubmodule(submodulePath, relativeSubmodulePath),
+        ));
 
         await registrar.registerContext(registry, context);
 
@@ -210,11 +213,11 @@ function runtimeWithSubmodules(submodules: readonly GitSubmodule[]): GitRuntime 
     };
 }
 
-function runtimeWithUnbornSubmodule(submodulePath: string): GitRuntime {
+function runtimeWithUnbornSubmodule(submoduleCwd: string, relativeSubmodulePath: string): GitRuntime {
     return {
         supports: () => true,
         execute: async <_TInput, TResult>(operation: SemanticGitOperation, context: GitExecutionContext): Promise<TResult> => {
-            const isSubmoduleContext = context.cwd.endsWith(submodulePath);
+            const isSubmoduleContext = samePath(context.cwd, submoduleCwd);
             switch (operation) {
                 case 'resolveRef':
                     if (isSubmoduleContext) {
@@ -230,7 +233,7 @@ function runtimeWithUnbornSubmodule(submodulePath: string): GitRuntime {
                         ? { ...gitWorktree(context.cwd), head: 'HEAD', branch: undefined, isDetached: false }
                         : gitWorktree(context.cwd)]);
                 case 'listSubmodules':
-                    return runtimeResult(isSubmoduleContext ? [] : [{ path: submodulePath, status: ' ' }]);
+                    return runtimeResult(isSubmoduleContext ? [] : [{ path: relativeSubmodulePath, status: ' ' }]);
                 default:
                     throw new Error(`Unexpected operation: ${operation}`);
             }
