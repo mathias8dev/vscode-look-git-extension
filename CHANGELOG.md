@@ -4,6 +4,16 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.2.6] - 2026-08-01
+
+### Fixed
+
+#### Repository Lifecycle
+- Detect repositories initialized or removed after opening a workspace without requiring a window reload
+- Refresh Changes, Commit History, and Look Graph after Git operations and external repository changes
+- Handle unborn branches in fresh repositories so default branch and WIP state load without revision errors
+- Keep repository lifecycle updates synchronized for worktrees, submodules, and multi-repository workspaces
+
 ## [1.2.5] - 2026-07-15
 
 ### Added
