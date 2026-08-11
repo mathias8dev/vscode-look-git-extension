@@ -86,11 +86,14 @@ export function BranchPanel({
         hash: '',
     };
     const createBranchSource = selectedBranch ?? currentBranchInfo;
-    const updateSelectedDisabled = !selectedBranch || selectedBranch.isRemote;
+    const selectedLocalBranchDisabled = !selectedBranch || selectedBranch.isRemote;
+    const selectedBranchIsUnpublished = Boolean(selectedBranch && !selectedBranch.isRemote && !selectedBranch.upstream);
+    const updateSelectedDisabled = selectedLocalBranchDisabled || selectedBranchIsUnpublished;
     const deleteSelectedDisabled = !selectedBranch || selectedBranch.isCurrent;
     const compareWithLocalDisabled = !selectedBranch || selectedBranch.isCurrent;
     const fetching = isRunningRepositoryOperation(operationStatus, 'fetch');
     const updatingSelected = isRunningBranchOperation(operationStatus, 'update', selectedBranch?.name);
+    const pushingSelected = isRunningBranchOperation(operationStatus, 'push', selectedBranch?.name);
 
     const handleSelect = (fullName: string) => {
         onSelectBranch(selectBranchFilter(fullName, selectedBranchFilter));
@@ -184,6 +187,13 @@ export function BranchPanel({
                         onClick={() => runBranchCommand('update', selectedBranch)}
                     />
                     <IconButton
+                        icon="repo-push"
+                        title="Push Selected Branch..."
+                        disabled={selectedLocalBranchDisabled}
+                        busy={pushingSelected}
+                        onClick={() => runBranchCommand('push', selectedBranch)}
+                    />
+                    <IconButton
                         icon="trash"
                         title="Delete Selected Branch"
                         disabled={deleteSelectedDisabled}
@@ -203,6 +213,7 @@ export function BranchPanel({
                     <IconButton
                         icon="git-fetch"
                         title="Fetch"
+                        disabled={selectedBranchIsUnpublished}
                         busy={fetching}
                         onClick={onFetch}
                     />

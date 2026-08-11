@@ -5,6 +5,13 @@ import { showBranchNameInput } from '@extension/utils/branch-name-input';
 
 const REGULAR_MERGE = 'Regular Merge';
 const SQUASH_MERGE = 'Squash Merge';
+const UPDATE_BRANCH = 'Update Branch';
+const CHECKOUT_BRANCH = 'Check Out Branch';
+const FORCE_PUSH_WITH_LEASE = 'Force Push with Lease';
+const FORCE_PUSH = 'Force Push';
+const MORE_PUSH_ACTIONS = 'More Push Actions...';
+
+export type DivergedPushAction = 'update' | 'checkout' | 'forceWithLease' | 'force';
 
 export async function inputText(placeHolder: string, value?: string): Promise<string | undefined> {
     const input = await vscode.window.showInputBox({ placeHolder, value });
@@ -70,6 +77,34 @@ export async function pickMergeOptions(ref: string): Promise<MergeOptions | unde
     });
     if (!choice) { return undefined; }
     return { squash: choice === SQUASH_MERGE };
+}
+
+export async function confirmBehindBranchUpdate(branch: string, upstream: string): Promise<boolean> {
+    const choice = await vscode.window.showWarningMessage(
+        `"${branch}" is behind "${upstream}". Update it before pushing.`,
+        UPDATE_BRANCH,
+    );
+    return choice === UPDATE_BRANCH;
+}
+
+export async function pickDivergedPushAction(
+    branch: string,
+    upstream: string,
+    recovery: 'update' | 'checkout',
+): Promise<DivergedPushAction | undefined> {
+    const recoveryLabel = recovery === 'update' ? UPDATE_BRANCH : CHECKOUT_BRANCH;
+    const choice = await vscode.window.showQuickPick([recoveryLabel, FORCE_PUSH_WITH_LEASE, MORE_PUSH_ACTIONS], {
+        placeHolder: `"${branch}" has diverged from "${upstream}"`,
+    });
+    if (!choice) { return undefined; }
+    if (choice === recoveryLabel) { return recovery; }
+    if (choice === FORCE_PUSH_WITH_LEASE) { return 'forceWithLease'; }
+    const forceChoice = await vscode.window.showWarningMessage(
+        `Force push "${branch}"? This can overwrite commits on "${upstream}".`,
+        { modal: true },
+        FORCE_PUSH,
+    );
+    return forceChoice === FORCE_PUSH ? 'force' : undefined;
 }
 
 export async function pickStash(placeHolder: string, worktree: Worktree): Promise<number | undefined> {

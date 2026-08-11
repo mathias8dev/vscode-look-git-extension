@@ -50,6 +50,7 @@ export interface VscodeFetchOptions {
 }
 
 export const VscodeForcePushMode = {
+    Force: 0,
     ForceWithLease: 1,
 } as const;
 

@@ -4,6 +4,13 @@ export function isUnbornHeadError(error: unknown): boolean {
         && text.includes('unknown revision or path not in the working tree');
 }
 
+export function isNonFastForwardPushError(error: unknown): boolean {
+    const text = gitErrorText(error).toLowerCase();
+    return text.includes('(non-fast-forward)')
+        || text.includes('(fetch first)')
+        || text.includes('remote contains work that you do not have locally');
+}
+
 export function gitErrorText(error: unknown): string {
     return [
         error instanceof Error ? error.message : String(error),

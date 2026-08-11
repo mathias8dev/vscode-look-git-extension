@@ -97,6 +97,22 @@ describe('CliGitRuntime', () => {
         ]);
     });
 
+    it('passes raw force to a branch push', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(async (args) => {
+            calls.push([...args]);
+            if (args.join(' ') === 'rev-parse --abbrev-ref main@{upstream}') { return 'origin/main\n'; }
+            return '';
+        });
+
+        await runtime.execute('pushBranch', context, { branch: 'main', options: { force: true } });
+
+        expect(calls).toEqual([
+            ['rev-parse', '--abbrev-ref', 'main@{upstream}'],
+            ['push', '--force', 'origin', 'main'],
+        ]);
+    });
+
     it('publishes the current branch on push when it has no upstream', async () => {
         const calls: string[][] = [];
         const runtime = new CliGitRuntime(async (args) => {
