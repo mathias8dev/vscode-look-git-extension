@@ -586,6 +586,9 @@ function isCurrentDetailsError(state: GraphState, requestId: string | undefined,
 
 function applyGraphData(state: GraphState, data: GraphData, repoId: string | undefined): GraphState {
     const currentBranch = data.currentBranch;
+    const repository = sameRepositoryLocator(state.repository, data.repository)
+        ? state.repository
+        : data.repository ?? state.repository;
     const appending = state.loadingMore && graphDataMatchesSelectedRepository(data, state);
     const submodules = appending
         ? state.submodules
@@ -597,7 +600,7 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
             loadingMore: false,
             error: undefined,
             repoId: repoId ?? state.repoId,
-            repository: data.repository ?? state.repository,
+            repository,
             activeGraphRequestId: undefined,
         };
     }
@@ -629,7 +632,7 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
         tags: data.tags,
         worktrees: data.worktrees,
         submodules,
-        repository: data.repository ?? state.repository,
+        repository,
         currentBranch,
         currentUser: data.currentUser,
         hasRemotes: data.hasRemotes,
