@@ -109,6 +109,7 @@ export interface PullOptions {
 export interface PushOptions {
     readonly setUpstream?: boolean;
     readonly forceWithLease?: boolean;
+    readonly force?: boolean;
 }
 
 export interface GitHistoryOperations {

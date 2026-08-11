@@ -4,6 +4,24 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.2.7] - 2026-08-11
+
+### Added
+
+#### Look Graph
+- Add a Push action for the selected local branch in the branch panel toolbar
+- Add a paginated branch details panel with remote URL, upstream tracking, HEAD parents, and recent commits
+- Cover branch publication, behind-state recovery, divergence handling, and force-with-lease with a real VS Code E2E workflow
+
+### Changed
+
+#### Branches
+- Disable Fetch and Update actions when the selected branch has not been published
+- Publish new branches and push branches that are only ahead without an extra prompt
+- Offer Update for branches that are behind and contextual update or checkout recovery for diverged branches
+- Prefer force-with-lease for diverged branches and place raw force push behind an advanced action and explicit confirmation
+- Fetch and recalculate branch tracking after an unexpected non-fast-forward rejection before offering recovery actions
+
 ## [1.2.6] - 2026-08-01
 
 ### Fixed

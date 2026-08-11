@@ -23,6 +23,7 @@ interface BranchPanelProps {
     readonly selectedWorktreePath: string | undefined;
     readonly operationStatus?: GraphOperationStatusPush;
     readonly onSelectBranch: (branch: string | undefined) => void;
+    readonly onShowBranchDetails?: (branch: string) => void;
     readonly onSelectMainRepository?: () => void;
     readonly onSelectSubmodule?: (submodule: GraphSubmoduleInfo) => void;
     readonly onBranchCommand: (command: BranchCommand, branch: string, isRemote: boolean) => void;
@@ -45,6 +46,7 @@ export function BranchPanel({
     selectedWorktreePath,
     operationStatus,
     onSelectBranch,
+    onShowBranchDetails,
     onSelectMainRepository = () => undefined,
     onSelectSubmodule = () => undefined,
     onBranchCommand,
@@ -86,11 +88,14 @@ export function BranchPanel({
         hash: '',
     };
     const createBranchSource = selectedBranch ?? currentBranchInfo;
-    const updateSelectedDisabled = !selectedBranch || selectedBranch.isRemote;
+    const selectedLocalBranchDisabled = !selectedBranch || selectedBranch.isRemote;
+    const selectedBranchIsUnpublished = Boolean(selectedBranch && !selectedBranch.isRemote && !selectedBranch.upstream);
+    const updateSelectedDisabled = selectedLocalBranchDisabled || selectedBranchIsUnpublished;
     const deleteSelectedDisabled = !selectedBranch || selectedBranch.isCurrent;
     const compareWithLocalDisabled = !selectedBranch || selectedBranch.isCurrent;
     const fetching = isRunningRepositoryOperation(operationStatus, 'fetch');
     const updatingSelected = isRunningBranchOperation(operationStatus, 'update', selectedBranch?.name);
+    const pushingSelected = isRunningBranchOperation(operationStatus, 'push', selectedBranch?.name);
 
     const handleSelect = (fullName: string) => {
         onSelectBranch(selectBranchFilter(fullName, selectedBranchFilter));
@@ -184,6 +189,13 @@ export function BranchPanel({
                         onClick={() => runBranchCommand('update', selectedBranch)}
                     />
                     <IconButton
+                        icon="repo-push"
+                        title="Push Selected Branch..."
+                        disabled={selectedLocalBranchDisabled}
+                        busy={pushingSelected}
+                        onClick={() => runBranchCommand('push', selectedBranch)}
+                    />
+                    <IconButton
                         icon="trash"
                         title="Delete Selected Branch"
                         disabled={deleteSelectedDisabled}
@@ -196,6 +208,12 @@ export function BranchPanel({
                         onClick={() => runBranchCommand('compareWithCurrent', selectedBranch)}
                     />
                     <IconButton
+                        icon="info"
+                        title="Show Selected Branch Details"
+                        disabled={!selectedBranch || !onShowBranchDetails}
+                        onClick={() => selectedBranch && onShowBranchDetails?.(selectedBranch.name)}
+                    />
+                    <IconButton
                         icon="search"
                         title="Show My Branch"
                         onClick={showCurrentBranch}
@@ -203,6 +221,7 @@ export function BranchPanel({
                     <IconButton
                         icon="git-fetch"
                         title="Fetch"
+                        disabled={selectedBranchIsUnpublished}
                         busy={fetching}
                         onClick={onFetch}
                     />

@@ -116,7 +116,7 @@ describe('GraphApp', () => {
         render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
         await act(async () => sendToWebview({ type: 'graph/selectCommit', hash: 'abcdef1234567890' }));
 
-        const separator = await screen.findByRole('separator', { name: 'Resize commit details panel' });
+        const separator = await screen.findByRole('separator', { name: 'Resize details panel' });
         expect(separator).toHaveAttribute('aria-valuemin', '180');
         expect(separator).toHaveAttribute('aria-valuemax', '720');
         expect(separator).toHaveAttribute('aria-valuenow', '320');
@@ -124,6 +124,78 @@ describe('GraphApp', () => {
         fireEvent.keyDown(separator, { key: 'ArrowLeft' });
         await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', '336'));
         expect(localStorage.getItem('lookGit.commitDetailsPanelWidth')).toBe('336');
+    });
+
+    it('opens, paginates, and keeps branch details stable across branch selection', async () => {
+        const api = createMockVsCodeApi();
+        const { GraphApp } = await import('@webview/graph/graph-app');
+        const head = graphCommit('abcdef123456', 'feat(graph): branch details', ['parent123']);
+        const data = {
+            ...graphData([head]),
+            branches: [
+                { name: 'main', isRemote: false, isCurrent: true, hash: 'main-head' },
+                { name: 'feature/auth', isRemote: false, isCurrent: false, hash: head.hash, upstream: 'origin/feature/auth', ahead: 2, behind: 1 },
+            ],
+            hasRemotes: true,
+        };
+
+        render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
+        await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
+        const initialRequest = latestGraphDataRequest(api.messages);
+        await act(async () => sendToWebview({
+            type: 'graph/dataResponse',
+            requestId: initialRequest.requestId,
+            data,
+        }));
+
+        fireEvent.click(await screen.findByTitle('feature/auth'));
+        fireEvent.click(screen.getByRole('button', { name: 'Show Selected Branch Details' }));
+        await waitFor(() => expect(api.messages.some(isBranchDetailsRequest)).toBe(true));
+        const detailsRequest = latestBranchDetailsRequest(api.messages);
+
+        expect(detailsRequest.branch).toBe('feature/auth');
+        expect(detailsRequest.page).toEqual({ offset: 0, limit: 20 });
+
+        await act(async () => sendToWebview({
+            type: 'graph/branchDetailsResponse',
+            requestId: detailsRequest.requestId,
+            page: detailsRequest.page,
+            details: {
+                name: 'feature/auth',
+                isRemote: false,
+                isCurrent: false,
+                hash: head.hash,
+                remote: 'origin',
+                remoteUrl: 'git@example.test:team/repo.git',
+                upstream: 'origin/feature/auth',
+                ahead: 2,
+                behind: 1,
+                head,
+                commits: [head],
+                hasMore: true,
+                loadedCount: 1,
+            },
+        }));
+
+        expect(await screen.findByText('2 ahead, 1 behind')).toBeInTheDocument();
+        expect(screen.getByText('git@example.test:team/repo.git')).toBeInTheDocument();
+        expect(screen.getByText('parent123')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+
+        await waitFor(() => expect(branchDetailsRequests(api.messages)).toHaveLength(2));
+        expect(latestBranchDetailsRequest(api.messages).page).toEqual({ offset: 1, limit: 20 });
+
+        fireEvent.click(screen.getByTitle(/^main/));
+        await waitFor(() => expect(latestGraphDataRequest(api.messages).filters?.branches).toEqual(['main']));
+        const mainRequest = latestGraphDataRequest(api.messages);
+        await act(async () => sendToWebview({
+            type: 'graph/dataResponse',
+            requestId: mainRequest.requestId,
+            data: { ...data, repository: { ...mainRepository } },
+        }));
+
+        expect(branchDetailsRequests(api.messages)).toHaveLength(2);
+        expect(screen.getByText('git@example.test:team/repo.git')).toBeInTheDocument();
     });
 
     it('shows the repository list before rendering graph content for a selected repository', async () => {
@@ -555,6 +627,38 @@ function isGraphLoadMoreRequest(value: unknown): value is GraphLoadMoreRequestLi
 interface GraphLoadMoreRequestLike {
     readonly type: 'graph/loadMore';
     readonly requestId: string;
+    readonly page: {
+        readonly offset: number;
+        readonly limit: number;
+    };
+}
+
+function latestBranchDetailsRequest(messages: readonly unknown[]): BranchDetailsRequestLike {
+    const request = messages.filter(isBranchDetailsRequest).at(-1);
+    if (!request) { throw new Error('Expected a branch details request.'); }
+    return request;
+}
+
+function branchDetailsRequests(messages: readonly unknown[]): readonly BranchDetailsRequestLike[] {
+    return messages.filter(isBranchDetailsRequest);
+}
+
+function isBranchDetailsRequest(value: unknown): value is BranchDetailsRequestLike {
+    return typeof value === 'object'
+        && value !== null
+        && 'type' in value
+        && value.type === 'graph/branchDetailsRequest'
+        && 'requestId' in value
+        && typeof value.requestId === 'string'
+        && 'branch' in value
+        && typeof value.branch === 'string'
+        && 'page' in value;
+}
+
+interface BranchDetailsRequestLike {
+    readonly type: 'graph/branchDetailsRequest';
+    readonly requestId: string;
+    readonly branch: string;
     readonly page: {
         readonly offset: number;
         readonly limit: number;

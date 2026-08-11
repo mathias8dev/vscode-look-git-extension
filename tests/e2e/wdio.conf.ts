@@ -59,6 +59,7 @@ export const config: WebdriverIO.Config = {
     specs: [
         path.join(__dirname, 'wdio/changes-webview.e2e.ts'),
         path.join(__dirname, 'wdio/visual-rebase.e2e.ts'),
+        path.join(__dirname, 'wdio/graph-branch-actions.e2e.ts'),
         path.join(__dirname, 'wdio/repository-lifecycle.e2e.ts'),
     ],
     maxInstances: 1,

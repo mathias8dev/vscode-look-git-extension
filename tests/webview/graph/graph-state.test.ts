@@ -561,6 +561,65 @@ describe('graphState', () => {
         expect(stale.detailsLoading).toBe(true);
     });
 
+    it('loads and paginates branch details without accepting stale responses', () => {
+        const selected = reduceGraphState(createInitialGraphState(), { type: 'selectBranchDetails', branch: 'feature/auth' });
+        const started = reduceGraphState(selected, {
+            type: 'startBranchDetailsRequest',
+            requestId: 'branch-details-1',
+            offset: 0,
+        });
+        const stale = reduceGraphState(started, {
+            type: 'message',
+            message: {
+                type: 'graph/branchDetailsResponse',
+                requestId: 'branch-details-stale',
+                page: { offset: 0, limit: 1 },
+                details: branchDetails('feature/auth', [commit('stale')], true, 1),
+            },
+        });
+        const firstPage = reduceGraphState(stale, {
+            type: 'message',
+            message: {
+                type: 'graph/branchDetailsResponse',
+                requestId: 'branch-details-1',
+                page: { offset: 0, limit: 1 },
+                details: branchDetails('feature/auth', [commit('a')], true, 1),
+            },
+        });
+        const loadingMore = reduceGraphState(firstPage, {
+            type: 'startBranchDetailsRequest',
+            requestId: 'branch-details-2',
+            offset: 1,
+        });
+        const secondPage = reduceGraphState(loadingMore, {
+            type: 'message',
+            message: {
+                type: 'graph/branchDetailsResponse',
+                requestId: 'branch-details-2',
+                page: { offset: 1, limit: 1 },
+                details: branchDetails('feature/auth', [commit('b')], false, 2),
+            },
+        });
+
+        expect(selected.selectedBranchDetailsName).toBe('feature/auth');
+        expect(stale.branchDetails).toBeUndefined();
+        expect(firstPage.branchDetails?.commits.map((item) => item.hash)).toEqual(['a']);
+        expect(loadingMore.branchDetailsLoadingMore).toBe(true);
+        expect(secondPage.branchDetails?.commits.map((item) => item.hash)).toEqual(['a', 'b']);
+        expect(secondPage.branchDetails?.loadedCount).toBe(2);
+        expect(secondPage.branchDetails?.hasMore).toBe(false);
+        expect(secondPage.branchDetailsLoadingMore).toBe(false);
+    });
+
+    it('replaces branch details selection when a commit is selected', () => {
+        const branchSelected = reduceGraphState(createInitialGraphState(), { type: 'selectBranchDetails', branch: 'main' });
+        const commitSelected = reduceGraphState(branchSelected, { type: 'selectCommit', hash: 'abc123' });
+
+        expect(commitSelected.selectedBranchDetailsName).toBeUndefined();
+        expect(commitSelected.selectedHash).toBe('abc123');
+        expect(commitSelected.branchDetails).toBeUndefined();
+    });
+
     it('loads worktree details independently from commit selection', () => {
         const selected = reduceGraphState(createInitialGraphState(), { type: 'selectWorktree', path: '/repo/.worktrees/topic' });
         const stale = reduceGraphState(selected, {
@@ -1239,5 +1298,21 @@ function repositorySummary(id: string): RepositorySummary {
         stagedCount: 0,
         unstagedCount: 0,
         conflictCount: 0,
+    };
+}
+
+function branchDetails(name: string, commits: readonly GraphCommit[], hasMore: boolean, loadedCount: number) {
+    return {
+        name,
+        isRemote: false,
+        isCurrent: false,
+        hash: commits[0]?.hash ?? '',
+        upstream: `origin/${name}`,
+        ahead: 1,
+        behind: 0,
+        head: commits[0],
+        commits,
+        hasMore,
+        loadedCount,
     };
 }

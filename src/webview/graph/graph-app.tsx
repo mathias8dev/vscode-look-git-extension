@@ -4,6 +4,7 @@ import type { CommitFileChange, GraphContextTarget, GraphSubmoduleInfo } from '@
 import type { RepositoryLocator } from '@protocol/shared/repo';
 import { BranchPanel } from '@webview/features/graph/branch-panel';
 import { CommitDetailsPanel } from '@webview/features/graph/commit-details-panel';
+import { BranchDetailsPanel } from '@webview/features/graph/branch-details-panel';
 import { GraphTable } from '@webview/features/graph/graph-table';
 import { GraphToolbar } from '@webview/features/graph/graph-toolbar';
 import { GraphOperationNotice } from '@webview/features/graph/graph-operation-notice';
@@ -15,6 +16,7 @@ import {
 import { graphEmptyStateModel } from '@webview/features/graph/graph-empty-state-model';
 import {
     messageForCommitDetails,
+    messageForBranchDetails,
     messageForGraphDataRequest,
     messageForGraphContextTarget,
     messageForLoadMore,
@@ -37,6 +39,7 @@ import { applyWebviewFontSize, isWebviewFontSizeMessage } from '@webview/platfor
 import { sameResourcePath } from '@webview/shared/resource-path';
 
 const PAGE_LIMIT = 300;
+const BRANCH_DETAILS_PAGE_LIMIT = 20;
 const ERROR_NOTICE_TIMEOUT_MS = 8000;
 const OPERATION_NOTICE_TIMEOUT_MS = 5000;
 const BRANCH_PANEL_MIN = 120;
@@ -85,6 +88,24 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
         const worktree = state.worktrees.find((candidate) => sameResourcePath(candidate.path, state.selectedWorktreePath))?.locator;
         sendMessage(messageForWorktreeDetails(state.selectedWorktreePath, state.repository, worktree));
     }, [sendMessage, state.repository, state.selectedWorktreePath, state.worktrees]);
+
+    const selectedDetailsBranch = state.selectedBranchDetailsName
+        ? state.branches.find((branch) => branch.name === state.selectedBranchDetailsName)
+        : undefined;
+    const selectedDetailsBranchSignature = selectedDetailsBranch
+        ? `${selectedDetailsBranch.hash}\0${selectedDetailsBranch.upstream ?? ''}\0${selectedDetailsBranch.ahead ?? 0}\0${selectedDetailsBranch.behind ?? 0}`
+        : undefined;
+
+    useEffect(() => {
+        if (!state.selectedBranchDetailsName || selectedDetailsBranchSignature === undefined) { return; }
+        const message = messageForBranchDetails(
+            state.selectedBranchDetailsName,
+            { offset: 0, limit: BRANCH_DETAILS_PAGE_LIMIT },
+            state.repository,
+        );
+        dispatch({ type: 'startBranchDetailsRequest', requestId: message.requestId, offset: 0 });
+        sendMessage(message);
+    }, [sendMessage, selectedDetailsBranchSignature, state.repository, state.selectedBranchDetailsName]);
 
     useEffect(() => {
         if (!state.loading || !state.activeGraphRequestId) { return; }
@@ -170,6 +191,17 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
         dispatch({ type: 'selectWorktree', path });
     }, []);
 
+    const handleLoadMoreBranchDetails = useCallback(() => {
+        if (!state.selectedBranchDetailsName || !state.branchDetails?.hasMore || state.branchDetailsLoadingMore) { return; }
+        const message = messageForBranchDetails(
+            state.selectedBranchDetailsName,
+            { offset: state.branchDetails.loadedCount, limit: BRANCH_DETAILS_PAGE_LIMIT },
+            state.repository,
+        );
+        dispatch({ type: 'startBranchDetailsRequest', requestId: message.requestId, offset: state.branchDetails.loadedCount });
+        sendMessage(message);
+    }, [sendMessage, state.branchDetails, state.branchDetailsLoadingMore, state.repository, state.selectedBranchDetailsName]);
+
     const handleContextTarget = useCallback((target: GraphContextTarget) => {
         sendMessage(messageForGraphContextTarget(contextTargetForRepository(target, state.repository)));
     }, [sendMessage, state.repository]);
@@ -236,6 +268,7 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                             selectedWorktreePath={state.selectedWorktreePath}
                             operationStatus={state.operationStatus}
                             onSelectBranch={(branch) => dispatch({ type: 'setBranchFilter', branch })}
+                            onShowBranchDetails={(branch) => dispatch({ type: 'selectBranchDetails', branch })}
                             onSelectMainRepository={() => dispatch({ type: 'selectMainRepository' })}
                             onSelectSubmodule={handleSelectSubmodule}
                             onBranchCommand={(command, branch, isRemote) => sendMessage(messageForBranchCommand(command, branch, isRemote, state.repository))}
@@ -312,7 +345,7 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                     </div>
                 </div>
 
-                {state.selectedHash || state.selectedWorktreePath ? (
+                {state.selectedHash || state.selectedWorktreePath || state.selectedBranchDetailsName ? (
                     <ResizablePanel
                         storageKey={DETAILS_PANEL_STORAGE_KEY}
                         defaultSize={DETAILS_PANEL_DEFAULT}
@@ -320,10 +353,20 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                         maxSize={DETAILS_PANEL_MAX}
                         axis={ResizeAxis.Horizontal}
                         handleSide={ResizeHandleSide.Start}
-                        ariaLabel="Resize commit details panel"
-                        title="Drag or use arrow keys to resize commit details panel"
+                        ariaLabel="Resize details panel"
+                        title="Drag or use arrow keys to resize details panel"
                     >
-                        {(style) => (
+                        {(style) => state.selectedBranchDetailsName ? (
+                            <BranchDetailsPanel
+                                style={style}
+                                details={state.branchDetails}
+                                loading={state.detailsLoading}
+                                loadingMore={state.branchDetailsLoadingMore}
+                                onClose={() => dispatch({ type: 'clearSelection' })}
+                                onLoadMore={handleLoadMoreBranchDetails}
+                                onSelectCommit={(hash) => dispatch({ type: 'selectCommit', hash })}
+                            />
+                        ) : (
                             <CommitDetailsPanel
                                 style={style}
                                 details={state.commitDetails}

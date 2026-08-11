@@ -84,7 +84,7 @@ export class VscodeGitRemoteRuntime implements GitRuntime {
         const options = objectField(input, 'options');
         const remote = optionalStringField(input, 'remote') ?? remoteForBranch(repository, branch);
         if (!remote) {
-            if (!isHeadBranch(repository, branch) || booleanOption(options, 'forceWithLease')) {
+            if (!isHeadBranch(repository, branch) || hasForceOption(options)) {
                 throw new UnsupportedGitOperationError('pushBranch', context);
             }
             await this.executeCommand('git.publish', repository);
@@ -102,7 +102,7 @@ export class VscodeGitRemoteRuntime implements GitRuntime {
         }
 
         const branch = repository.state.HEAD?.name;
-        if (!branch || booleanOption(options, 'forceWithLease')) {
+        if (!branch || hasForceOption(options)) {
             throw new UnsupportedGitOperationError('push', context);
         }
         await this.executeCommand('git.publish', repository);
@@ -126,7 +126,13 @@ function fetchOptionsFromOptionsField(input: unknown): VscodeFetchOptions {
 }
 
 function forceMode(input: unknown): VscodeForcePushMode | undefined {
-    return booleanOption(objectField(input, 'options'), 'forceWithLease') ? VscodeForcePushMode.ForceWithLease : undefined;
+    const options = objectField(input, 'options');
+    if (booleanOption(options, 'forceWithLease')) { return VscodeForcePushMode.ForceWithLease; }
+    return booleanOption(options, 'force') ? VscodeForcePushMode.Force : undefined;
+}
+
+function hasForceOption(options: unknown): boolean {
+    return booleanOption(options, 'forceWithLease') || booleanOption(options, 'force');
 }
 
 function definedOptions(options: VscodeFetchOptions): VscodeFetchOptions {
