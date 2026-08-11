@@ -1242,7 +1242,8 @@ async function push(
 
 function pushArgs(remote: string | undefined, options: unknown): readonly string[] {
     const args = withOptionalRemote(['push'], remote);
-    return booleanOption(options, 'forceWithLease') ? [...args, '--force-with-lease'] : args;
+    const forceArg = pushForceArg(options);
+    return forceArg ? [...args, forceArg] : args;
 }
 
 async function pushBranch(
@@ -1262,9 +1263,15 @@ async function pushBranch(
 function pushBranchArgs(remote: string, branch: string, options: unknown, setUpstreamByDefault: boolean): readonly string[] {
     const args = ['push'];
     if (optionalBooleanField(options, 'setUpstream') ?? setUpstreamByDefault) { args.push('-u'); }
-    if (booleanOption(options, 'forceWithLease')) { args.push('--force-with-lease'); }
+    const forceArg = pushForceArg(options);
+    if (forceArg) { args.push(forceArg); }
     args.push(remote, branch);
     return args;
+}
+
+function pushForceArg(options: unknown): string | undefined {
+    if (booleanOption(options, 'forceWithLease')) { return '--force-with-lease'; }
+    return booleanOption(options, 'force') ? '--force' : undefined;
 }
 
 async function resolveBranchUpstream(

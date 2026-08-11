@@ -25,17 +25,19 @@ describe('VscodeGitRemoteRuntime', () => {
         ]);
     });
 
-    it('delegates push variants with force-with-lease metadata', async () => {
+    it('delegates push variants with force metadata', async () => {
         const repository = recordingRepository('/repo', { remotes: [{ name: 'upstream' }] });
         const runtime = new VscodeGitRemoteRuntime(async () => gitApi(repository));
 
         await runtime.execute('push', context, { remote: 'origin', options: { forceWithLease: true } });
         await runtime.execute('pushBranch', context, { remote: 'upstream', branch: 'feature/auth', options: { setUpstream: true } });
+        await runtime.execute('pushBranch', context, { remote: 'upstream', branch: 'feature/auth', options: { force: true } });
         await runtime.execute('forcePushWithLease', context, { remote: 'origin', branch: 'main' });
 
         expect(repository.pushCalls).toEqual([
             { remoteName: 'origin', branchName: undefined, setUpstream: false, force: 1 },
             { remoteName: 'upstream', branchName: 'feature/auth', setUpstream: true, force: undefined },
+            { remoteName: 'upstream', branchName: 'feature/auth', setUpstream: true, force: 0 },
             { remoteName: 'origin', branchName: 'main', setUpstream: false, force: 1 },
         ]);
     });

@@ -1,6 +1,6 @@
 # Look Git
 
-A modern, React-based Git extension for Visual Studio Code — featuring a visual commit graph, an enhanced changes panel with stash management, and an interactive commit history view.
+A modern, Git extension for Visual Studio Code — featuring a visual commit graph, an enhanced changes panel with stash management, and an interactive commit history view.
 
 ![Look Git — commit graph, changes panel, and commit history in action](https://raw.githubusercontent.com/mathias8dev/vscode-look-git-extension/main/docs/look-git/lookgit.gif)
 
@@ -56,6 +56,7 @@ A modern, React-based Git extension for Visual Studio Code — featuring a visua
 - **Commit details panel** — click any commit to see its full message, author, and changed files in a side panel
 - **Commit actions** — copy revisions, create patches, explain diffs, cherry-pick, checkout revisions, compare with local or worktrees, reset, revert, undo, reword, fixup, squash, drop, visual rebase, branch, tag, and push up to a commit
 - **Branch actions** — checkout, push, publish, rename, delete, rebase, merge, compare with current or worktrees, and create new branches or worktrees from any branch
+- **Safe branch pushing** — publish branches directly, update branches that are behind, recover diverged branches through checkout or update actions, prefer force-with-lease, and keep raw force push behind an explicit confirmation
 - **Worktree support** — add, remove, open, reveal, lock, unlock, fetch, pull, push, commit, stash, and diff linked worktrees; WIP status fetched per worktree
 - **Submodule visibility** — display submodule entries in the graph branch panel with their repository context
 - **Filters** — search by text/hash, filter by branch, author, or path

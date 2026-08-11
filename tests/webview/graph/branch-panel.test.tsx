@@ -99,7 +99,7 @@ describe('BranchPanel', () => {
             <BranchPanel
                 branches={[
                     branch('main', { isCurrent: true }),
-                    branch('feature/topic'),
+                    branch('feature/topic', { upstream: 'origin/feature/topic' }),
                 ]}
                 worktrees={[]}
                 submodules={[]}
@@ -118,6 +118,7 @@ describe('BranchPanel', () => {
 
         expect(markup).toContain('codicon-add');
         expect(markup).toContain('codicon-repo-pull');
+        expect(markup).toContain('codicon-repo-push');
         expect(markup).toContain('codicon-trash');
         expect(markup).toContain('codicon-arrow-swap');
         expect(markup).toContain('codicon-search');
@@ -135,7 +136,7 @@ describe('BranchPanel', () => {
             <BranchPanel
                 branches={[
                     branch('main', { isCurrent: true }),
-                    branch('feature/topic'),
+                    branch('feature/topic', { upstream: 'origin/feature/topic' }),
                 ]}
                 worktrees={[]}
                 submodules={[]}
@@ -154,6 +155,7 @@ describe('BranchPanel', () => {
 
         fireEvent.click(screen.getByLabelText('Create Branch from feature/topic'));
         fireEvent.click(screen.getByLabelText('Update Selected Branch'));
+        fireEvent.click(screen.getByLabelText('Push Selected Branch...'));
         fireEvent.click(screen.getByLabelText('Delete Selected Branch'));
         fireEvent.click(screen.getByLabelText('Compare with Local'));
         fireEvent.click(screen.getByLabelText('Show My Branch'));
@@ -161,6 +163,7 @@ describe('BranchPanel', () => {
 
         expect(onBranchCommand).toHaveBeenCalledWith('newBranchFrom', 'feature/topic', false);
         expect(onBranchCommand).toHaveBeenCalledWith('update', 'feature/topic', false);
+        expect(onBranchCommand).toHaveBeenCalledWith('push', 'feature/topic', false);
         expect(onBranchCommand).toHaveBeenCalledWith('delete', 'feature/topic', false);
         expect(onBranchCommand).toHaveBeenCalledWith('compareWithCurrent', 'feature/topic', false);
         expect(onSelectBranch).toHaveBeenCalledWith('main');
@@ -190,7 +193,59 @@ describe('BranchPanel', () => {
         );
 
         expect(screen.getByLabelText('Update Selected Branch')).toBeDisabled();
+        expect(screen.getByLabelText('Push Selected Branch...')).toBeDisabled();
         expect(screen.getByLabelText('Delete Selected Branch')).not.toBeDisabled();
+    });
+
+    it('disables push when no branch is selected', () => {
+        render(
+            <BranchPanel
+                branches={[branch('main', { isCurrent: true })]}
+                worktrees={[]}
+                submodules={[]}
+                currentBranch="main"
+                selectedBranchFilter={undefined}
+                selectedWorktreePath={undefined}
+                onSelectBranch={() => undefined}
+                onBranchCommand={() => undefined}
+                onFetch={() => undefined}
+                onSelectWorktree={() => undefined}
+                onOpenWorktree={() => undefined}
+                onAddWorktree={() => undefined}
+                onContextTarget={() => undefined}
+            />,
+        );
+
+        expect(screen.getByLabelText('Push Selected Branch...')).toBeDisabled();
+        expect(screen.getByLabelText('Fetch')).not.toBeDisabled();
+    });
+
+    it('disables update and fetch for an unpublished selected branch', () => {
+        render(
+            <BranchPanel
+                branches={[
+                    branch('main', { isCurrent: true, upstream: 'origin/main' }),
+                    branch('feature/topic'),
+                ]}
+                worktrees={[]}
+                submodules={[]}
+                currentBranch="main"
+                hasRemotes
+                selectedBranchFilter="feature/topic"
+                selectedWorktreePath={undefined}
+                onSelectBranch={() => undefined}
+                onBranchCommand={() => undefined}
+                onFetch={() => undefined}
+                onSelectWorktree={() => undefined}
+                onOpenWorktree={() => undefined}
+                onAddWorktree={() => undefined}
+                onContextTarget={() => undefined}
+            />,
+        );
+
+        expect(screen.getByLabelText('Update Selected Branch')).toBeDisabled();
+        expect(screen.getByLabelText('Fetch')).toBeDisabled();
+        expect(screen.getByLabelText('Push Selected Branch...')).not.toBeDisabled();
     });
 
     it('expands and collapses branch folders from the side panel', () => {
