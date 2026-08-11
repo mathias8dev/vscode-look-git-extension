@@ -121,10 +121,57 @@ describe('BranchPanel', () => {
         expect(markup).toContain('codicon-repo-push');
         expect(markup).toContain('codicon-trash');
         expect(markup).toContain('codicon-arrow-swap');
+        expect(markup).toContain('codicon-info');
         expect(markup).toContain('codicon-search');
         expect(markup).toContain('codicon-git-fetch');
         expect(markup).toContain('codicon-expand-all');
         expect(markup).toContain('codicon-collapse-all');
+    });
+
+    it('shows details for the selected branch and disables the action without a selection', () => {
+        const onShowBranchDetails = vi.fn<(branch: string) => void>();
+        const { rerender } = render(
+            <BranchPanel
+                branches={[branch('feature/topic', { upstream: 'origin/feature/topic' })]}
+                worktrees={[]}
+                submodules={[]}
+                currentBranch="main"
+                selectedBranchFilter="feature/topic"
+                selectedWorktreePath={undefined}
+                onSelectBranch={() => undefined}
+                onShowBranchDetails={onShowBranchDetails}
+                onBranchCommand={() => undefined}
+                onFetch={() => undefined}
+                onSelectWorktree={() => undefined}
+                onOpenWorktree={() => undefined}
+                onAddWorktree={() => undefined}
+                onContextTarget={() => undefined}
+            />,
+        );
+
+        fireEvent.click(screen.getByLabelText('Show Selected Branch Details'));
+        expect(onShowBranchDetails).toHaveBeenCalledWith('feature/topic');
+
+        rerender(
+            <BranchPanel
+                branches={[branch('feature/topic', { upstream: 'origin/feature/topic' })]}
+                worktrees={[]}
+                submodules={[]}
+                currentBranch="main"
+                selectedBranchFilter={undefined}
+                selectedWorktreePath={undefined}
+                onSelectBranch={() => undefined}
+                onShowBranchDetails={onShowBranchDetails}
+                onBranchCommand={() => undefined}
+                onFetch={() => undefined}
+                onSelectWorktree={() => undefined}
+                onOpenWorktree={() => undefined}
+                onAddWorktree={() => undefined}
+                onContextTarget={() => undefined}
+            />,
+        );
+
+        expect(screen.getByLabelText('Show Selected Branch Details')).toBeDisabled();
     });
 
     it('runs branch side panel actions for the selected local branch', () => {

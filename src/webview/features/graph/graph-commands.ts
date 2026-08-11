@@ -1,5 +1,5 @@
 import type { GraphContextTarget, GraphFilters, GraphPage } from '@protocol/graph/types';
-import type { BranchCommand, CommitCommand, GraphDataRequest, GraphRepositoryCommand, GraphWebviewToExtensionMessage, LoadMoreGraphRequest, WorktreeCommand } from '@protocol/graph/messages';
+import type { BranchCommand, BranchDetailsRequest, CommitCommand, GraphDataRequest, GraphRepositoryCommand, GraphWebviewToExtensionMessage, LoadMoreGraphRequest, WorktreeCommand } from '@protocol/graph/messages';
 import type { RepositoryLocator, WorktreeLocator } from '@protocol/shared/repo';
 
 let requestCounter = 0;
@@ -46,6 +46,20 @@ export function messageForCommitDetails(hash: string, repository?: RepositoryLoc
         type: 'graph/commitDetailsRequest',
         requestId: nextRequestId(),
         hash,
+        ...repositoryProperty(repository),
+    };
+}
+
+export function messageForBranchDetails(
+    branch: string,
+    page: GraphPage,
+    repository?: RepositoryLocator,
+): BranchDetailsRequest {
+    return {
+        type: 'graph/branchDetailsRequest',
+        requestId: nextRequestId(),
+        branch,
+        page,
         ...repositoryProperty(repository),
     };
 }

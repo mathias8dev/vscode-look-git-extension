@@ -1,5 +1,5 @@
 // Mapping functions: Git-prefix core types → protocol types (webview-facing)
-import type { GitGraphCommit } from '@core/git/domain/git-commit';
+import type { GitCommit, GitGraphCommit } from '@core/git/domain/git-commit';
 import type { GitBranch } from '@core/git/domain/git-status';
 import type { GitWorktree, GitSubmodule } from '@core/git/domain/git-worktree';
 import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
@@ -7,7 +7,7 @@ import type { BranchInfo, GraphCommit, GraphSubmoduleInfo, WorktreeInfo } from '
 import { SubmoduleStatus, type RepositoryLocator, type SerializedRepoContext, type WorktreeLocator } from '@protocol/shared/repo';
 import { stableRepoContextId } from '@extension/repositories/repo-context-id';
 
-export function toProtocolGraphCommit(commit: GitGraphCommit): GraphCommit {
+export function toProtocolGraphCommit(commit: GitCommit | GitGraphCommit): GraphCommit {
     return {
         hash: commit.hash,
         shortHash: commit.shortHash,
@@ -16,8 +16,8 @@ export function toProtocolGraphCommit(commit: GitGraphCommit): GraphCommit {
         authorEmail: commit.authorEmail,
         authorDate: commit.authorDate,
         parentHashes: commit.parentHashes,
-        refs: commit.refs,
-        matchesFilter: commit.matchesFilter,
+        refs: commit.refs ?? [],
+        matchesFilter: 'matchesFilter' in commit ? commit.matchesFilter : undefined,
     };
 }
 

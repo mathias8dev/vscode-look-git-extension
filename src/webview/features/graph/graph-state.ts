@@ -1,5 +1,5 @@
 import { GraphOperationStatus, type GraphExtensionToWebviewMessage, type GraphOperationStatusPush } from '@protocol/graph/messages';
-import type { BranchInfo, CommitFileChange, GraphCommit, GraphData, GraphFilters, GraphSubmoduleInfo, TagInfo, WorktreeInfo, WorktreeWip } from '@protocol/graph/types';
+import type { BranchDetails, BranchInfo, CommitFileChange, GraphCommit, GraphData, GraphFilters, GraphSubmoduleInfo, TagInfo, WorktreeInfo, WorktreeWip } from '@protocol/graph/types';
 import type { ProtocolError, Resource } from '@protocol/shared/base';
 import type { RepositoryLocator, RepositorySummary } from '@protocol/shared/repo';
 import { branchesEqual, graphCommitsEqual, graphSubmodulesEqual, tagsEqual, worktreesEqual, worktreeWipsEqual as protocolWorktreeWipsEqual } from '@protocol/shared/protocol-data-equality';
@@ -119,10 +119,15 @@ export interface GraphState {
     readonly error: ProtocolError | undefined;
     readonly selectedHash: string | undefined;
     readonly selectedWorktreePath: string | undefined;
+    readonly selectedBranchDetailsName: string | undefined;
     readonly selectedHashes: readonly string[];
     readonly selectionAnchorHash: string | undefined;
     readonly commitDetails: CommitDetails | undefined;
+    readonly branchDetails: BranchDetails | undefined;
     readonly detailsLoading: boolean;
+    readonly branchDetailsLoadingMore: boolean;
+    readonly activeBranchDetailsRequestId: string | undefined;
+    readonly activeBranchDetailsRequestOffset: number | undefined;
     readonly repoId: string | undefined;
     readonly loadingMore: boolean;
     readonly refreshVersion: number;
@@ -138,6 +143,8 @@ export type GraphAction =
     | { readonly type: 'selectSubmodule'; readonly submodulePath: string; readonly submoduleLabel: string; readonly repository?: RepositoryLocator }
     | { readonly type: 'selectCommit'; readonly hash: string }
     | { readonly type: 'selectWorktree'; readonly path: string }
+    | { readonly type: 'selectBranchDetails'; readonly branch: string }
+    | { readonly type: 'startBranchDetailsRequest'; readonly requestId: string; readonly offset: number }
     | { readonly type: 'toggleCommitSelection'; readonly hash: string }
     | { readonly type: 'selectCommitRange'; readonly hashes: readonly string[]; readonly focusHash: string }
     | { readonly type: 'clearSelection' }
@@ -174,10 +181,15 @@ export function createInitialGraphState(): GraphState {
         error: undefined,
         selectedHash: undefined,
         selectedWorktreePath: undefined,
+        selectedBranchDetailsName: undefined,
         selectedHashes: [],
         selectionAnchorHash: undefined,
         commitDetails: undefined,
+        branchDetails: undefined,
         detailsLoading: false,
+        branchDetailsLoadingMore: false,
+        activeBranchDetailsRequestId: undefined,
+        activeBranchDetailsRequestOffset: undefined,
         repoId: undefined,
         loadingMore: false,
         refreshVersion: 0,
@@ -215,10 +227,15 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
                 filters: { ...state.filters, branches: undefined },
                 selectedHash: undefined,
                 selectedWorktreePath: undefined,
+                selectedBranchDetailsName: undefined,
                 selectedHashes: [],
                 selectionAnchorHash: undefined,
                 commitDetails: undefined,
+                branchDetails: undefined,
                 detailsLoading: false,
+                branchDetailsLoadingMore: false,
+                activeBranchDetailsRequestId: undefined,
+                activeBranchDetailsRequestOffset: undefined,
             }), state.refreshVersion + 1);
         case 'selectSubmodule':
             return startGraphReload(clearGraphContent({
@@ -229,21 +246,36 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
                 filters: { ...state.filters, branches: undefined },
                 selectedHash: undefined,
                 selectedWorktreePath: undefined,
+                selectedBranchDetailsName: undefined,
                 selectedHashes: [],
                 selectionAnchorHash: undefined,
                 commitDetails: undefined,
+                branchDetails: undefined,
                 detailsLoading: false,
+                branchDetailsLoadingMore: false,
+                activeBranchDetailsRequestId: undefined,
+                activeBranchDetailsRequestOffset: undefined,
             }), state.refreshVersion + 1);
         case 'selectCommit':
             return selectCommit(state, action.hash, [action.hash], action.hash);
         case 'selectWorktree':
             return selectWorktree(state, action.path);
+        case 'selectBranchDetails':
+            return selectBranchDetails(state, action.branch);
+        case 'startBranchDetailsRequest':
+            return {
+                ...state,
+                detailsLoading: action.offset === 0,
+                branchDetailsLoadingMore: action.offset > 0,
+                activeBranchDetailsRequestId: action.requestId,
+                activeBranchDetailsRequestOffset: action.offset,
+            };
         case 'toggleCommitSelection':
             return toggleCommitSelection(state, action.hash);
         case 'selectCommitRange':
             return selectCommit(state, action.focusHash, action.hashes, state.selectionAnchorHash ?? action.focusHash);
         case 'clearSelection':
-            return { ...state, selectedHash: undefined, selectedWorktreePath: undefined, selectedHashes: [], selectionAnchorHash: undefined, commitDetails: undefined, detailsLoading: false };
+            return clearDetailsSelection(state);
         case 'clearError':
             return { ...state, error: undefined };
         case 'clearOperationStatus':
@@ -280,10 +312,15 @@ function selectCommit(state: GraphState, hash: string, hashes: readonly string[]
         ...state,
         selectedHash: hash,
         selectedWorktreePath: undefined,
+        selectedBranchDetailsName: undefined,
         selectedHashes: nextHashes,
         selectionAnchorHash: anchorHash,
         detailsLoading: hash !== state.selectedHash || state.commitDetails === undefined,
         commitDetails: hash === state.selectedHash ? state.commitDetails : undefined,
+        branchDetails: undefined,
+        branchDetailsLoadingMore: false,
+        activeBranchDetailsRequestId: undefined,
+        activeBranchDetailsRequestOffset: undefined,
     };
 }
 
@@ -292,10 +329,50 @@ function selectWorktree(state: GraphState, path: string): GraphState {
         ...state,
         selectedHash: undefined,
         selectedWorktreePath: path,
+        selectedBranchDetailsName: undefined,
         selectedHashes: [],
         selectionAnchorHash: undefined,
         detailsLoading: !sameResourcePath(path, state.selectedWorktreePath) || state.commitDetails === undefined,
         commitDetails: sameResourcePath(path, state.selectedWorktreePath) ? state.commitDetails : undefined,
+        branchDetails: undefined,
+        branchDetailsLoadingMore: false,
+        activeBranchDetailsRequestId: undefined,
+        activeBranchDetailsRequestOffset: undefined,
+    };
+}
+
+function selectBranchDetails(state: GraphState, branch: string): GraphState {
+    const sameBranch = state.selectedBranchDetailsName === branch;
+    return {
+        ...state,
+        selectedHash: undefined,
+        selectedWorktreePath: undefined,
+        selectedBranchDetailsName: branch,
+        selectedHashes: [],
+        selectionAnchorHash: undefined,
+        commitDetails: undefined,
+        branchDetails: sameBranch ? state.branchDetails : undefined,
+        detailsLoading: !sameBranch || state.branchDetails === undefined,
+        branchDetailsLoadingMore: false,
+        activeBranchDetailsRequestId: undefined,
+        activeBranchDetailsRequestOffset: undefined,
+    };
+}
+
+function clearDetailsSelection(state: GraphState): GraphState {
+    return {
+        ...state,
+        selectedHash: undefined,
+        selectedWorktreePath: undefined,
+        selectedBranchDetailsName: undefined,
+        selectedHashes: [],
+        selectionAnchorHash: undefined,
+        commitDetails: undefined,
+        branchDetails: undefined,
+        detailsLoading: false,
+        branchDetailsLoadingMore: false,
+        activeBranchDetailsRequestId: undefined,
+        activeBranchDetailsRequestOffset: undefined,
     };
 }
 
@@ -353,6 +430,19 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
                     branch: message.branch,
                 },
             };
+        case 'graph/branchDetailsResponse':
+            if (message.requestId !== state.activeBranchDetailsRequestId
+                || message.details.name !== state.selectedBranchDetailsName) { return state; }
+            return {
+                ...state,
+                detailsLoading: false,
+                branchDetailsLoadingMore: false,
+                activeBranchDetailsRequestId: undefined,
+                activeBranchDetailsRequestOffset: undefined,
+                branchDetails: message.page.offset === 0 || !state.branchDetails
+                    ? message.details
+                    : appendBranchDetailsCommits(state.branchDetails, message.details),
+            };
         case 'graph/selectCommit':
             return selectCommit(state, message.hash, [message.hash], message.hash);
         case 'graph/revealCommit':
@@ -375,8 +465,20 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
                     ? { ...state, loading: false, loadingMore: false, activeGraphRequestId: undefined, error: message.error }
                     : { ...state, error: message.error };
             }
-            if (isDetailsError(message.error) && state.detailsLoading) {
-                return { ...state, detailsLoading: false, commitDetails: undefined, error: message.error };
+            if (isDetailsError(message.error)
+                && isCurrentDetailsError(state, message.requestId, message.error.operation)
+                && (state.detailsLoading || state.branchDetailsLoadingMore)) {
+                const branchDetailsInitialRequest = state.activeBranchDetailsRequestOffset === 0;
+                return {
+                    ...state,
+                    detailsLoading: false,
+                    branchDetailsLoadingMore: false,
+                    activeBranchDetailsRequestId: undefined,
+                    activeBranchDetailsRequestOffset: undefined,
+                    commitDetails: undefined,
+                    branchDetails: branchDetailsInitialRequest ? undefined : state.branchDetails,
+                    error: message.error,
+                };
             }
             return state;
         case 'error':
@@ -471,10 +573,15 @@ function isExpectedGraphError(state: GraphState, requestId: string | undefined):
     return state.activeGraphRequestId === requestId;
 }
 
-const DETAILS_OPERATIONS = new Set(['graph/commitDetailsRequest', 'graph/worktreeDetailsRequest']);
+const DETAILS_OPERATIONS = new Set(['graph/branchDetailsRequest', 'graph/commitDetailsRequest', 'graph/worktreeDetailsRequest']);
 
 function isDetailsError(error: ProtocolError): boolean {
     return Boolean(error.operation) && DETAILS_OPERATIONS.has(error.operation!);
+}
+
+function isCurrentDetailsError(state: GraphState, requestId: string | undefined, operation: string | undefined): boolean {
+    return operation !== 'graph/branchDetailsRequest'
+        || requestId === state.activeBranchDetailsRequestId;
 }
 
 function applyGraphData(state: GraphState, data: GraphData, repoId: string | undefined): GraphState {
@@ -511,6 +618,8 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
     });
     const rows = layoutState.rows;
     const displayRows = buildDisplayRows(rows, data.worktreeWips ?? []);
+    const branchDetailsAvailable = !state.selectedBranchDetailsName
+        || data.branches.some((branch) => branch.name === state.selectedBranchDetailsName);
     return {
         ...state,
         rows,
@@ -531,6 +640,33 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
         error: undefined,
         repoId: repoId ?? state.repoId,
         activeGraphRequestId: undefined,
+        ...(branchDetailsAvailable ? {} : clearedBranchDetailsState()),
+    };
+}
+
+function appendBranchDetailsCommits(current: BranchDetails, incoming: BranchDetails): BranchDetails {
+    const commits = uniqueGraphCommits([...current.commits, ...incoming.commits]);
+    return {
+        ...incoming,
+        commits,
+        loadedCount: incoming.loadedCount,
+    };
+}
+
+function clearedBranchDetailsState(): Pick<GraphState,
+    'selectedBranchDetailsName'
+    | 'branchDetails'
+    | 'detailsLoading'
+    | 'branchDetailsLoadingMore'
+    | 'activeBranchDetailsRequestId'
+    | 'activeBranchDetailsRequestOffset'> {
+    return {
+        selectedBranchDetailsName: undefined,
+        branchDetails: undefined,
+        detailsLoading: false,
+        branchDetailsLoadingMore: false,
+        activeBranchDetailsRequestId: undefined,
+        activeBranchDetailsRequestOffset: undefined,
     };
 }
 
