@@ -3,7 +3,7 @@ import type { OperationNoticeActionKind, OperationStatus } from '@protocol/share
 export { OperationStatus as GraphOperationStatus } from '@protocol/shared/operation';
 import type { RepositoriesChangedPush, RepositoryLocator, RepositoryNavigationMessage, SerializedRepoContext, WorktreeLocator } from '@protocol/shared/repo';
 import type { WebviewFontSizeChangedPush } from '@protocol/shared/ui';
-import type { GraphContextTarget, GraphData, GraphFilters, GraphPage, CommitFileChange, GraphSubmoduleInfo } from '@protocol/graph/types';
+import type { BranchDetails, GraphContextTarget, GraphData, GraphFilters, GraphPage, CommitFileChange, GraphSubmoduleInfo } from '@protocol/graph/types';
 
 // ── Extension → Webview (push — no requestId) ──────────────────────────────
 
@@ -102,6 +102,13 @@ export interface WorktreeDetailsResponse {
     readonly files: readonly CommitFileChange[];
 }
 
+export interface BranchDetailsResponse {
+    readonly type: 'graph/branchDetailsResponse';
+    readonly requestId: RequestId;
+    readonly page: GraphPage;
+    readonly details: BranchDetails;
+}
+
 // ── Webview → Extension (requests — carry requestId) ───────────────────────
 
 export interface GraphDataRequest {
@@ -136,6 +143,14 @@ export interface WorktreeDetailsRequest {
     readonly path: string;
     readonly repository?: RepositoryLocator;
     readonly worktree?: WorktreeLocator;
+}
+
+export interface BranchDetailsRequest {
+    readonly type: 'graph/branchDetailsRequest';
+    readonly requestId: RequestId;
+    readonly branch: string;
+    readonly page: GraphPage;
+    readonly repository?: RepositoryLocator;
 }
 
 // ── Webview → Extension (commands — no response expected) ──────────────────
@@ -281,6 +296,7 @@ export type GraphExtensionToWebviewMessage =
     | GraphDataResponse
     | CommitDetailsResponse
     | WorktreeDetailsResponse
+    | BranchDetailsResponse
     | GraphSelectCommitPush
     | GraphRevealCommitPush
     | GraphSelectWorktreePush
@@ -297,6 +313,7 @@ export type GraphWebviewToExtensionMessage =
     | LoadMoreGraphRequest
     | CommitDetailsRequest
     | WorktreeDetailsRequest
+    | BranchDetailsRequest
     | GraphContextTargetMessage
     | GraphRepositoryCommandRequest
     | BranchCommandRequest

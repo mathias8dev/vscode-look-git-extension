@@ -63,6 +63,31 @@ describe('graph branch actions e2e', () => {
             cleanupTestBranch(repo);
         }
     });
+
+    it('shows selected branch metadata and commits in the details panel', async () => {
+        const repo = await waitForLookGitReady();
+        const details = prepareBranchDetails(repo);
+        try {
+            await focusGraphView();
+            await openWebviewBySelector('.graph-branch-panel');
+            try {
+                await selectBranch(TEST_BRANCH);
+                await clickBranchAction('Show Selected Branch Details');
+                await waitForBranchDetails({
+                    branch: TEST_BRANCH,
+                    upstream: `origin/${TEST_BRANCH}`,
+                    remoteUrl: details.remoteUrl,
+                    head: details.head,
+                    parent: details.parent,
+                    message: 'e2e branch details',
+                });
+            } finally {
+                await closeWebview();
+            }
+        } finally {
+            cleanupTestBranch(repo);
+        }
+    });
 });
 
 async function waitForLookGitReady(): Promise<string> {
@@ -112,6 +137,23 @@ function prepareBehindBranch(repo: string): void {
     git(repo, ['push', '-q', 'origin', `${remoteHead}:refs/heads/${TEST_BRANCH}`]);
     git(repo, ['fetch', '-q', 'origin', TEST_BRANCH]);
     assert.equal(git(repo, ['rev-list', '--count', '--left-right', `${TEST_BRANCH}...origin/${TEST_BRANCH}`]).trim(), '0\t1');
+}
+
+function prepareBranchDetails(repo: string): { readonly head: string; readonly parent: string; readonly remoteUrl: string } {
+    cleanupTestBranch(repo);
+    const parent = git(repo, ['rev-parse', 'main']).trim();
+    const tree = git(repo, ['rev-parse', 'main^{tree}']).trim();
+    const head = git(repo, [
+        '-c', 'user.name=Look Git E2E',
+        '-c', 'user.email=look-git-e2e@example.test',
+        'commit-tree', tree,
+        '-p', parent,
+        '-m', 'e2e branch details',
+    ]).trim();
+    git(repo, ['update-ref', `refs/heads/${TEST_BRANCH}`, head]);
+    git(repo, ['push', '-q', 'origin', `${TEST_BRANCH}:refs/heads/${TEST_BRANCH}`]);
+    git(repo, ['branch', '--set-upstream-to', `origin/${TEST_BRANCH}`, TEST_BRANCH]);
+    return { head, parent, remoteUrl: git(repo, ['remote', 'get-url', 'origin']).trim() };
 }
 
 async function focusGraphView(): Promise<void> {
@@ -220,6 +262,35 @@ async function clickBranchAction(label: string): Promise<void> {
         button.click();
         return true;
     }, label), `Expected enabled branch action "${label}".`);
+}
+
+async function waitForBranchDetails(expected: {
+    readonly branch: string;
+    readonly upstream: string;
+    readonly remoteUrl: string;
+    readonly head: string;
+    readonly parent: string;
+    readonly message: string;
+}): Promise<void> {
+    let snapshot = '';
+    await pollUntil(async () => {
+        const result = await browser.execute((details) => {
+            const panel = document.querySelector<HTMLElement>('.branch-details-content');
+            const text = panel?.textContent?.replace(/\s+/g, ' ').trim() ?? '<missing>';
+            return {
+                matches: Boolean(panel)
+                    && text.includes(details.branch)
+                    && text.includes(details.upstream)
+                    && text.includes(details.remoteUrl)
+                    && text.includes(details.head)
+                    && text.includes(details.parent)
+                    && text.includes(details.message),
+                snapshot: text.slice(0, 1600),
+            };
+        }, expected);
+        snapshot = result.snapshot;
+        return result.matches;
+    }, `Expected branch details ${JSON.stringify(expected)}. Last snapshot:\n${snapshot}`);
 }
 
 async function clickNotificationAction(label: string): Promise<void> {

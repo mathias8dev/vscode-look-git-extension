@@ -8,6 +8,7 @@ All notable changes to Look Git are documented in this file.
 
 #### Look Graph
 - Add a Push action for the selected local branch in the branch panel toolbar
+- Add a paginated branch details panel with remote URL, upstream tracking, HEAD parents, and recent commits
 - Cover branch publication, behind-state recovery, divergence handling, and force-with-lease with a real VS Code E2E workflow
 
 ### Changed

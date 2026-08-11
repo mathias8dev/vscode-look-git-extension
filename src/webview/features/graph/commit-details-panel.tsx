@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import type { CommitFileChange } from '@protocol/graph/types';
 import type { CommitDetails } from '@webview/features/graph/graph-state';
 import { CommitDetailsContent } from '@webview/features/graph/commit-details-content';
+import { GraphDetailsPanel } from '@webview/features/graph/graph-details-panel';
 
 interface CommitDetailsPanelProps {
     readonly style?: CSSProperties;
@@ -18,41 +19,18 @@ export function CommitDetailsPanel({ style, details, loading, onClose, onDiff }:
     const detailsKey = details ? `${details.kind}:${details.path ?? details.hash}` : undefined;
 
     return (
-        <div className="graph-details-panel" style={style}>
-            <header className="graph-details-header">
-                <button
-                    type="button"
-                    className="graph-details-close"
-                    title="Close details"
-                    aria-label="Close details"
-                    onClick={onClose}
-                >
-                    <i className="codicon codicon-close" aria-hidden="true" />
-                </button>
-                {details && (
-                    <span className="graph-details-hash" title={details.path ?? details.hash}>
-                        {title}
-                    </span>
-                )}
-            </header>
-
-            {loading && (
-                <div className="graph-details-loading">
-                    <i className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
-                    <span>Loading…</span>
-                </div>
-            )}
-
-            {!loading && details && (
+        <GraphDetailsPanel
+            style={style}
+            title={title}
+            titleTooltip={details?.path ?? details?.hash}
+            loading={loading}
+            emptyLabel="Select a commit to see details"
+            onClose={onClose}
+        >
+            {details ? (
                 <CommitDetailsContent key={detailsKey} details={details} onDiff={onDiff} />
-            )}
-
-            {!loading && !details && (
-                <div className="graph-details-empty">
-                    Select a commit to see details
-                </div>
-            )}
-        </div>
+            ) : undefined}
+        </GraphDetailsPanel>
     );
 }
 

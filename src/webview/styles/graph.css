@@ -788,6 +788,126 @@
     padding: 16px;
 }
 
+.branch-details-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.branch-details-section {
+    padding: var(--look-git-space-sm);
+    border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
+}
+
+.branch-details-section h3 {
+    margin: 0 0 var(--look-git-space-sm);
+    font-size: inherit;
+    font-weight: 600;
+}
+
+.branch-details-grid {
+    display: grid;
+    gap: var(--look-git-space-xs);
+    margin: 0;
+}
+
+.branch-details-fact {
+    display: grid;
+    grid-template-columns: minmax(72px, 0.35fr) minmax(0, 1fr);
+    gap: var(--look-git-space-sm);
+}
+
+.branch-details-fact dt {
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+.branch-details-fact dd {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.branch-details-monospace,
+.branch-details-short-hash {
+    font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.branch-details-commits {
+    border-bottom: none;
+}
+
+.branch-details-commit-list {
+    display: grid;
+}
+
+.branch-details-commit {
+    display: grid;
+    gap: 2px;
+    width: 100%;
+    padding: var(--look-git-space-xs);
+    border: none;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--vscode-foreground, #cccccc);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.branch-details-commit:hover {
+    background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
+}
+
+.branch-details-commit:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder, #007fd4);
+    outline-offset: -1px;
+}
+
+.branch-details-commit-message {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.branch-details-commit-meta {
+    display: flex;
+    gap: var(--look-git-space-sm);
+    min-width: 0;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: 0.88em;
+}
+
+.branch-details-commit-meta > * {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.branch-details-load-more {
+    width: 100%;
+    min-height: 24px;
+    margin-top: var(--look-git-space-xs);
+    border: 1px solid transparent;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--vscode-textLink-foreground, #3794ff);
+    font: inherit;
+    cursor: pointer;
+}
+
+.branch-details-load-more:hover:not(:disabled) {
+    background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
+}
+
+.branch-details-load-more:disabled {
+    color: var(--vscode-disabledForeground, rgba(204, 204, 204, 0.5));
+    cursor: default;
+}
+
 /* ── Commit File Tree ────────────────────────────────────────────────────── */
 
 .commit-file-tree {

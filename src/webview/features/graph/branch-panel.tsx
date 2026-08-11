@@ -23,6 +23,7 @@ interface BranchPanelProps {
     readonly selectedWorktreePath: string | undefined;
     readonly operationStatus?: GraphOperationStatusPush;
     readonly onSelectBranch: (branch: string | undefined) => void;
+    readonly onShowBranchDetails?: (branch: string) => void;
     readonly onSelectMainRepository?: () => void;
     readonly onSelectSubmodule?: (submodule: GraphSubmoduleInfo) => void;
     readonly onBranchCommand: (command: BranchCommand, branch: string, isRemote: boolean) => void;
@@ -45,6 +46,7 @@ export function BranchPanel({
     selectedWorktreePath,
     operationStatus,
     onSelectBranch,
+    onShowBranchDetails,
     onSelectMainRepository = () => undefined,
     onSelectSubmodule = () => undefined,
     onBranchCommand,
@@ -204,6 +206,12 @@ export function BranchPanel({
                         title="Compare with Local"
                         disabled={compareWithLocalDisabled}
                         onClick={() => runBranchCommand('compareWithCurrent', selectedBranch)}
+                    />
+                    <IconButton
+                        icon="info"
+                        title="Show Selected Branch Details"
+                        disabled={!selectedBranch || !onShowBranchDetails}
+                        onClick={() => selectedBranch && onShowBranchDetails?.(selectedBranch.name)}
                     />
                     <IconButton
                         icon="search"

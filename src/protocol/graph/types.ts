@@ -35,6 +35,15 @@ export interface BranchInfo {
     readonly behind?: number;
 }
 
+export interface BranchDetails extends BranchInfo {
+    readonly remote?: string;
+    readonly remoteUrl?: string;
+    readonly head?: GraphCommit;
+    readonly commits: readonly GraphCommit[];
+    readonly hasMore: boolean;
+    readonly loadedCount: number;
+}
+
 export interface TagInfo {
     readonly name: string;
     readonly hash: string;

@@ -9,6 +9,7 @@ import {
     type GraphDataRequest,
     type CommitDetailsResponse,
     type WorktreeDetailsResponse,
+    type BranchDetailsResponse,
     type OpenWorktreeDiffRequest,
     type GraphOperationStatusPush,
 } from '@protocol/graph/messages';
@@ -22,6 +23,7 @@ import type { GitRepository } from '@application/ports/git-topology';
 import { GetGraphDataUseCase, type GraphDataResult, type GraphWorktreeWip } from '@application/usecases/graph/get-graph-data';
 import { GetCommitDetailsUseCase } from '@application/usecases/graph/get-commit-details';
 import { GetWorktreeDetailsUseCase } from '@application/usecases/graph/get-worktree-details';
+import { GetBranchDetailsUseCase } from '@application/usecases/graph/get-branch-details';
 import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
 import { toProtocolBranch, toProtocolGraphCommit, toProtocolGraphSubmodule, toProtocolWorktree } from '@extension/mapping/to-protocol';
 import { runCommitCommand } from '@extension/commands/commit-commands';
@@ -70,6 +72,7 @@ export class GraphMessageRouter {
         private readonly extensionUri?: vscode.Uri,
         private readonly storageUri?: vscode.Uri,
         private readonly runtimeRepositories?: RepositoryRegistry,
+        private readonly getBranchDetails = new GetBranchDetailsUseCase(),
     ) {
         this.graphDataPoster = new DistinctMessagePoster(postMessage, graphDataEqual, DISTINCT_MESSAGE_LAST_VALUE_ONLY);
     }
@@ -225,6 +228,39 @@ export class GraphMessageRouter {
                     files: details.files,
                 };
                 this.postMessage(response);
+                break;
+            }
+
+            case 'graph/branchDetailsRequest': {
+                const runtimeRepo = this.runtimeTargetsForRepository(msg.repository).repository;
+                if (!runtimeRepo) { throw new Error('No runtime repository available.'); }
+                const key = `branch-details:${runtimeRepo.repoId}`;
+                this.pending.get(key)?.abort();
+                const ctrl = new AbortController();
+                this.pending.set(key, ctrl);
+                try {
+                    const details = await this.getBranchDetails.execute(runtimeRepo, msg.branch, {
+                        limit: msg.page.limit,
+                        ...(msg.page.offset > 0 ? { encodedCursor: String(msg.page.offset) } : {}),
+                    }, ctrl.signal);
+                    const response: BranchDetailsResponse = {
+                        type: 'graph/branchDetailsResponse',
+                        requestId: msg.requestId,
+                        page: msg.page,
+                        details: {
+                            ...toProtocolBranch(details.branch),
+                            remote: details.remote,
+                            remoteUrl: details.remoteUrl,
+                            head: details.head ? toProtocolGraphCommit(details.head) : undefined,
+                            commits: details.commits.items.map(toProtocolGraphCommit),
+                            hasMore: details.commits.hasMore,
+                            loadedCount: msg.page.offset + details.commits.items.length,
+                        },
+                    };
+                    this.postMessage(response);
+                } finally {
+                    if (this.pending.get(key) === ctrl) { this.pending.delete(key); }
+                }
                 break;
             }
 

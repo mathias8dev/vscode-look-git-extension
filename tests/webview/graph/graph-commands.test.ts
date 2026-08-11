@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { messageForBranchCommand, messageForCommitCommand, messageForCommitDetails, messageForGraphContextTarget, messageForGraphDataRequest, messageForGraphRepositoryCommand, messageForOpenDiff } from '@webview/features/graph/graph-commands';
+import { messageForBranchCommand, messageForBranchDetails, messageForCommitCommand, messageForCommitDetails, messageForGraphContextTarget, messageForGraphDataRequest, messageForGraphRepositoryCommand, messageForOpenDiff } from '@webview/features/graph/graph-commands';
 
 describe('graphCommands', () => {
     it('sends commit command selections', () => {
@@ -18,6 +18,15 @@ describe('graphCommands', () => {
             branch: 'feature/ui',
             isRemote: false,
         });
+    });
+
+    it('sends paginated branch detail requests', () => {
+        expect(messageForBranchDetails('feature/auth', { offset: 20, limit: 20 })).toEqual(expect.objectContaining({
+            type: 'graph/branchDetailsRequest',
+            branch: 'feature/auth',
+            page: { offset: 20, limit: 20 },
+            requestId: expect.any(String),
+        }));
     });
 
     it('sends native context targets', () => {

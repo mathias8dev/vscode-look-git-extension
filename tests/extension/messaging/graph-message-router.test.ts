@@ -83,6 +83,49 @@ describe('GraphMessageRouter', () => {
         expect(calls.map((call) => call.repositoryId)).toEqual(['submodule-id', 'submodule-id']);
     });
 
+    it('returns paginated branch details from a real repository', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        const parent = repo.commitFile('README.md', 'base\n', 'base commit');
+        const head = repo.commitFile('src/app.ts', 'export const app = true;\n', 'feature commit');
+        const context = repoContext({ id: 'repo-id', cwd: repo.cwd, kind: RepoKind.Main, label: 'repo' });
+        const registry = runtimeRegistryForUnbornContext(context);
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(
+            { currentContext: context },
+            (message) => { messages.push(message); },
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            registry,
+        );
+
+        await router.handle({
+            type: 'graph/branchDetailsRequest',
+            requestId: 'branch-details-1',
+            branch: 'main',
+            page: { offset: 0, limit: 1 },
+        });
+
+        expect(messages).toContainEqual({
+            type: 'graph/branchDetailsResponse',
+            requestId: 'branch-details-1',
+            page: { offset: 0, limit: 1 },
+            details: expect.objectContaining({
+                name: 'main',
+                isRemote: false,
+                isCurrent: true,
+                head: expect.objectContaining({ hash: head, parentHashes: [parent] }),
+                commits: [expect.objectContaining({ hash: head, message: 'feature commit' })],
+                hasMore: true,
+                loadedCount: 1,
+            }),
+        });
+    });
+
     it('does not push graph data when a silent refresh returns the same snapshot', async () => {
         const registry = new RepositoryRegistry();
         registerRuntimeRepository(registry, neverRuntime());
