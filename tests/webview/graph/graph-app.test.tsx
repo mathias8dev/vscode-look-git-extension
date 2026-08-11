@@ -126,10 +126,18 @@ describe('GraphApp', () => {
         expect(localStorage.getItem('lookGit.commitDetailsPanelWidth')).toBe('336');
     });
 
-    it('opens branch details and requests additional commit pages', async () => {
+    it('opens, paginates, and keeps branch details stable across branch selection', async () => {
         const api = createMockVsCodeApi();
         const { GraphApp } = await import('@webview/graph/graph-app');
         const head = graphCommit('abcdef123456', 'feat(graph): branch details', ['parent123']);
+        const data = {
+            ...graphData([head]),
+            branches: [
+                { name: 'main', isRemote: false, isCurrent: true, hash: 'main-head' },
+                { name: 'feature/auth', isRemote: false, isCurrent: false, hash: head.hash, upstream: 'origin/feature/auth', ahead: 2, behind: 1 },
+            ],
+            hasRemotes: true,
+        };
 
         render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
         await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
@@ -137,14 +145,7 @@ describe('GraphApp', () => {
         await act(async () => sendToWebview({
             type: 'graph/dataResponse',
             requestId: initialRequest.requestId,
-            data: {
-                ...graphData([head]),
-                branches: [
-                    { name: 'main', isRemote: false, isCurrent: true, hash: 'main-head' },
-                    { name: 'feature/auth', isRemote: false, isCurrent: false, hash: head.hash, upstream: 'origin/feature/auth', ahead: 2, behind: 1 },
-                ],
-                hasRemotes: true,
-            },
+            data,
         }));
 
         fireEvent.click(await screen.findByTitle('feature/auth'));
@@ -183,6 +184,18 @@ describe('GraphApp', () => {
 
         await waitFor(() => expect(branchDetailsRequests(api.messages)).toHaveLength(2));
         expect(latestBranchDetailsRequest(api.messages).page).toEqual({ offset: 1, limit: 20 });
+
+        fireEvent.click(screen.getByTitle(/^main/));
+        await waitFor(() => expect(latestGraphDataRequest(api.messages).filters?.branches).toEqual(['main']));
+        const mainRequest = latestGraphDataRequest(api.messages);
+        await act(async () => sendToWebview({
+            type: 'graph/dataResponse',
+            requestId: mainRequest.requestId,
+            data: { ...data, repository: { ...mainRepository } },
+        }));
+
+        expect(branchDetailsRequests(api.messages)).toHaveLength(2);
+        expect(screen.getByText('git@example.test:team/repo.git')).toBeInTheDocument();
     });
 
     it('shows the repository list before rendering graph content for a selected repository', async () => {

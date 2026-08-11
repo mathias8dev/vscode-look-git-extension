@@ -105,7 +105,7 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
         );
         dispatch({ type: 'startBranchDetailsRequest', requestId: message.requestId, offset: 0 });
         sendMessage(message);
-    }, [sendMessage, selectedDetailsBranchSignature, state.refreshVersion, state.repository, state.selectedBranchDetailsName]);
+    }, [sendMessage, selectedDetailsBranchSignature, state.repository, state.selectedBranchDetailsName]);
 
     useEffect(() => {
         if (!state.loading || !state.activeGraphRequestId) { return; }
