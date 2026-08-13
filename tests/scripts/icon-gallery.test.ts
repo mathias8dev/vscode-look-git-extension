@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 describe('icon gallery', () => {
     it('indexes file icons by their resolved extensions', () => {
-        const require = createRequire(import.meta.url);
-        const loaded: unknown = require(path.join(process.cwd(), 'scripts', 'generate-icon-gallery.js'));
+        const requireFromRepository = createRequire(path.join(process.cwd(), 'package.json'));
+        const loaded: unknown = requireFromRepository(path.join(process.cwd(), 'scripts', 'generate-icon-gallery.js'));
         if (!isIconGalleryModule(loaded)) { throw new Error('Invalid icon gallery module.'); }
         const entries = loaded.collectFileTypeIcons();
 
