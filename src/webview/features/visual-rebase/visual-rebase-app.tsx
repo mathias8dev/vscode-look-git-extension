@@ -328,10 +328,10 @@ export function VisualRebaseApp({
                         <h2>Safety</h2>
                         {safety ? (
                             <ul className="visual-rebase-safety">
-                                <li data-state={safety.workingTreeClean ? 'ok' : 'warn'}>Working tree {safety.workingTreeClean ? 'clean' : 'has changes'}</li>
-                                <li data-state={safety.hasUpstream ? 'ok' : 'warn'}>{safety.hasUpstream ? 'Upstream configured' : 'No upstream configured'}</li>
-                                <li data-state={safety.pushedCommits > 0 ? 'warn' : 'ok'}>{safety.pushedCommits} published commits</li>
-                                <li data-state={safety.backupRef ? 'ok' : 'warn'}>{safety.backupRef ? 'Backup ref planned' : 'Backup ref unavailable'}</li>
+                                <li data-state={safety.workingTreeClean ? 'ok' : 'warn'}><span>Working tree {safety.workingTreeClean ? 'clean' : 'has changes'}</span></li>
+                                <li data-state={safety.hasUpstream ? 'ok' : 'warn'}><span>{safety.hasUpstream ? 'Upstream configured' : 'No upstream configured'}</span></li>
+                                <li data-state={safety.pushedCommits > 0 ? 'warn' : 'ok'}><span>{safety.pushedCommits} published commits</span></li>
+                                <li data-state={safety.backupRef ? 'ok' : 'warn'}><span>{safety.backupRef ? 'Backup ref planned' : 'Backup ref unavailable'}</span></li>
                             </ul>
                         ) : null}
                     </aside> : null}

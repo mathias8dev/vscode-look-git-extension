@@ -4,6 +4,8 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.2.8] - 2026-08-13
+
 ### Added
 
 #### Changes Panel
