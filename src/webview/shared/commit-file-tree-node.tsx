@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import type { CommitFileChange } from '@protocol/graph/types';
+import type { CommitFileChange } from '@protocol/shared/commit';
 import { IconButton } from '@webview/shared/icon-button';
-import { GraphFileTypeIcon } from '@webview/features/graph/graph-file-type-icon';
-import { iconKindForCommitFile } from '@webview/features/graph/graph-file-icon-model';
-import type { FileTreeNode } from '@webview/features/graph/commit-file-tree-model';
+import { CommitFileTypeIcon } from '@webview/shared/commit-file-type-icon';
+import { iconKindForCommitFile } from '@webview/shared/commit-file-icon-model';
+import type { FileTreeNode } from '@webview/shared/commit-file-tree-model';
 
 interface FileTreeNodeViewProps {
     readonly node: FileTreeNode;
@@ -80,7 +80,7 @@ export function FileTreeNodeView({ node, depth, onDiff, diffable = true, selecte
                 if (diffable && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDiff(); }
             }}
         >
-            <GraphFileTypeIcon kind={kind} />
+            <CommitFileTypeIcon kind={kind} />
             <span className="commit-file-name">{node.name}</span>
             {diffable ? (
                 <div className="commit-file-actions">

@@ -1,10 +1,53 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { VisualRebaseApp } from '@webview/features/visual-rebase/visual-rebase-app';
 
 describe('VisualRebaseApp', () => {
+    it('loads files for the selected commit and opens a file diff', async () => {
+        const onSelectCommit = vi.fn();
+        const onOpenCommitDiff = vi.fn();
+        const first = commit('aaa111111111', 'feat: first');
+        const changedFile = { status: 'M', filePath: 'src/app.ts' } as const;
+
+        render(
+            <VisualRebaseApp
+                title="Visual Rebase onto main"
+                currentBranch="feature/payments"
+                upstream="main"
+                onto="main"
+                initialCommits={[first, commit('bbb222222222', 'fix: second')]}
+                safety={undefined}
+                running={false}
+                completedBackupRef={undefined}
+                phase="planning"
+                notice={undefined}
+                conflictFiles={[]}
+                commitDetails={{ hash: first.hash, files: [changedFile] }}
+                onStart={() => {}}
+                onContinue={() => {}}
+                onAbort={() => {}}
+                onSkip={() => {}}
+                onOpenMergeEditor={() => {}}
+                onSelectCommit={onSelectCommit}
+                onOpenCommitDiff={onOpenCommitDiff}
+                onMarkResolved={() => {}}
+                onAcceptYours={() => {}}
+                onAcceptIncoming={() => {}}
+                onCancel={() => {}}
+                onReviewPlan={() => {}}
+            />,
+        );
+
+        await waitFor(() => expect(onSelectCommit).toHaveBeenCalledWith(first.hash));
+        fireEvent.click(screen.getByTitle('src/app.ts'));
+        expect(onOpenCommitDiff).toHaveBeenCalledWith(first.hash, changedFile);
+
+        fireEvent.click(screen.getByText('fix: second'));
+        await waitFor(() => expect(onSelectCommit).toHaveBeenCalledWith('bbb222222222'));
+    });
+
     it('submits the edited action plan', () => {
         const onStart = vi.fn();
 
@@ -26,9 +69,9 @@ describe('VisualRebaseApp', () => {
                 }}
                 running={false}
                 completedBackupRef={undefined}
-                error={undefined}
+                phase="planning"
+                notice={undefined}
                 conflictFiles={[]}
-                rebaseInProgress={false}
                 onStart={onStart}
                 onContinue={() => {}}
                 onAbort={() => {}}
@@ -38,16 +81,93 @@ describe('VisualRebaseApp', () => {
                 onAcceptYours={() => {}}
                 onAcceptIncoming={() => {}}
                 onCancel={() => {}}
+                onReviewPlan={() => {}}
             />,
         );
 
         fireEvent.change(screen.getByLabelText('Action for bbb2222'), { target: { value: 'fixup' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Reset plan' }));
+        expect(screen.getByLabelText('Action for bbb2222')).toHaveValue('pick');
+        fireEvent.change(screen.getByLabelText('Action for bbb2222'), { target: { value: 'fixup' } });
         fireEvent.click(screen.getByRole('button', { name: 'Start Rebase' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Confirm Start' }));
 
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
         expect(onStart).toHaveBeenCalledWith('main', 'main', [
             { hash: 'aaa111111111', action: 'pick', message: 'feat: first' },
             { hash: 'bbb222222222', action: 'fixup', message: 'fix: second' },
+        ]);
+    });
+
+    it('submits commits in the order chosen by drag and drop', () => {
+        const onStart = vi.fn();
+
+        render(
+            <VisualRebaseApp
+                title="Visual Rebase onto main"
+                currentBranch="feature/payments"
+                upstream="main"
+                onto="main"
+                initialCommits={[
+                    commit('aaa111111111', 'feat: first'),
+                    commit('bbb222222222', 'fix: second'),
+                    commit('ccc333333333', 'test: third'),
+                ]}
+                safety={{
+                    workingTreeClean: true,
+                    hasUpstream: true,
+                    pushedCommits: 0,
+                    backupRef: 'refs/look-git/backup/feature-payments',
+                }}
+                running={false}
+                completedBackupRef={undefined}
+                phase="planning"
+                notice={undefined}
+                conflictFiles={[]}
+                onStart={onStart}
+                onContinue={() => {}}
+                onAbort={() => {}}
+                onSkip={() => {}}
+                onOpenMergeEditor={() => {}}
+                onMarkResolved={() => {}}
+                onAcceptYours={() => {}}
+                onAcceptIncoming={() => {}}
+                onCancel={() => {}}
+                onReviewPlan={() => {}}
+            />,
+        );
+
+        const source = screen.getByLabelText('Reorder aaa1111');
+        const target = screen.getByText('test: third').closest('article');
+        if (!target) { throw new Error('Expected the third commit row.'); }
+        vi.spyOn(target, 'getBoundingClientRect').mockReturnValue({
+            x: 0,
+            y: 0,
+            width: 400,
+            height: 40,
+            top: 0,
+            right: 400,
+            bottom: 40,
+            left: 0,
+            toJSON: () => ({}),
+        });
+        const dataTransfer = {
+            effectAllowed: 'uninitialized',
+            dropEffect: 'none',
+            setData: vi.fn(),
+            getData: vi.fn(() => 'aaa111111111'),
+            setDragImage: vi.fn(),
+        };
+
+        fireEvent.dragStart(source, { dataTransfer });
+        fireEvent.dragOver(target, { clientY: 30, dataTransfer });
+        expect(target).toHaveClass('visual-rebase-row-drop-after');
+        fireEvent.drop(target, { clientY: 30, dataTransfer });
+        fireEvent.click(screen.getByRole('button', { name: 'Start Rebase' }));
+
+        expect(onStart).toHaveBeenCalledWith('main', 'main', [
+            { hash: 'bbb222222222', action: 'pick', message: 'fix: second' },
+            { hash: 'ccc333333333', action: 'pick', message: 'test: third' },
+            { hash: 'aaa111111111', action: 'pick', message: 'feat: first' },
         ]);
     });
 
@@ -69,9 +189,9 @@ describe('VisualRebaseApp', () => {
                 }}
                 running={false}
                 completedBackupRef={undefined}
-                error={undefined}
+                phase="planning"
+                notice={undefined}
                 conflictFiles={[]}
-                rebaseInProgress={false}
                 onStart={onStart}
                 onContinue={() => {}}
                 onAbort={() => {}}
@@ -81,13 +201,13 @@ describe('VisualRebaseApp', () => {
                 onAcceptYours={() => {}}
                 onAcceptIncoming={() => {}}
                 onCancel={() => {}}
+                onReviewPlan={() => {}}
             />,
         );
 
         fireEvent.change(screen.getByLabelText('Action for aaa1111'), { target: { value: 'reword' } });
         fireEvent.change(screen.getByLabelText('Reword message'), { target: { value: 'feat: better message' } });
         fireEvent.click(screen.getByRole('button', { name: 'Start Rebase' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Confirm Start' }));
 
         expect(onStart).toHaveBeenCalledWith('main', 'main', [
             { hash: 'aaa111111111', action: 'reword', message: 'feat: better message' },
@@ -115,9 +235,9 @@ describe('VisualRebaseApp', () => {
                 }}
                 running={false}
                 completedBackupRef={undefined}
-                error={undefined}
+                phase="planning"
+                notice={undefined}
                 conflictFiles={[]}
-                rebaseInProgress={false}
                 onStart={onStart}
                 onContinue={() => {}}
                 onAbort={() => {}}
@@ -127,13 +247,13 @@ describe('VisualRebaseApp', () => {
                 onAcceptYours={() => {}}
                 onAcceptIncoming={() => {}}
                 onCancel={() => {}}
+                onReviewPlan={() => {}}
             />,
         );
 
         fireEvent.change(screen.getByLabelText('Action for aaa1111'), { target: { value: 'edit' } });
         fireEvent.change(screen.getByLabelText('Action for bbb2222'), { target: { value: 'break' } });
         fireEvent.click(screen.getByRole('button', { name: 'Start Rebase' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Confirm Start' }));
 
         expect(onStart).toHaveBeenCalledWith('main', 'main', [
             { hash: 'aaa111111111', action: 'edit', message: 'feat: first' },
@@ -159,9 +279,9 @@ describe('VisualRebaseApp', () => {
                 }}
                 running={false}
                 completedBackupRef={undefined}
-                error={undefined}
+                phase="planning"
+                notice={undefined}
                 conflictFiles={[]}
-                rebaseInProgress={false}
                 onStart={onStart}
                 onContinue={() => {}}
                 onAbort={() => {}}
@@ -171,6 +291,7 @@ describe('VisualRebaseApp', () => {
                 onAcceptYours={() => {}}
                 onAcceptIncoming={() => {}}
                 onCancel={() => {}}
+                onReviewPlan={() => {}}
             />,
         );
 
@@ -179,11 +300,55 @@ describe('VisualRebaseApp', () => {
         expect(startButton).toBeEnabled();
         expect(screen.getByText('Working tree has changes')).toBeInTheDocument();
         fireEvent.click(startButton);
-        fireEvent.click(screen.getByRole('button', { name: 'Confirm Start' }));
+        const dialog = screen.getByRole('dialog', { name: 'Start with Working Tree Changes?' });
+        expect(within(dialog).getByText('Working tree changes will be autostashed and restored by Git.')).toBeInTheDocument();
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Start Rebase' }));
 
         expect(onStart).toHaveBeenCalledWith('main', 'main', [
             { hash: 'aaa111111111', action: 'pick', message: 'feat: first' },
         ]);
+    });
+
+    it('requires confirmation before rewriting published commits', () => {
+        const onStart = vi.fn();
+
+        render(
+            <VisualRebaseApp
+                title="Visual Rebase onto main"
+                currentBranch="feature/payments"
+                upstream="main"
+                onto="main"
+                initialCommits={[commit('aaa111111111', 'feat: first')]}
+                safety={{
+                    workingTreeClean: true,
+                    hasUpstream: true,
+                    pushedCommits: 1,
+                    backupRef: 'refs/look-git/backup/feature-payments',
+                }}
+                phase="planning"
+                running={false}
+                completedBackupRef={undefined}
+                notice={undefined}
+                conflictFiles={[]}
+                onStart={onStart}
+                onContinue={() => {}}
+                onAbort={() => {}}
+                onSkip={() => {}}
+                onOpenMergeEditor={() => {}}
+                onMarkResolved={() => {}}
+                onAcceptYours={() => {}}
+                onAcceptIncoming={() => {}}
+                onCancel={() => {}}
+                onReviewPlan={() => {}}
+            />,
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Start Rebase' }));
+        const dialog = screen.getByRole('dialog', { name: 'Rewrite Published Commits?' });
+        expect(within(dialog).getByText('1 published commit will require a force-with-lease push.')).toBeInTheDocument();
+        expect(onStart).not.toHaveBeenCalled();
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Start Rebase' }));
+        expect(onStart).toHaveBeenCalledOnce();
     });
 
     it('shows why start is disabled when the preview range has no commits', () => {
@@ -202,9 +367,9 @@ describe('VisualRebaseApp', () => {
                 }}
                 running={false}
                 completedBackupRef={undefined}
-                error={undefined}
+                phase="planning"
+                notice={undefined}
                 conflictFiles={[]}
-                rebaseInProgress={false}
                 onStart={() => {}}
                 onContinue={() => {}}
                 onAbort={() => {}}
@@ -214,6 +379,7 @@ describe('VisualRebaseApp', () => {
                 onAcceptYours={() => {}}
                 onAcceptIncoming={() => {}}
                 onCancel={() => {}}
+                onReviewPlan={() => {}}
             />,
         );
 
@@ -248,9 +414,9 @@ describe('VisualRebaseApp', () => {
                 ]}
                 running={false}
                 completedBackupRef={undefined}
-                error={undefined}
+                phase="planning"
+                notice={undefined}
                 conflictFiles={[]}
-                rebaseInProgress={false}
                 onStart={() => {}}
                 onPreview={onPreview}
                 onContinue={() => {}}
@@ -261,6 +427,7 @@ describe('VisualRebaseApp', () => {
                 onAcceptYours={() => {}}
                 onAcceptIncoming={() => {}}
                 onCancel={() => {}}
+                onReviewPlan={() => {}}
             />,
         );
 
@@ -301,9 +468,9 @@ describe('VisualRebaseApp', () => {
                 }}
                 running={false}
                 completedBackupRef={undefined}
-                error="Resolve conflicts."
+                phase="conflicts"
+                notice={{ message: 'Resolve conflicts.', details: 'Command failed: git rebase --rebase-merges' }}
                 conflictFiles={[conflictFile('src/app.ts', 'unmerged')]}
-                rebaseInProgress
                 onStart={() => {}}
                 onContinue={() => {}}
                 onAbort={() => {}}
@@ -314,6 +481,7 @@ describe('VisualRebaseApp', () => {
                 onAcceptYours={onAcceptYours}
                 onAcceptIncoming={onAcceptIncoming}
                 onCancel={() => {}}
+                onReviewPlan={() => {}}
             />,
         );
 
@@ -324,13 +492,54 @@ describe('VisualRebaseApp', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Open file' }));
 
         expect(screen.getByText('1 conflict remaining')).toBeInTheDocument();
+        expect(screen.getByText('Resolve conflicts before continuing')).toBeInTheDocument();
+        expect(screen.getAllByText('Resolve conflicts.')).toHaveLength(1);
+        expect(screen.getByText('Show Git output')).toBeInTheDocument();
+        expect(screen.getByLabelText('Rebase conflicts')).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: 'Unmerged Changes' })).toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'Setup' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'Operation' })).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
         expect(onAcceptYours).toHaveBeenCalledWith('src/app.ts');
         expect(onAcceptIncoming).toHaveBeenCalledWith('src/app.ts');
         expect(onOpenMergeEditor).toHaveBeenCalledWith('src/app.ts');
         expect(onOpenFile).toHaveBeenCalledWith('src/app.ts');
         expect(onMarkResolved).toHaveBeenCalledWith('src/app.ts');
+    });
+
+    it('renders a start failure only once', () => {
+        render(
+            <VisualRebaseApp
+                title="Visual Rebase onto main"
+                currentBranch="feature/payments"
+                upstream="main"
+                onto="main"
+                initialCommits={[commit('aaa111111111', 'feat: first')]}
+                safety={{
+                    workingTreeClean: true,
+                    hasUpstream: true,
+                    pushedCommits: 0,
+                    backupRef: 'refs/look-git/backup/feature-payments',
+                }}
+                running={false}
+                completedBackupRef={undefined}
+                phase="failed"
+                notice={{ message: 'Command failed.' }}
+                conflictFiles={[]}
+                onStart={() => {}}
+                onContinue={() => {}}
+                onAbort={() => {}}
+                onSkip={() => {}}
+                onOpenMergeEditor={() => {}}
+                onMarkResolved={() => {}}
+                onAcceptYours={() => {}}
+                onAcceptIncoming={() => {}}
+                onCancel={() => {}}
+                onReviewPlan={() => {}}
+            />,
+        );
+
+        expect(screen.getAllByText('Command failed.')).toHaveLength(1);
     });
 
     it('shows merged files as ready to mark resolved', () => {
@@ -352,9 +561,9 @@ describe('VisualRebaseApp', () => {
                 }}
                 running={false}
                 completedBackupRef={undefined}
-                error="All conflict markers resolved."
+                phase="conflicts"
+                notice={{ message: 'All conflict markers resolved.' }}
                 conflictFiles={[conflictFile('src/app.ts', 'merged')]}
-                rebaseInProgress
                 onStart={() => {}}
                 onContinue={() => {}}
                 onAbort={() => {}}
@@ -365,6 +574,7 @@ describe('VisualRebaseApp', () => {
                 onAcceptYours={() => {}}
                 onAcceptIncoming={() => {}}
                 onCancel={() => {}}
+                onReviewPlan={() => {}}
             />,
         );
 
@@ -396,10 +606,12 @@ describe('VisualRebaseApp', () => {
                 }}
                 running={false}
                 completedBackupRef={undefined}
-                error="Accepted conflict side. No changes remain; skip this commit to continue the rebase."
+                phase="paused"
+                notice={{
+                    message: 'Accepted conflict side. No changes remain; skip this commit to continue the rebase.',
+                    recommendedAction: 'skip',
+                }}
                 conflictFiles={[]}
-                rebaseInProgress
-                recommendedAction="skip"
                 onStart={() => {}}
                 onContinue={() => {}}
                 onAbort={() => {}}
@@ -409,6 +621,7 @@ describe('VisualRebaseApp', () => {
                 onAcceptYours={() => {}}
                 onAcceptIncoming={() => {}}
                 onCancel={() => {}}
+                onReviewPlan={() => {}}
             />,
         );
 
@@ -432,9 +645,9 @@ describe('VisualRebaseApp', () => {
                 }}
                 running={false}
                 completedBackupRef={undefined}
-                error="Rebase paused."
+                phase="paused"
+                notice={{ message: 'Rebase paused.' }}
                 conflictFiles={[]}
-                rebaseInProgress
                 onStart={() => {}}
                 onContinue={() => {}}
                 onAbort={() => {}}
@@ -444,6 +657,7 @@ describe('VisualRebaseApp', () => {
                 onAcceptYours={() => {}}
                 onAcceptIncoming={() => {}}
                 onCancel={() => {}}
+                onReviewPlan={() => {}}
             />,
         );
 
@@ -452,6 +666,7 @@ describe('VisualRebaseApp', () => {
         expect(screen.getByRole('button', { name: 'Skip' })).toBeEnabled();
         expect(screen.getByRole('button', { name: 'Abort' })).toBeEnabled();
         expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+        expect(screen.queryByLabelText('Action for aaa1111')).not.toBeInTheDocument();
     });
 
     it('shows a completed state instead of the editable planner after a completed rebase', () => {
@@ -470,9 +685,9 @@ describe('VisualRebaseApp', () => {
                 }}
                 running={false}
                 completedBackupRef="refs/look-git/backup/feature-payments"
-                error={undefined}
+                phase="completed"
+                notice={undefined}
                 conflictFiles={[]}
-                rebaseInProgress={false}
                 onStart={() => {}}
                 onContinue={() => {}}
                 onAbort={() => {}}
@@ -482,6 +697,7 @@ describe('VisualRebaseApp', () => {
                 onAcceptYours={() => {}}
                 onAcceptIncoming={() => {}}
                 onCancel={() => {}}
+                onReviewPlan={() => {}}
             />,
         );
 
@@ -513,9 +729,9 @@ describe('VisualRebaseApp', () => {
                 }}
                 running={false}
                 completedBackupRef={undefined}
-                error={undefined}
+                phase="planning"
+                notice={undefined}
                 conflictFiles={[]}
-                rebaseInProgress={false}
                 onStart={() => {}}
                 onContinue={() => {}}
                 onAbort={() => {}}
@@ -525,11 +741,13 @@ describe('VisualRebaseApp', () => {
                 onAcceptYours={() => {}}
                 onAcceptIncoming={() => {}}
                 onCancel={() => {}}
+                onReviewPlan={() => {}}
             />,
         );
 
         expect(screen.getByLabelText('Action for bbb2222')).toHaveValue('merge');
-        expect(screen.getByText('Merge-aware mode preserves merge topology. Commit reordering is disabled.')).toBeInTheDocument();
+        expect(screen.getByText('Merge topology is preserved; reordering is disabled.')).toBeInTheDocument();
+        expect(screen.getAllByTitle('Reordering is disabled for merge-aware plans')).toHaveLength(2);
     });
 
     it('allows merge commits to be reworded', () => {
@@ -553,9 +771,9 @@ describe('VisualRebaseApp', () => {
                 }}
                 running={false}
                 completedBackupRef={undefined}
-                error={undefined}
+                phase="planning"
+                notice={undefined}
                 conflictFiles={[]}
-                rebaseInProgress={false}
                 onStart={onStart}
                 onContinue={() => {}}
                 onAbort={() => {}}
@@ -565,6 +783,7 @@ describe('VisualRebaseApp', () => {
                 onAcceptYours={() => {}}
                 onAcceptIncoming={() => {}}
                 onCancel={() => {}}
+                onReviewPlan={() => {}}
             />,
         );
 
@@ -572,7 +791,6 @@ describe('VisualRebaseApp', () => {
         fireEvent.change(screen.getByLabelText('Action for bbb2222'), { target: { value: 'reword' } });
         fireEvent.change(screen.getByLabelText('Reword message'), { target: { value: 'merge: better message' } });
         fireEvent.click(screen.getByRole('button', { name: 'Start Rebase' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Confirm Start' }));
 
         expect(onStart).toHaveBeenCalledWith('main', 'main', [
             { hash: 'aaa111111111', action: 'pick', message: 'feat: first' },
@@ -596,9 +814,9 @@ describe('VisualRebaseApp', () => {
                 }}
                 running={false}
                 completedBackupRef={undefined}
-                error="Interactive rebase already in progress."
+                phase="paused"
+                notice={{ message: 'Interactive rebase already in progress.' }}
                 conflictFiles={[]}
-                rebaseInProgress
                 onStart={() => {}}
                 onContinue={() => {}}
                 onAbort={() => {}}
@@ -608,12 +826,13 @@ describe('VisualRebaseApp', () => {
                 onAcceptYours={() => {}}
                 onAcceptIncoming={() => {}}
                 onCancel={() => {}}
+                onReviewPlan={() => {}}
             />,
         );
 
-        expect(screen.getByRole('heading', { name: 'Rebase In Progress' })).toBeInTheDocument();
-        expect(screen.getByText('The original planner was closed. Runtime state was restored from extension storage.')).toBeInTheDocument();
-        expect(screen.queryByLabelText('Rebase plan')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Rebase Paused' })).toBeInTheDocument();
+        expect(screen.getByText('Interactive rebase already in progress.')).toBeInTheDocument();
+        expect(screen.queryByLabelText('Rebase paused')).toBeInTheDocument();
         expect(screen.queryByText('No commits in this range.')).not.toBeInTheDocument();
     });
 });

@@ -1,4 +1,4 @@
-import type { CommitFileChange } from '@protocol/graph/types';
+import type { CommitFileChange } from '@protocol/shared/commit';
 
 export interface FileTreeNode {
     readonly id: string;

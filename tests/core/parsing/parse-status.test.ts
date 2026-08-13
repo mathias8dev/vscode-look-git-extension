@@ -85,6 +85,10 @@ describe('detectConflictStateFromFiles', () => {
         expect(detectConflictStateFromFiles(['HEAD', 'rebase-apply'])).toBe('rebase');
     });
 
+    it('keeps rebase as the active operation while recreating a merge', () => {
+        expect(detectConflictStateFromFiles(['HEAD', 'MERGE_HEAD', 'rebase-merge'])).toBe('rebase');
+    });
+
     it('returns none for clean state', () => {
         expect(detectConflictStateFromFiles(['HEAD', 'index', 'config'])).toBe('none');
     });

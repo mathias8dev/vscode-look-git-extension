@@ -16,6 +16,7 @@ export type CodiconName =
     | 'git-stash'
     | 'git-stash-apply'
     | 'go-to-file'
+    | 'grabber'
     | 'loading'
     | 'pass'
     | 'remove'

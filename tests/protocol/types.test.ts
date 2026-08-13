@@ -134,10 +134,13 @@ describe('protocol discriminated unions', () => {
         const handle = (msg: VisualRebaseExtensionToWebviewMessage) => {
             switch (msg.type) {
                 case 'visualRebase/init': return msg.commits satisfies readonly unknown[];
-                case 'visualRebase/started': return;
+                case 'visualRebase/started': return msg.operation satisfies string;
                 case 'visualRebase/completed': return msg.backupRef satisfies string;
-                case 'visualRebase/error': return msg.recommendedAction satisfies 'continue' | 'skip' | undefined;
+                case 'visualRebase/paused': return msg.recommendedAction satisfies 'continue' | 'skip' | undefined;
+                case 'visualRebase/aborted': return;
+                case 'visualRebase/error': return msg.message satisfies string;
                 case 'visualRebase/previewResponse': return msg.requestId satisfies string;
+                case 'visualRebase/commitDetailsResponse': return msg.requestId satisfies string;
                 case 'ui/fontSizeChanged': return msg.fontSize satisfies number;
             }
         };
@@ -150,6 +153,8 @@ describe('protocol discriminated unions', () => {
                 case 'visualRebase/ready': return;
                 case 'visualRebase/start': return msg.plan satisfies readonly unknown[];
                 case 'visualRebase/previewRequest': return msg.requestId satisfies string;
+                case 'visualRebase/commitDetailsRequest': return msg.requestId satisfies string;
+                case 'visualRebase/openCommitDiff': return msg.commitHash satisfies string;
                 case 'visualRebase/cancel': return;
                 case 'visualRebase/continue': return;
                 case 'visualRebase/abort': return;

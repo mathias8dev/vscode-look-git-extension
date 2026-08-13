@@ -21,8 +21,7 @@ import { webviewFontSizeMessage } from '@extension/views/webview-font';
 import { operationActionsForStatus } from '@extension/utils/operation-feedback';
 import type { GitSubmodule } from '@core/git/domain/git-worktree';
 import { getReachableCommitHashes } from '@application/usecases/commits/get-reachable-commit-hashes';
-import { openCommitGitlinkDiff } from '@extension/utils/gitlink-diff';
-import { commitFileTempDiffUris } from '@extension/utils/diff-uris';
+import { openCommitFileDiff } from '@extension/utils/diff-uris';
 import type { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import type { RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
 import { requireRuntimeLocator } from '@extension/repositories/runtime-repository-locator';
@@ -455,7 +454,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 this.contextRepository = runtimeRepo;
             },
         );
-        movePanelToFloatingWindow(panel, 'Could not open file history in a separate window. Continuing in an editor tab.');
+        void movePanelToFloatingWindow(panel, 'Could not open file history in a separate window. Continuing in an editor tab.');
     }
 
     async runCommitContextCommand(command: CommitCommand): Promise<void> {
@@ -969,12 +968,7 @@ async function branchContainsCommit(repo: GitRepository, branch: GitBranch, hash
 }
 
 async function openHistoryDiff(repo: GitRepository, message: HistoryOpenDiffRequest): Promise<void> {
-    if (message.isSubmodule) {
-        await openCommitGitlinkDiff(repo, message);
-        return;
-    }
-    const { left, right } = await commitFileTempDiffUris(repo, repo.cwd, message);
-    await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(message.filePath)} (${message.commitHash.substring(0, 7)})`);
+    await openCommitFileDiff(repo, message);
 }
 
 function toHistoryCommit(commit: GitCommit, refs: readonly HistoryCommitRef[], canCherryPick: boolean) {

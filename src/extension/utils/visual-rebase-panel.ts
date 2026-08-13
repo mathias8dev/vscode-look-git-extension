@@ -4,13 +4,15 @@ import * as vscode from 'vscode';
 import { createHash } from 'crypto';
 import type { GitRepository, Worktree } from '@application/ports/git-topology';
 import type { GitCommit } from '@core/git/domain/git-commit';
-import type { VisualRebaseErrorPush, VisualRebaseRecommendedAction, VisualRebaseWebviewToExtensionMessage } from '@protocol/visual-rebase/messages';
+import type { VisualRebaseErrorPush, VisualRebasePausedPush, VisualRebaseRecommendedAction, VisualRebaseWebviewToExtensionMessage } from '@protocol/visual-rebase/messages';
 import type { VisualRebaseAction, VisualRebaseCommit, VisualRebaseConflictFile, VisualRebasePlanEntry, VisualRebaseRef, VisualRebaseSafety } from '@protocol/visual-rebase/types';
 import { assertNoUnmergedFiles } from '@extension/commands/git-command-helpers';
 import { currentBranchName } from '@extension/git/current-branch';
 import { getWebviewHtml } from '@extension/views/webview-html';
 import { openRuntimeThreeWayMergeEditor } from '@extension/utils/runtime-merge-editor';
-import { movePanelToFloatingWindow } from '@extension/utils/floating-editor-window';
+import { closePanelAndFloatingWindow, movePanelToFloatingWindow } from '@extension/utils/floating-editor-window';
+import { openCommitFileDiff } from '@extension/utils/diff-uris';
+import { isAbortError } from '@extension/messaging/error-serialization';
 
 const MAX_REBASE_COMMITS = 200;
 const EXECUTABLE_ACTIONS = new Set<VisualRebaseAction>(['pick', 'reword', 'edit', 'squash', 'fixup', 'drop', 'break', 'merge']);
@@ -42,8 +44,8 @@ export async function openVisualRebasePanel(
     const safety = existingRebase
         ? await visualRebaseSafetyForExistingRebase(repo, worktree, restoredRuntime)
         : await visualRebaseSafety(repo, worktree, currentBranch, commits.length);
-    const existingRebaseError = existingRebase
-        ? await visualRebaseError(worktree, 'Interactive rebase already in progress. Resolve the current stop, then continue.')
+    const existingRebasePause = existingRebase
+        ? await visualRebasePaused(worktree, 'Interactive rebase already in progress.')
         : undefined;
     const title = options.title ?? `Visual Rebase: ${currentBranch}`;
     const panel = vscode.window.createWebviewPanel(
@@ -57,9 +59,11 @@ export async function openVisualRebasePanel(
         },
     );
     panel.webview.html = getWebviewHtml(panel.webview, extensionUri, 'visual-rebase');
+    const movedToFloatingWindow = movePanelToFloatingWindow(panel, 'Could not open Visual Rebase in a separate window. Continuing in an editor tab.');
 
     const runtime: VisualRebaseRuntime = restoredRuntime ?? { backupRef: safety.backupRef };
     let operationRunning = false;
+    let commitDetailsController: AbortController | undefined;
     const runOperation = (operation: () => Promise<void>) => {
         if (operationRunning) { return; }
         operationRunning = true;
@@ -76,7 +80,7 @@ export async function openVisualRebasePanel(
                     commits,
                     safety,
                     refs,
-                    existingRebaseError,
+                    existingRebasePause,
                 });
                 return;
             case 'visualRebase/start':
@@ -93,8 +97,24 @@ export async function openVisualRebasePanel(
             case 'visualRebase/previewRequest':
                 runOperation(() => previewVisualRebaseSetup(repo, worktree, panel, currentBranch, message.requestId, message.rewriteAfter, message.replayOnto));
                 return;
+            case 'visualRebase/commitDetailsRequest': {
+                commitDetailsController?.abort();
+                const controller = new AbortController();
+                commitDetailsController = controller;
+                void postVisualRebaseCommitDetails(repo, panel, message.requestId, message.hash, controller.signal)
+                    .finally(() => {
+                        if (commitDetailsController === controller) { commitDetailsController = undefined; }
+                    });
+                return;
+            }
+            case 'visualRebase/openCommitDiff':
+                void openCommitFileDiff(repo, message, false).catch((error: unknown) => {
+                    void vscode.window.showErrorMessage(`Could not open commit diff: ${error instanceof Error ? error.message : String(error)}`);
+                });
+                return;
             case 'visualRebase/cancel':
-                panel.dispose();
+                commitDetailsController?.abort();
+                void closePanelAndFloatingWindow(panel, movedToFloatingWindow);
                 return;
             case 'visualRebase/continue':
                 runOperation(() => continueVisualRebase(worktree, panel, runtime, storageUri, 'continue'));
@@ -116,20 +136,53 @@ export async function openVisualRebasePanel(
                 return;
             case 'visualRebase/openMergeEditor':
                 void openRuntimeThreeWayMergeEditor(worktree, message.filePath).catch(async (error: unknown) => {
-                    const errorMessage = error instanceof Error ? error.message : String(error);
-                    await panel.webview.postMessage(await visualRebaseError(worktree, errorMessage));
+                    await panel.webview.postMessage(await visualRebaseOperationError(worktree, error));
                 });
                 return;
             case 'visualRebase/openFile':
                 void vscode.window.showTextDocument(vscode.Uri.file(path.join(worktree.path, message.filePath))).then(undefined, async (error: unknown) => {
-                    const errorMessage = error instanceof Error ? error.message : String(error);
-                    await panel.webview.postMessage(await visualRebaseError(worktree, errorMessage));
+                    await panel.webview.postMessage(await visualRebaseOperationError(worktree, error));
                 });
                 return;
         }
     });
-    panel.onDidDispose(() => { messageSubscription.dispose(); });
-    movePanelToFloatingWindow(panel, 'Could not open Visual Rebase in a separate window. Continuing in an editor tab.');
+    panel.onDidDispose(() => {
+        commitDetailsController?.abort();
+        messageSubscription.dispose();
+    });
+}
+
+async function postVisualRebaseCommitDetails(
+    repo: GitRepository,
+    panel: vscode.WebviewPanel,
+    requestId: string,
+    hash: string,
+    signal: AbortSignal,
+): Promise<void> {
+    try {
+        const files = await repo.getCommitFiles(hash, signal);
+        await panel.webview.postMessage({
+            type: 'visualRebase/commitDetailsResponse',
+            requestId,
+            hash,
+            files: files.map((file) => ({
+                status: file.status,
+                filePath: file.filePath,
+                ...(file.origPath ? { origPath: file.origPath } : {}),
+                ...(file.parentHash ? { parentHash: file.parentHash } : {}),
+                ...(file.isSubmodule ? { isSubmodule: true } : {}),
+            })),
+        });
+    } catch (error) {
+        if (isAbortError(error)) { return; }
+        await panel.webview.postMessage({
+            type: 'visualRebase/commitDetailsResponse',
+            requestId,
+            hash,
+            files: [],
+            error: error instanceof Error ? error.message : String(error),
+        });
+    }
 }
 
 async function loadVisualRebasePreview(
@@ -217,7 +270,7 @@ interface InitialVisualRebaseState {
     readonly commits: readonly VisualRebaseCommit[];
     readonly safety: VisualRebaseSafety;
     readonly refs: readonly VisualRebaseRef[];
-    readonly existingRebaseError: VisualRebaseErrorPush | undefined;
+    readonly existingRebasePause: VisualRebasePausedPush | undefined;
 }
 
 async function postInitialVisualRebaseState(panel: vscode.WebviewPanel, state: InitialVisualRebaseState): Promise<void> {
@@ -231,8 +284,8 @@ async function postInitialVisualRebaseState(panel: vscode.WebviewPanel, state: I
         safety: state.safety,
         refs: state.refs,
     });
-    if (state.existingRebaseError) {
-        await panel.webview.postMessage(state.existingRebaseError);
+    if (state.existingRebasePause) {
+        await panel.webview.postMessage(state.existingRebasePause);
     }
 }
 
@@ -259,7 +312,7 @@ async function runVisualRebase(
     runtime: VisualRebaseRuntime,
     options: RunVisualRebaseOptions,
 ): Promise<void> {
-    await panel.webview.postMessage({ type: 'visualRebase/started' });
+    await panel.webview.postMessage({ type: 'visualRebase/started', operation: 'start' });
     let keepRuntime = false;
     try {
         const mergeCommitHashes = await mergeCommitHashesForPlan(repo, options.plan);
@@ -295,10 +348,7 @@ async function runVisualRebase(
         });
         keepRuntime = await postRebasePausedOrCompleted(worktree, panel, options.backupRef);
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const errorMessage = await visualRebaseError(worktree, message);
-        keepRuntime = errorMessage.rebaseInProgress === true;
-        await panel.webview.postMessage(errorMessage);
+        keepRuntime = await postVisualRebaseOperationError(worktree, panel, error);
     } finally {
         if (!keepRuntime) {
             await cleanupVisualRebaseRuntime(worktree, options.storageUri, runtime);
@@ -381,7 +431,7 @@ async function continueVisualRebase(
     storageUri: vscode.Uri,
     mode: 'continue' | 'skip',
 ): Promise<void> {
-    await panel.webview.postMessage({ type: 'visualRebase/started' });
+    await panel.webview.postMessage({ type: 'visualRebase/started', operation: mode });
     let keepRuntime = false;
     try {
         if (mode === 'continue') {
@@ -391,10 +441,7 @@ async function continueVisualRebase(
         }
         keepRuntime = await postRebasePausedOrCompleted(worktree, panel, runtime.backupRef);
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const errorMessage = await visualRebaseError(worktree, message);
-        keepRuntime = errorMessage.rebaseInProgress === true;
-        await panel.webview.postMessage(errorMessage);
+        keepRuntime = await postVisualRebaseOperationError(worktree, panel, error);
     } finally {
         if (!keepRuntime) {
             await cleanupVisualRebaseRuntime(worktree, storageUri, runtime);
@@ -403,31 +450,29 @@ async function continueVisualRebase(
 }
 
 async function abortVisualRebase(worktree: Worktree, panel: vscode.WebviewPanel, runtime: VisualRebaseRuntime, storageUri: vscode.Uri): Promise<void> {
-    await panel.webview.postMessage({ type: 'visualRebase/started' });
+    await panel.webview.postMessage({ type: 'visualRebase/started', operation: 'abort' });
     try {
         await worktree.abortRebase();
-        await panel.webview.postMessage({ type: 'visualRebase/error', message: 'Rebase aborted.' });
+        await panel.webview.postMessage({ type: 'visualRebase/aborted' });
         await cleanupVisualRebaseRuntime(worktree, storageUri, runtime);
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        await panel.webview.postMessage(await visualRebaseError(worktree, message));
+        await panel.webview.postMessage(await visualRebaseOperationError(worktree, error));
     }
 }
 
 async function markVisualRebaseResolved(worktree: Worktree, panel: vscode.WebviewPanel, filePath: string): Promise<void> {
-    await panel.webview.postMessage({ type: 'visualRebase/started' });
+    await panel.webview.postMessage({ type: 'visualRebase/started', operation: 'resolveConflict' });
     try {
         await worktree.stage([filePath]);
         const status = await worktree.getStatus();
         const hasConflicts = status.conflicts.length > 0;
-        await panel.webview.postMessage(await visualRebaseError(
+        await panel.webview.postMessage(await visualRebasePaused(
             worktree,
             hasConflicts ? 'Resolve remaining conflicts, then continue.' : 'All conflicts marked resolved. Continue the rebase.',
             hasConflicts ? undefined : 'continue',
         ));
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        await panel.webview.postMessage(await visualRebaseError(worktree, message));
+        await panel.webview.postMessage(await visualRebaseOperationError(worktree, error));
     }
 }
 
@@ -437,7 +482,7 @@ async function acceptVisualRebaseConflict(
     filePath: string,
     side: 'yours' | 'incoming',
 ): Promise<void> {
-    await panel.webview.postMessage({ type: 'visualRebase/started' });
+    await panel.webview.postMessage({ type: 'visualRebase/started', operation: 'resolveConflict' });
     try {
         if (side === 'yours') {
             await worktree.acceptOurs([filePath]);
@@ -449,7 +494,7 @@ async function acceptVisualRebaseConflict(
         const hasConflicts = status.conflicts.length > 0;
         const hasStagedChanges = status.staged.length > 0;
         const recommendedAction = hasConflicts ? undefined : hasStagedChanges ? 'continue' : 'skip';
-        await panel.webview.postMessage(await visualRebaseError(
+        await panel.webview.postMessage(await visualRebasePaused(
             worktree,
             hasConflicts
                 ? 'Accepted conflict side. Resolve remaining conflicts, then continue.'
@@ -459,33 +504,50 @@ async function acceptVisualRebaseConflict(
             recommendedAction,
         ));
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        await panel.webview.postMessage(await visualRebaseError(worktree, message));
+        await panel.webview.postMessage(await visualRebaseOperationError(worktree, error));
     }
 }
 
 async function postRebasePausedOrCompleted(worktree: Worktree, panel: vscode.WebviewPanel, backupRef: string): Promise<boolean> {
     if (await isRebaseInProgress(worktree)) {
-        await panel.webview.postMessage(await visualRebaseError(worktree, 'Rebase paused. Resolve the current stop, then continue.'));
+        await panel.webview.postMessage(await visualRebasePaused(worktree, 'Rebase paused.'));
         return true;
     }
     await panel.webview.postMessage({ type: 'visualRebase/completed', backupRef });
     return false;
 }
 
-async function visualRebaseError(
+async function visualRebaseOperationError(worktree: Worktree, error: unknown): Promise<VisualRebasePausedPush | VisualRebaseErrorPush> {
+    const details = error instanceof Error ? error.message : String(error);
+    if (!await isRebaseInProgress(worktree)) {
+        return { type: 'visualRebase/error', message: details };
+    }
+    const paused = await visualRebasePaused(worktree, 'Rebase paused.', undefined, details);
+    return paused.reason === 'conflicts'
+        ? { ...paused, message: 'Rebase paused with conflicts.' }
+        : paused;
+}
+
+async function postVisualRebaseOperationError(worktree: Worktree, panel: vscode.WebviewPanel, error: unknown): Promise<boolean> {
+    const result = await visualRebaseOperationError(worktree, error);
+    await panel.webview.postMessage(result);
+    return result.type === 'visualRebase/paused';
+}
+
+async function visualRebasePaused(
     worktree: Worktree,
     message: string,
     recommendedAction?: VisualRebaseRecommendedAction,
-): Promise<VisualRebaseErrorPush> {
+    details?: string,
+): Promise<VisualRebasePausedPush> {
     const status = await worktree.getStatus().catch(() => undefined);
     const conflictFiles = status ? visualRebaseConflictFiles(status.conflicts, status.unstaged) : [];
-    const rebaseInProgress = await isRebaseInProgress(worktree);
     return {
-        type: 'visualRebase/error' as const,
+        type: 'visualRebase/paused',
+        reason: conflictFiles.length > 0 ? 'conflicts' : 'stopped',
         message,
-        ...(conflictFiles.length > 0 ? { conflictFiles } : {}),
-        ...(rebaseInProgress ? { rebaseInProgress: true } : {}),
+        conflictFiles,
+        ...(details && details !== message ? { details } : {}),
         ...(recommendedAction ? { recommendedAction } : {}),
     };
 }

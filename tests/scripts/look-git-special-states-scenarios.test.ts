@@ -154,16 +154,51 @@ describe('lookGit special state setup scenarios', () => {
         expect(git(pullConflictTarget, ['status', '--porcelain', '-uall'])).toContain('UU src/app.ts');
     });
 
-    it('creates an interactive rebase fixture with multiple sequential conflicts', () => {
+    it('creates an interactive rebase lab covering planner and runtime edge cases', () => {
         const { repo } = setupScenario('interactive-rebase-conflicts');
 
         expect(fs.existsSync(repo)).toBe(true);
         expect(git(repo, ['branch', '--show-current']).trim()).toBe('feature/interactive-rebase-conflicts');
-        expect(git(repo, ['status', '--porcelain', '-uall'])).toBe('');
-        expect(Number(git(repo, ['rev-list', '--count', 'main..feature/interactive-rebase-conflicts']).trim())).toBeGreaterThanOrEqual(6);
-        expect(Number(git(repo, ['rev-list', '--count', 'feature/interactive-rebase-conflicts..main']).trim())).toBeGreaterThanOrEqual(5);
+        expect(git(repo, ['status', '--porcelain', '-uall'])).toContain(' M notes/rebase-session.md');
+        expect(lines(git(repo, ['branch', '--format=%(refname:short)']))).toEqual(expect.arrayContaining([
+            'feature/interactive-rebase-actions',
+            'feature/interactive-rebase-conflicts',
+            'feature/interactive-rebase-merge-conflict',
+            'feature/interactive-rebase-merge-aware',
+            'target/interactive-rebase-alternate',
+        ]));
+        expect(git(repo, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', 'feature/interactive-rebase-conflicts@{u}']).trim()).toBe('origin/feature/interactive-rebase-conflicts');
+        expect(git(repo, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', 'feature/interactive-rebase-actions@{u}']).trim()).toBe('origin/feature/interactive-rebase-actions');
+        expect(aheadBehind(repo, 'feature/interactive-rebase-conflicts', 'origin/feature/interactive-rebase-conflicts')).toEqual([2, 0]);
+        expect(aheadBehind(repo, 'feature/interactive-rebase-actions', 'origin/feature/interactive-rebase-actions')).toEqual([3, 0]);
+        expect(Number(git(repo, ['rev-list', '--count', 'main..feature/interactive-rebase-conflicts']).trim())).toBe(6);
+        expect(Number(git(repo, ['rev-list', '--count', 'feature/interactive-rebase-conflicts..main']).trim())).toBe(5);
+        expect(Number(git(repo, ['rev-list', '--count', 'main..feature/interactive-rebase-actions']).trim())).toBe(7);
+        expect(Number(git(repo, ['rev-list', '--count', '--merges', 'main..feature/interactive-rebase-actions']).trim())).toBe(0);
+        expect(Number(git(repo, ['rev-list', '--count', '--merges', 'main..feature/interactive-rebase-merge-aware']).trim())).toBe(1);
+        expect(Number(git(repo, ['rev-list', '--count', '--merges', 'main..feature/interactive-rebase-merge-conflict']).trim())).toBe(1);
+        expect(Number(git(repo, ['rev-list', '--count', 'main..target/interactive-rebase-alternate']).trim())).toBe(1);
+        const emptyCommit = git(repo, ['log', '--format=%H', '--fixed-strings', '--grep=chore(rebase): add intentional empty pause candidate', 'feature/interactive-rebase-actions']).trim();
+        expect(emptyCommit).not.toBe('');
+        expect(git(repo, ['diff-tree', '--no-commit-id', '--name-only', '-r', emptyCommit]).trim()).toBe('');
+        expect(fs.readFileSync(path.join(repo, 'README.md'), 'utf8')).toContain('## Flow checklist');
 
-        expect(() => gitWithEnv(repo, ['rebase', '-i', 'main'], { GIT_SEQUENCE_EDITOR: 'true' })).toThrow();
+        git(repo, ['checkout', '-q', 'feature/interactive-rebase-merge-conflict']);
+        expect(() => gitWithEnv(repo, [
+            'rebase',
+            '--autostash',
+            '-i',
+            '--rebase-merges',
+            '--onto',
+            'target/interactive-rebase-alternate',
+            'main',
+        ], { GIT_SEQUENCE_EDITOR: 'true' })).toThrow();
+        expect(git(repo, ['status', '--porcelain', '-uall'])).toContain('AA src/merge-conflict/shared.ts');
+        git(repo, ['rebase', '--abort']);
+        expect(git(repo, ['status', '--porcelain', '-uall'])).toContain(' M notes/rebase-session.md');
+
+        git(repo, ['checkout', '-q', 'feature/interactive-rebase-conflicts']);
+        expect(() => gitWithEnv(repo, ['rebase', '--autostash', '-i', 'main'], { GIT_SEQUENCE_EDITOR: 'true' })).toThrow();
         expect(git(repo, ['status', '--porcelain', '-uall'])).toContain('UU src/app.ts');
 
         resolveConflict(repo, 'src/app.ts', 'export const appState = "resolved-app";\n', true);
@@ -173,7 +208,8 @@ describe('lookGit special state setup scenarios', () => {
         expect(git(repo, ['status', '--porcelain', '-uall'])).toContain('UU src/api.ts');
 
         resolveConflict(repo, 'src/api.ts', 'export const apiEndpoint = "resolved-api";\n', false);
-        expect(git(repo, ['status', '--porcelain', '-uall'])).toBe('');
+        expect(git(repo, ['status', '--porcelain', '-uall'])).toContain(' M notes/rebase-session.md');
+        expect(git(repo, ['stash', 'list'])).toBe('');
         expect(git(repo, ['branch', '--show-current']).trim()).toBe('feature/interactive-rebase-conflicts');
     });
 });

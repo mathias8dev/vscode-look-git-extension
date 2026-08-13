@@ -1,4 +1,5 @@
 import type { Pagination } from '@protocol/shared/base';
+import type { CommitFileChange as SharedCommitFileChange } from '@protocol/shared/commit';
 import type { RepositoryLocator, SubmoduleStatus, WorktreeLocator } from '@protocol/shared/repo';
 
 export interface GraphFilters {
@@ -96,13 +97,7 @@ export interface GraphData {
     readonly submodules: readonly GraphSubmoduleInfo[];
 }
 
-export interface CommitFileChange {
-    readonly status: string;
-    readonly filePath: string;
-    readonly origPath?: string;
-    readonly parentHash?: string;
-    readonly isSubmodule?: boolean;
-}
+export type CommitFileChange = SharedCommitFileChange;
 
 export interface GraphCommitContextTarget {
     readonly kind: 'commit';
