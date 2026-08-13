@@ -14,6 +14,7 @@ interface ChangeRowProps {
     readonly actions?: readonly ChangeActionDescriptor<ChangeRowAction>[];
     readonly primaryAction?: ChangeRowAction;
     readonly alwaysShowActions?: boolean;
+    readonly showSelectionCheckbox?: boolean;
 }
 
 export function ChangeRow({
@@ -27,6 +28,7 @@ export function ChangeRow({
     actions: actionOverride,
     primaryAction: primaryActionOverride,
     alwaysShowActions = false,
+    showSelectionCheckbox = false,
 }: ChangeRowProps) {
     return (
         <SharedChangeRow
@@ -37,6 +39,7 @@ export function ChangeRow({
             actions={actionOverride ?? rowActionsFor(item)}
             primaryAction={primaryActionOverride ?? primaryRowActionFor(item)}
             alwaysShowActions={alwaysShowActions}
+            showSelectionCheckbox={showSelectionCheckbox}
             onSelect={(selectedItem, mode) => onSelect(selectedItem, toChangeSelectionMode(mode))}
             onOpenContextMenu={onOpenContextMenu}
             onAction={onAction}

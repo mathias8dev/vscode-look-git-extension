@@ -273,6 +273,7 @@ export function SubmoduleItem({
                                     sortMode={ChangesSortMode.Path}
                                     collapsed={collapsedSectionIds.includes(section.id)}
                                     selectedItemIds={selectedItemIdsSet}
+                                    showSelectionCheckboxes={selectedItemIdsSet.size > 0}
                                     contextForItem={contextForItem}
                                     onToggleCollapsed={() => setCollapsedSectionIds((ids) => toggleSectionId(ids, section.id))}
                                     onSelectItem={selectItem}

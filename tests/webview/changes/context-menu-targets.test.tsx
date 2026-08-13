@@ -61,6 +61,7 @@ describe('changes native context menu targets', () => {
             <TreeNodeView
                 node={node}
                 selectedItemIds={new Set()}
+                showSelectionCheckboxes={false}
                 contextForItem={() => JSON.stringify({ webviewSection: 'changesSelection', preventDefaultContextMenuItems: true })}
                 onSelectItem={vi.fn()}
                 onOpenSelectionContext={vi.fn()}

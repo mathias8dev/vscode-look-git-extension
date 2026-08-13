@@ -14,6 +14,7 @@ interface ChangeSectionViewProps {
     readonly sortMode: ChangesSortMode;
     readonly collapsed: boolean;
     readonly selectedItemIds: ReadonlySet<string>;
+    readonly showSelectionCheckboxes: boolean;
     readonly contextForItem: (item: ChangeListItem) => string;
     readonly onToggleCollapsed: () => void;
     readonly onSelectItem: (item: ChangeListItem, mode: ChangeSelectionMode) => void;
@@ -32,6 +33,7 @@ export function ChangeSectionView({
     sortMode,
     collapsed,
     selectedItemIds,
+    showSelectionCheckboxes,
     contextForItem,
     onToggleCollapsed,
     onSelectItem,
@@ -144,6 +146,7 @@ export function ChangeSectionView({
                                 key={node.id}
                                 node={node}
                                 selectedItemIds={selectedItemIds}
+                                showSelectionCheckboxes={showSelectionCheckboxes}
                                 contextForItem={contextForItem}
                                 onSelectItem={onSelectItem}
                                 onOpenSelectionContext={onOpenSelectionContext}
@@ -156,6 +159,7 @@ export function ChangeSectionView({
                                 item={item}
                                 depth={0}
                                 selected={selectedItemIds.has(item.id)}
+                                showSelectionCheckbox={showSelectionCheckboxes}
                                 context={contextForItem(item)}
                                 onSelect={onSelectItem}
                                 onOpenContextMenu={onOpenSelectionContext}
