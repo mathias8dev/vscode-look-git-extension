@@ -1,11 +1,12 @@
-import { iconForFileKind } from '@webview/shared/file-icon-assets';
-import { IconifySvg } from '@webview/shared/iconify-svg';
+import { iconNamesForFileKind } from '@webview/shared/file-icon-assets';
 import type { WebviewFileIconKind } from '@webview/shared/file-icon-model';
+import { ThemedIconifySvg } from '@webview/shared/themed-iconify-svg';
 
 interface FileTypeIconProps {
     readonly kind: WebviewFileIconKind;
 }
 
 export function FileTypeIcon({ kind }: FileTypeIconProps) {
-    return <IconifySvg className="file-type-icon" icon={iconForFileKind(kind)} />;
+    const icons = iconNamesForFileKind(kind);
+    return <ThemedIconifySvg className="file-type-icon" dark={icons.dark} light={icons.light} />;
 }

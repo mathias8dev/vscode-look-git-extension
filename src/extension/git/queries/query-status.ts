@@ -2,7 +2,7 @@ import * as fs from 'fs/promises';
 import type { GitExec } from '@extension/git/git-exec';
 import type { GitStatus, GitStash } from '@core/git/domain/git-status';
 import type { GitFileChange } from '@core/git/domain/git-commit';
-import { parsePorcelainStatus } from '@core/parsing/parse-status';
+import { detectConflictStateFromFiles, parsePorcelainStatus } from '@core/parsing/parse-status';
 import { parseSubmodulePaths } from '@core/parsing/parse-submodule-status';
 import { parseNameStatusZ } from '@core/parsing/parse-name-status';
 
@@ -20,9 +20,16 @@ export async function queryStatus(
 }
 
 async function queryConflictState(execRawReadonly: GitExec, signal?: AbortSignal): Promise<GitStatus['conflictState']> {
-    if (await refExists(execRawReadonly, 'MERGE_HEAD', signal)) { return 'merge'; }
-    if (await gitPathExists(execRawReadonly, 'rebase-merge', signal) || await gitPathExists(execRawReadonly, 'rebase-apply', signal)) { return 'rebase'; }
-    return 'none';
+    const [rebaseMerge, rebaseApply, mergeHead] = await Promise.all([
+        gitPathExists(execRawReadonly, 'rebase-merge', signal),
+        gitPathExists(execRawReadonly, 'rebase-apply', signal),
+        refExists(execRawReadonly, 'MERGE_HEAD', signal),
+    ]);
+    return detectConflictStateFromFiles([
+        ...(rebaseMerge ? ['rebase-merge'] : []),
+        ...(rebaseApply ? ['rebase-apply'] : []),
+        ...(mergeHead ? ['MERGE_HEAD'] : []),
+    ]);
 }
 
 async function gitPathExists(execRawReadonly: GitExec, path: string, signal?: AbortSignal): Promise<boolean> {

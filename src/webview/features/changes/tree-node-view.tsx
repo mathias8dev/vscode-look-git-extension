@@ -10,13 +10,14 @@ import { changesItemContext } from '@webview/features/changes/context-menu-model
 interface TreeNodeViewProps {
     readonly node: ChangeTreeNode;
     readonly selectedItemIds: ReadonlySet<string>;
+    readonly showSelectionCheckboxes: boolean;
     readonly contextForItem: (item: ChangeListItem) => string;
     readonly onSelectItem: (item: ChangeListItem, mode: ChangeSelectionMode) => void;
     readonly onOpenSelectionContext: (item: ChangeListItem) => void;
     readonly onRowAction: (item: ChangeListItem, action: ChangeRowAction) => void;
 }
 
-export function TreeNodeView({ node, selectedItemIds, contextForItem, onSelectItem, onOpenSelectionContext, onRowAction }: TreeNodeViewProps) {
+export function TreeNodeView({ node, selectedItemIds, showSelectionCheckboxes, contextForItem, onSelectItem, onOpenSelectionContext, onRowAction }: TreeNodeViewProps) {
     const [folderCollapsed, setFolderCollapsed] = useState(false);
 
     if (node.item) {
@@ -25,6 +26,7 @@ export function TreeNodeView({ node, selectedItemIds, contextForItem, onSelectIt
                 item={node.item}
                 depth={node.depth}
                 selected={selectedItemIds.has(node.item.id)}
+                showSelectionCheckbox={showSelectionCheckboxes}
                 context={contextForItem(node.item)}
                 onSelect={onSelectItem}
                 onOpenContextMenu={onOpenSelectionContext}
@@ -61,6 +63,7 @@ export function TreeNodeView({ node, selectedItemIds, contextForItem, onSelectIt
                     key={child.id}
                     node={child}
                     selectedItemIds={selectedItemIds}
+                    showSelectionCheckboxes={showSelectionCheckboxes}
                     contextForItem={contextForItem}
                     onSelectItem={onSelectItem}
                     onOpenSelectionContext={onOpenSelectionContext}

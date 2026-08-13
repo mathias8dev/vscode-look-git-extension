@@ -145,9 +145,16 @@ describe('ChangesWebview', () => {
         sendStatusDataWithStagedChange();
 
         const input = await screen.findByPlaceholderText('Message (Ctrl+Enter to commit on "experimental")');
-        expect(screen.getByRole('button', { name: 'Commit' })).toBeInTheDocument();
-        fireEvent.change(input, { target: { value: 'feat(changes): native commit menu' } });
+        const commitButton = screen.getByRole('button', { name: 'Commit' });
         const moreButton = screen.getByRole('button', { name: 'More commit options' });
+        expect(commitButton).toBeDisabled();
+        expect(moreButton).toBeDisabled();
+        expect(moreButton).not.toHaveAttribute('data-vscode-context');
+
+        fireEvent.change(input, { target: { value: 'feat(changes): native commit menu' } });
+
+        expect(commitButton).toBeEnabled();
+        expect(moreButton).toBeEnabled();
         expect(moreButton.getAttribute('data-vscode-context')).toContain('changesCommitComposer');
         fireEvent.click(moreButton);
 
@@ -241,6 +248,28 @@ describe('ChangesWebview', () => {
                 stashIncludeUntracked: true,
             },
         });
+    });
+
+    it('shows selection checkboxes after a change is selected', async () => {
+        const api = createMockVsCodeApi();
+        const { ChangesWebview } = await import('@webview/changes/changes-webview');
+
+        render(<ChangesWebview />);
+        sendStatusDataWithMultipleChanges();
+
+        expect(screen.queryByRole('checkbox', { name: /Select change/ })).not.toBeInTheDocument();
+        fireEvent.click(await screen.findByTitle('src/a.ts'));
+
+        const firstCheckbox = await screen.findByRole('checkbox', { name: 'Select change src/a.ts' });
+        const secondCheckbox = screen.getByRole('checkbox', { name: 'Select change src/b.ts' });
+        expect(firstCheckbox).toBeChecked();
+        expect(secondCheckbox).not.toBeChecked();
+
+        const diffRequestCount = messageCount(api.messages, 'changes/openDiff');
+        fireEvent.click(secondCheckbox);
+
+        await waitFor(() => expect(secondCheckbox).toBeChecked());
+        expect(messageCount(api.messages, 'changes/openDiff')).toBe(diffRequestCount);
     });
 
     it('posts review requests from changes and staged section bars only', async () => {
@@ -583,6 +612,15 @@ function sendStatusData(): void {
             submodules: [],
         },
     });
+}
+
+function messageCount(messages: readonly unknown[], type: string): number {
+    return messages.filter((message) => (
+        typeof message === 'object'
+        && message !== null
+        && 'type' in message
+        && message.type === type
+    )).length;
 }
 
 function sendStatusDataWithSubmodule(): void {

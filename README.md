@@ -70,17 +70,41 @@ A modern, Git extension for Visual Studio Code — featuring a visual commit gra
 
 The Changes panel and Commit History live in the sidebar, while the Look Graph opens in the panel area — here showing a commit's context menu with the full set of commit actions.
 
+### Changes and repository commands
+
+![Look Git Changes panel — selected-file actions and repository pull, push, fetch, branch, remote, stash, and tag commands](https://raw.githubusercontent.com/mathias8dev/vscode-look-git-extension/refs/heads/release/1.2.8/docs/look-git/lookMoreHorz.png)
+
+The Changes view provides a broad set of file and repository Git actions, including stage, discard, patch, commit, checkout, pull, push, fetch, branch, remote, stash, and tag workflows ...
+
+### Command Palette
+
+![Look Git commands in the Visual Studio Code Command Palette](https://raw.githubusercontent.com/mathias8dev/vscode-look-git-extension/refs/heads/release/1.2.8/docs/look-git/lookCommandPanel.png)
+
+Look Git actions are also available from the Visual Studio Code Command Palette for keyboard-driven workflows.
+
 ### Submodules, worktrees & conflicts
 
 ![Look Git submodule support — first-class submodule and worktree entries alongside the modern conflicts editor](https://raw.githubusercontent.com/mathias8dev/vscode-look-git-extension/main/docs/look-git/submodules.png)
 
 First-class submodule and worktree support, plus the modern conflicts editor for resolving merges in place.
 
+### File History
+
+![Look Git file history — browse every commit that modified a file and inspect its revisions](https://raw.githubusercontent.com/mathias8dev/vscode-look-git-extension/main/docs/look-git/history.gif)
+
+Open a file's history to see every commit that modified it, then inspect and compare the file at any revision.
+
 ### Commit History
 
-![Look Git commit history — expand commits, inspect changed files, and open commit actions](https://raw.githubusercontent.com/mathias8dev/vscode-look-git-extension/main/docs/look-git/history.gif)
+![Look Git commit history context menu — advanced actions for the selected commit](https://raw.githubusercontent.com/mathias8dev/vscode-look-git-extension/refs/heads/release/1.2.8/docs/look-git/commitHistoryContext.png)
 
-Expand commits in place, inspect changed files, open diffs, and run history actions without leaving the sidebar.
+The commit context menu exposes revision, patch, comparison, rewrite, branch, tag, worktree, and navigation actions in one place.
+
+### Interactive Rebase
+
+![Look Git visual interactive rebase — configure, reorder, rewrite, inspect, and replay commits](https://raw.githubusercontent.com/mathias8dev/vscode-look-git-extension/refs/heads/release/1.2.8/docs/look-git/lookInteractiveRebase.gif)
+
+Configure the base and target branches, reorder commits with drag and drop, choose rebase actions, inspect changed files, edit messages, and resolve conflicts through the complete visual rebase flow.
 
 ### Git Blame
 

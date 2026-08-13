@@ -4,6 +4,7 @@ import type { ChangeActionDescriptor } from '@webview/shared/change-row-actions'
 import { FileTypeIcon } from '@webview/shared/file-type-icon';
 import { iconKindForPath } from '@webview/shared/file-icon-model';
 import { IconButton } from '@webview/shared/icon-button';
+import { SelectionCheckbox } from '@webview/shared/selection-checkbox';
 import { depthStyle } from '@webview/shared/view-styles';
 
 export type ChangeRowSelectionMode = 'replace' | 'toggle' | 'range';
@@ -21,6 +22,7 @@ interface SharedChangeRowProps<TItem extends SharedChangeRowItem, TAction extend
     readonly actions: readonly ChangeActionDescriptor<TAction>[];
     readonly primaryAction?: TAction;
     readonly alwaysShowActions?: boolean;
+    readonly showSelectionCheckbox?: boolean;
     readonly onSelect: (item: TItem, mode: ChangeRowSelectionMode) => void;
     readonly onOpenContextMenu: (item: TItem) => void;
     readonly onAction: (item: TItem, action: TAction) => void;
@@ -34,6 +36,7 @@ export function SharedChangeRow<TItem extends SharedChangeRowItem, TAction exten
     actions,
     primaryAction,
     alwaysShowActions = false,
+    showSelectionCheckbox = false,
     onSelect,
     onOpenContextMenu,
     onAction,
@@ -106,7 +109,15 @@ export function SharedChangeRow<TItem extends SharedChangeRowItem, TAction exten
                 }
             }}
         >
-            <FileTypeIcon kind={entry.isSubmodule ? 'submodule' : iconKindForPath(entry.filePath)} />
+            {showSelectionCheckbox ? (
+                <SelectionCheckbox
+                    className="change-row-selection-checkbox"
+                    checked={selected}
+                    ariaLabel={`Select change ${entry.filePath}`}
+                    onToggle={() => onSelect(item, 'toggle')}
+                />
+            ) : null}
+            <FileTypeIcon kind={entry.isSubmodule ? 'file-type-git' : iconKindForPath(entry.filePath)} />
             <div className="file-info">
                 <span className="file-name">{fileName(entry.filePath)}</span>
                 <span className="file-path">{parentPath(entry)}</span>

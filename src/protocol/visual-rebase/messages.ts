@@ -1,7 +1,10 @@
+import type { CommitFileChange } from '@protocol/shared/commit';
 import type { VisualRebaseCommit, VisualRebaseConflictFile, VisualRebasePlanEntry, VisualRebaseRef, VisualRebaseSafety } from '@protocol/visual-rebase/types';
 import type { WebviewFontSizeChangedPush } from '@protocol/shared/ui';
 
 export type VisualRebaseRecommendedAction = 'continue' | 'skip';
+export type VisualRebaseOperation = 'start' | 'continue' | 'skip' | 'abort' | 'resolveConflict';
+export type VisualRebasePauseReason = 'conflicts' | 'stopped';
 
 export interface VisualRebaseInitPush {
     readonly type: 'visualRebase/init';
@@ -16,6 +19,7 @@ export interface VisualRebaseInitPush {
 
 export interface VisualRebaseStartedPush {
     readonly type: 'visualRebase/started';
+    readonly operation: VisualRebaseOperation;
 }
 
 export interface VisualRebaseCompletedPush {
@@ -23,12 +27,23 @@ export interface VisualRebaseCompletedPush {
     readonly backupRef: string;
 }
 
+export interface VisualRebasePausedPush {
+    readonly type: 'visualRebase/paused';
+    readonly reason: VisualRebasePauseReason;
+    readonly message: string;
+    readonly details?: string;
+    readonly conflictFiles: readonly VisualRebaseConflictFile[];
+    readonly recommendedAction?: VisualRebaseRecommendedAction;
+}
+
+export interface VisualRebaseAbortedPush {
+    readonly type: 'visualRebase/aborted';
+}
+
 export interface VisualRebaseErrorPush {
     readonly type: 'visualRebase/error';
     readonly message: string;
-    readonly conflictFiles?: readonly VisualRebaseConflictFile[];
-    readonly rebaseInProgress?: boolean;
-    readonly recommendedAction?: VisualRebaseRecommendedAction;
+    readonly details?: string;
 }
 
 export interface VisualRebasePreviewResponse {
@@ -38,6 +53,14 @@ export interface VisualRebasePreviewResponse {
     readonly replayOnto: string;
     readonly commits?: readonly VisualRebaseCommit[];
     readonly safety?: VisualRebaseSafety;
+    readonly error?: string;
+}
+
+export interface VisualRebaseCommitDetailsResponse {
+    readonly type: 'visualRebase/commitDetailsResponse';
+    readonly requestId: string;
+    readonly hash: string;
+    readonly files: readonly CommitFileChange[];
     readonly error?: string;
 }
 
@@ -57,6 +80,22 @@ export interface VisualRebasePreviewRequest {
     readonly requestId: string;
     readonly rewriteAfter: string;
     readonly replayOnto: string;
+}
+
+export interface VisualRebaseCommitDetailsRequest {
+    readonly type: 'visualRebase/commitDetailsRequest';
+    readonly requestId: string;
+    readonly hash: string;
+}
+
+export interface VisualRebaseOpenCommitDiffMessage {
+    readonly type: 'visualRebase/openCommitDiff';
+    readonly commitHash: string;
+    readonly filePath: string;
+    readonly status: string;
+    readonly origPath?: string;
+    readonly parentHash?: string;
+    readonly isSubmodule?: boolean;
 }
 
 export interface VisualRebaseCancelMessage {
@@ -104,14 +143,19 @@ export type VisualRebaseExtensionToWebviewMessage =
     | VisualRebaseInitPush
     | VisualRebaseStartedPush
     | VisualRebaseCompletedPush
+    | VisualRebasePausedPush
+    | VisualRebaseAbortedPush
     | VisualRebaseErrorPush
     | VisualRebasePreviewResponse
+    | VisualRebaseCommitDetailsResponse
     | WebviewFontSizeChangedPush;
 
 export type VisualRebaseWebviewToExtensionMessage =
     | VisualRebaseReadyMessage
     | VisualRebaseStartMessage
     | VisualRebasePreviewRequest
+    | VisualRebaseCommitDetailsRequest
+    | VisualRebaseOpenCommitDiffMessage
     | VisualRebaseCancelMessage
     | VisualRebaseContinueMessage
     | VisualRebaseAbortMessage

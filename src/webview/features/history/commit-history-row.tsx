@@ -2,6 +2,7 @@ import type { KeyboardEvent, MouseEvent } from 'react';
 import type { HistoryCommit, HistoryCommitRef } from '@protocol/history/types';
 import { formatHistoryDate, formatRelativeDate } from '@webview/features/history/history-model';
 import { HistoryCommitSelectionMode } from '@webview/features/history/history-state';
+import { SelectionCheckbox } from '@webview/shared/selection-checkbox';
 
 interface CommitHistoryRowProps {
     readonly commit: HistoryCommit;
@@ -68,13 +69,11 @@ export function CommitHistoryRow({ commit, expanded, selected, showSelectionChec
             }}
         >
             {showSelectionCheckbox ? (
-                <input
-                    type="checkbox"
+                <SelectionCheckbox
                     className="history-row-selection-checkbox"
-                    aria-label={`Select commit ${commit.message}`}
                     checked={selected}
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={() => onSelect(commit.hash, HistoryCommitSelectionMode.Toggle)}
+                    ariaLabel={`Select commit ${commit.message}`}
+                    onToggle={() => onSelect(commit.hash, HistoryCommitSelectionMode.Toggle)}
                 />
             ) : null}
             <i className={`codicon codicon-chevron-${expanded ? 'down' : 'right'} history-row-chevron`} aria-hidden="true" />

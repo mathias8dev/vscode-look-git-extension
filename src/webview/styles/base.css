@@ -26,6 +26,23 @@
     box-sizing: border-box;
 }
 
+.look-git-tooltip {
+    position: fixed;
+    z-index: 10000;
+    max-width: min(32em, calc(100vw - 8px));
+    padding: var(--look-git-space-xs) var(--look-git-space-sm);
+    border: 1px solid var(--vscode-editorHoverWidget-border, var(--vscode-widget-border, #454545));
+    border-radius: 3px;
+    color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground, #cccccc));
+    background: var(--vscode-editorHoverWidget-background, var(--vscode-editor-background, #252526));
+    box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
+    font: inherit;
+    line-height: var(--look-git-line-height);
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    pointer-events: none;
+}
+
 html,
 body,
 #root {
@@ -325,4 +342,18 @@ h1 {
     min-height: 0;
     overflow: auto;
     padding: var(--look-git-space-lg);
+}
+
+.selection-checkbox {
+    width: 1em;
+    height: 1em;
+    min-width: 1em;
+    margin: 0;
+    accent-color: var(--vscode-checkbox-selectBackground, var(--vscode-button-background, #0e639c));
+    cursor: pointer;
+}
+
+.selection-checkbox:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder, #007fd4);
+    outline-offset: 1px;
 }

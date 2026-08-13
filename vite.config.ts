@@ -31,7 +31,20 @@ export default defineConfig({
         assetFileNames: '[name][extname]',
         chunkFileNames: 'chunks/[name]-[hash].js',
         entryFileNames: '[name].js',
+        manualChunks: vscodeIconChunk,
       },
     },
   },
 });
+
+function vscodeIconChunk(moduleId: string): string | undefined {
+  const normalizedId = moduleId.replaceAll('\\', '/');
+  const match = normalizedId.match(/\/@iconify\/icons-vscode-icons\/([^/?]+)\.js/);
+  const iconName = match?.[1];
+  if (!iconName || iconName.startsWith('default-')) { return undefined; }
+  let bucket = 0;
+  for (const character of iconName) {
+    bucket = (bucket * 31 + character.charCodeAt(0)) % 32;
+  }
+  return `vscode-icons-${bucket.toString().padStart(2, '0')}`;
+}

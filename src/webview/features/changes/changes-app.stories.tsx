@@ -141,6 +141,7 @@ function appArgs(state: ChangesState) {
         onShowOperationOutput: noop,
         onDismissOperation: noop,
         onCreateStash: noop,
+        onCreateSelectedStash: noop,
         onToggleStash: noop,
         onStashAction: noop,
         onStashFileDiff: noop,

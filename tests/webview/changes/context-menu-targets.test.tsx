@@ -61,6 +61,7 @@ describe('changes native context menu targets', () => {
             <TreeNodeView
                 node={node}
                 selectedItemIds={new Set()}
+                showSelectionCheckboxes={false}
                 contextForItem={() => JSON.stringify({ webviewSection: 'changesSelection', preventDefaultContextMenuItems: true })}
                 onSelectItem={vi.fn()}
                 onOpenSelectionContext={vi.fn()}
@@ -155,6 +156,7 @@ function renderSubmodule(status: SubmoduleStatusData): void {
             onCommitComposerContextTarget={vi.fn()}
             onGenerateCommitMessage={vi.fn()}
             onCreateStash={vi.fn()}
+            onCreateSelectedStash={vi.fn()}
             onToggleStash={vi.fn()}
             onStashAction={vi.fn()}
             onStashFileDiff={vi.fn()}

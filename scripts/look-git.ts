@@ -49,8 +49,9 @@ const scenarios = new Map<string, ScenarioSetup>([
     ['multirepo', setupRepositoryDiscovery],
     ['graph-heavy', setupGraphHeavy],
     ['heavy-graph', setupGraphHeavy],
-    ['interactive-rebase-conflicts', setupInteractiveRebaseConflicts],
-    ['interactive-rebase-multiple-conflicts', setupInteractiveRebaseConflicts],
+    ['interactive-rebase', setupInteractiveRebaseScenario],
+    ['interactive-rebase-conflicts', setupInteractiveRebaseScenario],
+    ['interactive-rebase-multiple-conflicts', setupInteractiveRebaseScenario],
     ['rebase-conflicts', setupRebaseConflicts],
     ['remote', setupRemote],
     ['remote-failure', setupRemoteUnavailable],
@@ -144,7 +145,7 @@ function printHelp(): void {
         '  ./lookGit setup merge-conflicts',
         '  ./lookGit setup merge-conflics',
         '  ./lookGit setup graph-heavy',
-        '  ./lookGit setup interactive-rebase-conflicts',
+        '  ./lookGit setup interactive-rebase',
         '  ./lookGit setup empty-repo',
         '  ./lookGit setup file-context-menu',
         '  ./lookGit setup remote',
@@ -200,7 +201,7 @@ function uniqueScenarios(): readonly string[] {
         'empty-repo',
         'file-context-menu',
         'graph-heavy',
-        'interactive-rebase-conflicts',
+        'interactive-rebase',
         'merge-conflicts',
         'repository-discovery',
         'rebase-conflicts',
@@ -224,7 +225,7 @@ function canonicalScenarioName(name: string): string {
     if (name === 'remotes') { return 'remote'; }
     if (name === 'heavy-graph') { return 'graph-heavy'; }
     if (name === 'multi-repo' || name === 'multi-repository' || name === 'multirepo') { return 'repository-discovery'; }
-    if (name === 'interactive-rebase-multiple-conflicts') { return 'interactive-rebase-conflicts'; }
+    if (name === 'interactive-rebase' || name === 'interactive-rebase-multiple-conflicts') { return 'interactive-rebase-conflicts'; }
     if (name === 'remote-failure' || name === 'remote-offline') { return 'remote-unavailable'; }
     if (name === 'semantic-git-actions') { return 'semantic-actions'; }
     if (name === 'unpublished') { return 'unpublished-branch'; }
@@ -696,13 +697,41 @@ function setupRebaseConflicts(target: string): void {
     expectGitFailure(target, ['rebase', 'main']);
 }
 
-function setupInteractiveRebaseConflicts(target: string): void {
+function setupInteractiveRebaseScenario(target: string, outputRoot: string): void {
+    const remoteRoot = path.join(outputRoot, '.interactive-rebase-remotes');
+    const origin = path.join(remoteRoot, 'origin.git');
+    removeDir(remoteRoot);
+    fs.mkdirSync(remoteRoot, { recursive: true });
+    initBareRepo(origin);
+
     initRepo(target);
+    git(target, ['remote', 'add', 'origin', origin]);
     write(target, 'README.md', [
-        '# Interactive rebase conflict fixture',
+        '# Interactive Rebase Lab',
         '',
-        'Open this repository on `feature/interactive-rebase-conflicts`.',
-        'Start a Visual Rebase onto `main` to hit several sequential conflicts.',
+        'Regenerate this repository with `./lookGit setup interactive-rebase`.',
+        '',
+        '## Branches',
+        '',
+        '- `feature/interactive-rebase-actions`: linear commits for drag-and-drop, reword, edit, squash, fixup, drop, break, continue, and completion.',
+        '- `feature/interactive-rebase-conflicts`: partially published commits that conflict with `main` in three separate steps.',
+        '- `feature/interactive-rebase-merge-aware`: a merge commit for topology-preserving mode and disabled reordering.',
+        '- `feature/interactive-rebase-merge-conflict`: a resolved merge that conflicts again when Git recreates it.',
+        '- `target/interactive-rebase-alternate`: an independent replay target for the setup picker.',
+        '',
+        '## Flow checklist',
+        '',
+        '1. Switch to `feature/interactive-rebase-actions` and open Visual Rebase after `main`.',
+        '2. Drag commits before and after one another, then use reword, squash, fixup, edit, break, and drop.',
+        '3. Use `target/interactive-rebase-alternate` as Replay onto, select the current branch as Rewrite commits after for an empty range, and type a missing ref to test preview errors and retry.',
+        '4. Pause on edit or break, close the panel, reopen it, then continue, skip, or abort.',
+        '5. Switch to `feature/interactive-rebase-conflicts` and rebase onto `main` for sequential conflicts.',
+        '6. On `src/app.ts`, Accept current changes to produce an empty patch and promote Skip, or resolve it manually and Continue.',
+        '7. Switch to `feature/interactive-rebase-merge-aware` to verify preserved topology and disabled reordering.',
+        '8. Rebase `feature/interactive-rebase-merge-conflict` onto `target/interactive-rebase-alternate` to stop while recreating its merge commit.',
+        '9. Complete a rebase and verify the backup ref and completed state.',
+        '',
+        'Both linear branches track a partially published remote branch. The working tree also starts with a tracked local edit, so the confirmation combines published-history and autostash risks. Run `git restore notes/rebase-session.md` to test the clean-working-tree path.',
         '',
         'Expected conflict order:',
         '1. `src/app.ts`',
@@ -710,12 +739,15 @@ function setupInteractiveRebaseConflicts(target: string): void {
         '3. `src/api.ts`',
         '',
     ].join('\n'));
-    commit(target, 'docs(rebase): add interactive conflict fixture guide', { author: nextAuthor() });
+    write(target, 'notes/rebase-session.md', '# Rebase session\n\nBaseline tracked note for the autostash flow.\n');
+    commit(target, 'docs(rebase): add interactive rebase lab guide', { author: nextAuthor() });
     write(target, 'src/app.ts', 'export const appState = "base";\n');
     write(target, 'src/settings.ts', 'export const settingsMode = "base";\n');
     write(target, 'src/api.ts', 'export const apiEndpoint = "base";\n');
     commit(target, 'feat(rebase): add shared interactive rebase base', { author: nextAuthor() });
     const base = git(target, ['rev-parse', 'HEAD']).trim();
+    git(target, ['tag', 'visual-rebase-base', base]);
+    git(target, ['push', '-q', '-u', 'origin', 'main']);
 
     git(target, ['checkout', '-q', '-b', 'feature/interactive-rebase-conflicts', base]);
     write(target, 'src/app.ts', 'export const appState = "feature-dashboard";\n');
@@ -726,6 +758,7 @@ function setupInteractiveRebaseConflicts(target: string): void {
     commit(target, 'feat(rebase): update settings on feature branch', { author: nextAuthor() });
     write(target, 'src/feature/audit.ts', 'export const auditEnabled = true;\n');
     commit(target, 'feat(rebase): add audit side commit', { author: nextAuthor() });
+    git(target, ['push', '-q', '-u', 'origin', 'feature/interactive-rebase-conflicts']);
     write(target, 'src/api.ts', 'export const apiEndpoint = "feature-v2";\n');
     commit(target, 'feat(rebase): update api endpoint on feature branch', { author: nextAuthor() });
     write(target, 'docs/feature-plan.md', '# Feature plan\n\nFinal clean commit after the conflict sequence.\n');
@@ -742,8 +775,59 @@ function setupInteractiveRebaseConflicts(target: string): void {
     commit(target, 'feat(rebase): add main telemetry side commit', { author: nextAuthor() });
     write(target, 'src/api.ts', 'export const apiEndpoint = "main-v2";\n');
     commit(target, 'feat(rebase): update api endpoint on main branch', { author: nextAuthor() });
+    git(target, ['tag', 'visual-rebase-main']);
+    git(target, ['push', '-q', 'origin', 'main', '--tags']);
+
+    git(target, ['checkout', '-q', '-b', 'feature/interactive-rebase-actions', 'main']);
+    write(target, 'src/planner/plan.ts', 'export const plannerSteps = ["pick"];\n');
+    commit(target, 'feat(rebase): add reorder candidate', { author: nextAuthor() });
+    write(target, 'src/planner/plan.ts', 'export const plannerSteps = ["pick", "fixup"];\n');
+    commit(target, 'fix(rebase): add squash and fixup candidate', { author: nextAuthor() });
+    write(target, 'docs/planner-message.md', '# Original planner message\n');
+    commit(target, 'docs(rebase): add reword candidate', { author: nextAuthor() });
+    write(target, 'tests/planner-actions.test.ts', 'export const editPauseCovered = true;\n');
+    commit(target, 'test(rebase): add edit pause candidate', { author: nextAuthor() });
+    git(target, ['push', '-q', '-u', 'origin', 'feature/interactive-rebase-actions']);
+    git(target, ['commit', '-q', '--allow-empty', '-m', 'chore(rebase): add intentional empty pause candidate'], { author: nextAuthor() });
+    write(target, 'src/planner/breakpoint.ts', 'export const breakHere = true;\n');
+    commit(target, 'refactor(rebase): add break candidate', { author: nextAuthor() });
+    write(target, 'src/planner/drop-me.ts', 'export const temporaryPlannerCode = true;\n');
+    commit(target, 'chore(rebase): add drop candidate', { author: nextAuthor() });
+
+    git(target, ['checkout', '-q', '-b', 'target/interactive-rebase-alternate', 'main']);
+    write(target, 'src/targets/alternate.ts', 'export const alternateReplayTarget = true;\n');
+    commit(target, 'feat(rebase): add alternate replay target', { author: nextAuthor() });
+    git(target, ['tag', 'visual-rebase-alternate-target']);
+
+    git(target, ['checkout', '-q', '-b', 'feature/interactive-rebase-merge-aware', 'main']);
+    write(target, 'src/merge-aware/feature.ts', 'export const mergeAwareFeature = true;\n');
+    commit(target, 'feat(rebase): add merge-aware feature root', { author: nextAuthor() });
+    git(target, ['checkout', '-q', '-b', 'topic/interactive-rebase-merge']);
+    write(target, 'src/merge-aware/topic.ts', 'export const mergeAwareTopic = true;\n');
+    commit(target, 'feat(rebase): add merge-aware topic', { author: nextAuthor() });
+    git(target, ['checkout', '-q', 'feature/interactive-rebase-merge-aware']);
+    write(target, 'src/merge-aware/feature-followup.ts', 'export const mergeAwareFollowup = true;\n');
+    commit(target, 'refactor(rebase): add merge-aware feature follow-up', { author: nextAuthor() });
+    git(target, ['merge', '--no-ff', '-m', 'merge(rebase): integrate merge-aware topic', 'topic/interactive-rebase-merge'], { author: nextAuthor() });
+    write(target, 'docs/merge-aware-result.md', '# Merge-aware result\n');
+    commit(target, 'docs(rebase): add merge-aware completion candidate', { author: nextAuthor() });
+    git(target, ['branch', '-D', 'topic/interactive-rebase-merge']);
+
+    git(target, ['checkout', '-q', '-b', 'feature/interactive-rebase-merge-conflict', 'main']);
+    write(target, 'src/merge-conflict/shared.ts', 'export const mergeConflictSide = "feature";\n');
+    commit(target, 'feat(rebase): add merge conflict feature side', { author: nextAuthor() });
+    git(target, ['checkout', '-q', '-b', 'topic/interactive-rebase-merge-conflict', 'main']);
+    write(target, 'src/merge-conflict/shared.ts', 'export const mergeConflictSide = "topic";\n');
+    commit(target, 'feat(rebase): add merge conflict topic side', { author: nextAuthor() });
+    git(target, ['checkout', '-q', 'feature/interactive-rebase-merge-conflict']);
+    expectGitFailure(target, ['merge', '--no-ff', '-m', 'merge(rebase): resolve merge-aware conflict', 'topic/interactive-rebase-merge-conflict']);
+    write(target, 'src/merge-conflict/shared.ts', 'export const mergeConflictSide = "resolved";\n');
+    git(target, ['add', 'src/merge-conflict/shared.ts']);
+    git(target, ['commit', '-q', '-m', 'merge(rebase): resolve merge-aware conflict'], { author: nextAuthor() });
+    git(target, ['branch', '-D', 'topic/interactive-rebase-merge-conflict']);
 
     git(target, ['checkout', '-q', 'feature/interactive-rebase-conflicts']);
+    write(target, 'notes/rebase-session.md', '# Rebase session\n\nLocal tracked draft restored by the autostash flow.\n');
 }
 
 function setupStashPopBlocked(target: string): void {

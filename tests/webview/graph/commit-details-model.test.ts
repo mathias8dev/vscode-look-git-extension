@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CommitFileChange } from '@protocol/graph/types';
-import { filterCommitDetailFiles } from '@webview/features/graph/commit-details-model';
+import { filterCommitDetailFiles } from '@webview/shared/commit-file-filter';
 
 describe('commitDetailsModel', () => {
     it('filters commit detail files by path or original path', () => {
