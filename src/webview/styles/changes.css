@@ -818,6 +818,11 @@
     height: 16px;
 }
 
+.vscode-light .icon-theme-dark,
+body:not(.vscode-light) .icon-theme-light {
+    display: none;
+}
+
 
 .file-main {
     min-width: 0;

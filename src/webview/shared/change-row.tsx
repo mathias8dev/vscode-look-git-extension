@@ -117,7 +117,7 @@ export function SharedChangeRow<TItem extends SharedChangeRowItem, TAction exten
                     onToggle={() => onSelect(item, 'toggle')}
                 />
             ) : null}
-            <FileTypeIcon kind={entry.isSubmodule ? 'submodule' : iconKindForPath(entry.filePath)} />
+            <FileTypeIcon kind={entry.isSubmodule ? 'file-type-git' : iconKindForPath(entry.filePath)} />
             <div className="file-info">
                 <span className="file-name">{fileName(entry.filePath)}</span>
                 <span className="file-path">{parentPath(entry)}</span>

@@ -127,7 +127,7 @@ function CommitHistoryFileRow({
         <>
             <span className="history-file-spacer" aria-hidden="true" />
             <span className={`history-file-status history-file-status-${statusClass(file.status)}`}>{file.status}</span>
-            <FileTypeIcon kind={file.isSubmodule ? 'submodule' : iconKindForPath(file.filePath)} />
+            <FileTypeIcon kind={file.isSubmodule ? 'file-type-git' : iconKindForPath(file.filePath)} />
             <span className="history-file-path" title={file.filePath}>{name}</span>
             {file.origPath ? <span className="history-file-original" title={file.origPath}>{file.origPath}</span> : null}
         </>
