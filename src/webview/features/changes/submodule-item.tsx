@@ -45,6 +45,7 @@ interface SubmoduleItemProps {
     readonly onCommitComposerContextTarget: (message: string) => void;
     readonly onGenerateCommitMessage: () => void;
     readonly onCreateStash: (message: string) => void;
+    readonly onCreateSelectedStash: (target: ChangesSelectionContextTarget, message: string) => void;
     readonly onToggleStash: (index: number) => void;
     readonly onStashAction: (index: number, action: StashEntryAction) => void;
     readonly onStashFileDiff: (index: number, file: StashFileEntry) => void;
@@ -81,6 +82,7 @@ export function SubmoduleItem({
     onCommitComposerContextTarget,
     onGenerateCommitMessage,
     onCreateStash,
+    onCreateSelectedStash,
     onToggleStash,
     onStashAction,
     onStashFileDiff,
@@ -282,6 +284,7 @@ export function SubmoduleItem({
                                     onBulkAction={onBulkAction}
                                     onReview={reviewHandlerFor(section, submodule.path, (target) => onExplainSelection(target))}
                                     onStash={section.id === ChangeSectionId.Unstaged ? onCreateStash : undefined}
+                                    onStashSelected={(items, message) => onCreateSelectedStash(changesSelectionTarget(items, submodule.path), message)}
                                 />
                             ))}
                             {!conflictsOnly ? (

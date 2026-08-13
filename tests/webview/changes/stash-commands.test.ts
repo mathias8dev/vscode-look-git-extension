@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    messageForCreateSelectedStash,
     messageForCreateStash,
     messageForStashAction,
     messageForStashFileDiff,
@@ -7,6 +8,7 @@ import {
     CreateStashKind,
     StashEntryAction,
 } from '@webview/features/changes/stash-commands';
+import type { ChangesSelectionContextTarget } from '@protocol/changes/types';
 
 describe('stashCommands', () => {
     it('creates stash commands with normalized optional messages', () => {
@@ -15,6 +17,22 @@ describe('stashCommands', () => {
             message: 'save work',
         });
         expect(messageForCreateStash(CreateStashKind.Staged, '   ')).toEqual({ type: 'changes/stashStaged' });
+    });
+
+    it('creates path-limited stash commands for repository and submodule selections', () => {
+        const target = selectedStashTarget();
+        expect(messageForCreateSelectedStash(target, '  selected work  ')).toEqual({
+            type: 'changes/stashSelectedFiles',
+            filePaths: ['src/selected.ts'],
+            includeUntracked: false,
+            message: 'selected work',
+        });
+        expect(messageForCreateSelectedStash({ ...target, submodulePath: 'modules/lib' }, '   ')).toEqual({
+            type: 'changes/submoduleStashSelectedFiles',
+            submodulePath: 'modules/lib',
+            filePaths: ['src/selected.ts'],
+            includeUntracked: false,
+        });
     });
 
     it('creates stash entry action messages', () => {
@@ -46,3 +64,18 @@ describe('stashCommands', () => {
         expect(stashFilesRequestId(4)).toBe('changes:stash-files:4');
     });
 });
+
+function selectedStashTarget(): ChangesSelectionContextTarget {
+    return {
+        kind: 'selection',
+        filePaths: ['src/selected.ts'],
+        stageFilePaths: ['src/selected.ts'],
+        unstageFilePaths: [],
+        discardFilePaths: ['src/selected.ts'],
+        stashFilePaths: ['src/selected.ts'],
+        patchStagedFilePaths: [],
+        patchUnstagedFilePaths: ['src/selected.ts'],
+        patchUntrackedFilePaths: [],
+        stashIncludeUntracked: false,
+    };
+}

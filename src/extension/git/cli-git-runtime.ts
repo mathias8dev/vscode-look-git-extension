@@ -95,7 +95,6 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     markResolved: (input) => ({ args: ['add', '--', ...requiredStringArrayField(input, 'paths')] }),
     commit: (input) => ({ args: ['commit', '-m', requiredStringField(input, 'message')] }),
     amendCommit: (input) => ({ args: ['commit', '--amend', '-m', requiredStringField(input, 'message')] }),
-    stash: (input) => ({ args: stashArgs(input) }),
     applyStash: (input) => ({ args: ['stash', 'apply', requiredStringField(input, 'stash')] }),
     popStash: (input) => ({ args: ['stash', 'pop', requiredStringField(input, 'stash')] }),
     dropStash: (input) => ({ args: ['stash', 'drop', requiredString(input, 'stash')] }),
@@ -142,6 +141,9 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
 };
 
 const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = {
+    stash: async (input, runProcess, context, signal) => {
+        await createStash(input, runProcess, context, signal);
+    },
     getStatus: async (_input, runProcess, context, signal) => {
         return await queryStatus(readonlyRawExec(runProcess, context), signal);
     },
@@ -1144,6 +1146,41 @@ function stashArgs(input: unknown): readonly string[] {
     const messageArgs = withOptionalMessage(args, message);
     const paths = optionalStringArrayField(options, 'paths');
     return paths.length > 0 ? [...messageArgs, '--', ...paths] : messageArgs;
+}
+
+async function createStash(
+    input: unknown,
+    runProcess: CliGitRuntimeProcess,
+    context: GitExecutionContext,
+    signal?: AbortSignal,
+): Promise<void> {
+    const options = objectField(input, 'options');
+    const paths = optionalStringArrayField(options, 'paths');
+    if (paths.length === 0 || booleanOption(options, 'keepIndex') || booleanOption(options, 'staged')) {
+        await runTrimmed(runProcess, context, stashArgs(input), signal);
+        return;
+    }
+
+    // A stash pathspec limits cleanup, but Git still records the entire index in the stash commit.
+    // Build the stash against a selected-only index so unrelated staged entries are not captured.
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'look-git-stash-'));
+    const indexPath = path.join(tempDir, 'index');
+    const patchPath = path.join(tempDir, 'selected-index.patch');
+    const env = { GIT_INDEX_FILE: indexPath };
+    try {
+        await runTrimmed(runProcess, context, ['read-tree', 'HEAD'], signal, env);
+        const stagedPatch = await runRaw(runProcess, context, [
+            'diff', '--cached', '--binary', '--full-index', '--no-ext-diff', '--no-textconv', '--', ...paths,
+        ], signal);
+        if (stagedPatch) {
+            await fs.writeFile(patchPath, stagedPatch, 'utf8');
+            await runTrimmed(runProcess, context, ['apply', '--cached', '--whitespace=nowarn', patchPath], signal, env);
+        }
+        await runTrimmed(runProcess, context, stashArgs(input), signal, env);
+        await runTrimmed(runProcess, context, ['reset', '-q', 'HEAD', '--', ...paths]);
+    } finally {
+        await fs.rm(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+    }
 }
 
 function booleanOption(input: unknown, field: string): boolean {

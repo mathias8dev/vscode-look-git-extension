@@ -38,6 +38,7 @@ interface SubmoduleSectionProps {
     readonly onCommitComposerContextTarget: (submodulePath: string, message: string) => void;
     readonly onGenerateCommitMessage: (submodulePath: string) => void;
     readonly onCreateStash: (submodulePath: string, message: string) => void;
+    readonly onCreateSelectedStash: (target: ChangesSelectionContextTarget, message: string) => void;
     readonly onToggleStash: (submodulePath: string, index: number) => void;
     readonly onStashAction: (submodulePath: string, index: number, action: StashEntryAction) => void;
     readonly onStashFileDiff: (submodulePath: string, index: number, file: StashFileEntry) => void;
@@ -69,6 +70,7 @@ export function SubmoduleSection({
     onCommitComposerContextTarget,
     onGenerateCommitMessage,
     onCreateStash,
+    onCreateSelectedStash,
     onToggleStash,
     onStashAction,
     onStashFileDiff,
@@ -134,6 +136,7 @@ export function SubmoduleSection({
                                 onCommitComposerContextTarget={(message) => onCommitComposerContextTarget(submodule.path, message)}
                                 onGenerateCommitMessage={() => onGenerateCommitMessage(submodule.path)}
                                 onCreateStash={(message) => onCreateStash(submodule.path, message)}
+                                onCreateSelectedStash={onCreateSelectedStash}
                                 onToggleStash={(index) => onToggleStash(submodule.path, index)}
                                 onStashAction={(index, action) => onStashAction(submodule.path, index, action)}
                                 onStashFileDiff={(index, file) => onStashFileDiff(submodule.path, index, file)}

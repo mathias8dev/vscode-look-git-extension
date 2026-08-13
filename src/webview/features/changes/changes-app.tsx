@@ -50,6 +50,7 @@ interface ChangesAppProps {
     readonly onShowOperationOutput?: () => void;
     readonly onDismissOperation?: () => void;
     readonly onCreateStash: (kind: CreateStashKind, message: string) => void;
+    readonly onCreateSelectedStash: (target: ChangesSelectionContextTarget, message: string) => void;
     readonly onToggleStash: (index: number) => void;
     readonly onStashAction: (index: number, action: StashEntryAction) => void;
     readonly onStashFileDiff: (index: number, file: StashFileEntry) => void;
@@ -95,6 +96,7 @@ export function ChangesApp({
     onShowOperationOutput,
     onDismissOperation,
     onCreateStash,
+    onCreateSelectedStash,
     onToggleStash,
     onStashAction,
     onStashFileDiff,
@@ -259,6 +261,7 @@ export function ChangesApp({
                         onBulkAction={onBulkAction}
                         onReview={reviewHandlerFor(section, (target) => onExplainSelection(target))}
                         onStash={stashHandlerFor(section.id, onCreateStash)}
+                        onStashSelected={(items, message) => onCreateSelectedStash(changesSelectionTarget(items), message)}
                         stashTitle={stashTitleFor(section.id)}
                     />
                 )) : null}
@@ -289,6 +292,7 @@ export function ChangesApp({
                         onCommitComposerContextTarget={onSubmoduleCommitComposerContextTarget}
                         onGenerateCommitMessage={onGenerateCommitMessageForSubmodule}
                         onCreateStash={onSubmoduleCreateStash}
+                        onCreateSelectedStash={onCreateSelectedStash}
                         onToggleStash={onToggleSubmoduleStash}
                         onStashAction={onSubmoduleStashAction}
                         onStashFileDiff={onSubmoduleStashFileDiff}

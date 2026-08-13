@@ -242,6 +242,29 @@ describe('SubmoduleItem', () => {
         });
     });
 
+    it('targets only selected changes when creating a submodule stash', () => {
+        const onCreateSelectedStash = vi.fn();
+        renderSubmodule({
+            statusData: statusData({
+                unstaged: [
+                    { indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/selected.ts' },
+                    { indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/remaining.ts' },
+                ],
+            }),
+            onCreateSelectedStash,
+        });
+
+        fireEvent.click(screen.getByTitle('src/selected.ts'));
+        fireEvent.click(screen.getByRole('button', { name: 'Stash selected changes' }));
+        fireEvent.change(screen.getByLabelText('Stash message'), { target: { value: 'selected submodule work' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Stash' }));
+
+        expect(onCreateSelectedStash).toHaveBeenCalledWith(expect.objectContaining({
+            submodulePath: 'modules/lib',
+            stashFilePaths: ['src/selected.ts'],
+        }), 'selected submodule work');
+    });
+
     it('shows a busy refresh control while submodule status is loading', () => {
         renderSubmodule({
             statusData: statusData(),
@@ -264,6 +287,7 @@ function renderSubmodule(input: {
     readonly onOpenContextMenu?: () => void;
     readonly onExplainSelection?: Parameters<typeof SubmoduleItem>[0]['onExplainSelection'];
     readonly onSelectionContextTarget?: Parameters<typeof SubmoduleItem>[0]['onSelectionContextTarget'];
+    readonly onCreateSelectedStash?: Parameters<typeof SubmoduleItem>[0]['onCreateSelectedStash'];
     readonly onOperationAction?: (conflictState: ConflictState.Merge | ConflictState.Rebase, action: OperationAction) => void;
 }): void {
     render(
@@ -292,6 +316,7 @@ function renderSubmodule(input: {
             onCommitComposerContextTarget={vi.fn()}
             onGenerateCommitMessage={vi.fn()}
             onCreateStash={vi.fn()}
+            onCreateSelectedStash={input.onCreateSelectedStash ?? vi.fn()}
             onToggleStash={vi.fn()}
             onStashAction={vi.fn()}
             onStashFileDiff={vi.fn()}
