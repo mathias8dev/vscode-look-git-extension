@@ -307,16 +307,21 @@
 }
 
 .visual-rebase-safety li {
-  padding-left: 1em;
+  display: grid;
+  grid-template-columns: 0.7em minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.4em;
+  min-width: 0;
   color: var(--vscode-descriptionForeground);
 }
 
 .visual-rebase-safety li::before {
-  display: inline-block;
-  width: 0.7em;
-  margin-left: -1em;
-  margin-right: 0.3em;
+  line-height: 1;
   content: "●";
+}
+
+.visual-rebase-safety li span {
+  min-width: 0;
 }
 
 .visual-rebase-safety li[data-state="ok"]::before {
@@ -384,6 +389,7 @@
 
 .visual-rebase-rows {
   display: grid;
+  grid-auto-rows: max-content;
   align-content: start;
   gap: 0.35em;
   min-height: 0;
@@ -569,7 +575,9 @@
 
 .visual-rebase-row-main strong,
 .visual-rebase-row-main span {
+  min-width: 0;
   overflow: hidden;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -740,15 +748,15 @@
   color: var(--vscode-editorWarning-foreground);
 }
 
-.visual-rebase-conflict-badge {
+.visual-rebase-conflict-heading .visual-rebase-conflict-badge {
   display: inline-grid;
   place-items: center;
   min-width: 2em;
   height: 2em;
   padding: 0 0.35em;
   border-radius: 999px;
-  color: var(--vscode-badge-foreground);
-  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground, #ffffff);
+  background: var(--vscode-badge-background, #4d4d4d);
 }
 
 .visual-rebase-conflict-list {
