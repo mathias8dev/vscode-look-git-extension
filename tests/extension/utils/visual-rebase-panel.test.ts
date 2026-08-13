@@ -316,12 +316,12 @@ describe('openVisualRebasePanel', () => {
         fixture.write('conflict.txt', 'resolved\n');
         panel?.webview.messageHandler?.({ type: 'visualRebase/markResolved', filePath: 'conflict.txt' });
 
-        await expect.poll(() => fixture.gitTrim(['status', '--short']), GIT_OPERATION_POLL).toBe('M  conflict.txt');
         await expect.poll(() => panel?.webview.messages, GIT_OPERATION_POLL).toContainEqual(expect.objectContaining({
             type: 'visualRebase/paused',
             message: 'All conflicts marked resolved. Continue the rebase.',
             reason: 'stopped',
         }));
+        expect(fixture.gitTrim(['status', '--short'])).toBe('M  conflict.txt');
 
         panel?.webview.messageHandler?.({ type: 'visualRebase/continue' });
 
@@ -336,12 +336,12 @@ describe('openVisualRebasePanel', () => {
 
         panel?.webview.messageHandler?.({ type: 'visualRebase/acceptIncoming', filePath: 'conflict.txt' });
 
-        await expect.poll(() => fixture.gitTrim(['status', '--short']), GIT_OPERATION_POLL).toBe('M  conflict.txt');
         await expect.poll(() => panel?.webview.messages, GIT_OPERATION_POLL).toContainEqual(expect.objectContaining({
             type: 'visualRebase/paused',
             message: 'Accepted conflict side. Continue the rebase.',
             reason: 'stopped',
         }));
+        expect(fixture.gitTrim(['status', '--short'])).toBe('M  conflict.txt');
 
         panel?.webview.messageHandler?.({ type: 'visualRebase/continue' });
 
@@ -356,12 +356,12 @@ describe('openVisualRebasePanel', () => {
 
         panel?.webview.messageHandler?.({ type: 'visualRebase/acceptYours', filePath: 'conflict.txt' });
 
-        await expect.poll(() => fixture.gitTrim(['status', '--short']), GIT_OPERATION_POLL).toBe('');
         await expect.poll(() => panel?.webview.messages, GIT_OPERATION_POLL).toContainEqual(expect.objectContaining({
             type: 'visualRebase/paused',
             message: 'Accepted conflict side. No changes remain; skip this commit to continue the rebase.',
             reason: 'stopped',
         }));
+        expect(fixture.gitTrim(['status', '--short'])).toBe('');
 
         panel?.webview.messageHandler?.({ type: 'visualRebase/skip' });
 
@@ -457,7 +457,6 @@ describe('openVisualRebasePanel', () => {
             ],
         });
 
-        await expect.poll(() => fixture.gitTrim(['status', '--short']), GIT_OPERATION_POLL).toContain('UU conflict.txt');
         await expect.poll(() => panel?.webview.messages, GIT_OPERATION_POLL).toContainEqual(expect.objectContaining({
             type: 'visualRebase/paused',
             reason: 'conflicts',
@@ -470,6 +469,7 @@ describe('openVisualRebasePanel', () => {
                 }),
             ]),
         }));
+        expect(fixture.gitTrim(['status', '--short'])).toContain('UU conflict.txt');
     });
 
     it('rewords a merge commit in a merge-aware visual rebase plan', async () => {
@@ -640,7 +640,6 @@ describe('openVisualRebasePanel', () => {
             ],
         });
 
-        await expect.poll(() => fixture.gitTrim(['status', '--short']), GIT_OPERATION_POLL).toContain('UU conflict.txt');
         await expect.poll(() => panel?.webview.messages, GIT_OPERATION_POLL).toContainEqual(expect.objectContaining({
             type: 'visualRebase/paused',
             reason: 'conflicts',
@@ -653,6 +652,7 @@ describe('openVisualRebasePanel', () => {
                 }),
             ]),
         }));
+        expect(fixture.gitTrim(['status', '--short'])).toContain('UU conflict.txt');
         return panel;
     }
 
