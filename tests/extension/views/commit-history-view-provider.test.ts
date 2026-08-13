@@ -13,7 +13,8 @@ import { RepositoryRegistry } from '@extension/repositories/repository-registry'
 import { CommitHistoryViewProvider } from '@extension/views/commit-history-view-provider';
 import { makeWebviewView, resetVscodeMock } from '@tests/helpers/provider-runtime';
 import { createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
-import { setQuickPickValue, window } from '@tests/mocks/vscode';
+import { commands, setQuickPickValue, window } from '@tests/mocks/vscode';
+import { commitContextActionIds } from '@tests/helpers/commit-context-commands';
 
 describe('CommitHistoryViewProvider', () => {
     const repos: TempGitRepo[] = [];
@@ -21,6 +22,67 @@ describe('CommitHistoryViewProvider', () => {
     afterEach(() => {
         while (repos.length) { repos.pop()!.cleanup(); }
         resetVscodeMock();
+    });
+
+    it('registers every history commit context action', () => {
+        const provider = providerFor(historyRuntime([]));
+
+        provider.registerNativeContextCommands();
+
+        for (const command of commitContextActionIds('lookGit.history')) {
+            expect(commands.registrations.has(command), command).toBe(true);
+        }
+    });
+
+    it('navigates from the context commit while multiple commits are selected', async () => {
+        const provider = providerFor(historyRuntime([]));
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        provider.registerNativeContextCommands();
+        view.messageHandler?.({
+            type: 'history/contextTarget',
+            target: {
+                kind: 'commit',
+                hash: 'clicked',
+                hashes: ['newest', 'clicked', 'oldest'],
+                childHash: 'child',
+                parentHash: 'parent',
+                canUndoCommit: false,
+            },
+        });
+
+        await vscode.commands.executeCommand('lookGit.history.goToChildCommit');
+        await vscode.commands.executeCommand('lookGit.history.goToParentCommit');
+
+        expect(view.messages).toEqual(expect.arrayContaining([
+            { type: 'history/selectCommit', hash: 'child' },
+            { type: 'history/selectCommit', hash: 'parent' },
+        ]));
+    });
+
+    it('executes history context commands against the complete commit selection', async () => {
+        const calls: RuntimeCall[] = [];
+        const provider = providerFor(historyRuntime(calls));
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        provider.registerNativeContextCommands();
+        view.messageHandler?.({
+            type: 'history/contextTarget',
+            target: {
+                kind: 'commit',
+                hash: 'clicked',
+                hashes: ['newest', 'clicked', 'oldest'],
+                canUndoCommit: false,
+                canCherryPick: true,
+            },
+        });
+
+        await vscode.commands.executeCommand('lookGit.history.cherryPick');
+
+        expect(calls
+            .filter((call) => call.operation === 'cherryPick')
+            .map((call) => isRecord(call.input) ? call.input.commit : undefined))
+            .toEqual(['newest', 'clicked', 'oldest']);
     });
 
     it('pulls the selected non-current history branch by updating that branch ref', async () => {
@@ -298,6 +360,8 @@ function historyRuntime(calls: RuntimeCall[]): GitRuntime {
                     return runtimeResult([]);
                 case 'getReachableCommitHashes':
                     return runtimeResult(new Set<string>());
+                case 'orderCommits':
+                    return runtimeResult(isRecord(input) && Array.isArray(input.hashes) ? input.hashes : []);
                 case 'getStatus':
                     return runtimeResult(emptyStatus());
                 case 'getUpstreamBranch':
@@ -309,6 +373,7 @@ function historyRuntime(calls: RuntimeCall[]): GitRuntime {
                 case 'fetchAll':
                 case 'updateRef':
                 case 'pushBranch':
+                case 'cherryPick':
                     return runtimeResult(undefined);
                 default:
                     throw new Error(`Unexpected operation: ${operation}`);
