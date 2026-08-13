@@ -1,13 +1,16 @@
 import type { Preview } from '@storybook/react-vite';
+import { WebviewTooltipProvider } from '../src/webview/shared/webview-tooltip-provider';
 import '../src/webview/styles.css';
 import '../src/webview/storybook.css';
 
 const preview = {
     decorators: [
         (Story) => (
-            <div className="storybook-vscode-shell">
-                <Story />
-            </div>
+            <WebviewTooltipProvider>
+                <div className="storybook-vscode-shell">
+                    <Story />
+                </div>
+            </WebviewTooltipProvider>
         ),
     ],
     parameters: {
