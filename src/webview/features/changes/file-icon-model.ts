@@ -4,7 +4,7 @@ import { iconKindForPath as iconKindForSharedPath, type WebviewFileIconKind } fr
 export type FileIconKind = WebviewFileIconKind;
 
 export function iconKindForStatusEntry(entry: StatusEntry): FileIconKind {
-    return entry.isSubmodule ? 'submodule' : iconKindForPath(entry.filePath);
+    return entry.isSubmodule ? 'file-type-git' : iconKindForPath(entry.filePath);
 }
 
 export function iconKindForStashFile(file: StashFileEntry): FileIconKind {

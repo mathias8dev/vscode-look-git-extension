@@ -4,7 +4,5 @@ import { iconKindForPath, type WebviewFileIconKind } from '@webview/shared/file-
 export type CommitFileIconKind = WebviewFileIconKind;
 
 export function iconKindForCommitFile(file: CommitFileChange): CommitFileIconKind {
-    if (file.isSubmodule) { return 'submodule'; }
-    const kind = iconKindForPath(file.filePath);
-    return kind === 'submodule' ? 'file' : kind;
+    return file.isSubmodule ? 'file-type-git' : iconKindForPath(file.filePath);
 }

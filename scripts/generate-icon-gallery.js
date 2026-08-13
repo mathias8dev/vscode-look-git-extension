@@ -1,11 +1,13 @@
 const fs = require('fs');
 const path = require('path');
+const ts = require('typescript');
 
 const repoRoot = path.resolve(__dirname, '..');
 const sourceRoot = path.join(repoRoot, 'src', 'webview');
 const outputPath = path.resolve(repoRoot, process.argv[2] ?? path.join('artifacts', 'icon-gallery.html'));
-const fileIconAssetsPath = path.join(sourceRoot, 'shared', 'fileIconAssets.ts');
-const fileIconModelPath = path.join(sourceRoot, 'shared', 'fileIconModel.ts');
+const vscodeIconsPath = path.join(repoRoot, 'node_modules', '@iconify', 'icons-vscode-icons');
+const vscodeIconCatalogPath = path.join(sourceRoot, 'shared', 'vscode-icon-catalog.generated.ts');
+const fileIconModelPath = path.join(sourceRoot, 'shared', 'file-icon-model.ts');
 const codiconCssPath = path.join(repoRoot, 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.css');
 const codiconFontPath = path.join(repoRoot, 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.ttf');
 
@@ -19,7 +21,8 @@ const codiconCssIconPattern = /\.codicon-([a-z0-9]+(?:-[a-z0-9]+)*):before\s*\{/
 function main() {
     const files = sourceFiles(sourceRoot);
     const fileTypeIcons = collectFileTypeIcons();
-    const iconifyIcons = collectIconifyIcons(files);
+    const catalogModules = new Set(fileTypeIcons.map((entry) => entry.moduleName));
+    const iconifyIcons = collectIconifyIcons(files).filter((entry) => !catalogModules.has(entry.moduleName));
     const codiconCss = readCodiconCss();
     const codicons = collectCodicons(files, availableCodicons(codiconCss));
 
@@ -48,115 +51,86 @@ function sourceFiles(root) {
 }
 
 function collectFileTypeIcons() {
-    const source = fs.readFileSync(fileIconAssetsPath, 'utf8');
-    const importByAlias = iconifyImports(source);
-    const matchesByKind = collectFileTypeMatches();
-    const entries = [];
-    let currentKinds = [];
-
-    for (const line of source.split(/\r?\n/)) {
-        const caseMatch = line.match(/case '([^']+)':/);
-        if (caseMatch) {
-            currentKinds.push(caseMatch[1]);
-            continue;
-        }
-
-        const returnMatch = line.match(/return\s+([A-Za-z_$][\w$]*);/);
-        if (!returnMatch || currentKinds.length === 0) {
-            continue;
-        }
-
-        const alias = returnMatch[1];
-        const moduleName = importByAlias.get(alias);
-        if (!moduleName) {
-            throw new Error(`Unable to resolve icon import alias ${alias}.`);
-        }
-
-        for (const kind of currentKinds) {
-            entries.push({
+    const matchesByIcon = collectFileTypeMatches();
+    return fs.readdirSync(vscodeIconsPath)
+        .filter((name) => name.endsWith('.js'))
+        .sort()
+        .map((fileName) => {
+            const kind = fileName.slice(0, -3);
+            const moduleName = `@iconify/icons-vscode-icons/${kind}`;
+            return {
                 kind,
                 moduleName,
-                alias,
+                alias: kind,
                 icon: loadIconifyIcon(moduleName),
-                matches: [...(matchesByKind.get(kind) ?? [])].sort((a, b) => a.localeCompare(b)),
-                sources: [sourceEntry(fileIconAssetsPath, alias), sourceEntry(fileIconModelPath, kind)],
-            });
-        }
-        currentKinds = [];
-    }
-
-    return entries.sort((a, b) => a.kind.localeCompare(b.kind));
+                matches: [...(matchesByIcon.get(kind) ?? [])].sort((left, right) => left.localeCompare(right)),
+                sources: [sourceEntry(path.join(vscodeIconsPath, fileName), kind)],
+            };
+        });
 }
 
 function collectFileTypeMatches() {
-    const source = fs.readFileSync(fileIconModelPath, 'utf8');
-    const matchesByKind = new Map();
-    const lines = source.split(/\r?\n/);
-    let inExtensionSwitch = false;
-    let currentExtensions = [];
-
-    for (const line of lines) {
-        const exactReturnMatch = line.match(/return '([^']+)';/);
-        const exactNameMatches = [...line.matchAll(/name === '([^']+)'/g)].map((match) => match[1]);
-        if (exactReturnMatch && exactNameMatches.length > 0) {
-            for (const name of exactNameMatches) {
-                addKindMatch(matchesByKind, exactReturnMatch[1], name);
-            }
-        }
-
-        const startsWithMatch = line.match(/name\.startsWith\('([^']+)'\).*return '([^']+)';/);
-        if (startsWithMatch) {
-            addKindMatch(matchesByKind, startsWithMatch[2], `${startsWithMatch[1]}*`);
-        }
-
-        if (line.includes("name.includes('docker')") && line.includes("return 'docker'")) {
-            addKindMatch(matchesByKind, 'docker', '*docker*.yml');
-            addKindMatch(matchesByKind, 'docker', '*docker*.yaml');
-        }
-
-        if (line.includes('if (isConfigFile(name))')) {
-            for (const pattern of ['*config.js', '*config.ts', '*config.json', '*rc', '*.config.*', '.*']) {
-                addKindMatch(matchesByKind, 'config', pattern);
-            }
-        }
-
-        if (line.includes('switch (extension)')) {
-            inExtensionSwitch = true;
-            continue;
-        }
-
-        if (!inExtensionSwitch) {
-            continue;
-        }
-
-        const caseMatch = line.match(/case '([^']+)':/);
-        if (caseMatch) {
-            currentExtensions.push(`.${caseMatch[1]}`);
-            continue;
-        }
-
-        const returnMatch = line.match(/return '([^']+)';/);
-        if (returnMatch && currentExtensions.length > 0) {
-            for (const extension of currentExtensions) {
-                addKindMatch(matchesByKind, returnMatch[1], extension);
-            }
-            currentExtensions = [];
-            continue;
-        }
-
-        if (line.includes('default:')) {
-            addKindMatch(matchesByKind, 'file', 'fallback');
-            inExtensionSwitch = false;
-        }
+    const extensionIcons = new Map([
+        ...stringRecord(fileIconModelPath, 'fallbackExtensionIcons'),
+        ...stringRecord(vscodeIconCatalogPath, 'languageExtensionIcons'),
+        ...stringRecord(vscodeIconCatalogPath, 'fileExtensionIcons'),
+        ...stringRecord(fileIconModelPath, 'extensionIconOverrides'),
+    ]);
+    const matchesByIcon = new Map();
+    for (const [extension, icon] of extensionIcons) {
+        const matches = matchesByIcon.get(icon) ?? new Set();
+        matches.add(`.${extension}`);
+        matchesByIcon.set(icon, matches);
     }
-
-    return matchesByKind;
+    return matchesByIcon;
 }
 
-function addKindMatch(matchesByKind, kind, value) {
-    const matches = matchesByKind.get(kind) ?? new Set();
-    matches.add(value);
-    matchesByKind.set(kind, matches);
+function stringRecord(filePath, variableName) {
+    const source = ts.createSourceFile(
+        filePath,
+        fs.readFileSync(filePath, 'utf8'),
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TS,
+    );
+    let declaration;
+    source.forEachChild(function visit(node) {
+        if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === variableName) {
+            declaration = node;
+            return;
+        }
+        node.forEachChild(visit);
+    });
+    const initializer = unwrapExpression(declaration?.initializer);
+    if (!initializer || !ts.isObjectLiteralExpression(initializer)) {
+        throw new Error(`Unable to read ${variableName} from ${path.relative(repoRoot, filePath)}.`);
+    }
+
+    const entries = [];
+    for (const property of initializer.properties) {
+        if (!ts.isPropertyAssignment(property)) { continue; }
+        const name = propertyName(property.name);
+        const value = unwrapExpression(property.initializer);
+        if (name !== undefined && value && ts.isStringLiteralLike(value)) {
+            entries.push([name, value.text]);
+        }
+    }
+    return entries;
+}
+
+function unwrapExpression(expression) {
+    let current = expression;
+    while (current && (ts.isAsExpression(current) || ts.isSatisfiesExpression(current) || ts.isParenthesizedExpression(current))) {
+        current = current.expression;
+    }
+    return current;
+}
+
+function propertyName(name) {
+    if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
+        return name.text;
+    }
+    return undefined;
 }
 
 function collectIconifyIcons(files) {
@@ -507,4 +481,8 @@ function escapeHtml(value) {
         .replaceAll('"', '&quot;');
 }
 
-main();
+if (require.main === module) {
+    main();
+}
+
+module.exports = { collectFileTypeIcons };

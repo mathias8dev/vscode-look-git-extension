@@ -1,181 +1,93 @@
-export type WebviewFileIconKind =
-    | 'typescript'
-    | 'javascript'
-    | 'json'
-    | 'markdown'
-    | 'css'
-    | 'html'
-    | 'image'
-    | 'binary'
-    | 'dart'
-    | 'flutter'
-    | 'python'
-    | 'go'
-    | 'rust'
-    | 'java'
-    | 'kotlin'
-    | 'swift'
-    | 'php'
-    | 'ruby'
-    | 'csharp'
-    | 'c'
-    | 'cpp'
-    | 'yaml'
-    | 'xml'
-    | 'vue'
-    | 'svelte'
-    | 'astro'
-    | 'shell'
-    | 'powershell'
-    | 'docker'
-    | 'toml'
-    | 'sql'
-    | 'graphql'
-    | 'prisma'
-    | 'tailwind'
-    | 'xcode'
-    | 'plist'
-    | 'gradle'
-    | 'maven'
-    | 'config'
-    | 'properties'
-    | 'package'
-    | 'git'
-    | 'submodule'
-    | 'file';
+import {
+    defaultFileIcon,
+    fileExtensionIcons,
+    fileNameIcons,
+    languageFileNameIcons,
+    languageFilePatterns,
+    languageExtensionIcons,
+    type VscodeIconName,
+} from '@webview/shared/vscode-icon-catalog.generated';
+
+export type WebviewFileIconKind = VscodeIconName;
+
+const fallbackExtensionIcons: Readonly<Record<string, VscodeIconName>> = {
+    exs: 'file-type-elixir',
+    graphql: 'file-type-graphql',
+    hrl: 'file-type-erlang',
+    kts: 'file-type-kotlin',
+    pbxproj: 'file-type-xcode',
+    sc: 'file-type-scala',
+};
+
+const extensionIconOverrides: Readonly<Record<string, VscodeIconName>> = {
+    cjs: 'file-type-js-official',
+    cts: 'file-type-typescript-official',
+    'd.cts': 'file-type-typescriptdef-official',
+    'd.mts': 'file-type-typescriptdef-official',
+    'd.ts': 'file-type-typescriptdef-official',
+    js: 'file-type-js-official',
+    mjs: 'file-type-js-official',
+    mts: 'file-type-typescript-official',
+    ts: 'file-type-typescript-official',
+};
 
 export function iconKindForPath(filePath: string): WebviewFileIconKind {
-    const name = fileName(filePath).toLowerCase();
-    const extension = name.includes('.') ? name.split('.').pop() ?? '' : '';
+    const name = fileName(filePath);
+    const normalizedName = name.toLowerCase();
+    const exact = fileNameIcons[name] ?? fileNameIcons[normalizedName] ?? languageFileNameIcons[normalizedName];
+    if (exact) { return exact; }
 
-    if (name === 'package.json') { return 'package'; }
-    if (name === 'pom.xml') { return 'maven'; }
-    if (name === 'fastfile') { return 'ruby'; }
-    if (name === 'bin') { return 'binary'; }
-    if (name.startsWith('.git') || name === 'gitignore' || name === 'gitattributes') { return 'git'; }
-    if (name === 'pubspec.yaml' || name === 'pubspec.yml' || name === 'pubspec.lock') { return 'flutter'; }
-    if (name === 'dockerfile' || name.startsWith('dockerfile.') || name === 'docker-compose.yml' || name === 'docker-compose.yaml' || (name.includes('docker') && (name.endsWith('.yml') || name.endsWith('.yaml')))) { return 'docker'; }
-    if (name.startsWith('tailwind.config.')) { return 'tailwind'; }
-    if (name === 'rust-toolchain' || name === 'rust-toolchain.toml') { return 'rust'; }
-    if (isConfigFile(name)) { return 'config'; }
+    const normalizedPath = filePath.replaceAll('\\', '/').toLowerCase();
+    const pattern = languageFilePatterns.find((entry) => matchesWildcard(
+        entry.pattern.includes('/') ? normalizedPath : normalizedName,
+        entry.pattern,
+    ));
+    if (pattern) { return pattern.icon; }
+    if (isGenericConfigFile(normalizedName)) { return 'file-type-config'; }
 
-    switch (extension) {
-        case 'ts':
-        case 'tsx':
-            return 'typescript';
-        case 'js':
-        case 'jsx':
-        case 'mjs':
-        case 'cjs':
-            return 'javascript';
-        case 'json':
-        case 'jsonc':
-            return 'json';
-        case 'md':
-        case 'mdx':
-            return 'markdown';
-        case 'css':
-        case 'scss':
-        case 'sass':
-        case 'less':
-            return 'css';
-        case 'html':
-        case 'htm':
-            return 'html';
-        case 'bin':
-            return 'binary';
-        case 'properties':
-            return 'properties';
-        case 'dart':
-            return 'dart';
-        case 'py':
-        case 'pyw':
-            return 'python';
-        case 'go':
-            return 'go';
-        case 'rs':
-            return 'rust';
-        case 'java':
-            return 'java';
-        case 'kt':
-        case 'kts':
-            return 'kotlin';
-        case 'swift':
-            return 'swift';
-        case 'php':
-            return 'php';
-        case 'rb':
-            return 'ruby';
-        case 'cs':
-            return 'csharp';
-        case 'c':
-        case 'h':
-            return 'c';
-        case 'cc':
-        case 'cpp':
-        case 'cxx':
-        case 'hh':
-        case 'hpp':
-        case 'hxx':
-            return 'cpp';
-        case 'yaml':
-        case 'yml':
-            return 'yaml';
-        case 'xml':
-            return 'xml';
-        case 'plist':
-            return 'plist';
-        case 'pbxproj':
-            return 'xcode';
-        case 'gradle':
-            return 'gradle';
-        case 'vue':
-            return 'vue';
-        case 'svelte':
-            return 'svelte';
-        case 'astro':
-            return 'astro';
-        case 'sh':
-        case 'bash':
-        case 'zsh':
-        case 'fish':
-            return 'shell';
-        case 'ps1':
-        case 'psm1':
-        case 'psd1':
-            return 'powershell';
-        case 'toml':
-            return 'toml';
-        case 'sql':
-        case 'sqlite':
-        case 'sqlite3':
-            return 'sql';
-        case 'graphql':
-        case 'gql':
-            return 'graphql';
-        case 'prisma':
-            return 'prisma';
-        case 'png':
-        case 'jpg':
-        case 'jpeg':
-        case 'gif':
-        case 'webp':
-        case 'svg':
-            return 'image';
-        default:
-            return 'file';
+    for (const suffix of suffixesForName(normalizedName)) {
+        const icon = extensionIconOverrides[suffix]
+            ?? fileExtensionIcons[suffix]
+            ?? languageExtensionIcons[suffix]
+            ?? fallbackExtensionIcons[suffix];
+        if (icon) { return icon; }
     }
+    return defaultFileIcon;
+}
+
+function matchesWildcard(value: string, pattern: string): boolean {
+    const parts = pattern.split('*');
+    let offset = 0;
+    if (!pattern.startsWith('*') && !value.startsWith(parts[0] ?? '')) { return false; }
+    for (const part of parts) {
+        if (!part) { continue; }
+        const index = value.indexOf(part, offset);
+        if (index < 0) { return false; }
+        offset = index + part.length;
+    }
+    const last = parts.at(-1) ?? '';
+    return pattern.endsWith('*') || value.endsWith(last);
 }
 
 function fileName(filePath: string): string {
-    return filePath.split('/').pop() || filePath;
+    return filePath.split(/[\\/]/).pop() || filePath;
 }
 
-function isConfigFile(name: string): boolean {
+function isGenericConfigFile(name: string): boolean {
     return name.endsWith('config.js')
         || name.endsWith('config.ts')
         || name.endsWith('config.json')
         || name.endsWith('rc')
         || name.includes('.config.')
         || name.startsWith('.');
+}
+
+function suffixesForName(name: string): readonly string[] {
+    const parts = name.split('.');
+    const suffixes: string[] = [];
+    for (let index = 0; index < parts.length; index += 1) {
+        const suffix = parts.slice(index).join('.');
+        if (suffix) { suffixes.push(suffix); }
+    }
+    return suffixes;
 }
