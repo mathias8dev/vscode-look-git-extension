@@ -112,5 +112,5 @@ async function generateMessage(
 }
 
 function movePanelToFloatingWindow(panel: vscode.WebviewPanel): void {
-    moveWebviewPanelToFloatingWindow(panel, 'Could not open commit message editor in a separate window. Continuing in an editor tab.');
+    void moveWebviewPanelToFloatingWindow(panel, 'Could not open commit message editor in a separate window. Continuing in an editor tab.');
 }

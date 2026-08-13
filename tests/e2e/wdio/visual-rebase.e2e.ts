@@ -32,10 +32,11 @@ describe('visual rebase e2e', () => {
         await openWebviewBySelectorWhenReady('main.visual-rebase');
         try {
             await waitForVisualRebaseReady();
+            await waitForVisualRebaseFile('src/wdio-visual-rebase.ts');
             await pickReplayOnto('new-base');
             await waitForVisualRebaseText('new-base');
             await clickVisualRebaseButton('Start Rebase');
-            await clickVisualRebaseButton('Confirm Start');
+            await confirmVisualRebaseStartIfNeeded();
         } finally {
             await closeWebview();
             await browser.switchToWindow(mainWindow);
@@ -192,6 +193,13 @@ async function waitForVisualRebaseReady(): Promise<void> {
     await pollUntil(async () => await browser.execute(() => Boolean(document.querySelector('main.visual-rebase'))), 'Expected Visual Rebase webview to be ready.');
 }
 
+async function waitForVisualRebaseFile(filePath: string): Promise<void> {
+    await pollUntil(async () => await browser.execute((expectedPath: string) =>
+        Array.from(document.querySelectorAll('.commit-file-leaf'))
+            .some((row) => row.getAttribute('title') === expectedPath),
+    filePath), `Expected Visual Rebase inspector to contain "${filePath}".`);
+}
+
 async function pickReplayOnto(refName: string): Promise<void> {
     await clickVisualRebaseButton('Pick Replay onto');
     await pollUntil(async () => await browser.execute((expectedRef: string) =>
@@ -218,6 +226,19 @@ async function clickVisualRebaseButton(label: string): Promise<void> {
         button.click();
         return true;
     }, label), `Expected Visual Rebase button "${label}" to be enabled.`);
+}
+
+async function confirmVisualRebaseStartIfNeeded(): Promise<void> {
+    await pollUntil(async () => await browser.execute(() => {
+        const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>('button'))
+            .find((candidate) => candidate.textContent?.trim() === 'Confirm Start');
+        if (confirm && !confirm.disabled) {
+            confirm.click();
+            return true;
+        }
+        const text = document.body.textContent ?? '';
+        return text.includes('Rewriting') || text.includes('Rebasing') || text.includes('Rebase Completed');
+    }), 'Expected Visual Rebase to request confirmation or start the rebase.');
 }
 
 async function waitForVisualRebaseText(text: string): Promise<void> {

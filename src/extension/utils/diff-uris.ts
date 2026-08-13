@@ -1,14 +1,17 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import type { GitRepository } from '@application/ports/git-topology';
 import { gitBlobUri } from '@extension/utils/git-blob-documents';
+import { openCommitGitlinkDiff } from '@extension/utils/gitlink-diff';
 
-type CommitDiffFile = {
+export interface CommitDiffFile {
     readonly commitHash: string;
     readonly filePath: string;
     readonly origPath?: string;
     readonly parentHash?: string;
     readonly status: string;
-};
+    readonly isSubmodule?: boolean;
+}
 
 type DiffUris = {
     readonly left: vscode.Uri;
@@ -16,6 +19,20 @@ type DiffUris = {
 };
 
 export type BlobContentReader = (ref: string, filePath: string) => Promise<string>;
+
+export async function openCommitFileDiff(repo: GitRepository, file: CommitDiffFile, preview?: boolean): Promise<void> {
+    if (file.isSubmodule) {
+        await openCommitGitlinkDiff(repo, file);
+        return;
+    }
+    const { left, right } = await commitFileTempDiffUris(repo, repo.cwd, file);
+    const args = [left, right, `${path.basename(file.filePath)} (${file.commitHash.substring(0, 7)})`] as const;
+    if (preview === undefined) {
+        await vscode.commands.executeCommand('vscode.diff', ...args);
+    } else {
+        await vscode.commands.executeCommand('vscode.diff', ...args, { preview });
+    }
+}
 
 export async function commitFileTempDiffUris(repo: GitRepository, cwd: string, file: CommitDiffFile): Promise<DiffUris> {
     const parentRef = file.parentHash ?? `${file.commitHash}~1`;

@@ -1,8 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { CommitFileTree } from '@webview/features/graph/commit-file-tree';
-import { FileTreeNodeView } from '@webview/features/graph/file-tree-node';
-import { buildFileTree } from '@webview/features/graph/commit-file-tree-model';
+import { CommitFileTree } from '@webview/shared/commit-file-tree';
+import { FileTreeNodeView } from '@webview/shared/commit-file-tree-node';
+import { buildFileTree } from '@webview/shared/commit-file-tree-model';
 import { ViewMode } from '@webview/shared/view-mode';
 import { expectItem } from '@tests/helpers/assertions';
 

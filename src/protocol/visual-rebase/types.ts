@@ -1,3 +1,5 @@
+import type { CommitFileChange } from '@protocol/shared/commit';
+
 export type VisualRebaseAction = 'pick' | 'reword' | 'edit' | 'squash' | 'fixup' | 'drop' | 'break' | 'merge';
 
 export interface VisualRebaseCommit {
@@ -41,4 +43,9 @@ export interface VisualRebaseConflictFile {
     readonly workTreeStatus: string;
     readonly state: VisualRebaseConflictFileState;
     readonly origPath?: string;
+}
+
+export interface VisualRebaseCommitDetails {
+    readonly hash: string;
+    readonly files: readonly CommitFileChange[];
 }

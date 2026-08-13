@@ -7,8 +7,8 @@ import { SearchInput } from '@webview/shared/search-input';
 import { ViewModeToggle } from '@webview/shared/view-mode-toggle';
 import { ViewMode } from '@webview/shared/view-mode';
 import { readViewMode, writeViewMode } from '@webview/shared/view-mode-storage';
-import { CommitFileTree } from '@webview/features/graph/commit-file-tree';
-import { filterCommitDetailFiles } from '@webview/features/graph/commit-details-model';
+import { CommitFileTree } from '@webview/shared/commit-file-tree';
+import { filterCommitDetailFiles } from '@webview/shared/commit-file-filter';
 import type { CommitDetails } from '@webview/features/graph/graph-state';
 
 const COMMIT_MESSAGE_PANEL_MIN = 72;

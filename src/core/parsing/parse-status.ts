@@ -84,7 +84,7 @@ export function summarizeStatusEntries(status: {
 /** Detect merge/rebase state from a list of files in the .git directory. */
 export function detectConflictStateFromFiles(gitDirFiles: readonly string[]): ConflictState {
     const files = new Set(gitDirFiles);
-    if (files.has('MERGE_HEAD')) { return 'merge'; }
     if (files.has('rebase-merge') || files.has('rebase-apply')) { return 'rebase'; }
+    if (files.has('MERGE_HEAD')) { return 'merge'; }
     return 'none';
 }

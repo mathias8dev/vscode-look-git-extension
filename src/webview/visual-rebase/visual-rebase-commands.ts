@@ -1,5 +1,6 @@
+import type { CommitFileChange } from '@protocol/shared/commit';
 import type { VisualRebasePlanEntry } from '@protocol/visual-rebase/types';
-import type { VisualRebaseAbortMessage, VisualRebaseAcceptIncomingMessage, VisualRebaseAcceptYoursMessage, VisualRebaseCancelMessage, VisualRebaseContinueMessage, VisualRebaseMarkResolvedMessage, VisualRebaseOpenFileMessage, VisualRebaseOpenMergeEditorMessage, VisualRebasePreviewRequest, VisualRebaseReadyMessage, VisualRebaseSkipMessage, VisualRebaseStartMessage } from '@protocol/visual-rebase/messages';
+import type { VisualRebaseAbortMessage, VisualRebaseAcceptIncomingMessage, VisualRebaseAcceptYoursMessage, VisualRebaseCancelMessage, VisualRebaseCommitDetailsRequest, VisualRebaseContinueMessage, VisualRebaseMarkResolvedMessage, VisualRebaseOpenCommitDiffMessage, VisualRebaseOpenFileMessage, VisualRebaseOpenMergeEditorMessage, VisualRebasePreviewRequest, VisualRebaseReadyMessage, VisualRebaseSkipMessage, VisualRebaseStartMessage } from '@protocol/visual-rebase/messages';
 
 export function messageForVisualRebaseReady(): VisualRebaseReadyMessage {
     return { type: 'visualRebase/ready' };
@@ -19,6 +20,22 @@ export function messageForVisualRebasePreview(
     replayOnto: string,
 ): VisualRebasePreviewRequest {
     return { type: 'visualRebase/previewRequest' as const, requestId, rewriteAfter, replayOnto };
+}
+
+export function messageForVisualRebaseCommitDetails(requestId: string, hash: string): VisualRebaseCommitDetailsRequest {
+    return { type: 'visualRebase/commitDetailsRequest', requestId, hash };
+}
+
+export function messageForVisualRebaseOpenCommitDiff(commitHash: string, file: CommitFileChange): VisualRebaseOpenCommitDiffMessage {
+    return {
+        type: 'visualRebase/openCommitDiff',
+        commitHash,
+        filePath: file.filePath,
+        status: file.status,
+        ...(file.origPath ? { origPath: file.origPath } : {}),
+        ...(file.parentHash ? { parentHash: file.parentHash } : {}),
+        ...(file.isSubmodule ? { isSubmodule: true } : {}),
+    };
 }
 
 export function messageForVisualRebaseCancel(): VisualRebaseCancelMessage {

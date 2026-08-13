@@ -2,6 +2,7 @@ import type { VisualRebaseConflictFile } from '@protocol/visual-rebase/types';
 import type { ReactNode } from 'react';
 import { SharedChangeRow, type SharedChangeRowItem } from '@webview/shared/change-row';
 import { ChangeRowAction, type ChangeActionDescriptor } from '@webview/shared/change-row-actions';
+import { Codicon } from '@webview/shared/codicon';
 
 interface VisualRebaseConflictListProps {
     readonly conflictFiles: readonly VisualRebaseConflictFile[];
@@ -29,8 +30,11 @@ export function VisualRebaseConflictList({
     return (
         <section className="visual-rebase-conflicts" aria-label="Rebase conflict actions">
             <div className="visual-rebase-conflict-heading">
+                <span className="visual-rebase-conflict-heading-icon" aria-hidden="true">
+                    <Codicon name="warning" />
+                </span>
                 <div>
-                    <strong>Resolve conflicts</strong>
+                    <strong>Resolve conflicts before continuing</strong>
                     <span>{statusText(conflictCount, mergedItems.length)}</span>
                 </div>
                 <span className="visual-rebase-conflict-badge">{totalCount}</span>

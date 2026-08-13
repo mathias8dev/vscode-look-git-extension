@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import type { CommitFileChange } from '@protocol/graph/types';
+import type { CommitFileChange } from '@protocol/shared/commit';
 import { ViewMode } from '@webview/shared/view-mode';
-import { FileTreeNodeView } from '@webview/features/graph/file-tree-node';
-import { buildFileTree, type FileTreeNode } from '@webview/features/graph/commit-file-tree-model';
+import { FileTreeNodeView } from '@webview/shared/commit-file-tree-node';
+import { buildFileTree, type FileTreeNode } from '@webview/shared/commit-file-tree-model';
 
 interface CommitFileTreeProps {
     readonly files: readonly CommitFileChange[];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { messageForVisualRebaseAbort, messageForVisualRebaseAcceptIncoming, messageForVisualRebaseAcceptYours, messageForVisualRebaseCancel, messageForVisualRebaseContinue, messageForVisualRebaseMarkResolved, messageForVisualRebaseOpenFile, messageForVisualRebaseOpenMergeEditor, messageForVisualRebasePreview, messageForVisualRebaseReady, messageForVisualRebaseSkip, messageForVisualRebaseStart } from '@webview/visual-rebase/visual-rebase-commands';
+import { messageForVisualRebaseAbort, messageForVisualRebaseAcceptIncoming, messageForVisualRebaseAcceptYours, messageForVisualRebaseCancel, messageForVisualRebaseCommitDetails, messageForVisualRebaseContinue, messageForVisualRebaseMarkResolved, messageForVisualRebaseOpenCommitDiff, messageForVisualRebaseOpenFile, messageForVisualRebaseOpenMergeEditor, messageForVisualRebasePreview, messageForVisualRebaseReady, messageForVisualRebaseSkip, messageForVisualRebaseStart } from '@webview/visual-rebase/visual-rebase-commands';
 
 describe('visual rebase commands', () => {
     it('serializes ready cancel and start messages', () => {
@@ -41,6 +41,26 @@ describe('visual rebase commands', () => {
             requestId: 'req-1',
             rewriteAfter: 'main',
             replayOnto: 'origin/main',
+        });
+        expect(messageForVisualRebaseCommitDetails('details-1', 'abc123456789')).toEqual({
+            type: 'visualRebase/commitDetailsRequest',
+            requestId: 'details-1',
+            hash: 'abc123456789',
+        });
+        expect(messageForVisualRebaseOpenCommitDiff('abc123456789', {
+            status: 'R',
+            filePath: 'src/new.ts',
+            origPath: 'src/old.ts',
+            parentHash: 'parent123',
+            isSubmodule: true,
+        })).toEqual({
+            type: 'visualRebase/openCommitDiff',
+            commitHash: 'abc123456789',
+            status: 'R',
+            filePath: 'src/new.ts',
+            origPath: 'src/old.ts',
+            parentHash: 'parent123',
+            isSubmodule: true,
         });
     });
 });
