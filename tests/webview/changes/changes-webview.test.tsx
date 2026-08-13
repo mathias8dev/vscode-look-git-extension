@@ -145,9 +145,16 @@ describe('ChangesWebview', () => {
         sendStatusDataWithStagedChange();
 
         const input = await screen.findByPlaceholderText('Message (Ctrl+Enter to commit on "experimental")');
-        expect(screen.getByRole('button', { name: 'Commit' })).toBeInTheDocument();
-        fireEvent.change(input, { target: { value: 'feat(changes): native commit menu' } });
+        const commitButton = screen.getByRole('button', { name: 'Commit' });
         const moreButton = screen.getByRole('button', { name: 'More commit options' });
+        expect(commitButton).toBeDisabled();
+        expect(moreButton).toBeDisabled();
+        expect(moreButton).not.toHaveAttribute('data-vscode-context');
+
+        fireEvent.change(input, { target: { value: 'feat(changes): native commit menu' } });
+
+        expect(commitButton).toBeEnabled();
+        expect(moreButton).toBeEnabled();
         expect(moreButton.getAttribute('data-vscode-context')).toContain('changesCommitComposer');
         fireEvent.click(moreButton);
 
