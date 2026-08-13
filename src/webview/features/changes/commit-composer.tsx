@@ -85,6 +85,7 @@ export function CommitComposer({
     };
 
     const handleNativeMenuContext = () => {
+        if (!canCommit) { return; }
         if (ignoreSyntheticContextMenuRef.current) {
             ignoreSyntheticContextMenuRef.current = false;
             return;
@@ -93,6 +94,7 @@ export function CommitComposer({
     };
 
     const handleNativeMenuClick = (event: MouseEvent<HTMLButtonElement>) => {
+        if (!canCommit) { return; }
         rememberNativeMenuTarget();
         openNativeCommitMenu(event, ignoreSyntheticContextMenuRef);
     };
@@ -154,7 +156,8 @@ export function CommitComposer({
                         title="More commit options"
                         aria-label="More commit options"
                         aria-haspopup="menu"
-                        data-vscode-context={changesCommitComposerContext()}
+                        disabled={!canCommit}
+                        data-vscode-context={canCommit ? changesCommitComposerContext() : undefined}
                         onContextMenu={handleNativeMenuContext}
                         onClick={handleNativeMenuClick}
                     >
