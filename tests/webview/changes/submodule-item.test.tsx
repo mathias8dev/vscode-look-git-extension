@@ -217,8 +217,10 @@ describe('SubmoduleItem', () => {
 
         const app = screen.getByTitle('src/app.ts');
         const staged = screen.getByTitle('src/staged.ts');
+        expect(screen.queryByRole('checkbox', { name: /Select change/ })).not.toBeInTheDocument();
         fireEvent.click(app, { ctrlKey: true });
-        fireEvent.click(staged, { ctrlKey: true });
+        expect(screen.getByRole('checkbox', { name: 'Select change src/app.ts' })).toBeChecked();
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Select change src/staged.ts' }));
 
         expect(staged).toHaveAttribute('aria-selected', 'true');
         expect(staged.getAttribute('data-vscode-context')).toContain('changesSelection');

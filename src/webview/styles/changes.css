@@ -734,6 +734,10 @@
     outline-offset: -1px;
 }
 
+.change-row-selection-checkbox {
+    flex: 0 0 1em;
+}
+
 .folder-row {
     color: var(--vscode-descriptionForeground, #9d9d9d);
     cursor: pointer;

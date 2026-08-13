@@ -250,6 +250,7 @@ export function ChangesApp({
                         sortMode={state.sortMode}
                         collapsed={state.collapsedSectionIds.includes(section.id)}
                         selectedItemIds={selectedItemIds}
+                        showSelectionCheckboxes={selectedItemIds.size > 0}
                         contextForItem={contextForItem}
                         onToggleCollapsed={() => onSectionToggle(section.id)}
                         onSelectItem={(item, mode) => onSelectItem(item, mode, visibleItemIds)}

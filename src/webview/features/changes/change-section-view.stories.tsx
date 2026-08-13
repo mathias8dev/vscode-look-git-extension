@@ -25,6 +25,7 @@ const meta = {
         sortMode: ChangesSortMode.Path,
         collapsed: false,
         selectedItemIds: new Set(),
+        showSelectionCheckboxes: false,
         contextForItem: () => '{"webviewSection":"changes"}',
         onToggleCollapsed: noop,
         onSelectItem: noop,

@@ -243,6 +243,28 @@ describe('ChangesWebview', () => {
         });
     });
 
+    it('shows selection checkboxes after a change is selected', async () => {
+        const api = createMockVsCodeApi();
+        const { ChangesWebview } = await import('@webview/changes/changes-webview');
+
+        render(<ChangesWebview />);
+        sendStatusDataWithMultipleChanges();
+
+        expect(screen.queryByRole('checkbox', { name: /Select change/ })).not.toBeInTheDocument();
+        fireEvent.click(await screen.findByTitle('src/a.ts'));
+
+        const firstCheckbox = await screen.findByRole('checkbox', { name: 'Select change src/a.ts' });
+        const secondCheckbox = screen.getByRole('checkbox', { name: 'Select change src/b.ts' });
+        expect(firstCheckbox).toBeChecked();
+        expect(secondCheckbox).not.toBeChecked();
+
+        const diffRequestCount = messageCount(api.messages, 'changes/openDiff');
+        fireEvent.click(secondCheckbox);
+
+        await waitFor(() => expect(secondCheckbox).toBeChecked());
+        expect(messageCount(api.messages, 'changes/openDiff')).toBe(diffRequestCount);
+    });
+
     it('posts review requests from changes and staged section bars only', async () => {
         const api = createMockVsCodeApi();
         const { ChangesWebview } = await import('@webview/changes/changes-webview');
@@ -583,6 +605,15 @@ function sendStatusData(): void {
             submodules: [],
         },
     });
+}
+
+function messageCount(messages: readonly unknown[], type: string): number {
+    return messages.filter((message) => (
+        typeof message === 'object'
+        && message !== null
+        && 'type' in message
+        && message.type === type
+    )).length;
 }
 
 function sendStatusDataWithSubmodule(): void {

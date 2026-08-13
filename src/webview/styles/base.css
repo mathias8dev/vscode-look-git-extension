@@ -326,3 +326,17 @@ h1 {
     overflow: auto;
     padding: var(--look-git-space-lg);
 }
+
+.selection-checkbox {
+    width: 1em;
+    height: 1em;
+    min-width: 1em;
+    margin: 0;
+    accent-color: var(--vscode-checkbox-selectBackground, var(--vscode-button-background, #0e639c));
+    cursor: pointer;
+}
+
+.selection-checkbox:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder, #007fd4);
+    outline-offset: 1px;
+}
