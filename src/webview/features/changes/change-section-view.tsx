@@ -23,6 +23,7 @@ interface ChangeSectionViewProps {
     readonly onBulkAction: (section: ChangeSection, action: ChangeBulkAction) => void;
     readonly onReview?: (section: ChangeSection) => void;
     readonly onStash?: (message: string) => void;
+    readonly onStashSelected?: (items: readonly ChangeListItem[], message: string) => void;
     readonly stashTitle?: string;
     readonly showWhenEmpty?: boolean;
 }
@@ -42,6 +43,7 @@ export function ChangeSectionView({
     onBulkAction,
     onReview,
     onStash,
+    onStashSelected,
     stashTitle = 'Stash changes',
     showWhenEmpty = false,
 }: ChangeSectionViewProps) {
@@ -61,9 +63,16 @@ export function ChangeSectionView({
     const visible = visibleChangeItems(section.items, visibleLimit);
     const tree = buildChangeTree(visible.items, (left, right) => compareChangeItems(left, right, sortMode));
     const bulkActions = bulkActionsFor(section);
+    const selectedStashItems = onStash && onStashSelected
+        ? section.items.filter((item) => selectedItemIds.has(item.id))
+        : [];
+    const stashAction = selectedStashItems.length > 0
+        ? (message: string) => onStashSelected?.(selectedStashItems, message)
+        : onStash;
+    const resolvedStashTitle = selectedStashItems.length > 0 ? 'Stash selected changes' : stashTitle;
 
     const confirmStash = () => {
-        onStash?.(stashMsg);
+        stashAction?.(stashMsg);
         setStashMsg('');
         setShowStashPrompt(false);
     };
@@ -110,17 +119,17 @@ export function ChangeSectionView({
                             onClick={() => onReview(section)}
                         />
                     ) : null}
-                    {onStash ? (
+                    {stashAction ? (
                         <IconButton
                             icon="git-stash"
-                            title={stashTitle}
+                            title={resolvedStashTitle}
                             onClick={() => setShowStashPrompt(!showStashPrompt)}
                         />
                     ) : null}
                     <span>{section.items.length}</span>
                 </div>
             </header>
-            {onStash && showStashPrompt ? (
+            {stashAction && showStashPrompt ? (
                 <div className="stash-prompt" role="group" aria-label="Create stash">
                     <input
                         ref={stashInputRef}

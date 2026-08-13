@@ -1,5 +1,5 @@
 import type { ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
-import type { StashFileEntry } from '@protocol/changes/types';
+import type { ChangesSelectionContextTarget, StashFileEntry } from '@protocol/changes/types';
 
 export enum CreateStashKind {
     All = 'all',
@@ -22,6 +22,21 @@ export function messageForCreateStash(
     return kind === CreateStashKind.Staged
         ? { type: 'changes/stashStaged', ...payload }
         : { type: 'changes/stash', ...payload };
+}
+
+export function messageForCreateSelectedStash(
+    target: ChangesSelectionContextTarget,
+    message: string,
+): ChangesWebviewToExtensionMessage {
+    const trimmedMessage = message.trim();
+    const payload = {
+        filePaths: target.stashFilePaths,
+        includeUntracked: target.stashIncludeUntracked,
+        ...(trimmedMessage ? { message: trimmedMessage } : {}),
+    };
+    return target.submodulePath
+        ? { type: 'changes/submoduleStashSelectedFiles', submodulePath: target.submodulePath, ...payload }
+        : { type: 'changes/stashSelectedFiles', ...payload };
 }
 
 export function messageForStashAction(index: number, action: StashEntryAction): ChangesWebviewToExtensionMessage {

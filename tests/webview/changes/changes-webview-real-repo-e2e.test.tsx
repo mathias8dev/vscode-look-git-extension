@@ -109,6 +109,40 @@ describe('ChangesWebview real repo e2e', () => {
             fixture.cleanup();
         }
     }, 120_000);
+
+    it('stashes only the selected file when multiple files are changed', async () => {
+        const fixture = await createSemanticRuntimeFixture('look-git-webview-selected-stash-');
+        try {
+            fixture.git(['reset', '--hard', 'HEAD']);
+            fixture.git(['clean', '-fd']);
+            const workflowsDir = path.join(fixture.fixture.repo, '.github', 'workflows');
+            fs.mkdirSync(workflowsDir, { recursive: true });
+            fs.writeFileSync(path.join(workflowsDir, 'remote-windows.yml'), 'windows\n');
+            fs.writeFileSync(path.join(workflowsDir, 'remotes.yml'), 'remotes\n');
+            fs.writeFileSync(path.join(workflowsDir, 'remote-linux.yml'), 'linux\n');
+            fixture.git(['add', '--', '.github/workflows/remote-windows.yml', '.github/workflows/remotes.yml']);
+
+            const api = createMockVsCodeApi();
+            const { ChangesWebview } = await import('@webview/changes/changes-webview');
+            render(<ChangesWebview />);
+            await postStatus(fixture);
+
+            fireEvent.click(await screen.findByTitle('.github/workflows/remote-linux.yml'));
+            fireEvent.click(screen.getByRole('button', { name: 'Stash selected changes' }));
+            fireEvent.change(await screen.findByLabelText('Stash message'), { target: { value: 'selected stash' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Stash' }));
+            await drainWebviewMessages(api, fixture);
+
+            expect(fixture.git(['status', '--porcelain'])).toContain('A  .github/workflows/remote-windows.yml');
+            expect(fixture.git(['status', '--porcelain'])).toContain('A  .github/workflows/remotes.yml');
+            expect(fixture.git(['status', '--porcelain'])).not.toContain('remote-linux.yml');
+            expect((await fixture.worktree.getStashFiles('stash@{0}')).map((file) => file.filePath)).toEqual([
+                '.github/workflows/remote-linux.yml',
+            ]);
+        } finally {
+            fixture.cleanup();
+        }
+    }, 120_000);
 });
 
 async function postStatus(fixture: SemanticRuntimeFixture): Promise<void> {
@@ -152,6 +186,12 @@ async function handleMessage(message: ChangesWebviewToExtensionMessage, fixture:
             return;
         case 'changes/stash':
             await fixture.worktree.stash(message.message, { includeUntracked: true });
+            return;
+        case 'changes/stashSelectedFiles':
+            await fixture.worktree.stash(message.message, {
+                includeUntracked: message.includeUntracked,
+                paths: message.filePaths,
+            });
             return;
         case 'changes/acceptTheirs':
             await fixture.worktree.acceptTheirs([message.filePath]);

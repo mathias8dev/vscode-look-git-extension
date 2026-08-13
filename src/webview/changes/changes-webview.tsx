@@ -25,6 +25,7 @@ import { messageForOperationAction, type ActiveConflictState, type OperationActi
 import { changesSelectionTarget } from '@webview/features/changes/change-selection-model';
 import { messageForSelectionAction, ChangeSelectionAction } from '@webview/features/changes/selection-commands';
 import {
+    messageForCreateSelectedStash,
     messageForCreateStash,
     messageForStashAction,
     messageForStashFileDiff,
@@ -217,6 +218,7 @@ export function ChangesWebview() {
                 }
             }}
             onCreateStash={(kind: CreateStashKind, message: string) => postToExtension(messageForCreateStash(kind, message))}
+            onCreateSelectedStash={(target, message) => postToExtension(messageForCreateSelectedStash(target, message))}
             onToggleStash={toggleStash}
             onStashAction={(index: number, action: StashEntryAction) => postToExtension(messageForStashAction(index, action))}
             onStashFileDiff={(index: number, file: StashFileEntry) => postToExtension(messageForStashFileDiff(index, file))}

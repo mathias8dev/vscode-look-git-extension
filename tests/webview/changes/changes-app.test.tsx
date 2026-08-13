@@ -42,6 +42,7 @@ describe('ChangesApp', () => {
                 onGenerateCommitMessage={() => undefined}
                 onOperationAction={() => undefined}
                 onCreateStash={() => undefined}
+                onCreateSelectedStash={() => undefined}
                 onToggleStash={() => undefined}
                 onStashAction={() => undefined}
                 onStashFileDiff={() => undefined}
@@ -106,6 +107,7 @@ describe('ChangesApp', () => {
                 onGenerateCommitMessage={() => undefined}
                 onOperationAction={() => undefined}
                 onCreateStash={onCreateStash}
+                onCreateSelectedStash={() => undefined}
                 onToggleStash={() => undefined}
                 onStashAction={() => undefined}
                 onStashFileDiff={() => undefined}

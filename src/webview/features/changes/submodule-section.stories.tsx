@@ -32,6 +32,7 @@ const meta = {
         onCommitComposerContextTarget: noop,
         onGenerateCommitMessage: noop,
         onCreateStash: noop,
+        onCreateSelectedStash: noop,
         onToggleStash: noop,
         onStashAction: noop,
         onStashFileDiff: noop,

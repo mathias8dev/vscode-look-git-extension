@@ -156,6 +156,7 @@ function renderSubmodule(status: SubmoduleStatusData): void {
             onCommitComposerContextTarget={vi.fn()}
             onGenerateCommitMessage={vi.fn()}
             onCreateStash={vi.fn()}
+            onCreateSelectedStash={vi.fn()}
             onToggleStash={vi.fn()}
             onStashAction={vi.fn()}
             onStashFileDiff={vi.fn()}
