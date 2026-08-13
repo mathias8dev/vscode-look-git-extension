@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { commitContextActionIds } from '@tests/helpers/commit-context-commands';
 
 interface PackageJson {
     readonly contributes?: {
@@ -21,11 +22,10 @@ describe('Graph native context menu manifest', () => {
         const commands = new Set((pkg.contributes?.commands ?? []).map((entry) => entry.command));
         const graphSquashCommand = pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.graph.commit.squashInto');
         const webviewContextMenu = pkg.contributes?.menus?.['webview/context'] ?? [];
+        const expectedCommitCommands = commitContextActionIds('lookGit.graph.commit');
 
         for (const command of [
-            'lookGit.graph.commit.copyRevisionNumber',
-            'lookGit.graph.commit.explainDiff',
-            'lookGit.graph.commit.goToParentCommit',
+            ...expectedCommitCommands,
             'lookGit.graph.branch.checkout',
             'lookGit.graph.branch.update',
             'lookGit.graph.branch.publish',
@@ -64,6 +64,10 @@ describe('Graph native context menu manifest', () => {
         expect(pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.graph.branch.delete')).toMatchObject({
             enablement: 'graphBranchCanDelete',
         });
+        expect(webviewContextMenu
+            .filter((entry) => entry.when === "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'")
+            .map((entry) => entry.command))
+            .toEqual(expectedCommitCommands);
         expect(webviewContextMenu).toEqual(expect.arrayContaining([
             expect.objectContaining({
                 command: 'lookGit.graph.commit.copyRevisionNumber',

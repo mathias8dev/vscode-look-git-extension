@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { commitContextActionIds } from '@tests/helpers/commit-context-commands';
 
 interface PackageJson {
     readonly contributes?: {
@@ -96,9 +97,9 @@ describe('Commit History native context menu manifest', () => {
         const commands = new Set((pkg.contributes?.commands ?? []).map((entry) => entry.command));
         const historySquashCommand = pkg.contributes?.commands?.find((entry) => entry.command === 'lookGit.history.squashInto');
         const webviewContextMenu = pkg.contributes?.menus?.['webview/context'] ?? [];
+        const expectedCommitCommands = commitContextActionIds('lookGit.history');
 
-        expect(commands).toContain('lookGit.history.copyRevisionNumber');
-        expect(commands).toContain('lookGit.history.explainDiff');
+        for (const command of expectedCommitCommands) { expect(commands).toContain(command); }
         expect(commands).toContain('lookGit.history.openFileDiff');
         expectLookGitFileContextMenu(pkg);
         expect(historySquashCommand).toMatchObject({
@@ -143,6 +144,10 @@ describe('Commit History native context menu manifest', () => {
                 when: 'editorTextFocus && lookGit.blame.annotationsVisible',
             }),
         ]));
+        expect(webviewContextMenu
+            .filter((entry) => entry.when === "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'")
+            .map((entry) => entry.command))
+            .toEqual(expectedCommitCommands);
         expect(webviewContextMenu).toEqual(expect.arrayContaining([
             expect.objectContaining({
                 command: 'lookGit.history.copyRevisionNumber',
