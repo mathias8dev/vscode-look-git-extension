@@ -4,6 +4,46 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+### Added
+
+#### Changes Panel
+- Show selection checkboxes for change rows, folders, and submodules when selecting files for batch actions
+
+#### Visual Rebase
+- Add drag-and-drop commit reordering alongside the existing move controls
+- Add in-panel ref pickers, automatic plan previews, published-history and dirty-worktree risk confirmation, and explicit backup-ref status
+- Show the files changed by the selected commit in the inspector and open file diffs in pinned editor tabs
+- Add dedicated running, paused, conflict, failed, aborted, and completed states with contextual Continue, Skip, and Abort actions
+- Expand the generated interactive-rebase scenario to cover linear actions, sequential conflicts, merge topology, merge conflicts, alternate replay targets, published commits, and autostash
+
+#### Webview
+- Expand file and folder icon coverage to all 1,244 bundled `vscode-icons` assets with cached on-demand loading
+- Add extension-aware search to the generated icon gallery
+
+### Changed
+
+#### Visual Rebase
+- Keep the Visual Rebase panel visible while opening commit diffs and merge editors, and close its floating editor window when cancelling
+
+### Fixed
+
+#### Changes Panel
+- Stash only the selected files while preserving staged and unselected working-tree changes across regular, keep-index, include-untracked, and staged stash modes
+- Disable the commit action selector whenever the primary Commit action is unavailable
+
+#### Commit History and Look Graph
+- Add regression coverage for context actions targeting multiple selected commits
+
+#### Webview
+- Replace delayed native browser tooltips with consistent webview tooltips and prevent duplicate native titles
+
+#### Visual Rebase
+- Present rebase conflicts as a resolvable paused state instead of an operation failure and avoid rendering the same Git error twice
+
+#### File Icons
+- Preserve official TypeScript and JavaScript variants, React icons for JSX and TSX, and specialized TypeScript definition icons
+- Restore missing Kotlin script, GraphQL, Elixir script, Erlang header, Scala script, generic configuration, and folder alias associations
+
 ## [1.2.7] - 2026-08-11
 
 ### Added
