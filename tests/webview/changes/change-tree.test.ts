@@ -18,26 +18,6 @@ describe('changeTree', () => {
         expect(sections.map((section) => section.items.length)).toEqual([1, 1, 1]);
     });
 
-    it('associates only untracked entries with discovered nested repositories', () => {
-        const sections = buildChangeSections({
-            conflicts: [],
-            staged: [],
-            unstaged: [
-                { indexStatus: '?', workTreeStatus: '?', filePath: 'android/engage_android/' },
-                { indexStatus: ' ', workTreeStatus: 'M', filePath: 'ios/' },
-            ],
-            conflictState: ConflictState.None,
-            stashes: [],
-            submodules: [],
-        }, new Map([
-            ['android/engage_android', 'android-context'],
-            ['ios', 'ios-context'],
-        ]));
-
-        expect(sections[2]?.items[0]?.nestedRepositoryContextId).toBe('android-context');
-        expect(sections[2]?.items[1]?.nestedRepositoryContextId).toBeUndefined();
-    });
-
     it('groups paths into tree nodes without backend layout data', () => {
         const sections = buildChangeSections({
             conflicts: [],

@@ -11,7 +11,11 @@ export interface RepositorySelectionAccessor {
     readonly currentContext: RepoContext | undefined;
 }
 
-export class RepositorySelectionStore implements RepositorySelectionAccessor, vscode.Disposable {
+export interface RepositoryContextAccessor extends RepositorySelectionAccessor {
+    readonly contexts: readonly RepoContext[];
+}
+
+export class RepositorySelectionStore implements RepositoryContextAccessor, vscode.Disposable {
     private readonly onDidChangeEmitter = new vscode.EventEmitter<RepositorySelectionState>();
     readonly onDidChange = this.onDidChangeEmitter.event;
 

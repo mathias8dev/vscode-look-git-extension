@@ -14,10 +14,7 @@ describe('multi-repository navigator e2e', () => {
         try {
             await waitForRepositoryDetail('workspace', 'section[aria-label="Repository changes"]');
             await waitForChildRepositories(['app', 'api'], ['plugin']);
-            await navigateNestedRepositoryChange('app/');
-            await waitForRepositoryDetail('app', 'section[aria-label="Repository changes"]');
-            await navigateBackToParentRepository();
-            await waitForRepositoryDetail('workspace', 'section[aria-label="Repository changes"]');
+            await waitForNestedRepositoryChangesAbsent(['app/', 'api/']);
             await setChildRepositoriesExpanded(false);
             await waitForRepositoryDetail('workspace', 'section[aria-label="Repository changes"]');
             await setChildRepositoriesExpanded(true);
@@ -243,19 +240,16 @@ async function navigateRepository(label: string): Promise<void> {
     }, `Expected repository row "${label}".\n${snapshot}`);
 }
 
-async function navigateNestedRepositoryChange(filePath: string): Promise<void> {
+async function waitForNestedRepositoryChangesAbsent(filePaths: readonly string[]): Promise<void> {
     let snapshot = '';
     await pollUntil(async () => {
         snapshot = await webviewSnapshot();
-        return await browser.execute((expectedPath: string) => {
-            const row = Array.from(document.querySelectorAll<HTMLElement>('article.change-row'))
-                .find((candidate) => candidate.title === expectedPath);
-            if (!row) { return false; }
-            row.scrollIntoView({ block: 'center', inline: 'nearest' });
-            row.click();
-            return true;
-        }, filePath);
-    }, `Expected nested repository change "${filePath}".\n${snapshot}`);
+        return await browser.execute((hiddenPaths: readonly string[]) => {
+            const visiblePaths = Array.from(document.querySelectorAll<HTMLElement>('article.change-row'))
+                .map((candidate) => candidate.title);
+            return hiddenPaths.every((filePath) => !visiblePaths.includes(filePath));
+        }, filePaths);
+    }, `Expected nested repositories to be absent from Changes: ${filePaths.join(', ')}.\n${snapshot}`);
 }
 
 async function waitForChildRepositories(repositoryLabels: readonly string[], hiddenLabels: readonly string[] = []): Promise<void> {

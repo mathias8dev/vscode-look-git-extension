@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSubmoduleStatus, parseSubmodulePaths } from '@core/parsing/parse-submodule-status';
+import { parseSubmoduleStatus } from '@core/parsing/parse-submodule-status';
 import { expectItem } from '@tests/helpers/assertions';
 
 describe('parseSubmoduleStatus', () => {
@@ -47,17 +47,5 @@ describe('parseSubmoduleStatus', () => {
 
         expect(result).toHaveLength(2);
         expect(result.map((s) => s.path)).toEqual(['modules/a', 'modules/b']);
-    });
-});
-
-describe('parseSubmodulePaths', () => {
-    it('returns a Set of paths', () => {
-        const output = ' abc modules/a\n+def modules/b';
-        const paths = parseSubmodulePaths(output);
-        expect(paths).toEqual(new Set(['modules/a', 'modules/b']));
-    });
-
-    it('returns empty Set for empty output', () => {
-        expect(parseSubmodulePaths('')).toEqual(new Set());
     });
 });

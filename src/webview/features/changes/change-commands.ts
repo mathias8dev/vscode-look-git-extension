@@ -15,14 +15,6 @@ export enum ChangeBulkAction {
 }
 
 export function rowActionsFor(item: ChangeListItem): readonly ChangeActionDescriptor<ChangeRowAction>[] {
-    if (item.nestedRepositoryContextId) {
-        return [
-            item.section === ChangeSectionId.Staged
-                ? { action: ChangeRowAction.Unstage, icon: 'remove', label: 'Unstage', title: 'Unstage nested repository' }
-                : { action: ChangeRowAction.Stage, icon: 'add', label: 'Stage', title: 'Stage nested repository' },
-            { action: ChangeRowAction.Open, icon: 'folder-opened', label: 'Open', title: 'Open nested repository' },
-        ];
-    }
     if (item.section === ChangeSectionId.Staged) {
         if (item.entry.isSubmodule) {
             return [
@@ -72,7 +64,6 @@ export function rowActionsFor(item: ChangeListItem): readonly ChangeActionDescri
 }
 
 export function primaryRowActionFor(item: ChangeListItem): ChangeRowAction | undefined {
-    if (item.nestedRepositoryContextId) { return ChangeRowAction.Open; }
     if (item.entry.isSubmodule) { return ChangeRowAction.Diff; }
     return item.section === ChangeSectionId.Conflicts
         ? ChangeRowAction.OpenMergeEditor

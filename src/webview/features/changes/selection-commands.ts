@@ -17,10 +17,7 @@ export enum ChangeSelectionAction {
 
 export function selectionActionsFor(items: readonly ChangeListItem[]): readonly ChangeActionDescriptor<ChangeSelectionAction>[] {
     if (items.length === 0) { return []; }
-    const nestedRepository = items.length === 1 ? items[0]?.nestedRepositoryContextId : undefined;
-    const singleFileActions: ChangeActionDescriptor<ChangeSelectionAction>[] = nestedRepository
-        ? [{ action: ChangeSelectionAction.Open, icon: 'folder-opened', label: 'Open', title: 'Open nested repository' }]
-        : items.length === 1
+    const singleFileActions: ChangeActionDescriptor<ChangeSelectionAction>[] = items.length === 1
         ? [
             { action: ChangeSelectionAction.Diff, icon: 'diff', label: 'Diff', title: 'Open selected file diff' },
             { action: ChangeSelectionAction.Open, icon: 'go-to-file', label: 'Open', title: 'Open selected file' },
@@ -44,12 +41,6 @@ export function messageForSelectionAction(
     action: ChangeSelectionAction,
 ): ChangesWebviewToExtensionMessage | undefined {
     const firstItem = items[0];
-    if (action === ChangeSelectionAction.Open && items.length === 1 && firstItem?.nestedRepositoryContextId) {
-        return { type: 'repo/navigateRepository', contextId: firstItem.nestedRepositoryContextId };
-    }
-    if (action === ChangeSelectionAction.Diff && items.length === 1 && firstItem?.nestedRepositoryContextId) {
-        return undefined;
-    }
     if ((action === ChangeSelectionAction.Open || action === ChangeSelectionAction.Diff) && items.length === 1 && firstItem) {
         return messageForRowAction(firstItem, action as unknown as ChangeRowAction);
     }

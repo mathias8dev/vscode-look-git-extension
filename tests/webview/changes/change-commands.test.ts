@@ -8,7 +8,6 @@ import {
     messageForExplainRepositoryChanges,
     messageForExplainSelection,
     messageForRowAction,
-    primaryRowActionFor,
     rowActionsFor,
 } from '@webview/features/changes/change-commands';
 import { ChangeSectionId, type ChangeListItem, type ChangeSection } from '@webview/features/changes/change-tree';
@@ -23,33 +22,6 @@ function item(section: ChangeSectionId, filePath = 'src/app.ts'): ChangeListItem
 }
 
 describe('changeCommands', () => {
-    it('offers repository navigation and staging actions for a nested repository', () => {
-        const nestedRepository: ChangeListItem = {
-            id: 'unstaged:android/engage_android/',
-            section: ChangeSectionId.Unstaged,
-            isStaged: false,
-            nestedRepositoryContextId: 'android-context',
-            entry: { indexStatus: '?', workTreeStatus: '?', filePath: 'android/engage_android/' },
-        };
-
-        expect(rowActionsFor(nestedRepository).map((action) => action.action)).toEqual([
-            ChangeRowAction.Stage,
-            ChangeRowAction.Open,
-        ]);
-        expect(rowActionsFor(nestedRepository).map((action) => action.title)).toEqual([
-            'Stage nested repository',
-            'Open nested repository',
-        ]);
-        expect(primaryRowActionFor(nestedRepository)).toBe(ChangeRowAction.Open);
-
-        const section: ChangeSection = {
-            id: ChangeSectionId.Unstaged,
-            title: 'Changes',
-            items: [nestedRepository],
-        };
-        expect(bulkActionsFor(section).map((action) => action.action)).toEqual([ChangeBulkAction.StageAll]);
-    });
-
     it('offers stage/discard actions for unstaged files', () => {
         const actions = rowActionsFor(item(ChangeSectionId.Unstaged));
         expect(actions.map((action) => action.action)).toEqual([

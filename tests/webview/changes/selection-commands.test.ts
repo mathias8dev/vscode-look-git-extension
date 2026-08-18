@@ -26,14 +26,6 @@ function submodule(section: ChangeSectionId, filePath: string): ChangeListItem {
     };
 }
 
-function nestedRepository(filePath: string): ChangeListItem {
-    return {
-        ...item(ChangeSectionId.Unstaged, filePath),
-        nestedRepositoryContextId: 'nested-context',
-        entry: { indexStatus: '?', workTreeStatus: '?', filePath },
-    };
-}
-
 describe('selectionCommands', () => {
     it('offers contextual actions for selected changes', () => {
         const actions = selectionActionsFor([item(ChangeSectionId.Unstaged, 'a.ts')]);
@@ -94,24 +86,4 @@ describe('selectionCommands', () => {
         expect(changesSelectionTarget(selected).patchUnstagedFilePaths).toEqual(['src/app.ts']);
     });
 
-    it('navigates nested repositories and excludes them from file-only actions', () => {
-        const selected = [nestedRepository('android/engage_android/')];
-
-        expect(selectionActionsFor(selected).map((action) => action.action)).toEqual([
-            ChangeSelectionAction.Open,
-            ChangeSelectionAction.Stage,
-        ]);
-        expect(messageForSelectionAction(selected, ChangeSelectionAction.Open)).toEqual({
-            type: 'repo/navigateRepository',
-            contextId: 'nested-context',
-        });
-        expect(messageForSelectionAction(selected, ChangeSelectionAction.Diff)).toBeUndefined();
-        expect(messageForSelectionAction(selected, ChangeSelectionAction.Discard)).toBeUndefined();
-        expect(changesSelectionTarget(selected)).toEqual(expect.objectContaining({
-            stageFilePaths: ['android/engage_android/'],
-            discardFilePaths: [],
-            stashFilePaths: [],
-            patchUntrackedFilePaths: [],
-        }));
-    });
 });

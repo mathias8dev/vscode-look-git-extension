@@ -186,7 +186,7 @@ describe('CliGitRuntime', () => {
     it('returns typed status data from git status output', async () => {
         const runtime = new CliGitRuntime(async (args) => {
             if (args[0] === 'status') { return ' M file.txt\0'; }
-            if (args[0] === 'submodule') { return ''; }
+            if (args[0] === 'config') { return ''; }
             throw new Error(`Unexpected args: ${args.join(' ')}`);
         });
 
@@ -225,7 +225,10 @@ describe('CliGitRuntime', () => {
             if (args.join(' ') === 'worktree list --porcelain') {
                 return 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-linked\nHEAD def456\ndetached\n';
             }
-            if (args.join(' ') === 'submodule status') {
+            if (args.join(' ') === 'config --file .gitmodules --null --get-regexp ^submodule\\..*\\.path$') {
+                return 'submodule.one.path\nlibs/one\0submodule.two.path\nlibs/two\0';
+            }
+            if (args.join(' ') === 'submodule status -- libs/one libs/two') {
                 return ' abc123 libs/one (heads/main)\n-ded456 libs/two\n';
             }
             throw new Error(`Unexpected args: ${args.join(' ')}`);

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
+import type { RepositoryContextAccessor } from '@extension/repositories/repository-selection-store';
 import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush, ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
 import { CommitMode, type ChangesContextTarget, type StatusData } from '@protocol/changes/types';
 import type { RepositoriesChangedPush, RepositoryNavigationMessage } from '@protocol/shared/repo';
@@ -27,6 +27,7 @@ import { operationActionsForStatus } from '@extension/utils/operation-feedback';
 import { withCancellationSignal } from '@extension/utils/vscode-cancellation';
 import { webviewFontSizeMessage } from '@extension/views/webview-font';
 import { statusDataEqual } from '@protocol/shared/protocol-data-equality';
+import { excludeNestedRepositoryChanges, nestedRepositoryPaths } from '@extension/repositories/nested-repository-boundaries';
 import { DISTINCT_MESSAGE_LAST_VALUE_ONLY, DistinctMessagePoster } from '@extension/messaging/distinct-message-poster';
 
 const APPLY_PATCH_FROM_CLIPBOARD = 'From Clipboard';
@@ -217,7 +218,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     constructor(
         private readonly extensionUri: vscode.Uri,
-        private readonly repositories: RepositorySelectionAccessor,
+        private readonly repositories: RepositoryContextAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
         private readonly generateCommitMessage = new GenerateCommitMessageUseCase(new VscodeLanguageModelCommitMessageGenerator()),
         private readonly createChangesPatch: CreateChangesPatchUseCase = defaultCreateChangesPatch,
@@ -703,9 +704,13 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 if (!await this.beforeRefresh()) { continue; }
 
                 const { status, stashes, submodules, currentBranch, worktree } = await this.loadChangesStatus(controller.signal);
+                const visibleStatus = excludeNestedRepositoryChanges(
+                    status,
+                    nestedRepositoryPaths(context, this.repositories.contexts),
+                );
                 this.router?.setKnownSubmodulePaths(submodules.map((submodule) => submodule.path));
-                this.updateBadge(status.staged.length + status.unstaged.length + status.conflicts.length);
-                this.postStatusDataIfChanged(buildStatusData(status, stashes, submodules, currentBranch));
+                this.updateBadge(visibleStatus.staged.length + visibleStatus.unstaged.length + visibleStatus.conflicts.length);
+                this.postStatusDataIfChanged(buildStatusData(visibleStatus, stashes, submodules, currentBranch));
                 await this.postSquashMergeMessagePresetIfNeeded(worktree, controller.signal);
             } catch (error) {
                 if (isAbortError(error)) { continue; }

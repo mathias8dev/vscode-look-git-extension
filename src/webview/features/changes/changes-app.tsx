@@ -7,13 +7,12 @@ import { ErrorNotice } from '@webview/shared/error-notice';
 import { OperationNotice } from '@webview/shared/operation-notice';
 import { operationNoticeActions } from '@webview/shared/operation-notice-actions';
 import { RepositoryNavigator } from '@webview/shared/repository-navigator';
-import { ChangeRowAction, type ChangeBulkAction } from '@webview/features/changes/change-commands';
+import type { ChangeBulkAction, ChangeRowAction } from '@webview/features/changes/change-commands';
 import { ChangeSectionView } from '@webview/features/changes/change-section-view';
 import { changesSelectionTarget, hasPatchableSelectionTarget, isChangeListItem } from '@webview/features/changes/change-selection-model';
 import { CommitComposer } from '@webview/features/changes/commit-composer';
 import { EmptyState } from '@webview/features/changes/empty-state';
 import { OperationBanner } from '@webview/features/changes/operation-banner';
-import { nestedRepositoryContextIdsByPath } from '@webview/features/changes/nested-repository-model';
 import { StashList } from '@webview/features/changes/stash-list';
 import { SubmoduleSection } from '@webview/features/changes/submodule-section';
 import { SelectionToolbar } from '@webview/features/changes/selection-toolbar';
@@ -119,14 +118,7 @@ export function ChangesApp({
     onRepositoryNavigate = noop,
     onOpenRepositoryInNewWindow = noop,
 }: ChangesAppProps) {
-    const nestedRepositoryIds = useMemo(() => nestedRepositoryContextIdsByPath(
-        state.repositorySummaries.status === 'ready' ? state.repositorySummaries.data : [],
-        state.activeRepositoryContextId.status === 'ready' ? state.activeRepositoryContextId.data : undefined,
-    ), [state.activeRepositoryContextId, state.repositorySummaries]);
-    const rawSections = useMemo(
-        () => buildChangeSections(state.status, nestedRepositoryIds),
-        [nestedRepositoryIds, state.status],
-    );
+    const rawSections = useMemo(() => buildChangeSections(state.status), [state.status]);
     const visibleRawSections = useMemo(
         () => state.showConflictsOnly
             ? rawSections.filter((section) => section.id === ChangeSectionId.Conflicts)
@@ -261,13 +253,7 @@ export function ChangesApp({
                         onToggleCollapsed={() => onSectionToggle(section.id)}
                         onSelectItem={(item, mode) => onSelectItem(item, mode, visibleItemIds)}
                         onOpenSelectionContext={openSelectionContext}
-                        onRowAction={(item, action) => {
-                            if (action === ChangeRowAction.Open && item.nestedRepositoryContextId) {
-                                onRepositoryNavigate(item.nestedRepositoryContextId);
-                                return;
-                            }
-                            onRowAction(item, action);
-                        }}
+                        onRowAction={onRowAction}
                         onBulkAction={onBulkAction}
                         onReview={reviewHandlerFor(section, (target) => onExplainSelection(target))}
                         onStash={stashHandlerFor(section.id, onCreateStash)}

@@ -13,7 +13,8 @@ All notable changes to Look Git are documented in this file.
 
 #### Multi-Repo
 - Keep the active repository content visible while browsing collapsible child repositories, with semantic parent and root navigation shared by Changes, Commit History, and Look Graph
-- Render discovered untracked nested repositories as navigable repository rows in Changes without exposing file-only diff, discard, patch, or stash actions
+- Hide discovered nested repositories from their parent's Changes state and global actions while keeping them available through the Repository Navigator
+- Keep repositories available when the index contains gitlinks that are not registered in `.gitmodules`
 
 ## [1.2.8] - 2026-08-13
 

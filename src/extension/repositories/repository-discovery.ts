@@ -6,6 +6,7 @@ import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { createRepoContext } from '@extension/repositories/repo-context-factory';
 import { DEFAULT_REPOSITORY_SCAN_MAX_DEPTH, normalizeRepositoryScanMaxDepth } from '@extension/repositories/repository-scan-depth';
 import { isPathInside, normalizePathForComparison, samePath } from '@extension/utils/path-compare';
+import { queryRegisteredSubmodulePaths } from '@extension/git/queries/query-submodules';
 
 const IGNORED_DIRECTORY_NAMES = new Set([
     '.git',
@@ -130,11 +131,7 @@ function cachedRegisteredSubmodulePaths(parentContext: RepoContext, cache: Map<s
 async function registeredSubmodulePaths(cwd: string): Promise<readonly string[]> {
     try {
         const git = new GitCliBackend(cwd);
-        const output = await git.run(['config', '--file', '.gitmodules', '--null', '--name-only', '--get-regexp', '^submodule\\..*\\.path$']);
-        const keys = output.split('\0').filter(Boolean);
-        const submodulePaths = await Promise.all(keys.map(async (key) => (await git.run(['config', '--file', '.gitmodules', '--get', key])).trim()));
-        return submodulePaths
-            .filter(Boolean)
+        return (await queryRegisteredSubmodulePaths((args, signal) => git.run(args, { signal })))
             .map((submodulePath) => path.resolve(cwd, submodulePath));
     } catch {
         return [];
