@@ -123,6 +123,43 @@ describe('CommitHistoryViewProvider', () => {
         expect(calls).not.toContainEqual(expect.objectContaining({ operation: 'push' }));
     });
 
+    it('runs toolbar actions against the navigated nested repository', async () => {
+        const parent = {
+            id: 'workspace-id',
+            cwd: '/workspace',
+            kind: RepoKind.Main,
+            label: 'workspace',
+        } satisfies RepoContext;
+        const child = {
+            id: 'app-id',
+            cwd: '/workspace/app',
+            kind: RepoKind.Main,
+            parentId: parent.id,
+            label: 'app',
+        } satisfies RepoContext;
+        const calls: RuntimeCall[] = [];
+        const runtime = historyRuntime(calls);
+        const registry = new RepositoryRegistry();
+        registerRuntimeContext(registry, parent, runtime);
+        registerRuntimeContext(registry, child, runtime);
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: child },
+            async () => {},
+            undefined,
+            undefined,
+            registry,
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'push' });
+
+        await expect.poll(() => calls.filter((call) => call.operation === 'push')).toEqual([
+            expect.objectContaining({ context: expect.objectContaining({ repositoryId: child.id, cwd: child.cwd }) }),
+        ]);
+    });
+
     it('scopes the default history load to the current branch instead of all refs', async () => {
         const calls: RuntimeCall[] = [];
         const provider = providerFor(historyRuntime(calls));
@@ -386,6 +423,11 @@ function repoContext(): RepoContext {
 
 function runtimeRegistry(context: RepoContext, runtime: GitRuntime): RepositoryRegistry {
     const registry = new RepositoryRegistry();
+    registerRuntimeContext(registry, context, runtime);
+    return registry;
+}
+
+function registerRuntimeContext(registry: RepositoryRegistry, context: RepoContext, runtime: GitRuntime): void {
     registry.registerRepository(new RuntimeGitRepository({
         repoId: context.id,
         cwd: context.cwd,
@@ -404,7 +446,6 @@ function runtimeRegistry(context: RepoContext, runtime: GitRuntime): RepositoryR
         branch: 'main',
         dirty: false,
     }, runtime));
-    return registry;
 }
 
 function runtimeRegistryForUnbornContext(context: RepoContext, runtime: GitRuntime): RepositoryRegistry {
@@ -462,6 +503,7 @@ function historyRuntime(calls: RuntimeCall[]): GitRuntime {
                 case 'fetchAll':
                 case 'updateRef':
                 case 'pushBranch':
+                case 'push':
                 case 'cherryPick':
                     return runtimeResult(undefined);
                 default:

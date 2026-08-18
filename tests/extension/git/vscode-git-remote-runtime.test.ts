@@ -67,6 +67,58 @@ describe('VscodeGitRemoteRuntime', () => {
         expect(repository.pushCalls).toEqual([]);
     });
 
+    it('publishes the exact nested repository when VS Code resolves its parent by containment', async () => {
+        const parent = recordingRepository('/workspace', { HEAD: { name: 'main' }, remotes: [] });
+        const child = recordingRepository('/workspace/app', { HEAD: { name: 'feature/app' }, remotes: [] });
+        const commandCalls: CommandCall[] = [];
+        const runtime = new VscodeGitRemoteRuntime(
+            async () => containingParentGitApi(parent, child),
+            recordingCommandExecutor(commandCalls),
+        );
+
+        await runtime.execute('push', nestedContext(), { options: {} });
+
+        expect(commandCalls).toEqual([{ command: 'git.publish', args: [child] }]);
+        expect(parent.pushCalls).toEqual([]);
+    });
+
+    it('routes every supported remote operation to the exact nested repository', async () => {
+        const repositoryState = {
+            HEAD: { name: 'feature/app', upstream: { remote: 'origin', name: 'feature/app' } },
+            remotes: [{ name: 'origin' }],
+        } satisfies Partial<VscodeGitRepository['state']>;
+        const parent = recordingRepository('/workspace', repositoryState);
+        const child = recordingRepository('/workspace/app', repositoryState);
+        const runtime = new VscodeGitRemoteRuntime(async () => containingParentGitApi(parent, child));
+        const childContext = nestedContext();
+
+        await runtime.execute('fetch', childContext, { remote: 'origin', options: { prune: true } });
+        await runtime.execute('fetchAll', childContext, { options: { prune: true } });
+        await runtime.execute('pull', childContext, { options: {} });
+        await runtime.execute('push', childContext, { remote: 'origin', options: {} });
+        await runtime.execute('pushBranch', childContext, { remote: 'origin', branch: 'feature/app', options: {} });
+        await runtime.execute('forcePushWithLease', childContext, { remote: 'origin', branch: 'feature/app' });
+
+        expect(parent.fetchCalls).toEqual([]);
+        expect(parent.pullCalls).toBe(0);
+        expect(parent.pushCalls).toEqual([]);
+        expect(child.fetchCalls).toEqual([
+            { remote: 'origin', prune: true },
+            { all: true, prune: true },
+        ]);
+        expect(child.pullCalls).toBe(1);
+        expect(child.pushCalls).toHaveLength(3);
+    });
+
+    it('falls back instead of running against a containing parent when the nested repository is not open in VS Code', async () => {
+        const parent = recordingRepository('/workspace', { remotes: [{ name: 'origin' }] });
+        const runtime = new VscodeGitRemoteRuntime(async () => containingParentGitApi(parent));
+
+        await expect(runtime.execute('push', nestedContext(), { remote: 'origin', options: {} }))
+            .rejects.toBeInstanceOf(UnsupportedGitOperationError);
+        expect(parent.pushCalls).toEqual([]);
+    });
+
     it('resolves pushBranch remote from the current branch upstream', async () => {
         const repository = recordingRepository('/repo', {
             HEAD: { name: 'main', remote: 'upstream', upstream: { remote: 'upstream', name: 'main' } },
@@ -183,6 +235,24 @@ function gitApi(repository: VscodeGitRepository): VscodeGitApi {
         getRepository(uri): VscodeGitRepository | null {
             return uri.fsPath === repository.rootUri.fsPath ? repository : null;
         },
+    };
+}
+
+function containingParentGitApi(parent: VscodeGitRepository, child?: VscodeGitRepository): VscodeGitApi {
+    return {
+        repositories: child ? [parent, child] : [parent],
+        getRepository(): VscodeGitRepository {
+            return parent;
+        },
+    };
+}
+
+function nestedContext(): GitExecutionContext {
+    return {
+        cwd: '/workspace/app',
+        gitDir: '/workspace/app/.git',
+        repositoryId: 'app',
+        kind: 'main',
     };
 }
 

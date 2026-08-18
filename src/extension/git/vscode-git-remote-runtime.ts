@@ -71,9 +71,9 @@ export class VscodeGitRemoteRuntime implements GitRuntime {
 
     private async resolveRepository(operation: SemanticGitOperation, context: GitExecutionContext): Promise<VscodeGitRepository> {
         const api = await this.getGitApi();
-        const repository = api?.getRepository(vscode.Uri.file(context.cwd))
-            ?? api?.repositories.find((candidate) => samePath(candidate.rootUri.fsPath, context.cwd));
-        if (!repository) {
+        const repository = api?.repositories.find((candidate) => samePath(candidate.rootUri.fsPath, context.cwd))
+            ?? api?.getRepository(vscode.Uri.file(context.cwd));
+        if (!repository || !samePath(repository.rootUri.fsPath, context.cwd)) {
             throw new UnsupportedGitOperationError(operation, context);
         }
         return repository;
