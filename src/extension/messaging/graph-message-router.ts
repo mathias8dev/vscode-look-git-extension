@@ -180,6 +180,7 @@ export class GraphMessageRouter {
                 const ctrl = new AbortController();
                 this.pending.set(key, ctrl);
                 try {
+                    if (await this.invalidateMissingBranchFilter(msg.filters, msg.repository, ctrl.signal)) { return; }
                     const data = await this.buildGraphData(msg.filters, msg.page.offset, msg.page.limit, ctrl.signal, msg.repository, false);
                     this.lastGraphDataRequest = graphDataRequestSnapshot(msg);
                     this.graphDataPoster.remember(key, data);
@@ -199,6 +200,7 @@ export class GraphMessageRouter {
                 const ctrl = new AbortController();
                 this.pending.set(key, ctrl);
                 try {
+                    if (await this.invalidateMissingBranchFilter(msg.filters, msg.repository, ctrl.signal)) { return; }
                     const data = await this.buildGraphData(msg.filters, msg.page.offset, msg.page.limit, ctrl.signal, msg.repository, false);
                     const response: GraphDataResponse = { type: 'graph/dataResponse', requestId: msg.requestId, data };
                     this.postMessage(response);
@@ -329,7 +331,9 @@ export class GraphMessageRouter {
                 this.postEmptyGraphDataIfChanged();
                 return;
             }
-            const data = await this.buildGraphData(filters ?? {}, GRAPH_REFRESH_OFFSET, GRAPH_REFRESH_LIMIT, signal, undefined, false);
+            const graphFilters = filters ?? {};
+            if (await this.invalidateMissingBranchFilter(graphFilters, undefined, signal)) { return; }
+            const data = await this.buildGraphData(graphFilters, GRAPH_REFRESH_OFFSET, GRAPH_REFRESH_LIMIT, signal, undefined, false);
             this.postGraphDataPushIfChanged(context.id, undefined, data);
         } catch (error) {
             if (isAbortError(error)) { return; }
@@ -356,6 +360,13 @@ export class GraphMessageRouter {
         this.pending.set(key, ctrl);
         try {
             const request = this.lastGraphDataRequest;
+            if (await this.invalidateMissingBranchFilter(request.filters, request.repository, ctrl.signal)) {
+                this.lastGraphDataRequest = {
+                    ...request,
+                    filters: { ...request.filters, branches: undefined },
+                };
+                return;
+            }
             const data = await this.buildGraphData(
                 request.filters,
                 request.page.offset,
@@ -450,6 +461,24 @@ export class GraphMessageRouter {
 
     private postEmptyGraphDataIfChanged(): void {
         this.postGraphDataPushIfChanged(NO_REPOSITORY_ID, undefined, emptyGraphData());
+    }
+
+    private async invalidateMissingBranchFilter(
+        filters: GraphFilters,
+        repository: RepositoryLocator | undefined,
+        signal?: AbortSignal,
+    ): Promise<boolean> {
+        if (!filters.branches?.length) { return false; }
+        const branches = await this.requireRuntimeRepositoryForRequest(repository).listBranches(signal);
+        const availableRefs = new Set<string>(['HEAD']);
+        for (const branch of branches) {
+            availableRefs.add(branch.name);
+            availableRefs.add(branch.isRemote ? `refs/remotes/${branch.name}` : `refs/heads/${branch.name}`);
+        }
+        const missingBranch = filters.branches.find((branch) => !availableRefs.has(branch));
+        if (!missingBranch) { return false; }
+        this.postBranchFilterInvalidation({ branch: missingBranch, repository });
+        return true;
     }
 
     private async buildGraphSubmodules(repository: RepositoryLocator | undefined, signal?: AbortSignal): Promise<readonly GraphSubmoduleInfo[]> {
@@ -654,11 +683,7 @@ export class GraphMessageRouter {
 
     private async refreshAfterRepositoryChange(invalidatedBranchFilter?: BranchFilterInvalidation): Promise<void> {
         if (invalidatedBranchFilter) {
-            this.postMessage({
-                type: 'graph/branchFilterInvalidated',
-                branch: invalidatedBranchFilter.branch,
-                ...repositoryMessageProperty(invalidatedBranchFilter.repository),
-            });
+            this.postBranchFilterInvalidation(invalidatedBranchFilter);
         } else {
             this.requestGraphRefresh();
         }
@@ -674,6 +699,14 @@ export class GraphMessageRouter {
                 code: 'refreshFailed',
             });
         }
+    }
+
+    private postBranchFilterInvalidation(invalidation: BranchFilterInvalidation): void {
+        this.postMessage({
+            type: 'graph/branchFilterInvalidated',
+            branch: invalidation.branch,
+            ...repositoryMessageProperty(invalidation.repository),
+        });
     }
 
     requestGraphRefresh(): void {

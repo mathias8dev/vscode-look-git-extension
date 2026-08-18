@@ -163,6 +163,84 @@ describe('GraphMessageRouter', () => {
         expect(executeGraphData).toHaveBeenCalledTimes(2);
     });
 
+    it('invalidates a selected branch renamed outside Look Git before refreshing', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        repo.commitFile('README.md', 'initial\n', 'initial commit');
+        repo.git(['branch', '-m', 'develop']);
+        const context = repoContext({ id: 'repo-id', cwd: repo.cwd, kind: RepoKind.Main, label: 'repo' });
+        const registry = runtimeRegistryForUnbornContext(context);
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(
+            repositoryAccessor(context),
+            (message) => { messages.push(message); },
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            registry,
+        );
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph:replace:0:0',
+            repoId: context.id,
+            filters: { branches: ['develop'] },
+            page: { offset: 0, limit: 300 },
+        });
+        expect(messages).toContainEqual(expect.objectContaining({
+            type: 'graph/dataResponse',
+            data: expect.objectContaining({ currentBranch: 'develop' }),
+        }));
+
+        messages.length = 0;
+        repo.git(['branch', '-m', 'main']);
+        await router.refreshGraphData();
+
+        expect(messages).toContainEqual({
+            type: 'graph/branchFilterInvalidated',
+            branch: 'develop',
+        });
+        expect(messages.some((message) => message.type === 'graph/error')).toBe(false);
+    });
+
+    it('invalidates a stale branch filter before serving a graph data request', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        repo.commitFile('README.md', 'initial\n', 'initial commit');
+        repo.git(['branch', '-m', 'develop']);
+        repo.git(['branch', '-m', 'main']);
+        const context = repoContext({ id: 'repo-id', cwd: repo.cwd, kind: RepoKind.Main, label: 'repo' });
+        const registry = runtimeRegistryForUnbornContext(context);
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const router = new GraphMessageRouter(
+            repositoryAccessor(context),
+            (message) => { messages.push(message); },
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            registry,
+        );
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph:replace:0:0',
+            repoId: context.id,
+            filters: { branches: ['develop'] },
+            page: { offset: 0, limit: 300 },
+        });
+
+        expect(messages).toEqual([{
+            type: 'graph/branchFilterInvalidated',
+            branch: 'develop',
+        }]);
+    });
+
     it('responds with the default branch and WIP for an initialized repository without commits', async () => {
         const repo = createTempGitRepo();
         repos.push(repo);
