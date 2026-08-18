@@ -74,22 +74,51 @@ jobs:
   release:
     name: Release
     needs: [unit, e2e]
-    # Only release once the whole matrix is green, and only from pushes to main.
-    # Release branches validate the candidate; main owns the published tag.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: read
     steps:
+      - name: Resolve merged release pull request
+        id: release_pr
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const repository = context.payload.repository;
+            const pulls = await github.paginate(
+              github.rest.repos.listPullRequestsAssociatedWithCommit,
+              {
+                ...context.repo,
+                commit_sha: context.sha,
+              },
+            );
+            const releasePull = pulls.find(({ merged_at, base, head }) => (
+              merged_at !== null
+              && base.ref === repository.default_branch
+              && head.repo?.full_name === repository.full_name
+              && head.ref.startsWith('release/')
+            ));
+
+            core.setOutput('eligible', releasePull !== undefined);
+            if (releasePull) {
+              core.notice(`Publishing merged release pull request #${releasePull.number}.`);
+            } else {
+              core.notice('No merged release/* pull request is associated with this commit; skipping publication.');
+            }
       - uses: actions/checkout@v7
+        if: steps.release_pr.outputs.eligible == 'true'
         with:
           fetch-depth: 0
       - uses: actions/setup-node@v7
+        if: steps.release_pr.outputs.eligible == 'true'
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
+      - if: steps.release_pr.outputs.eligible == 'true'
+        run: npm ci
       - name: Resolve version and tag state
+        if: steps.release_pr.outputs.eligible == 'true'
         id: meta
         run: |
           version="$(node -p "require('./package.json').version")"
@@ -102,10 +131,10 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Package VSIX
-        if: steps.meta.outputs.exists == 'false'
+        if: steps.release_pr.outputs.eligible == 'true' && steps.meta.outputs.exists == 'false'
         run: npm run vsix -- release
       - name: Create tag and GitHub release
-        if: steps.meta.outputs.exists == 'false'
+        if: steps.release_pr.outputs.eligible == 'true' && steps.meta.outputs.exists == 'false'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.meta.outputs.version }}
