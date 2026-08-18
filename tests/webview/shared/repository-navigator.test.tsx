@@ -17,7 +17,7 @@ describe('RepositoryNavigator', () => {
         expect(screen.queryByRole('list')).not.toBeInTheDocument();
     });
 
-    it('keeps active repository content visible while exposing child repositories', () => {
+    it('keeps a sole workspace repository active without exposing a redundant parent level', () => {
         const onNavigate = vi.fn<(contextId: string | undefined) => void>();
         renderNavigator({
             activeContextId: { status: 'ready', data: 'platform' },
@@ -33,6 +33,7 @@ describe('RepositoryNavigator', () => {
 
         expect(screen.getByText('Repository content')).toBeInTheDocument();
         expect(screen.getByText('api')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Back to repositories' })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Show nested repositories' })).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: /api/ }));
@@ -182,6 +183,7 @@ describe('RepositoryNavigator', () => {
                 data: [
                     repositorySummary('workspace', '/workspace'),
                     repositorySummary('app', '/workspace/modules/app', 'main', 'workspace'),
+                    repositorySummary('tools', '/tools'),
                 ],
             },
         });

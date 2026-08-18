@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as path from 'path';
 import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
 import type { GitBranch, GitStatus } from '@core/git/domain/git-status';
 import type { GitTag } from '@core/git/domain/git-status';
@@ -366,16 +367,12 @@ describe('GraphMessageRouter', () => {
         }]);
     });
 
-    it('excludes discovered child repositories from worktree WIPs and details for the requested repository', async () => {
-        const currentContext = repoContext({ id: 'other-id', cwd: '/other', kind: RepoKind.Main, label: 'other' });
-        const parentContext = repoContext({ id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' });
-        const childContext = repoContext({
-            id: 'android-id',
-            cwd: '/repo/android/engage_android',
-            kind: RepoKind.Main,
-            parentId: parentContext.id,
-            label: 'engage_android',
-        });
+    it('excludes an undiscovered nested repository from worktree WIPs and details', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        repo.mkdir('android/engage_android');
+        repo.git(['-C', 'android/engage_android', 'init', '-q']);
+        const parentContext = repoContext({ id: 'repo-id', cwd: repo.cwd, kind: RepoKind.Main, label: 'repo' });
         const status: GitStatus = {
             staged: [],
             unstaged: [
@@ -387,13 +384,13 @@ describe('GraphMessageRouter', () => {
             conflictState: 'none',
         };
         const registry = new RepositoryRegistry();
-        registerRuntimeRepository(registry, fixedStatusRuntime(status));
+        registerRuntimeRepository(registry, fixedStatusRuntime(status), repo.cwd);
         const messages: GraphExtensionToWebviewMessage[] = [];
         const getGraphData = new GetGraphDataUseCase();
         const executeGraphData = vi.spyOn(getGraphData, 'execute').mockResolvedValue(graphDataResult());
-        const repository = { repoId: 'repo-id', kind: 'main', path: '/repo' } satisfies RepositoryLocator;
+        const repository = { repoId: 'repo-id', kind: 'main', path: repo.cwd } satisfies RepositoryLocator;
         const router = new GraphMessageRouter(
-            repositoryAccessor(currentContext, [currentContext, parentContext, childContext]),
+            repositoryAccessor(parentContext),
             (message) => { messages.push(message); },
             async () => {},
             getGraphData,
@@ -407,7 +404,7 @@ describe('GraphMessageRouter', () => {
         await router.handle({
             type: 'graph/dataRequest',
             requestId: 'graph:replace:0:0',
-            repoId: currentContext.id,
+            repoId: parentContext.id,
             repository,
             filters: {},
             page: { offset: 0, limit: 300 },
@@ -415,17 +412,17 @@ describe('GraphMessageRouter', () => {
         const resolveWorktreeWips = executeGraphData.mock.calls[0]?.[4]?.resolveWorktreeWips;
         expect(resolveWorktreeWips).toBeDefined();
         const wips = await resolveWorktreeWips!([
-            gitWorktree({ path: '/repo', head: 'abc123', branch: 'main', isMain: true }),
+            gitWorktree({ path: repo.cwd, head: 'abc123', branch: 'main', isMain: true }),
         ]);
         await router.handle({
             type: 'graph/worktreeDetailsRequest',
             requestId: 'worktree-details-1',
-            path: '/repo',
+            path: repo.cwd,
             repository,
         });
 
         expect(wips).toEqual([{
-            path: '/repo',
+            path: repo.cwd,
             head: 'abc123',
             branch: 'main',
             staged: 0,
@@ -436,7 +433,7 @@ describe('GraphMessageRouter', () => {
         expect(messages).toContainEqual({
             type: 'graph/worktreeDetailsResponse',
             requestId: 'worktree-details-1',
-            path: '/repo',
+            path: repo.cwd,
             head: 'abc123',
             branch: 'main',
             files: [
@@ -781,19 +778,19 @@ function neverRuntime(): GitRuntime {
     };
 }
 
-function registerRuntimeRepository(registry: RepositoryRegistry, runtime: GitRuntime): void {
+function registerRuntimeRepository(registry: RepositoryRegistry, runtime: GitRuntime, cwd = '/repo'): void {
     registry.registerRepository(new RuntimeGitRepository({
         repoId: 'repo-id',
-        cwd: '/repo',
-        gitDir: '/repo/.git',
+        cwd,
+        gitDir: path.join(cwd, '.git'),
         kind: 'main',
         label: 'repo',
     }, runtime));
     registry.registerWorktree(new RuntimeWorktree({
         repoId: 'repo-id',
         worktreeId: 'repo-id',
-        path: '/repo',
-        gitDir: '/repo/.git',
+        path: cwd,
+        gitDir: path.join(cwd, '.git'),
         repositoryKind: 'main',
         isMain: true,
         head: 'abc123',

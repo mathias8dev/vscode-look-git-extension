@@ -47,6 +47,7 @@ import {
     excludeNestedRepositoryChanges,
     excludeNestedRepositoryWorktreeFiles,
     nestedRepositoryPaths,
+    resolveNestedRepositoryPaths,
 } from '@extension/repositories/nested-repository-boundaries';
 
 type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
@@ -232,7 +233,11 @@ export class GraphMessageRouter {
                 const runtimeWorktree = this.runtimeTargetsForWorktree(msg.repository, msg.worktree, msg.path).worktree;
                 if (!runtimeWorktree) { throw new Error('No runtime worktree available.'); }
                 const details = await this.getWorktreeDetails.execute(runtimeWorktree);
-                const repositoryPaths = this.nestedRepositoryPathsForWorktree(msg.repository, runtimeWorktree.path);
+                const repositoryPaths = await this.nestedRepositoryPathsForWorktree(
+                    msg.repository,
+                    runtimeWorktree.path,
+                    details.files.filter((file) => file.status === '?').map((file) => file.filePath),
+                );
                 const response: WorktreeDetailsResponse = {
                     type: 'graph/worktreeDetailsResponse',
                     requestId: msg.requestId,
@@ -491,7 +496,12 @@ export class GraphMessageRouter {
                 const status = await runtimeWorktree.getStatus(signal);
                 const visibleStatus = excludeNestedRepositoryChanges(
                     status,
-                    this.nestedRepositoryPathsForWorktree(repository, worktree.path),
+                    await this.nestedRepositoryPathsForWorktree(
+                        repository,
+                        worktree.path,
+                        untrackedStatusPaths(status),
+                        signal,
+                    ),
                 );
                 return toGraphWorktreeWip(worktree, visibleStatus);
             } catch (error) {
@@ -503,16 +513,19 @@ export class GraphMessageRouter {
         return wips.filter((wip): wip is GraphWorktreeWip => wip !== undefined);
     }
 
-    private nestedRepositoryPathsForWorktree(
+    private async nestedRepositoryPathsForWorktree(
         repository: RepositoryLocator | undefined,
         worktreePath: string,
-    ): ReadonlySet<string> {
+        untrackedPaths: readonly string[],
+        signal?: AbortSignal,
+    ): Promise<ReadonlySet<string>> {
         const context = this.repositories.contexts.find((candidate) => samePath(candidate.cwd, worktreePath))
             ?? (repository
                 ? this.repositories.contexts.find((candidate) => candidate.id === repository.repoId
                     || samePath(candidate.cwd, repository.path))
                 : this.repositories.currentContext);
-        return context ? nestedRepositoryPaths(context, this.repositories.contexts) : new Set();
+        const knownRepositoryPaths = context ? nestedRepositoryPaths(context, this.repositories.contexts) : new Set<string>();
+        return resolveNestedRepositoryPaths(worktreePath, untrackedPaths, knownRepositoryPaths, signal);
     }
 
     private async handleRepositoryCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/repositoryCommand' }>): Promise<void> {
@@ -704,6 +717,12 @@ function toGraphWorktreeWip(worktree: GitWorktree, status: GitStatus): GraphWork
         branch: worktree.branch?.replace(/^refs\/heads\//, ''),
         ...summary,
     };
+}
+
+function untrackedStatusPaths(status: GitStatus): readonly string[] {
+    return [...status.staged, ...status.unstaged, ...status.conflicts]
+        .filter((entry) => entry.indexStatus === '?' || entry.workTreeStatus === '?')
+        .map((entry) => entry.filePath);
 }
 
 function graphRequestKey(repoId: string, repository: RepositoryLocator | undefined, kind: 'replace' | 'more' | 'submodules'): string {

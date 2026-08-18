@@ -54,24 +54,27 @@ export function RepositoryNavigator({
     const activeRepository = readyRepositories.find((repository) => repository.context.id === activeContextId.data);
     if (activeRepository) {
         const childRepositories = readyRepositories.filter((repository) => repository.context.parentId === activeRepository.context.id);
+        const canNavigateBack = Boolean(activeRepository.context.parentId) || navigation.repositories.length > 1;
         const childrenCollapsed = collapsedRepositoryIds.includes(activeRepository.context.id);
         const childListId = `repository-children-${activeRepository.context.id}`;
         return (
             <section className="repository-navigator repository-navigator-detail repository-navigator-enter" aria-label={title}>
-                <div className="repository-navigator-detail-header">
-                    <IconButton
-                        icon="arrow-left"
-                        title={activeRepository.context.parentId ? 'Back to parent repository' : 'Back to repositories'}
-                        onClick={() => {
-                            setQuery('');
-                            onNavigate(activeRepository.context.parentId);
-                        }}
-                    />
-                    <div className="repository-navigator-detail-text">
-                        <span className="repository-navigator-detail-label">{title}</span>
-                        <strong>{activeRepository.context.label}</strong>
+                {canNavigateBack ? (
+                    <div className="repository-navigator-detail-header">
+                        <IconButton
+                            icon="arrow-left"
+                            title={activeRepository.context.parentId ? 'Back to parent repository' : 'Back to repositories'}
+                            onClick={() => {
+                                setQuery('');
+                                onNavigate(activeRepository.context.parentId);
+                            }}
+                        />
+                        <div className="repository-navigator-detail-text">
+                            <span className="repository-navigator-detail-label">{title}</span>
+                            <strong>{activeRepository.context.label}</strong>
+                        </div>
                     </div>
-                </div>
+                ) : undefined}
                 {childRepositories.length > 0 ? (
                     <section className="repository-navigator-children" aria-label={`Repositories in ${activeRepository.context.label}`}>
                         <button
