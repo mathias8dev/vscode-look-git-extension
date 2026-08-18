@@ -5,6 +5,7 @@ import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type * as vscode from 'vscode';
 import { discoverChildRepositoryContexts, discoverRepositoryContexts } from '@extension/repositories/repository-discovery';
+import { createRepoContext } from '@extension/repositories/repo-context-factory';
 import { Uri } from '@tests/mocks/vscode';
 import { createSubmoduleFixture, createTempGitRepo, removeDirSyncWithRetry, samePath, type TempGitRepo } from '@tests/helpers/git-repo';
 
@@ -102,6 +103,35 @@ describe('repository discovery', () => {
         expect(contexts).toHaveLength(0);
     });
 
+    it('discovers repositories at the configured filesystem depth', async () => {
+        const root = tempRoot();
+        const checkout = initRepoAt(path.join(root, 'clients', 'desktop'));
+
+        const contexts = await discoverRepositoryContexts({
+            workspaceFolders: [workspaceFolder(root)],
+            resolveRepositoryScanMaxDepth: () => 2,
+        });
+
+        expect(contexts.some((context) => samePath(context.cwd, checkout))).toBe(true);
+        expect(contexts).toHaveLength(1);
+    });
+
+    it('resolves the filesystem depth independently for each workspace folder', async () => {
+        const shallowRoot = tempRoot();
+        const deepRoot = tempRoot();
+        const shallowCheckout = initRepoAt(path.join(shallowRoot, 'clients', 'desktop'));
+        const deepCheckout = initRepoAt(path.join(deepRoot, 'clients', 'desktop'));
+
+        const contexts = await discoverRepositoryContexts({
+            workspaceFolders: [workspaceFolder(shallowRoot), workspaceFolder(deepRoot)],
+            resolveRepositoryScanMaxDepth: (folder) => samePath(folder.uri.fsPath, deepRoot) ? 2 : 1,
+        });
+
+        expect(contexts.some((context) => samePath(context.cwd, shallowCheckout))).toBe(false);
+        expect(contexts.some((context) => samePath(context.cwd, deepCheckout))).toBe(true);
+        expect(contexts).toHaveLength(1);
+    });
+
     it('discovers nested repositories below a workspace repository with parent contexts', async () => {
         const parent = tempRepo();
         const child = initRepoAt(path.join(parent.cwd, 'child'));
@@ -142,6 +172,21 @@ describe('repository discovery', () => {
         expect(childContext).toBeDefined();
         expect(childContext?.parentId).toBe(parentContext.id);
         expect(childContexts).toHaveLength(1);
+    });
+
+    it('uses the configured depth when discovering children of a known repository', async () => {
+        const parent = tempRepo();
+        const child = initRepoAt(path.join(parent.cwd, 'packages', 'app'));
+        const parentContext = createRepoContext(parent.cwd);
+
+        const defaultDepthContexts = await discoverChildRepositoryContexts(parentContext);
+        const configuredDepthContexts = await discoverChildRepositoryContexts(parentContext, 2);
+        const childContext = configuredDepthContexts.find((context) => samePath(context.cwd, child));
+
+        expect(defaultDepthContexts.some((context) => samePath(context.cwd, child))).toBe(false);
+        expect(childContext).toBeDefined();
+        expect(childContext?.parentId).toBe(parentContext.id);
+        expect(configuredDepthContexts).toHaveLength(1);
     });
 
     it('does not list registered submodules as nested repositories', async () => {

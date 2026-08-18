@@ -19,6 +19,7 @@ if (!fs.existsSync(workspacePath)) {
     createRepository(path.join(workspacePath, 'app'), 'feature/app-work', 'src/app.ts', 'app working change\n');
     createRepository(path.join(workspacePath, 'api'), 'main', 'src/api.ts', 'api working change\n');
     createRepository(path.join(workspacePath, 'app', 'plugin'), 'main', 'src/plugin.ts', 'plugin working change\n');
+    createRepository(path.join(workspacePath, 'containers', 'deep-repository'), 'main', 'src/deep.ts', 'deep repository working change\n');
 }
 
 process.env.LOOK_GIT_WDIO_MULTIREPO_WORKSPACE = workspacePath;

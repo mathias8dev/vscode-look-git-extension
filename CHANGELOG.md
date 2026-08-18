@@ -4,6 +4,11 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+### Added
+
+#### Multi-Repo
+- Add a resource-scoped `lookGit.repositoryScanMaxDepth` setting with live repository redetection and independent values for each workspace folder
+
 ## [1.2.8] - 2026-08-13
 
 ### Added

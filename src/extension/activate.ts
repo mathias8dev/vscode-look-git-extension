@@ -9,6 +9,7 @@ import { VscodeGitRemoteRuntime } from '@extension/git/vscode-git-remote-runtime
 import { RepositoryRuntimeRegistrar } from '@extension/repositories/repository-runtime-registrar';
 import { RepositorySelectionStore } from '@extension/repositories/repository-selection-store';
 import { discoverChildRepositoryContexts, discoverRepositoryContexts } from '@extension/repositories/repository-discovery';
+import { getRepositoryScanMaxDepth, registerRepositoryScanMaxDepthListener } from '@extension/repositories/repository-discovery-settings';
 import { RepositorySummaryService } from '@extension/repositories/repository-summary';
 import { RepositoryRefreshCoordinator } from '@extension/repositories/repository-refresh-coordinator';
 import { registerRuntimeContextWithRecovery } from '@extension/repositories/runtime-registration-recovery';
@@ -194,6 +195,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         notifyRepositoriesChanged();
         const discoveredContexts = await discoverRepositoryContexts({
             workspaceFolders: vscode.workspace.workspaceFolders,
+            resolveRepositoryScanMaxDepth: (workspaceFolder) => getRepositoryScanMaxDepth(workspaceFolder.uri),
         });
         if (generation !== repositoryStateGeneration) { return; }
         const contexts = await mergeDynamicRepositoryContexts(discoveredContexts);
@@ -233,7 +235,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (childDiscoveryInFlight.has(repoContext.id)) { return; }
         childDiscoveryInFlight.add(repoContext.id);
         try {
-            const childContexts = await discoverChildRepositoryContexts(repoContext);
+            const childContexts = await discoverChildRepositoryContexts(
+                repoContext,
+                getRepositoryScanMaxDepth(vscode.Uri.file(repoContext.cwd)),
+            );
             if (!repositories.contexts.some((contextItem) => contextItem.id === repoContext.id)) { return; }
             const knownContextIds = new Set(repositories.contexts.map((contextItem) => contextItem.id));
             const missingContexts = childContexts.filter((contextItem) => !knownContextIds.has(contextItem.id));
@@ -285,7 +290,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             for (const parentId of parentIdsToScan) {
                 const parentContext = contextsById.get(parentId);
                 if (!parentContext) { continue; }
-                for (const childContext of await discoverChildRepositoryContexts(parentContext)) {
+                for (const childContext of await discoverChildRepositoryContexts(
+                    parentContext,
+                    getRepositoryScanMaxDepth(vscode.Uri.file(parentContext.cwd)),
+                )) {
                     refreshedDynamicContexts.set(childContext.id, childContext);
                     const wasKnownDynamicParent = dynamicParentIds.has(childContext.id);
                     if (!contextsById.has(childContext.id)) {
@@ -353,6 +361,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         registerGitBlobDocumentProvider(),
         gitWatcher,
         repositoryDiscoveryWatcher,
+        registerRepositoryScanMaxDepthListener(debouncedSyncDiscoveredRepositories),
         ...changesProvider.registerNativeContextCommands(),
         ...commitHistoryProvider.registerNativeContextCommands(),
         ...graphProvider.registerNativeContextCommands(),

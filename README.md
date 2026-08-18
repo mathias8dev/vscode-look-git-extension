@@ -11,6 +11,7 @@ A modern, Git extension for Visual Studio Code — featuring a visual commit gra
 - **Repository discovery** — open a Git repository or a plain workspace folder that contains multiple Git repositories
 - **Repository navigator** — Changes, Commit History, and Look Graph show a repository list when multiple repositories are available, then navigate into the selected repository
 - **Nested repository navigation** — browse one repository level at a time, with back navigation for repository containers that include child repositories
+- **Configurable repository scan depth** — set `lookGit.repositoryScanMaxDepth` for the current workspace folder to control how deeply Look Git searches for repositories; the default is `1`
 - **Cross-platform path handling** — repository and worktree matching is canonicalized for macOS path aliases, Windows casing, symlinks, and junctions
 
 ### Changes Panel
@@ -124,13 +125,18 @@ Toggle inline blame or full-file annotations from Look Git commands and jump fro
 - Visual Studio Code 1.85 or later
 - A Git repository opened in VS Code
 
-## Git Blame Settings
+## Settings
 
-- `lookGit.inlineBlame.enabled` — automatically show inline blame on the active editor line
-- `lookGit.blame.mergeCommitLines` — show full-file blame text only on the first line of each commit block
-- `lookGit.blame.highlightChangedLines` — highlight all lines belonging to the commit under the cursor
-- `lookGit.blame.dateFormatStyle` — choose `date`, `dateTime`, `time`, `relative`, or `iso`
-- `lookGit.blame.authorNameStyle` — choose `full`, `first`, or `last`
+| Setting | Default | Description |
+| --- | --- | --- |
+| `lookGit.fontSize` | `0` | Font size used by Look Git webviews. Set to `0` to follow VS Code's `editor.fontSize`. |
+| `lookGit.repositoryScanMaxDepth` | `1` | Maximum directory depth scanned for Git repositories. This setting is resource-scoped, so each workspace folder can use its own value. |
+| `lookGit.commitMessageEditor` | `window` | Commit message editor used when rewording: `window`, `editor`, or `input`. |
+| `lookGit.inlineBlame.enabled` | `false` | Automatically show inline blame for the active editor line. |
+| `lookGit.blame.mergeCommitLines` | `false` | Show full-file blame text only on the first line of each commit block. |
+| `lookGit.blame.highlightChangedLines` | `false` | Highlight every line belonging to the commit under the cursor. |
+| `lookGit.blame.dateFormatStyle` | `date` | Blame date format: `date`, `dateTime`, `time`, `relative`, or `iso`. |
+| `lookGit.blame.authorNameStyle` | `full` | Blame author name format: `full`, `first`, or `last`. |
 
 ## Known Limitations
 

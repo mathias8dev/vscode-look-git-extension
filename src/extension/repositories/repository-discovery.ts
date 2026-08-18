@@ -4,9 +4,9 @@ import type * as vscode from 'vscode';
 import type { RepoContext } from '@core/git/domain/repo-context';
 import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { createRepoContext } from '@extension/repositories/repo-context-factory';
+import { DEFAULT_REPOSITORY_SCAN_MAX_DEPTH, normalizeRepositoryScanMaxDepth } from '@extension/repositories/repository-scan-depth';
 import { isPathInside, normalizePathForComparison, samePath } from '@extension/utils/path-compare';
 
-const MAX_REPOSITORY_DISCOVERY_DEPTH = 1;
 const IGNORED_DIRECTORY_NAMES = new Set([
     '.git',
     '.vscode',
@@ -20,18 +20,20 @@ const IGNORED_DIRECTORY_NAMES = new Set([
 
 export interface RepositoryDiscoveryInput {
     readonly workspaceFolders: readonly vscode.WorkspaceFolder[] | undefined;
+    readonly resolveRepositoryScanMaxDepth?: (workspaceFolder: vscode.WorkspaceFolder) => number;
 }
 
 export async function discoverRepositoryContexts(input: RepositoryDiscoveryInput): Promise<readonly RepoContext[]> {
     const contexts = new Map<string, RepoContext>();
 
     for (const folder of input.workspaceFolders ?? []) {
+        const maxDepth = normalizeRepositoryScanMaxDepth(input.resolveRepositoryScanMaxDepth?.(folder));
         const workspaceContext = await discoverWorkspaceRepositoryContext(folder.uri.fsPath);
         if (workspaceContext) {
             addContext(contexts, workspaceContext);
         }
 
-        for (const context of await discoverNestedRepositoryContexts(folder.uri.fsPath, workspaceContext)) {
+        for (const context of await discoverNestedRepositoryContexts(folder.uri.fsPath, workspaceContext, maxDepth)) {
             addContext(contexts, context);
         }
     }
@@ -39,8 +41,11 @@ export async function discoverRepositoryContexts(input: RepositoryDiscoveryInput
     return [...contexts.values()];
 }
 
-export async function discoverChildRepositoryContexts(parentContext: RepoContext): Promise<readonly RepoContext[]> {
-    return discoverNestedRepositoryContexts(parentContext.cwd, parentContext);
+export async function discoverChildRepositoryContexts(
+    parentContext: RepoContext,
+    maxDepth = DEFAULT_REPOSITORY_SCAN_MAX_DEPTH,
+): Promise<readonly RepoContext[]> {
+    return discoverNestedRepositoryContexts(parentContext.cwd, parentContext, normalizeRepositoryScanMaxDepth(maxDepth));
 }
 
 async function discoverWorkspaceRepositoryContext(cwd: string): Promise<RepoContext | undefined> {
@@ -52,7 +57,11 @@ async function discoverWorkspaceRepositoryContext(cwd: string): Promise<RepoCont
     }
 }
 
-async function discoverNestedRepositoryContexts(workspacePath: string, workspaceContext?: RepoContext): Promise<readonly RepoContext[]> {
+async function discoverNestedRepositoryContexts(
+    workspacePath: string,
+    workspaceContext: RepoContext | undefined,
+    maxDepth: number,
+): Promise<readonly RepoContext[]> {
     const contexts: RepoContext[] = [];
     const scanRoot = workspaceContext?.cwd ?? workspacePath;
     const registeredSubmodulePathsByParentId = new Map<string, Promise<readonly string[]>>();
@@ -74,14 +83,14 @@ async function discoverNestedRepositoryContexts(workspacePath: string, workspace
         if (!isWorkspaceRepositoryRoot && await hasGitMarker(current.dirPath)) {
             const context = await discoverRepositoryContextAtRoot(current.dirPath, current.parentContext);
             if (context) { contexts.push(context); }
-            if (current.depth >= MAX_REPOSITORY_DISCOVERY_DEPTH) { continue; }
+            if (current.depth >= maxDepth) { continue; }
             for (const childPath of await readableChildDirectories(current.dirPath)) {
                 queue.push({ dirPath: childPath, depth: current.depth + 1, parentContext: context });
             }
             continue;
         }
 
-        if (current.depth >= MAX_REPOSITORY_DISCOVERY_DEPTH) { continue; }
+        if (current.depth >= maxDepth) { continue; }
 
         for (const childPath of await readableChildDirectories(current.dirPath)) {
             queue.push({ dirPath: childPath, depth: current.depth + 1, parentContext: current.parentContext });

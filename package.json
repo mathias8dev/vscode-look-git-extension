@@ -67,6 +67,13 @@
           "minimum": 0,
           "markdownDescription": "Controls the font size used by Look Git webviews. Set to `0` to follow VS Code `editor.fontSize`."
         },
+        "lookGit.repositoryScanMaxDepth": {
+          "type": "integer",
+          "scope": "resource",
+          "default": 1,
+          "minimum": 0,
+          "markdownDescription": "Controls the maximum directory depth used when scanning each workspace folder for Git repositories. Configure this setting per workspace folder when different roots require different scan depths."
+        },
         "lookGit.commitMessageEditor": {
           "type": "string",
           "enum": [

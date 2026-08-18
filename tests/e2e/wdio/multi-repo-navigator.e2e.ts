@@ -51,7 +51,59 @@ describe('multi-repository navigator e2e', () => {
             await closeWebview();
         }
     });
+
+    it('applies repository scan depth to the current workspace folder without reloading', async () => {
+        await waitForLookGitReady();
+        await updateRepositoryScanMaxDepth(1);
+
+        await focusChangesView();
+        await openWebviewBySelector('main.changes-shell');
+        try {
+            await waitForRepositoryOverview(['app', 'api'], ['deep-repository', 'plugin']);
+        } finally {
+            await closeWebview();
+        }
+
+        try {
+            const inspection = await updateRepositoryScanMaxDepth(2);
+            assert.equal(inspection.workspaceFolderValue, 2);
+            assert.equal(inspection.globalValue, undefined);
+
+            await focusChangesView();
+            await openWebviewBySelector('main.changes-shell');
+            try {
+                await waitForRepositoryOverview(['app', 'api', 'deep-repository'], ['plugin']);
+            } finally {
+                await closeWebview();
+            }
+        } finally {
+            await updateRepositoryScanMaxDepth(undefined);
+        }
+    });
 });
+
+async function updateRepositoryScanMaxDepth(value: number | undefined): Promise<{
+    readonly workspaceFolderValue: number | undefined;
+    readonly globalValue: number | undefined;
+}> {
+    return await browser.executeWorkbench(async (vscode, nextValue: number | undefined) => {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) { throw new Error('VS Code did not open a workspace folder.'); }
+        const configuration = vscode.workspace.getConfiguration('lookGit', workspaceFolder.uri);
+        await configuration.update('repositoryScanMaxDepth', nextValue, vscode.ConfigurationTarget.WorkspaceFolder);
+        const inspection: unknown = configuration.inspect('repositoryScanMaxDepth');
+        const workspaceFolderValue = inspection && typeof inspection === 'object' && 'workspaceFolderValue' in inspection
+            ? inspection.workspaceFolderValue
+            : undefined;
+        const globalValue = inspection && typeof inspection === 'object' && 'globalValue' in inspection
+            ? inspection.globalValue
+            : undefined;
+        return {
+            workspaceFolderValue: typeof workspaceFolderValue === 'number' ? workspaceFolderValue : undefined,
+            globalValue: typeof globalValue === 'number' ? globalValue : undefined,
+        };
+    }, value);
+}
 
 async function waitForLookGitReady(): Promise<string> {
     return await browser.executeWorkbench(async (vscode) => {
