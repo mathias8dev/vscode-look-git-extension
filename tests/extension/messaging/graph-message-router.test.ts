@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
-import type { GitBranch } from '@core/git/domain/git-status';
+import type { GitBranch, GitStatus } from '@core/git/domain/git-status';
 import type { GitTag } from '@core/git/domain/git-status';
 import type { GitGraphCommit } from '@core/git/domain/git-commit';
 import type { GitWorktree } from '@core/git/domain/git-worktree';
@@ -16,6 +16,7 @@ import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
 import { RuntimeWorktree } from '@extension/git/runtime-worktree';
 import { GraphMessageRouter } from '@extension/messaging/graph-message-router';
 import { RepositoryRegistry } from '@extension/repositories/repository-registry';
+import type { RepositoryContextAccessor } from '@extension/repositories/repository-selection-store';
 import { createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
 
 describe('GraphMessageRouter', () => {
@@ -31,7 +32,9 @@ describe('GraphMessageRouter', () => {
             supports: () => true,
             async execute<TInput = unknown, TResult = unknown>(operation: SemanticGitOperation, context: GitExecutionContext, input: TInput): Promise<TResult> {
                 calls.push(context);
-                if (operation === 'getCommitFiles') { return [] as TResult; } // Router test exercises this operation as a file-list result.
+                if (operation === 'getCommitFiles') {
+                    return [{ status: 'M', filePath: 'modules/auth-kit', isSubmodule: true }] as TResult; // Router test exercises this operation as a file-list result.
+                }
                 if (operation === 'getCommitMessage') {
                     return `${context.repositoryId}:${commitFromInput(input)}` as TResult; // Router test exercises this operation as a message string.
                 }
@@ -56,7 +59,7 @@ describe('GraphMessageRouter', () => {
             parentRepoId: 'repo-id',
         } satisfies RepositoryLocator;
         const router = new GraphMessageRouter(
-            { currentContext: { id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' } },
+            repositoryAccessor({ id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' }),
             (message) => { messages.push(message); },
             async () => {},
             undefined,
@@ -79,7 +82,7 @@ describe('GraphMessageRouter', () => {
             requestId: 'details-1',
             hash: 'abc123',
             fullMessage: 'submodule-id:abc123',
-            files: [],
+            files: [{ status: 'M', filePath: 'modules/auth-kit', isSubmodule: true }],
         });
         expect(calls.map((call) => call.repositoryId)).toEqual(['submodule-id', 'submodule-id']);
     });
@@ -93,7 +96,7 @@ describe('GraphMessageRouter', () => {
         const registry = runtimeRegistryForUnbornContext(context);
         const messages: GraphExtensionToWebviewMessage[] = [];
         const router = new GraphMessageRouter(
-            { currentContext: context },
+            repositoryAccessor(context),
             (message) => { messages.push(message); },
             async () => {},
             undefined,
@@ -134,7 +137,7 @@ describe('GraphMessageRouter', () => {
         const getGraphData = new GetGraphDataUseCase();
         const executeGraphData = vi.spyOn(getGraphData, 'execute').mockResolvedValue(graphDataResult());
         const router = new GraphMessageRouter(
-            { currentContext: { id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' } },
+            repositoryAccessor({ id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' }),
             (message) => { messages.push(message); },
             async () => {},
             getGraphData,
@@ -167,7 +170,7 @@ describe('GraphMessageRouter', () => {
         const registry = runtimeRegistryForUnbornContext(context);
         const messages: GraphExtensionToWebviewMessage[] = [];
         const router = new GraphMessageRouter(
-            { currentContext: context },
+            repositoryAccessor(context),
             (message) => { messages.push(message); },
             async () => {},
             undefined,
@@ -220,7 +223,7 @@ describe('GraphMessageRouter', () => {
         const registry = runtimeRegistryForUnbornContext(context);
         const messages: GraphExtensionToWebviewMessage[] = [];
         const router = new GraphMessageRouter(
-            { currentContext: context },
+            repositoryAccessor(context),
             (message) => { messages.push(message); },
             async () => {},
             undefined,
@@ -269,7 +272,7 @@ describe('GraphMessageRouter', () => {
             parentRepoId: context.parentId,
         } satisfies RepositoryLocator;
         const router = new GraphMessageRouter(
-            { currentContext: repoContext({ id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' }) },
+            repositoryAccessor(repoContext({ id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' })),
             (message) => { messages.push(message); },
             async () => {},
             undefined,
@@ -325,7 +328,7 @@ describe('GraphMessageRouter', () => {
         const getGraphData = new GetGraphDataUseCase();
         const executeGraphData = vi.spyOn(getGraphData, 'execute').mockResolvedValue(graphDataResult());
         const router = new GraphMessageRouter(
-            { currentContext: { id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' } },
+            repositoryAccessor({ id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' }),
             (message) => { messages.push(message); },
             async () => {},
             getGraphData,
@@ -363,6 +366,86 @@ describe('GraphMessageRouter', () => {
         }]);
     });
 
+    it('excludes discovered child repositories from worktree WIPs and details for the requested repository', async () => {
+        const currentContext = repoContext({ id: 'other-id', cwd: '/other', kind: RepoKind.Main, label: 'other' });
+        const parentContext = repoContext({ id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' });
+        const childContext = repoContext({
+            id: 'android-id',
+            cwd: '/repo/android/engage_android',
+            kind: RepoKind.Main,
+            parentId: parentContext.id,
+            label: 'engage_android',
+        });
+        const status: GitStatus = {
+            staged: [],
+            unstaged: [
+                statusEntry('?', '?', '.gitignore'),
+                statusEntry('?', '?', 'android/engage_android/'),
+                statusEntry('?', '?', 'notes/'),
+            ],
+            conflicts: [],
+            conflictState: 'none',
+        };
+        const registry = new RepositoryRegistry();
+        registerRuntimeRepository(registry, fixedStatusRuntime(status));
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const getGraphData = new GetGraphDataUseCase();
+        const executeGraphData = vi.spyOn(getGraphData, 'execute').mockResolvedValue(graphDataResult());
+        const repository = { repoId: 'repo-id', kind: 'main', path: '/repo' } satisfies RepositoryLocator;
+        const router = new GraphMessageRouter(
+            repositoryAccessor(currentContext, [currentContext, parentContext, childContext]),
+            (message) => { messages.push(message); },
+            async () => {},
+            getGraphData,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            registry,
+        );
+
+        await router.handle({
+            type: 'graph/dataRequest',
+            requestId: 'graph:replace:0:0',
+            repoId: currentContext.id,
+            repository,
+            filters: {},
+            page: { offset: 0, limit: 300 },
+        });
+        const resolveWorktreeWips = executeGraphData.mock.calls[0]?.[4]?.resolveWorktreeWips;
+        expect(resolveWorktreeWips).toBeDefined();
+        const wips = await resolveWorktreeWips!([
+            gitWorktree({ path: '/repo', head: 'abc123', branch: 'main', isMain: true }),
+        ]);
+        await router.handle({
+            type: 'graph/worktreeDetailsRequest',
+            requestId: 'worktree-details-1',
+            path: '/repo',
+            repository,
+        });
+
+        expect(wips).toEqual([{
+            path: '/repo',
+            head: 'abc123',
+            branch: 'main',
+            staged: 0,
+            unstaged: 0,
+            untracked: 2,
+            conflicts: 0,
+        }]);
+        expect(messages).toContainEqual({
+            type: 'graph/worktreeDetailsResponse',
+            requestId: 'worktree-details-1',
+            path: '/repo',
+            head: 'abc123',
+            branch: 'main',
+            files: [
+                { status: '?', filePath: '.gitignore', origPath: undefined },
+                { status: '?', filePath: 'notes/', origPath: undefined },
+            ],
+        });
+    });
+
     it('resolves worktree WIPs for a submodule repository locator', async () => {
         const registry = new RepositoryRegistry();
         const runtime = statusRuntime('/repo/modules/auth-kit');
@@ -390,7 +473,7 @@ describe('GraphMessageRouter', () => {
         const getGraphData = new GetGraphDataUseCase();
         const executeGraphData = vi.spyOn(getGraphData, 'execute').mockResolvedValue(graphDataResult());
         const router = new GraphMessageRouter(
-            { currentContext: { id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' } },
+            repositoryAccessor({ id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' }),
             (message) => { messages.push(message); },
             async () => {},
             getGraphData,
@@ -443,7 +526,7 @@ describe('GraphMessageRouter', () => {
                 commits: [commit({ hash: 'def456', shortHash: 'def456', message: 'change' })],
             }));
         const router = new GraphMessageRouter(
-            { currentContext: { id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' } },
+            repositoryAccessor({ id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' }),
             (message) => { messages.push(message); },
             async () => {},
             getGraphData,
@@ -469,7 +552,10 @@ describe('GraphMessageRouter', () => {
 
     it('pushes empty graph data instead of a runtime error after the active repository closes', async () => {
         const context = { id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' } satisfies RepoContext;
-        const repositories: { currentContext: RepoContext | undefined } = { currentContext: context };
+        const repositories: { currentContext: RepoContext | undefined; readonly contexts: readonly RepoContext[] } = {
+            currentContext: context,
+            contexts: [context],
+        };
         const registry = new RepositoryRegistry();
         registerRuntimeRepository(registry, neverRuntime());
         const messages: GraphExtensionToWebviewMessage[] = [];
@@ -526,7 +612,7 @@ describe('GraphMessageRouter', () => {
             });
         });
         const router = new GraphMessageRouter(
-            { currentContext: context },
+            repositoryAccessor(context),
             (message) => { messages.push(message); },
             async () => {},
             getGraphData,
@@ -603,7 +689,7 @@ function graphRouter(
     onRepositoryUpdated: () => Promise<void>,
 ): GraphMessageRouter {
     return new GraphMessageRouter(
-        { currentContext: { id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' } },
+        repositoryAccessor({ id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' }),
         (message) => { messages.push(message); },
         onRepositoryUpdated,
         undefined,
@@ -657,6 +743,16 @@ function statusRuntime(dirtyCwd = '/repo'): GitRuntime {
                 } as TResult;
             }
             return { staged: [], unstaged: [], conflicts: [], conflictState: 'none' } as TResult;
+        },
+    };
+}
+
+function fixedStatusRuntime(status: GitStatus): GitRuntime {
+    return {
+        supports: () => true,
+        async execute<_TInput = unknown, TResult = unknown>(operation: SemanticGitOperation): Promise<TResult> {
+            if (operation !== 'getStatus') { throw new Error(`Unexpected operation ${operation}`); }
+            return status as TResult; // The fixture returns the result defined by this semantic operation.
         },
     };
 }
@@ -736,6 +832,13 @@ function runtimeRegistryForUnbornContext(context: RepoContext): RepositoryRegist
 
 function repoContext(context: RepoContext): RepoContext {
     return context;
+}
+
+function repositoryAccessor(
+    currentContext: RepoContext | undefined,
+    contexts: readonly RepoContext[] = currentContext ? [currentContext] : [],
+): RepositoryContextAccessor {
+    return { currentContext, contexts };
 }
 
 function graphDataResult(overrides: Partial<GraphDataResult> = {}): GraphDataResult {

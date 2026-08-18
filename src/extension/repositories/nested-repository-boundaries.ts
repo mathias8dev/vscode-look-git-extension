@@ -28,6 +28,15 @@ export function excludeNestedRepositoryChanges(
     };
 }
 
+export function excludeNestedRepositoryWorktreeFiles<T extends { readonly status: string; readonly filePath: string }>(
+    files: readonly T[],
+    repositoryPaths: ReadonlySet<string>,
+): readonly T[] {
+    if (repositoryPaths.size === 0) { return files; }
+    return files.filter((file) => file.status !== '?'
+        || !repositoryPaths.has(normalizeGitPath(file.filePath)));
+}
+
 function repositoryRelativePath(parentPath: string, childPath: string): string | undefined {
     const relativePath = path.relative(parentPath, childPath);
     if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) { return undefined; }

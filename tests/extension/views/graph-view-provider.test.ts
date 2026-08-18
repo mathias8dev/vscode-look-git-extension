@@ -10,7 +10,7 @@ import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
 describe('GraphViewProvider', () => {
     it('registers every graph commit context action', () => {
         resetVscodeMock();
-        const provider = new GraphViewProvider(vscode.Uri.file('/extension'), { currentContext: undefined });
+        const provider = new GraphViewProvider(vscode.Uri.file('/extension'), { currentContext: undefined, contexts: [] });
 
         provider.registerNativeContextCommands();
 
@@ -21,7 +21,7 @@ describe('GraphViewProvider', () => {
 
     it('navigates from the context commit while multiple commits are selected', async () => {
         resetVscodeMock();
-        const provider = new GraphViewProvider(vscode.Uri.file('/extension'), { currentContext: undefined });
+        const provider = new GraphViewProvider(vscode.Uri.file('/extension'), { currentContext: undefined, contexts: [] });
         const view = makeWebviewView();
         provider.resolveWebviewView(view);
         provider.registerNativeContextCommands();
@@ -49,7 +49,7 @@ describe('GraphViewProvider', () => {
     it('forwards the complete commit selection to graph context commands', async () => {
         resetVscodeMock();
         const handle = vi.spyOn(GraphMessageRouter.prototype, 'handle').mockResolvedValue();
-        const provider = new GraphViewProvider(vscode.Uri.file('/extension'), { currentContext: undefined });
+        const provider = new GraphViewProvider(vscode.Uri.file('/extension'), { currentContext: undefined, contexts: [] });
         const view = makeWebviewView();
         provider.resolveWebviewView(view);
         provider.registerNativeContextCommands();
@@ -79,7 +79,7 @@ describe('GraphViewProvider', () => {
         const onRepositoryNavigation = vi.fn(async () => {});
         const provider = new GraphViewProvider(
             vscode.Uri.file('/extension'),
-            { currentContext: undefined },
+            { currentContext: undefined, contexts: [] },
             async () => {},
             undefined,
             undefined,
@@ -99,7 +99,7 @@ describe('GraphViewProvider', () => {
         const context = { id: 'repo-3', cwd: '/repo-3', kind: RepoKind.Main, label: 'repo-3' } satisfies RepoContext;
         const provider = new GraphViewProvider(
             vscode.Uri.file('/extension'),
-            { currentContext: context },
+            { currentContext: context, contexts: [context] },
             async () => {},
         );
         const view = makeWebviewView();
@@ -120,7 +120,7 @@ describe('GraphViewProvider', () => {
         const beforeRequest = vi.fn(async () => false);
         const provider = new GraphViewProvider(
             vscode.Uri.file('/extension'),
-            { currentContext: context },
+            { currentContext: context, contexts: [context] },
             async () => {},
             undefined,
             undefined,
@@ -143,7 +143,7 @@ describe('GraphViewProvider', () => {
         resetVscodeMock();
         const provider = new GraphViewProvider(
             vscode.Uri.file('/extension'),
-            { currentContext: undefined },
+            { currentContext: undefined, contexts: [] },
             async () => {},
         );
         const view = makeWebviewView();

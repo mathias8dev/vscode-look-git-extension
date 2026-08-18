@@ -5,6 +5,7 @@ import { RepoKind } from '@core/git/domain/repo-context';
 import { createRepoContext, createSubmoduleRepoContext } from '@extension/repositories/repo-context-factory';
 import {
     excludeNestedRepositoryChanges,
+    excludeNestedRepositoryWorktreeFiles,
     nestedRepositoryPaths,
 } from '@extension/repositories/nested-repository-boundaries';
 
@@ -49,6 +50,22 @@ describe('nestedRepositoryBoundaries', () => {
 
         expect([...repositoryPaths]).toEqual(['packages/app']);
         expect(visible).toEqual(status);
+    });
+
+    it('hides only untracked worktree detail files matching registered child repositories', () => {
+        const parent = createRepoContext(path.join(path.sep, 'workspace', 'root'));
+        const child = createRepoContext(path.join(parent.cwd, 'packages', 'app'), parent.id);
+        const repositoryPaths = nestedRepositoryPaths(parent, [parent, child]);
+        const files = [
+            { status: '?', filePath: 'packages/app/' },
+            { status: 'M', filePath: 'packages/app' },
+            { status: '?', filePath: 'packages/app-example/' },
+        ];
+
+        expect(excludeNestedRepositoryWorktreeFiles(files, repositoryPaths)).toEqual([
+            { status: 'M', filePath: 'packages/app' },
+            { status: '?', filePath: 'packages/app-example/' },
+        ]);
     });
 });
 
