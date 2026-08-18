@@ -346,6 +346,12 @@ describe('GraphApp', () => {
         const { GraphApp } = await import('@webview/graph/graph-app');
 
         render(<GraphApp sendMessage={(message) => api.postMessage(message)} />);
+        await waitFor(() => expect(api.messages.some(isGraphDataRequest)).toBe(true));
+        await act(async () => sendToWebview({
+            type: 'graph/dataResponse',
+            requestId: latestGraphDataRequest(api.messages).requestId,
+            data: graphData([]),
+        }));
         const fetchButton = screen.getByRole('button', { name: 'Fetch' });
 
         await act(async () => sendToWebview({

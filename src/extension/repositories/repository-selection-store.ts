@@ -22,7 +22,8 @@ export class RepositorySelectionStore implements RepositoryContextAccessor, vsco
     private readonly contextStore = new RepositoryContextStore();
 
     constructor() {
-        this.contextStore.onDidChange(({ activeContext }) => {
+        this.contextStore.onDidChange(({ activeContext, activeContextChanged }) => {
+            if (!activeContextChanged) { return; }
             this.onDidChangeEmitter.fire({ context: activeContext });
         });
     }

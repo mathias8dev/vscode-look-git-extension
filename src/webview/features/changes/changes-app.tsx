@@ -228,7 +228,7 @@ export function ChangesApp({
             />
 
             <section className="changes-content" aria-label="Repository changes">
-                {state.loading ? <EmptyState title="Loading" subtitle="Reading repository state…" icon="loading" iconSpin /> : null}
+                {state.loading ? <EmptyState className="delayed-loading-indicator" title="Loading" subtitle="Reading repository state…" icon="loading" iconSpin /> : null}
                 {!state.loading && !hasRepository ? <EmptyState title="No repository" subtitle="Open a Git repository to see changes" icon="source-control" /> : null}
                 {!state.loading && hasRepository && changeCount === 0 ? <EmptyState title="No changes" subtitle="Working tree is clean" icon="pass" /> : null}
                 {!state.loading && hasRepository && changeCount > 0 && visibleChangeCount === 0 ? (

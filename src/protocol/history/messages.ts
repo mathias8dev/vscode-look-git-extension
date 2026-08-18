@@ -9,6 +9,11 @@ export interface RepoContextChangedPush {
     readonly context?: SerializedRepoContext;
 }
 
+export interface RepoNavigationStartedPush {
+    readonly type: 'repo/navigationStarted';
+    readonly context?: SerializedRepoContext;
+}
+
 export interface HistoryDataPush {
     readonly type: 'history/data';
     readonly data: HistoryData;
@@ -53,6 +58,7 @@ export interface HistoryOperationStatusPush {
 
 export type HistoryExtensionToWebviewMessage =
     | RepoContextChangedPush
+    | RepoNavigationStartedPush
     | RepositoriesChangedPush
     | WebviewFontSizeChangedPush
     | HistoryDataPush

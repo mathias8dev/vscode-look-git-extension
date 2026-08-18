@@ -11,6 +11,11 @@ export interface RepoContextChangedPush {
     readonly context?: SerializedRepoContext;
 }
 
+export interface RepoNavigationStartedPush {
+    readonly type: 'repo/navigationStarted';
+    readonly context?: SerializedRepoContext;
+}
+
 export interface StatusDataPush {
     readonly type: 'changes/statusData';
     readonly data: StatusData;
@@ -370,6 +375,7 @@ export interface GetSubmoduleStatusRequest {
 
 export type ChangesExtensionToWebviewMessage =
     | RepoContextChangedPush
+    | RepoNavigationStartedPush
     | RepositoriesChangedPush
     | WebviewFontSizeChangedPush
     | StatusDataPush

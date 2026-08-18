@@ -519,6 +519,69 @@ describe('ChangesViewProvider', () => {
         });
         vi.clearAllTimers();
     });
+
+    it('announces navigation immediately without refreshing the unprepared repository', async () => {
+        const context = {
+            id: 'repo-2',
+            cwd: '/repo-2',
+            kind: RepoKind.Main,
+            label: 'repo-2',
+        } satisfies RepoContext;
+        const beforeRefresh = vi.fn(async () => false);
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            repositorySelection(context),
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            beforeRefresh,
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messages.length = 0;
+
+        provider.notifyRepoNavigationStarted(context);
+        await vi.advanceTimersByTimeAsync(100);
+
+        expect(view.messages).toEqual([{
+            type: 'repo/navigationStarted',
+            context: { id: 'repo-2', cwd: '/repo-2', kind: 'main', label: 'repo-2' },
+        }]);
+        expect(beforeRefresh).not.toHaveBeenCalled();
+    });
+
+    it('replays pending navigation when the Changes webview becomes ready', async () => {
+        const context = {
+            id: 'repo-2',
+            cwd: '/repo-2',
+            kind: RepoKind.Main,
+            label: 'repo-2',
+        } satisfies RepoContext;
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            repositorySelection(context),
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            async () => false,
+        );
+        provider.notifyRepoNavigationStarted(context);
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'changes/ready' });
+
+        expect(view.messages).toContainEqual(expect.objectContaining({ type: 'repo/navigationStarted' }));
+        expect(view.messages.some((message) => isMessageType(message, 'changes/statusData'))).toBe(false);
+    });
 });
 
 function repositorySelection(

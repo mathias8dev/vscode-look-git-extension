@@ -433,6 +433,8 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                     [message.path]: (state.submoduleCommitFocusRequestByPath[message.path] ?? 0) + 1,
                 },
             };
+        case 'repo/navigationStarted':
+            return resetForRepositoryNavigation(state, message.context?.id);
         case 'repo/contextChanged':
             return {
                 ...resetForRepositoryNavigation(state, message.context?.id),

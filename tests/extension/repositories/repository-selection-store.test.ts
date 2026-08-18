@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RepositorySelectionStore } from '@extension/repositories/repository-selection-store';
 import { createRepoContext } from '@extension/repositories/repo-context-factory';
 import { removeDirSyncWithRetry } from '@tests/helpers/git-repo';
@@ -42,6 +42,20 @@ describe('RepositorySelectionStore', () => {
         store.setContexts([parent, child]);
 
         expect(store.soleTopLevelContext).toEqual(parent);
+    });
+
+    it('does not report a new selection when child discovery only changes the repository inventory', () => {
+        const store = new RepositorySelectionStore();
+        const parent = createRepoContext('/workspace');
+        const child = createRepoContext('/workspace/packages/app', parent.id);
+        const listener = vi.fn();
+        store.setContexts([parent]);
+        store.onDidChange(listener);
+
+        store.setContexts([parent, child]);
+
+        expect(store.currentContext).toEqual(parent);
+        expect(listener).not.toHaveBeenCalled();
     });
 
     it('does not choose between multiple top-level repositories', () => {

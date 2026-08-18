@@ -10,10 +10,10 @@ import type { RepositoriesChangedPush, RepositoryNavigationMessage } from '@prot
 import type { RepoContext } from '@core/git/domain/repo-context';
 import type { CommitCommand } from '@protocol/graph/messages';
 import type { HistoryCommitDetails, HistoryCommitRef, HistoryContextTarget, HistoryData } from '@protocol/history/types';
-import type { HistoryCommitDetailsRequest, HistoryDataRequest, HistoryExtensionToWebviewMessage, HistoryOpenDiffRequest, HistoryOperationStatusPush, HistoryToolbarCommand, HistoryWebviewToExtensionMessage } from '@protocol/history/messages';
+import type { HistoryCommitDetailsRequest, HistoryDataRequest, HistoryExtensionToWebviewMessage, HistoryOpenDiffRequest, HistoryOperationStatusPush, HistoryToolbarCommand, HistoryWebviewToExtensionMessage, RepoContextChangedPush, RepoNavigationStartedPush } from '@protocol/history/messages';
 import { runCommitCommand } from '@extension/commands/commit-commands';
 import { runBranchCommand } from '@extension/commands/branch-commands';
-import { createErrorPayload } from '@extension/messaging/error-serialization';
+import { createErrorPayload, isAbortError } from '@extension/messaging/error-serialization';
 import { appendErrorToOutput, showErrorOutput } from '@extension/messaging/error-output-channel';
 import { getWebviewHtml } from '@extension/views/webview-html';
 import { toSerializedRepoContext } from '@extension/mapping/to-protocol';
@@ -79,10 +79,12 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     private contextTarget?: HistoryContextTarget;
     private contextRepository?: GitRepository;
     private repositoriesChangedMessage?: RepositoriesChangedPush;
+    private repositoryLifecycleMessage?: RepoNavigationStartedPush | RepoContextChangedPush;
     private selectedHistoryRef: string | undefined;
     private selectedRepositoryScope: HistoryRepositoryScope | undefined;
     private refCache?: HistoryRefCache;
     private operationSequence = 0;
+    private repositoryRequestController = new AbortController();
     private readonly historyDataPoster = new DistinctMessagePoster<HistoryExtensionToWebviewMessage, HistoryData>(
         (message) => { this.postMessage(message); },
         historyDataEqual,
@@ -97,6 +99,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         _repositoryResolver?: unknown,
         private readonly runtimeRepositories?: RepositoryRegistry,
         private readonly onRepositoryNavigation: (message: RepositoryNavigationMessage) => Promise<void> = async () => {},
+        private readonly beforeRefresh: () => Promise<boolean> = async () => true,
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -133,12 +136,16 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     async refresh(): Promise<void> {
         if (!this.view) { return; }
+        if (!await this.beforeRefresh()) { return; }
+        const signal = this.repositoryRequestController.signal;
         try {
             this.refCache = undefined;
-            await this.syncSubmoduleScopeContext();
-            const data = await this.loadHistoryPage(DEFAULT_PAGE);
+            await this.syncSubmoduleScopeContext(signal);
+            const data = await this.loadHistoryPage(DEFAULT_PAGE, signal);
+            signal.throwIfAborted();
             this.postHistoryDataIfChanged(data);
         } catch (error) {
+            if (isAbortError(error)) { return; }
             this.postHistoryError(error, 'history/refresh', 'refreshFailed');
         }
     }
@@ -152,6 +159,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             case 'history/ready':
                 this.historyDataPoster.clear();
                 this.postRepositoriesChangedMessage();
+                this.postRepositoryLifecycleMessage();
                 await this.refresh();
                 return;
             case 'history/refresh':
@@ -181,19 +189,22 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private async handleDataRequest(message: HistoryDataRequest): Promise<void> {
         if (!this.view) { return; }
+        const signal = this.repositoryRequestController.signal;
         try {
-            const data = await this.loadHistoryPage(message.page);
+            const data = await this.loadHistoryPage(message.page, signal);
+            signal.throwIfAborted();
             this.postMessage({
                 type: 'history/dataResponse',
                 requestId: message.requestId,
                 data,
             });
         } catch (error) {
+            if (isAbortError(error)) { return; }
             this.postHistoryError(error, 'history/dataRequest', 'refreshFailed', message.requestId);
         }
     }
 
-    private async loadHistoryPage(page: Pagination): Promise<HistoryData> {
+    private async loadHistoryPage(page: Pagination, signal?: AbortSignal): Promise<HistoryData> {
         const normalizedPage = normalizePage(page);
         const repo = this.currentRuntimeRepository();
         if (!repo) {
@@ -206,7 +217,8 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
         return loadHistoryPageFor(repo, normalizedPage, {
             selectedHistoryRef: this.selectedHistoryRef,
-            loadRefs: () => this.loadRefs(repo),
+            signal,
+            loadRefs: () => this.loadRefs(repo, signal),
         });
     }
 
@@ -351,11 +363,11 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         this.postHistoryError(error, `history/${operation}`, 'gitOperationFailed');
     }
 
-    private async loadRefs(repo: GitRepository): Promise<HistoryRefCache> {
+    private async loadRefs(repo: GitRepository, signal?: AbortSignal): Promise<HistoryRefCache> {
         if (this.refCache) { return this.refCache; }
         const [branches, tags] = await Promise.all([
-            repo.listBranches(),
-            repo.listTags(),
+            repo.listBranches(signal),
+            repo.listTags(signal),
         ]);
         this.refCache = { branches, tags };
         return this.refCache;
@@ -368,22 +380,25 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private async handleCommitDetailsRequest(message: HistoryCommitDetailsRequest): Promise<void> {
         if (!this.view) { return; }
+        const signal = this.repositoryRequestController.signal;
         try {
-            const details = await this.loadCommitDetails(message.hash);
+            const details = await this.loadCommitDetails(message.hash, signal);
+            signal.throwIfAborted();
             this.postMessage({
                 type: 'history/commitDetailsResponse',
                 requestId: message.requestId,
                 details,
             });
         } catch (error) {
+            if (isAbortError(error)) { return; }
             this.postHistoryError(error, 'history/commitDetails', 'refreshFailed', message.requestId);
         }
     }
 
-    private async loadCommitDetails(hash: string): Promise<HistoryCommitDetails> {
+    private async loadCommitDetails(hash: string, signal?: AbortSignal): Promise<HistoryCommitDetails> {
         const repo = this.currentRuntimeRepository();
         if (!repo) { throw new Error('No active Git repository.'); }
-        return loadCommitDetails(repo, hash);
+        return loadCommitDetails(repo, hash, signal);
     }
 
     private async handleOpenDiff(message: HistoryOpenDiffRequest): Promise<void> {
@@ -568,11 +583,39 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         this.contextRepository = undefined;
         this.refCache = undefined;
         this.historyDataPoster.clear();
-        this.view?.webview.postMessage({
+        this.repositoryLifecycleMessage = {
             type: 'repo/contextChanged',
             ...(context ? { context: toSerializedRepoContext(context) } : {}),
-        });
+        };
+        this.postRepositoryLifecycleMessage();
         await this.refresh();
+    }
+
+    notifyRepoNavigationStarted(context: RepoContext | undefined): void {
+        this.repositoryRequestController.abort();
+        this.repositoryRequestController = new AbortController();
+        this.selectedHistoryRef = undefined;
+        this.selectedRepositoryScope = undefined;
+        this.contextRepository = undefined;
+        this.contextTarget = undefined;
+        this.refCache = undefined;
+        this.historyDataPoster.clear();
+        this.repositoryLifecycleMessage = {
+            type: 'repo/navigationStarted',
+            ...(context ? { context: toSerializedRepoContext(context) } : {}),
+        };
+        this.postRepositoryLifecycleMessage();
+    }
+
+    notifyRepoNavigationFailed(error: unknown): void {
+        this.postMessage({
+            type: 'history/error',
+            ...createErrorPayload(error, {
+                code: 'refreshFailed',
+                operation: 'repo/navigation',
+                recoverable: true,
+            }),
+        });
     }
 
     notifyRepositoriesChanged(message: RepositoriesChangedPush): void {
@@ -591,6 +634,12 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     private postRepositoriesChangedMessage(): void {
         if (this.repositoriesChangedMessage) {
             void this.view?.webview.postMessage(this.repositoriesChangedMessage);
+        }
+    }
+
+    private postRepositoryLifecycleMessage(): void {
+        if (this.repositoryLifecycleMessage) {
+            this.postMessage(this.repositoryLifecycleMessage);
         }
     }
 
@@ -688,13 +737,14 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async syncSubmoduleScopeContext(): Promise<void> {
+    private async syncSubmoduleScopeContext(signal?: AbortSignal): Promise<void> {
         if (!this.repositories.currentContext) {
             this.selectedRepositoryScope = undefined;
             await vscode.commands.executeCommand('setContext', 'lookGit.historyHasSubmodules', false);
             return;
         }
-        const submodules = await this.loadSubmodules();
+        const submodules = await this.loadSubmodules(signal);
+        signal?.throwIfAborted();
         await this.applySubmoduleScopeContext(submodules);
     }
 
@@ -709,11 +759,12 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
         this.refCache = undefined;
     }
 
-    private async loadSubmodules(): Promise<readonly GitSubmodule[]> {
+    private async loadSubmodules(signal?: AbortSignal): Promise<readonly GitSubmodule[]> {
         if (!this.repositories.currentContext || !this.runtimeRepositories) { return []; }
         try {
-            return await requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext).repository().listSubmodules();
+            return await requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext).repository().listSubmodules(signal);
         } catch (error) {
+            if (isAbortError(error)) { throw error; }
             this.postHistoryError(error, 'history/listSubmodules', 'gitOperationFailed');
             return [];
         }
@@ -729,6 +780,7 @@ interface LoadHistoryPageOptions {
     readonly selectedHistoryRef?: string;
     readonly pathFilter?: string;
     readonly lineRange?: LineRange;
+    readonly signal?: AbortSignal;
     readonly loadRefs: () => Promise<HistoryRefCache>;
 }
 
@@ -883,12 +935,12 @@ async function loadHistoryPageFor(
 ): Promise<HistoryData> {
     const pageLimit = page.limit + 1;
     const [commits, refs] = await Promise.all([
-        loadHistoryCommits(repo, pageLimit, page.offset, options.selectedHistoryRef, options.pathFilter, options.lineRange),
+        loadHistoryCommits(repo, pageLimit, page.offset, options.selectedHistoryRef, options.pathFilter, options.lineRange, options.signal),
         options.loadRefs(),
     ]);
     const visibleCommits = commits.slice(0, page.limit);
     const currentBranchCommits = options.selectedHistoryRef
-        ? await currentBranchCommitHashSet(repo, visibleCommits)
+        ? await currentBranchCommitHashSet(repo, visibleCommits, options.signal)
         : new Set(visibleCommits.map((commit) => commit.hash));
     return {
         commits: visibleCommits.map((commit) => toHistoryCommit(
@@ -908,35 +960,36 @@ async function loadHistoryCommits(
     selectedHistoryRef: string | undefined,
     pathFilter: string | undefined,
     lineRange: LineRange | undefined,
+    signal?: AbortSignal,
 ): Promise<readonly GitCommit[]> {
     const pageRequest = { limit, encodedCursor: offset > 0 ? String(offset) : undefined };
     if (lineRange && selectedHistoryRef) {
         throw new Error('Selection history does not support branch filtering yet.');
     }
     if (lineRange && pathFilter) {
-        const page = await repo.getFileSelectionHistory(pathFilter, { startLine: lineRange.startLine, endLine: lineRange.endLine }, {}, pageRequest);
+        const page = await repo.getFileSelectionHistory(pathFilter, { startLine: lineRange.startLine, endLine: lineRange.endLine }, {}, pageRequest, signal);
         return page.items;
     }
     if (selectedHistoryRef && pathFilter) {
-        const page = await repo.getFileHistory(pathFilter, { branches: [selectedHistoryRef] }, pageRequest);
+        const page = await repo.getFileHistory(pathFilter, { branches: [selectedHistoryRef] }, pageRequest, signal);
         return page.items;
     }
     if (selectedHistoryRef) {
-        const page = await repo.getCommitGraph({ branches: [selectedHistoryRef] }, pageRequest);
+        const page = await repo.getCommitGraph({ branches: [selectedHistoryRef] }, pageRequest, signal);
         return page.items;
     }
     if (pathFilter) {
-        const page = await repo.getFileHistory(pathFilter, {}, pageRequest);
+        const page = await repo.getFileHistory(pathFilter, {}, pageRequest, signal);
         return page.items;
     }
-    const page = await repo.getCommitGraph({ branches: ['HEAD'] }, pageRequest);
+    const page = await repo.getCommitGraph({ branches: ['HEAD'] }, pageRequest, signal);
     return page.items;
 }
 
-async function loadCommitDetails(repo: GitRepository, hash: string): Promise<HistoryCommitDetails> {
+async function loadCommitDetails(repo: GitRepository, hash: string, signal?: AbortSignal): Promise<HistoryCommitDetails> {
     const [fullMessage, files] = await Promise.all([
-        repo.getCommitMessage(hash),
-        repo.getCommitFiles(hash),
+        repo.getCommitMessage(hash, signal),
+        repo.getCommitFiles(hash, signal),
     ]);
     return {
         hash,
@@ -1097,10 +1150,11 @@ async function hasNewConflicts(worktree: Worktree, existingConflicts: ReadonlySe
     return status.conflicts.some((entry: { filePath: string }) => !existingConflicts.has(entry.filePath));
 }
 
-async function currentBranchCommitHashSet(repo: GitRepository, commits: readonly GitCommit[]): Promise<ReadonlySet<string>> {
+async function currentBranchCommitHashSet(repo: GitRepository, commits: readonly GitCommit[], signal?: AbortSignal): Promise<ReadonlySet<string>> {
     try {
-        return await getReachableCommitHashes(repo, commits.map((commit) => commit.hash));
-    } catch {
+        return await getReachableCommitHashes(repo, commits.map((commit) => commit.hash), signal);
+    } catch (error) {
+        if (isAbortError(error)) { throw error; }
         return new Set();
     }
 }

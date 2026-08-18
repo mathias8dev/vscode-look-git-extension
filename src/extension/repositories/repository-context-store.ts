@@ -5,6 +5,7 @@ import { samePath } from '@extension/utils/path-compare';
 export interface RepositoryContextState {
     readonly contexts: readonly RepoContext[];
     readonly activeContext: RepoContext | undefined;
+    readonly activeContextChanged: boolean;
 }
 
 export class RepositoryContextStore implements vscode.Disposable {
@@ -24,8 +25,8 @@ export class RepositoryContextStore implements vscode.Disposable {
 
     setContexts(contexts: readonly RepoContext[]): void {
         const previousContexts = this.contexts;
+        const previousActiveContext = this.activeContext;
         const nextContextsById = new Map(contexts.map((context) => [context.id, context]));
-        const previousActiveContextId = this.activeContextId;
         this.contextsById = nextContextsById;
         if (this.activeContextId && !this.contextsById.has(this.activeContextId)) {
             this.activeContextId = defaultContextId(this.contextsById);
@@ -33,26 +34,28 @@ export class RepositoryContextStore implements vscode.Disposable {
         if (!this.activeContextId) {
             this.activeContextId = defaultContextId(this.contextsById);
         }
-        if (previousActiveContextId !== this.activeContextId || contextsChanged(previousContexts, this.contexts)) {
-            this.fire();
+        const activeContextChanged = !sameContext(previousActiveContext, this.activeContext);
+        if (activeContextChanged || contextsChanged(previousContexts, this.contexts)) {
+            this.fire(activeContextChanged);
         }
     }
 
     upsertContext(context: RepoContext): void {
         const previous = this.contextsById.get(context.id);
         if (sameContext(previous, context)) { return; }
+        const previousActiveContext = this.activeContext;
         this.contextsById.set(context.id, context);
         if (!this.activeContextId) {
             this.activeContextId = defaultContextId(this.contextsById);
         }
-        this.fire();
+        this.fire(!sameContext(previousActiveContext, this.activeContext));
     }
 
     setActiveContextId(contextId: string | undefined): void {
         const nextContextId = contextId && this.contextsById.has(contextId) ? contextId : undefined;
         if (this.activeContextId === nextContextId) { return; }
         this.activeContextId = nextContextId;
-        this.fire();
+        this.fire(true);
     }
 
     setActiveContextCwd(cwd: string | undefined): void {
@@ -68,10 +71,11 @@ export class RepositoryContextStore implements vscode.Disposable {
         this.onDidChangeEmitter.dispose();
     }
 
-    private fire(): void {
+    private fire(activeContextChanged: boolean): void {
         this.onDidChangeEmitter.fire({
             contexts: this.contexts,
             activeContext: this.activeContext,
+            activeContextChanged,
         });
     }
 }

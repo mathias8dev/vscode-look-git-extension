@@ -245,6 +245,95 @@ describe('CommitHistoryViewProvider', () => {
         expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/navigateRepository', contextId: 'repo-child' });
     });
 
+    it('announces navigation without loading history before the runtime is ready', () => {
+        const context = repoContext();
+        const runtime = historyRuntime([]);
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            async () => {},
+            undefined,
+            undefined,
+            runtimeRegistry(context, runtime),
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messages.length = 0;
+
+        provider.notifyRepoNavigationStarted(context);
+
+        expect(view.messages).toEqual([{
+            type: 'repo/navigationStarted',
+            context: { id: context.id, cwd: context.cwd, kind: 'main', label: context.label },
+        }]);
+    });
+
+    it('cancels stale history loading when repository navigation starts', async () => {
+        const context = repoContext();
+        let signalFromGraphRequest: AbortSignal | undefined;
+        let markGraphStarted = (): void => {};
+        const graphStarted = new Promise<void>((resolve) => { markGraphStarted = resolve; });
+        const runtime: GitRuntime = {
+            supports: () => true,
+            async execute<TInput = unknown, TResult = unknown>(operation: SemanticGitOperation, _context: GitExecutionContext, _input: TInput, signal?: AbortSignal): Promise<TResult> {
+                if (operation === 'getCommitGraph') {
+                    signalFromGraphRequest = signal;
+                    markGraphStarted();
+                    return await new Promise<TResult>((_resolve, reject) => {
+                        signal?.addEventListener('abort', () => { reject(signal.reason); }, { once: true });
+                    });
+                }
+                if (operation === 'listBranches' || operation === 'listTags' || operation === 'listSubmodules') {
+                    return runtimeResult([]);
+                }
+                throw new Error(`Unexpected operation: ${operation}`);
+            },
+        };
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            async () => {},
+            undefined,
+            undefined,
+            runtimeRegistry(context, runtime),
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messages.length = 0;
+        const refresh = provider.refresh();
+        await graphStarted;
+
+        provider.notifyRepoNavigationStarted(context);
+        await refresh;
+
+        expect(signalFromGraphRequest?.aborted).toBe(true);
+        expect(view.messages).toEqual([expect.objectContaining({ type: 'repo/navigationStarted' })]);
+    });
+
+    it('replays pending navigation without loading history when the webview becomes ready', async () => {
+        const context = repoContext();
+        const beforeRefresh = vi.fn(async () => false);
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            async () => {},
+            undefined,
+            undefined,
+            runtimeRegistry(context, historyRuntime([])),
+            async () => {},
+            beforeRefresh,
+        );
+        provider.notifyRepoNavigationStarted(context);
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/ready' });
+        await expect.poll(() => beforeRefresh.mock.calls.length).toBe(1);
+
+        expect(view.messages).toContainEqual(expect.objectContaining({ type: 'repo/navigationStarted' }));
+        expect(view.messages.some((message) => isMessageType(message, 'history/data'))).toBe(false);
+    });
+
     it('keeps file history panels alive while hidden so pending commit details can resolve', async () => {
         const provider = providerFor(historyRuntime([]));
 

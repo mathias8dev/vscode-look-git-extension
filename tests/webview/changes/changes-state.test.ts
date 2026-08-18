@@ -224,6 +224,27 @@ describe('changesState', () => {
         expect(back.activeRepositoryContextId).toEqual({ status: 'ready', data: undefined });
     });
 
+    it('clears stale changes when repository navigation starts in another webview', () => {
+        const loaded = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: statusDataMessage({
+                unstaged: [{ indexStatus: ' ', workTreeStatus: '?', filePath: '.worktrees/child' }],
+            }),
+        });
+
+        const navigating = reduceChangesState(loaded, {
+            type: 'message',
+            message: {
+                type: 'repo/navigationStarted',
+                context: { id: 'repo-b', cwd: '/work/repo-b', kind: 'main', label: 'repo-b' },
+            },
+        });
+
+        expect(navigating.status).toEqual(createStatusData());
+        expect(navigating.loading).toBe(true);
+        expect(navigating.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-b' });
+    });
+
     it('keeps protocol errors visible across status refreshes', () => {
         const failed = reduceChangesState(createInitialChangesState(), {
             type: 'message',

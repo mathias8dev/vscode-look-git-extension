@@ -249,6 +249,26 @@ describe('historyState', () => {
         expect(back.activeRepositoryContextId).toEqual({ status: 'ready', data: undefined });
     });
 
+    it('clears stale history when repository navigation starts in another webview', () => {
+        const loaded = {
+            ...createInitialHistoryState(),
+            commits: [commit('a111111', 'feat: stale')],
+            loading: false,
+        };
+
+        const navigating = reduceHistoryState(loaded, {
+            type: 'message',
+            message: {
+                type: 'repo/navigationStarted',
+                context: { id: 'repo-b', cwd: '/work/repo-b', kind: 'main', label: 'repo-b' },
+            },
+        });
+
+        expect(navigating.commits).toEqual([]);
+        expect(navigating.loading).toBe(true);
+        expect(navigating.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-b' });
+    });
+
     it('stores protocol errors', () => {
         const state = reduceHistoryState(createInitialHistoryState(), {
             type: 'message',

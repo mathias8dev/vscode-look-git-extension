@@ -98,7 +98,7 @@ export function CommitHistoryApp({
 
             <section className="history-list" role="listbox" aria-label="Commits">
                 {state.loading && state.commits.length === 0 ? (
-                    <div className="history-loading">
+                    <div className="history-loading delayed-loading-indicator">
                         <i className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
                         <span>Loading commits...</span>
                     </div>

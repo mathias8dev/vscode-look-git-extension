@@ -474,6 +474,8 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
             return state;
         case 'error':
             return { ...state, loading: false, loadingMore: false, activeGraphRequestId: undefined, error: message.error };
+        case 'repo/navigationStarted':
+            return resetForRepositoryNavigation(state, message.context?.id);
         case 'repo/contextChanged':
             return {
                 ...resetForRepositoryNavigation(state, message.context?.id),

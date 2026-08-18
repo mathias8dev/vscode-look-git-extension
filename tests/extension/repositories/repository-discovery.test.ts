@@ -189,6 +189,18 @@ describe('repository discovery', () => {
         expect(configuredDepthContexts).toHaveLength(1);
     });
 
+    it('does not continue child discovery after repository navigation is aborted', async () => {
+        const parent = tempRepo();
+        const controller = new AbortController();
+        controller.abort();
+
+        await expect(discoverChildRepositoryContexts(
+            createRepoContext(parent.cwd),
+            2,
+            controller.signal,
+        )).rejects.toMatchObject({ name: 'AbortError' });
+    });
+
     it('does not list registered submodules as nested repositories', async () => {
         const fixture = createSubmoduleFixture();
         cleanups.push(fixture.cleanup);

@@ -170,6 +170,30 @@ describe('graphState', () => {
         expect(back.activeRepositoryContextId).toEqual({ status: 'ready', data: undefined });
     });
 
+    it('clears stale graph data without requesting the new repository before it is ready', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: graphData([commit('a')], 1, false),
+            },
+        });
+
+        const navigating = reduceGraphState(loaded, {
+            type: 'message',
+            message: {
+                type: 'repo/navigationStarted',
+                context: { id: 'repo-b', cwd: '/work/repo-b', kind: 'main', label: 'repo-b' },
+            },
+        });
+
+        expect(navigating.rows).toEqual([]);
+        expect(navigating.loading).toBe(true);
+        expect(navigating.activeGraphRequestId).toBeUndefined();
+        expect(navigating.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-b' });
+    });
+
     it('tracks load-more requests and clears them when graph data arrives', () => {
         const loaded = reduceGraphState(createInitialGraphState(), {
             type: 'message',
