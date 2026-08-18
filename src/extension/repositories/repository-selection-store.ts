@@ -31,6 +31,11 @@ export class RepositorySelectionStore implements RepositorySelectionAccessor, vs
         return this.contextStore.contexts;
     }
 
+    get soleTopLevelContext(): RepoContext | undefined {
+        const contexts = this.contextStore.contexts.filter((context) => !context.parentId);
+        return contexts.length === 1 ? contexts[0] : undefined;
+    }
+
     setContexts(contexts: readonly RepoContext[]): void {
         this.contextStore.setContexts(contexts);
     }

@@ -7,7 +7,6 @@ import type { RepositorySummary } from '@protocol/shared/repo';
 export interface HistoryState {
     readonly repositorySummaries: Resource<readonly RepositorySummary[]>;
     readonly activeRepositoryContextId: Resource<string | undefined>;
-    readonly repositoryListContextId: Resource<string | undefined>;
     readonly commits: readonly HistoryCommit[];
     readonly expandedHashes: readonly string[];
     readonly selectedHashes: readonly string[];
@@ -31,14 +30,12 @@ export type HistoryAction =
     | { readonly type: 'startLoadMore' }
     | { readonly type: 'clearError' }
     | { readonly type: 'clearOperationStatus'; readonly operationId: string }
-    | { readonly type: 'selectRepositoryContext'; readonly contextId: string }
-    | { readonly type: 'showRepositoryList'; readonly contextId?: string };
+    | { readonly type: 'navigateRepository'; readonly contextId?: string };
 
 export function createInitialHistoryState(): HistoryState {
     return {
         repositorySummaries: { status: 'ready', data: [] },
         activeRepositoryContextId: { status: 'ready', data: undefined },
-        repositoryListContextId: { status: 'ready', data: undefined },
         commits: [],
         expandedHashes: [],
         selectedHashes: [],
@@ -76,14 +73,8 @@ export function reduceHistoryState(state: HistoryState, action: HistoryAction): 
             return state.operationStatus?.operationId === action.operationId
                 ? { ...state, operationStatus: undefined }
                 : state;
-        case 'selectRepositoryContext':
+        case 'navigateRepository':
             return resetForRepositoryNavigation(state, action.contextId);
-        case 'showRepositoryList':
-            return {
-                ...state,
-                activeRepositoryContextId: { status: 'ready', data: undefined },
-                repositoryListContextId: { status: 'ready', data: action.contextId },
-            };
     }
 }
 
@@ -105,7 +96,7 @@ function reduceMessage(state: HistoryState, message: HistoryExtensionToWebviewMe
             return { ...state, loading: false, loadingMore: false, detailsLoadingHash: undefined, error: message.error };
         case 'repo/contextChanged':
             return {
-                ...resetForRepositoryNavigation(state),
+                ...resetForRepositoryNavigation(state, message.context?.id),
                 activeRepositoryContextId: { status: 'ready', data: message.context?.id },
             };
         case 'repo/repositoriesChanged':
@@ -113,21 +104,17 @@ function reduceMessage(state: HistoryState, message: HistoryExtensionToWebviewMe
                 ...state,
                 repositorySummaries: message.repositories,
                 activeRepositoryContextId: message.activeContextId,
-                repositoryListContextId: message.listContextId,
             };
         case 'ui/fontSizeChanged':
             return state;
     }
 }
 
-function resetForRepositoryNavigation(state: HistoryState, contextId?: string): HistoryState {
+function resetForRepositoryNavigation(state: HistoryState, contextId: string | undefined): HistoryState {
     return {
         ...createInitialHistoryState(),
         repositorySummaries: state.repositorySummaries,
-        repositoryListContextId: state.repositoryListContextId,
-        activeRepositoryContextId: contextId === undefined
-            ? state.activeRepositoryContextId
-            : { status: 'ready', data: contextId },
+        activeRepositoryContextId: { status: 'ready', data: contextId },
     };
 }
 

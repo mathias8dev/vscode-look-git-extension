@@ -10,7 +10,7 @@ A modern, Git extension for Visual Studio Code — featuring a visual commit gra
 
 - **Repository discovery** — open a Git repository or a plain workspace folder that contains multiple Git repositories
 - **Repository navigator** — Changes, Commit History, and Look Graph show a repository list when multiple repositories are available, then navigate into the selected repository
-- **Nested repository navigation** — browse one repository level at a time, with back navigation for repository containers that include child repositories
+- **Hierarchical repository navigation** — keep the current repository and its changes active while browsing collapsible child repositories, then return to the parent repository or workspace root
 - **Configurable repository scan depth** — set `lookGit.repositoryScanMaxDepth` for the current workspace folder to control how deeply Look Git searches for repositories; the default is `1`
 - **Cross-platform path handling** — repository and worktree matching is canonicalized for macOS path aliases, Windows casing, symlinks, and junctions
 

@@ -83,7 +83,6 @@ describe('graphState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: 'repo-a' },
-                listContextId: { status: 'ready', data: undefined },
             },
         });
 
@@ -150,11 +149,10 @@ describe('graphState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: undefined },
-                listContextId: { status: 'ready', data: undefined },
             },
         });
 
-        const selected = reduceGraphState(withNavigator, { type: 'selectRepositoryContext', contextId: 'repo-b' });
+        const selected = reduceGraphState(withNavigator, { type: 'navigateRepository', contextId: 'repo-b' });
         const confirmed = reduceGraphState(selected, {
             type: 'message',
             message: {
@@ -162,7 +160,7 @@ describe('graphState', () => {
                 context: { id: 'repo-b', cwd: '/work/repo-b', kind: 'main', label: 'repo-b' },
             },
         });
-        const back = reduceGraphState(selected, { type: 'showRepositoryList' });
+        const back = reduceGraphState(selected, { type: 'navigateRepository' });
 
         expect(selected.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-b' });
         expect(selected.rows).toEqual([]);

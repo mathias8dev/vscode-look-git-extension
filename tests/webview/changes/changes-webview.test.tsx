@@ -32,6 +32,42 @@ describe('ChangesWebview', () => {
         expect(screen.queryByLabelText('More Actions')).not.toBeInTheDocument();
     });
 
+    it('navigates to a discovered repository when its untracked directory row is opened', async () => {
+        const api = createMockVsCodeApi();
+        const { ChangesWebview } = await import('@webview/changes/changes-webview');
+
+        render(<ChangesWebview />);
+        act(() => sendToWebview({
+            type: 'repo/repositoriesChanged',
+            repositories: {
+                status: 'ready',
+                data: [
+                    repositorySummary('parent', '/workspace/engage_sdks'),
+                    repositorySummary('android', '/workspace/engage_sdks/android/engage_android', 'parent'),
+                ],
+            },
+            activeContextId: { status: 'ready', data: 'parent' },
+        }));
+        act(() => sendToWebview({
+            type: 'changes/statusData',
+            data: {
+                repositoryState: RepositoryState.Available,
+                currentBranch: 'main',
+                staged: [],
+                unstaged: [{ indexStatus: '?', workTreeStatus: '?', filePath: 'android/engage_android/' }],
+                conflicts: [],
+                conflictState: ConflictState.None,
+                stashes: [],
+                submodules: [],
+            },
+        }));
+
+        fireEvent.click(await screen.findByTitle('android/engage_android/'));
+
+        expect(api.messages).toContainEqual({ type: 'repo/navigateRepository', contextId: 'android' });
+        expect(api.messages).not.toContainEqual(expect.objectContaining({ type: 'changes/openDiff' }));
+    });
+
     it('applies live Look Git font-size changes', async () => {
         createMockVsCodeApi();
         const { ChangesWebview } = await import('@webview/changes/changes-webview');
@@ -753,4 +789,17 @@ function stashFilesRequests(messages: readonly unknown[]): readonly unknown[] {
 
 async function nextTick(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function repositorySummary(id: string, cwd: string, parentId?: string) {
+    return {
+        context: { id, cwd, kind: 'main' as const, ...(parentId ? { parentId } : {}), label: id },
+        hasRemote: false,
+        branchCount: 0,
+        submoduleCount: 0,
+        worktreeCount: 0,
+        stagedCount: 0,
+        unstagedCount: 0,
+        conflictCount: 0,
+    };
 }

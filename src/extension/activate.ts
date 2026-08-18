@@ -55,28 +55,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const runtimeRepositories = new RepositoryRegistry();
     let repositoriesResource: Resource<readonly RepositorySummary[]> = { status: 'loading' };
     let navigatedRepositoryContextId: string | undefined;
-    let listedRepositoryContextId: string | undefined;
+    let hasExplicitRepositoryNavigation = false;
     let activeRuntimeContextId: string | undefined;
     let repositoryStateGeneration = 0;
     let dynamicRepositoryContexts = new Map<string, RepoContext>();
     const childDiscoveryInFlight = new Set<string>();
     async function handleRepositoryNavigation(message: RepositoryNavigationMessage): Promise<void> {
         switch (message.type) {
-            case 'repo/selectRepository':
-                if (!repositories.contexts.some((contextItem) => contextItem.id === message.contextId)) { return; }
+            case 'repo/navigateRepository':
+                if (message.contextId && !repositories.contexts.some((contextItem) => contextItem.id === message.contextId)) { return; }
+                hasExplicitRepositoryNavigation = true;
                 navigatedRepositoryContextId = message.contextId;
                 repositories.selectContext(message.contextId);
-                {
-                    const repository = repositories.contexts.find((contextItem) => contextItem.id === message.contextId);
-                    if (repository) { void syncChildRepositories(repository); }
-                }
-                return;
-            case 'repo/showRepositoryList':
-                if (message.contextId && !repositories.contexts.some((contextItem) => contextItem.id === message.contextId)) { return; }
-                listedRepositoryContextId = message.contextId;
-                navigatedRepositoryContextId = undefined;
-                repositories.selectContext(undefined);
-                notifyRepositoriesChanged();
                 if (message.contextId) {
                     const repository = repositories.contexts.find((contextItem) => contextItem.id === message.contextId);
                     if (repository) { void syncChildRepositories(repository); }
@@ -147,7 +137,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             type: 'repo/repositoriesChanged',
             repositories: repositoriesResource,
             activeContextId: { status: 'ready', data: activeNavigatorContextId() },
-            listContextId: { status: 'ready', data: activeListContextId() },
         };
     }
 
@@ -156,16 +145,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (currentContext && activeRuntimeContextId !== currentContext.id) {
             return undefined;
         }
-        if (repositoriesResource.status === 'ready' && repositoriesResource.data.length <= 1) {
+        if (hasExplicitRepositoryNavigation) {
+            return navigatedRepositoryContextId;
+        }
+        if (repositories.soleTopLevelContext) {
             return currentContext?.id;
         }
-        return navigatedRepositoryContextId;
-    }
-
-    function activeListContextId(): string | undefined {
-        return repositories.contexts.some((contextItem) => contextItem.id === listedRepositoryContextId)
-            ? listedRepositoryContextId
-            : undefined;
+        return undefined;
     }
 
     function notifyRepositoriesChanged(): void {
@@ -181,11 +167,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     function syncActiveRepo(): void {
-        if (navigatedRepositoryContextId || listedRepositoryContextId) {
+        if (hasExplicitRepositoryNavigation) {
             notifyRepositoriesChanged();
             return;
         }
         repositories.selectContextForResource(vscode.window.activeTextEditor?.document.uri.fsPath);
+        if (!repositories.currentContext && repositories.soleTopLevelContext) {
+            repositories.selectContext(repositories.soleTopLevelContext.id);
+        }
         notifyRepositoriesChanged();
     }
 
@@ -203,9 +192,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         repositories.setContexts(contexts);
         if (navigatedRepositoryContextId && !contexts.some((repoContext) => repoContext.id === navigatedRepositoryContextId)) {
             navigatedRepositoryContextId = undefined;
-        }
-        if (listedRepositoryContextId && !contexts.some((repoContext) => repoContext.id === listedRepositoryContextId)) {
-            listedRepositoryContextId = undefined;
+            hasExplicitRepositoryNavigation = false;
         }
         gitWatcher.setContexts(contexts);
         repositoryDiscoveryWatcher.setContexts(contexts);
@@ -265,7 +252,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     function syncVisibleRepositoryChildren(): void {
         if (repositoriesResource.status !== 'ready') { return; }
         const summaries = repositoriesResource.data;
-        const visibleParentId = activeListContextId();
+        const visibleParentId = activeNavigatorContextId();
         const visibleRepositoryIds = summaries
             .filter((summary) => visibleParentId
                 ? summary.context.parentId === visibleParentId

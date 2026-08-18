@@ -296,8 +296,7 @@ async function branchContainsCommit(repo: GitRepository, branch: GitBranch, hash
 }
 
 function isRepositoryNavigationMessage(message: GraphWebviewToExtensionMessage): message is RepositoryNavigationMessage {
-    return message.type === 'repo/selectRepository'
-        || message.type === 'repo/showRepositoryList'
+    return message.type === 'repo/navigateRepository'
         || message.type === 'repo/openRepositoryInNewWindow';
 }
 

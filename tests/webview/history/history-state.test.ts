@@ -224,7 +224,6 @@ describe('historyState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: undefined },
-                listContextId: { status: 'ready', data: undefined },
             },
         });
 
@@ -240,8 +239,8 @@ describe('historyState', () => {
             activeRepositoryContextId: { status: 'ready', data: undefined },
             commits: [commit('a111111', 'feat: first')],
             loading: false,
-        }, { type: 'selectRepositoryContext', contextId: 'repo-b' });
-        const back = reduceHistoryState(withNavigator, { type: 'showRepositoryList' });
+        }, { type: 'navigateRepository', contextId: 'repo-b' });
+        const back = reduceHistoryState(withNavigator, { type: 'navigateRepository' });
 
         expect(withNavigator.repositorySummaries).toEqual({ status: 'ready', data: repositories });
         expect(withNavigator.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-b' });

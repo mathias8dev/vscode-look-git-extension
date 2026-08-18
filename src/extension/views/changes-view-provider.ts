@@ -826,8 +826,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 }
 
 function isRepositoryNavigationMessage(message: ChangesWebviewToExtensionMessage): message is RepositoryNavigationMessage {
-    return message.type === 'repo/selectRepository'
-        || message.type === 'repo/showRepositoryList'
+    return message.type === 'repo/navigateRepository'
         || message.type === 'repo/openRepositoryInNewWindow';
 }
 

@@ -145,8 +145,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private async handleMessage(message: HistoryWebviewToExtensionMessage): Promise<void> {
         switch (message.type) {
-            case 'repo/selectRepository':
-            case 'repo/showRepositoryList':
+            case 'repo/navigateRepository':
             case 'repo/openRepositoryInNewWindow':
                 await this.onRepositoryNavigation(message);
                 return;

@@ -139,13 +139,11 @@ describe('changesState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: 'repo-a' },
-                listContextId: { status: 'ready', data: 'repo-parent' },
             },
         });
 
         expect(state.repositorySummaries).toEqual({ status: 'ready', data: repositories });
         expect(state.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-a' });
-        expect(state.repositoryListContextId).toEqual({ status: 'ready', data: 'repo-parent' });
     });
 
     it('clears repository data on context changes while preserving navigator resources and preferences', () => {
@@ -162,7 +160,6 @@ describe('changesState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: 'repo-a' },
-                listContextId: { status: 'ready', data: undefined },
             },
         });
         const withStatus = reduceChangesState(withNavigator, {
@@ -209,7 +206,6 @@ describe('changesState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: undefined },
-                listContextId: { status: 'ready', data: undefined },
             },
         });
         const withStatus = reduceChangesState(withNavigator, {
@@ -219,8 +215,8 @@ describe('changesState', () => {
             }),
         });
 
-        const selected = reduceChangesState(withStatus, { type: 'selectRepositoryContext', contextId: 'repo-b' });
-        const back = reduceChangesState(selected, { type: 'showRepositoryList' });
+        const selected = reduceChangesState(withStatus, { type: 'navigateRepository', contextId: 'repo-b' });
+        const back = reduceChangesState(selected, { type: 'navigateRepository' });
 
         expect(selected.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-b' });
         expect(selected.status).toEqual(createStatusData());

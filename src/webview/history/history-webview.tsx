@@ -92,12 +92,8 @@ export function HistoryWebview() {
                 }
             }}
             onRepositoryNavigate={(contextId) => {
-                dispatch({ type: 'selectRepositoryContext', contextId });
-                vscodeApi.postMessage({ type: 'repo/selectRepository', contextId });
-            }}
-            onRepositoryList={(contextId) => {
-                dispatch({ type: 'showRepositoryList', contextId });
-                vscodeApi.postMessage({ type: 'repo/showRepositoryList', ...(contextId ? { contextId } : {}) });
+                dispatch({ type: 'navigateRepository', contextId });
+                vscodeApi.postMessage({ type: 'repo/navigateRepository', ...(contextId ? { contextId } : {}) });
             }}
             onOpenRepositoryInNewWindow={(contextId) => vscodeApi.postMessage({ type: 'repo/openRepositoryInNewWindow', contextId })}
         />

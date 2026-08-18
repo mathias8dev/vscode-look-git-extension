@@ -6,7 +6,6 @@ import { RepositoryNavigator } from '@webview/shared/repository-navigator';
 
 function RepositoryNavigatorScenario() {
     const [activeContextId, setActiveContextId] = useState<string | undefined>(undefined);
-    const [listContextId, setListContextId] = useState<string | undefined>(undefined);
     const repositories = {
         status: 'ready',
         data: repositorySummaries,
@@ -17,13 +16,8 @@ function RepositoryNavigatorScenario() {
             <RepositoryNavigator
                 repositories={repositories}
                 activeContextId={{ status: 'ready', data: activeContextId }}
-                listContextId={{ status: 'ready', data: listContextId }}
                 title="Repositories"
                 onNavigate={setActiveContextId}
-                onShowRepositoryList={(contextId) => {
-                    setActiveContextId(undefined);
-                    setListContextId(contextId);
-                }}
                 onOpenInNewWindow={setActiveContextId}
             >
                 <section className="storybook-navigator-content">

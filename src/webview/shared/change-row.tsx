@@ -23,6 +23,7 @@ interface SharedChangeRowProps<TItem extends SharedChangeRowItem, TAction extend
     readonly primaryAction?: TAction;
     readonly alwaysShowActions?: boolean;
     readonly showSelectionCheckbox?: boolean;
+    readonly isRepository?: boolean;
     readonly onSelect: (item: TItem, mode: ChangeRowSelectionMode) => void;
     readonly onOpenContextMenu: (item: TItem) => void;
     readonly onAction: (item: TItem, action: TAction) => void;
@@ -37,6 +38,7 @@ export function SharedChangeRow<TItem extends SharedChangeRowItem, TAction exten
     primaryAction,
     alwaysShowActions = false,
     showSelectionCheckbox = false,
+    isRepository = false,
     onSelect,
     onOpenContextMenu,
     onAction,
@@ -117,7 +119,7 @@ export function SharedChangeRow<TItem extends SharedChangeRowItem, TAction exten
                     onToggle={() => onSelect(item, 'toggle')}
                 />
             ) : null}
-            <FileTypeIcon kind={entry.isSubmodule ? 'file-type-git' : iconKindForPath(entry.filePath)} />
+            <FileTypeIcon kind={entry.isSubmodule || isRepository ? 'file-type-git' : iconKindForPath(entry.filePath)} />
             <div className="file-info">
                 <span className="file-name">{fileName(entry.filePath)}</span>
                 <span className="file-path">{parentPath(entry)}</span>
@@ -148,11 +150,12 @@ export function SharedChangeRow<TItem extends SharedChangeRowItem, TAction exten
 }
 
 function fileName(filePath: string): string {
-    return filePath.split('/').pop() || filePath;
+    const normalized = filePath.replace(/\/+$/, '');
+    return normalized.split('/').pop() || normalized;
 }
 
 function parentPath(entry: StatusEntry): string {
-    const parts = entry.filePath.split('/');
+    const parts = entry.filePath.replace(/\/+$/, '').split('/');
     parts.pop();
     const parent = parts.join('/');
     if (entry.origPath) { return `${entry.origPath} -> ${parent || '.'}`; }

@@ -229,15 +229,10 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
         <RepositoryNavigator
             repositories={state.repositorySummaries}
             activeContextId={state.activeRepositoryContextId}
-            listContextId={state.repositoryListContextId}
             title="Repositories"
             onNavigate={(contextId) => {
-                dispatch({ type: 'selectRepositoryContext', contextId });
-                sendMessage({ type: 'repo/selectRepository', contextId });
-            }}
-            onShowRepositoryList={(contextId) => {
-                dispatch({ type: 'showRepositoryList', contextId });
-                sendMessage({ type: 'repo/showRepositoryList', ...(contextId ? { contextId } : {}) });
+                dispatch({ type: 'navigateRepository', contextId });
+                sendMessage({ type: 'repo/navigateRepository', ...(contextId ? { contextId } : {}) });
             }}
             onOpenInNewWindow={(contextId) => sendMessage({ type: 'repo/openRepositoryInNewWindow', contextId })}
         >

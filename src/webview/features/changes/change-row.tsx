@@ -40,6 +40,7 @@ export function ChangeRow({
             primaryAction={primaryActionOverride ?? primaryRowActionFor(item)}
             alwaysShowActions={alwaysShowActions}
             showSelectionCheckbox={showSelectionCheckbox}
+            isRepository={item.nestedRepositoryContextId !== undefined}
             onSelect={(selectedItem, mode) => onSelect(selectedItem, toChangeSelectionMode(mode))}
             onOpenContextMenu={onOpenContextMenu}
             onAction={onAction}

@@ -1,7 +1,7 @@
 import type { ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
 import { ChangeRowAction, messageForRowAction, type ChangeActionDescriptor } from '@webview/features/changes/change-commands';
 import { changesSelectionTarget, hasPatchableSelectionTarget } from '@webview/features/changes/change-selection-model';
-import { ChangeSectionId, type ChangeListItem } from '@webview/features/changes/change-tree';
+import { ChangeSectionId, isFileActionItem, type ChangeListItem } from '@webview/features/changes/change-tree';
 
 export enum ChangeSelectionAction {
     Open = 'open',
@@ -17,7 +17,10 @@ export enum ChangeSelectionAction {
 
 export function selectionActionsFor(items: readonly ChangeListItem[]): readonly ChangeActionDescriptor<ChangeSelectionAction>[] {
     if (items.length === 0) { return []; }
-    const singleFileActions: ChangeActionDescriptor<ChangeSelectionAction>[] = items.length === 1
+    const nestedRepository = items.length === 1 ? items[0]?.nestedRepositoryContextId : undefined;
+    const singleFileActions: ChangeActionDescriptor<ChangeSelectionAction>[] = nestedRepository
+        ? [{ action: ChangeSelectionAction.Open, icon: 'folder-opened', label: 'Open', title: 'Open nested repository' }]
+        : items.length === 1
         ? [
             { action: ChangeSelectionAction.Diff, icon: 'diff', label: 'Diff', title: 'Open selected file diff' },
             { action: ChangeSelectionAction.Open, icon: 'go-to-file', label: 'Open', title: 'Open selected file' },
@@ -41,6 +44,12 @@ export function messageForSelectionAction(
     action: ChangeSelectionAction,
 ): ChangesWebviewToExtensionMessage | undefined {
     const firstItem = items[0];
+    if (action === ChangeSelectionAction.Open && items.length === 1 && firstItem?.nestedRepositoryContextId) {
+        return { type: 'repo/navigateRepository', contextId: firstItem.nestedRepositoryContextId };
+    }
+    if (action === ChangeSelectionAction.Diff && items.length === 1 && firstItem?.nestedRepositoryContextId) {
+        return undefined;
+    }
     if ((action === ChangeSelectionAction.Open || action === ChangeSelectionAction.Diff) && items.length === 1 && firstItem) {
         return messageForRowAction(firstItem, action as unknown as ChangeRowAction);
     }
@@ -78,7 +87,7 @@ function hasSection(items: readonly ChangeListItem[], section: ChangeSectionId):
 }
 
 function hasActionableSection(items: readonly ChangeListItem[], section: ChangeSectionId): boolean {
-    return items.some((item) => item.section === section && !item.entry.isSubmodule);
+    return items.some((item) => item.section === section && isFileActionItem(item));
 }
 
 function hasPatchableSelection(items: readonly ChangeListItem[]): boolean {
@@ -91,7 +100,7 @@ function pathsForSection(items: readonly ChangeListItem[], section: ChangeSectio
 
 function actionablePathsForSection(items: readonly ChangeListItem[], section: ChangeSectionId): readonly string[] {
     return items
-        .filter((item) => item.section === section && !item.entry.isSubmodule)
+        .filter((item) => item.section === section && isFileActionItem(item))
         .map((item) => item.entry.filePath);
 }
 

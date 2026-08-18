@@ -66,6 +66,23 @@ describe('ChangeRow', () => {
         })).toBe(ChangeRowAction.Diff);
     });
 
+    it('opens nested repositories and renders their trailing-slash paths as repository rows', () => {
+        const onAction = vi.fn<(item: ChangeListItem, action: ChangeRowAction) => void>();
+        const item: ChangeListItem = {
+            ...changeItem(ChangeSectionId.Unstaged, 'android/engage_android/', '?', '?'),
+            nestedRepositoryContextId: 'android-context',
+        };
+
+        const { container } = renderRow(item, onAction);
+        fireEvent.click(screen.getByTitle('android/engage_android/'));
+
+        expect(onAction).toHaveBeenCalledWith(item, ChangeRowAction.Open);
+        expect(screen.getByText('engage_android')).toBeInTheDocument();
+        expect(screen.getByText('android')).toBeInTheDocument();
+        expect(container.querySelector('.file-type-icon')).not.toBeNull();
+        expect(primaryRowActionFor(item)).toBe(ChangeRowAction.Open);
+    });
+
     it('uses the keyboard context menu key to select and target a change row', () => {
         const item = changeItem(ChangeSectionId.Unstaged, 'src/app.ts', ' ', 'M');
         const onSelect = vi.fn<(item: ChangeListItem, mode: ChangeSelectionMode) => void>();

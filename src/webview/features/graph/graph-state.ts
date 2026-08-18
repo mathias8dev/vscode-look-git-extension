@@ -98,7 +98,6 @@ export interface CommitDetails {
 export interface GraphState {
     readonly repositorySummaries: Resource<readonly RepositorySummary[]>;
     readonly activeRepositoryContextId: Resource<string | undefined>;
-    readonly repositoryListContextId: Resource<string | undefined>;
     readonly selectedRepository: GraphRepositorySelection;
     readonly repository: RepositoryLocator | undefined;
     readonly rows: readonly GraphRow[];
@@ -153,14 +152,12 @@ export type GraphAction =
     | { readonly type: 'clearFilters' }
     | { readonly type: 'refreshRequested' }
     | { readonly type: 'startLoadMore' }
-    | { readonly type: 'selectRepositoryContext'; readonly contextId: string }
-    | { readonly type: 'showRepositoryList'; readonly contextId?: string };
+    | { readonly type: 'navigateRepository'; readonly contextId?: string };
 
 export function createInitialGraphState(): GraphState {
     return {
         repositorySummaries: { status: 'ready', data: [] },
         activeRepositoryContextId: { status: 'ready', data: undefined },
-        repositoryListContextId: { status: 'ready', data: undefined },
         selectedRepository: mainGraphRepositorySelection(),
         repository: undefined,
         rows: [],
@@ -282,14 +279,8 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
             return state.operationStatus?.operationId === action.operationId
                 ? { ...state, operationStatus: undefined }
                 : state;
-        case 'selectRepositoryContext':
+        case 'navigateRepository':
             return resetForRepositoryNavigation(state, action.contextId);
-        case 'showRepositoryList':
-            return {
-                ...state,
-                activeRepositoryContextId: { status: 'ready', data: undefined },
-                repositoryListContextId: { status: 'ready', data: action.contextId },
-            };
         case 'clearFilters':
             return startGraphReload({
                 ...state,
@@ -485,7 +476,7 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
             return { ...state, loading: false, loadingMore: false, activeGraphRequestId: undefined, error: message.error };
         case 'repo/contextChanged':
             return {
-                ...resetForRepositoryNavigation(state),
+                ...resetForRepositoryNavigation(state, message.context?.id),
                 activeRepositoryContextId: { status: 'ready', data: message.context?.id },
                 activeGraphRequestId: message.context ? graphRequestId(0, 'replace') : undefined,
                 loading: Boolean(message.context),
@@ -495,7 +486,6 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
                 ...state,
                 repositorySummaries: message.repositories,
                 activeRepositoryContextId: message.activeContextId,
-                repositoryListContextId: message.listContextId,
             };
         case 'ui/fontSizeChanged':
             return state;
@@ -510,14 +500,11 @@ function reduceGraphOperationStatus(state: GraphState, message: GraphOperationSt
     return { ...state, operationStatus: message };
 }
 
-function resetForRepositoryNavigation(state: GraphState, contextId?: string): GraphState {
+function resetForRepositoryNavigation(state: GraphState, contextId: string | undefined): GraphState {
     return {
         ...createInitialGraphState(),
         repositorySummaries: state.repositorySummaries,
-        repositoryListContextId: state.repositoryListContextId,
-        activeRepositoryContextId: contextId === undefined
-            ? state.activeRepositoryContextId
-            : { status: 'ready', data: contextId },
+        activeRepositoryContextId: { status: 'ready', data: contextId },
         repoId: undefined,
         activeGraphRequestId: undefined,
     };

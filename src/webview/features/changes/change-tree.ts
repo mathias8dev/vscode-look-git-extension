@@ -1,5 +1,6 @@
 import type { StatusData, StatusEntry } from '@protocol/changes/types';
 import { SubmoduleStatus } from '@protocol/shared/repo';
+import { nestedRepositoryContextId } from '@webview/features/changes/nested-repository-model';
 
 export enum ChangeSectionId {
     Conflicts = 'conflicts',
@@ -12,6 +13,7 @@ export interface ChangeListItem {
     readonly section: ChangeSectionId;
     readonly entry: StatusEntry;
     readonly isStaged: boolean;
+    readonly nestedRepositoryContextId?: string;
 }
 
 export interface ChangeTreeNode {
@@ -31,22 +33,25 @@ export interface ChangeSection {
 
 export type ChangeItemCompare = (left: ChangeListItem, right: ChangeListItem) => number;
 
-export function buildChangeSections(status: StatusData): readonly ChangeSection[] {
+export function buildChangeSections(
+    status: StatusData,
+    nestedRepositoryContextIdsByPath: ReadonlyMap<string, string> = new Map(),
+): readonly ChangeSection[] {
     return [
         {
             id: ChangeSectionId.Conflicts,
             title: 'Conflicts',
-            items: status.conflicts.map((entry) => toItem(ChangeSectionId.Conflicts, entry, false)),
+            items: status.conflicts.map((entry) => toItem(ChangeSectionId.Conflicts, entry, false, nestedRepositoryContextIdsByPath)),
         },
         {
             id: ChangeSectionId.Staged,
             title: 'Staged',
-            items: status.staged.map((entry) => toItem(ChangeSectionId.Staged, entry, true)),
+            items: status.staged.map((entry) => toItem(ChangeSectionId.Staged, entry, true, nestedRepositoryContextIdsByPath)),
         },
         {
             id: ChangeSectionId.Unstaged,
             title: 'Changes',
-            items: status.unstaged.map((entry) => toItem(ChangeSectionId.Unstaged, entry, false)),
+            items: status.unstaged.map((entry) => toItem(ChangeSectionId.Unstaged, entry, false, nestedRepositoryContextIdsByPath)),
         },
     ];
 }
@@ -102,6 +107,10 @@ export function statusLabel(entry: StatusEntry): string {
     return 'Changed';
 }
 
+export function isFileActionItem(item: ChangeListItem): boolean {
+    return !item.entry.isSubmodule && !item.nestedRepositoryContextId;
+}
+
 function submoduleLabel(status: StatusEntry['submoduleStatus']): string {
     switch (status) {
         case SubmoduleStatus.Dirty:
@@ -116,13 +125,26 @@ function submoduleLabel(status: StatusEntry['submoduleStatus']): string {
     }
 }
 
-function toItem(section: ChangeSectionId, entry: StatusEntry, isStaged: boolean): ChangeListItem {
+function toItem(
+    section: ChangeSectionId,
+    entry: StatusEntry,
+    isStaged: boolean,
+    nestedRepositoryContextIdsByPath: ReadonlyMap<string, string>,
+): ChangeListItem {
+    const repositoryContextId = isUntracked(entry)
+        ? nestedRepositoryContextId(nestedRepositoryContextIdsByPath, entry.filePath)
+        : undefined;
     return {
         id: `${section}:${entry.filePath}:${entry.origPath ?? ''}`,
         section,
         entry,
         isStaged,
+        ...(repositoryContextId ? { nestedRepositoryContextId: repositoryContextId } : {}),
     };
+}
+
+function isUntracked(entry: StatusEntry): boolean {
+    return entry.indexStatus === '?' || entry.workTreeStatus === '?';
 }
 
 interface MutableTreeNode {

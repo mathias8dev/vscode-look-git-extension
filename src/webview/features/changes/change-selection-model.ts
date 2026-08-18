@@ -1,5 +1,5 @@
 import type { ChangesSelectionContextTarget } from '@protocol/changes/types';
-import { ChangeSectionId, type ChangeListItem } from '@webview/features/changes/change-tree';
+import { ChangeSectionId, isFileActionItem, type ChangeListItem } from '@webview/features/changes/change-tree';
 
 export function changesSelectionTarget(
     items: readonly ChangeListItem[],
@@ -7,7 +7,8 @@ export function changesSelectionTarget(
 ): ChangesSelectionContextTarget {
     const stageableItems = items.filter((item) => item.section === ChangeSectionId.Unstaged);
     const stagedItems = items.filter((item) => item.section === ChangeSectionId.Staged);
-    const stashableItems = items.filter((item) => item.section === ChangeSectionId.Unstaged || item.section === ChangeSectionId.Staged);
+    const fileItems = items.filter(isFileActionItem);
+    const stashableItems = fileItems.filter((item) => item.section === ChangeSectionId.Unstaged || item.section === ChangeSectionId.Staged);
     const untrackedItems = stageableItems.filter(isUntracked);
     const trackedUnstagedItems = stageableItems.filter((item) => !isUntracked(item));
     return {
@@ -16,7 +17,7 @@ export function changesSelectionTarget(
         filePaths: uniqueFilePaths(items),
         stageFilePaths: uniqueFilePaths(stageableItems),
         unstageFilePaths: uniqueFilePaths(stagedItems),
-        discardFilePaths: uniqueFilePaths(stageableItems),
+        discardFilePaths: uniqueFilePaths(stageableItems.filter(isFileActionItem)),
         stashFilePaths: uniqueFilePaths(stashableItems),
         patchStagedFilePaths: uniqueFilePaths(stagedItems.filter(isPatchableChangeItem)),
         patchUnstagedFilePaths: uniqueFilePaths(trackedUnstagedItems.filter(isPatchableChangeItem)),
@@ -44,5 +45,5 @@ function isUntracked(item: ChangeListItem): boolean {
 }
 
 function isPatchableChangeItem(item: ChangeListItem): boolean {
-    return item.entry.isSubmodule !== true;
+    return isFileActionItem(item);
 }

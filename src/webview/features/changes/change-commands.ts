@@ -1,7 +1,7 @@
 import type { ChangesToolbarCommand, ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
 import type { ChangesSelectionContextTarget } from '@protocol/changes/types';
 import { ChangeRowAction, type ChangeActionDescriptor } from '@webview/shared/change-row-actions';
-import { ChangeSectionId, type ChangeListItem, type ChangeSection } from '@webview/features/changes/change-tree';
+import { ChangeSectionId, isFileActionItem, type ChangeListItem, type ChangeSection } from '@webview/features/changes/change-tree';
 
 export { ChangeRowAction };
 export type { ChangeActionDescriptor };
@@ -15,6 +15,14 @@ export enum ChangeBulkAction {
 }
 
 export function rowActionsFor(item: ChangeListItem): readonly ChangeActionDescriptor<ChangeRowAction>[] {
+    if (item.nestedRepositoryContextId) {
+        return [
+            item.section === ChangeSectionId.Staged
+                ? { action: ChangeRowAction.Unstage, icon: 'remove', label: 'Unstage', title: 'Unstage nested repository' }
+                : { action: ChangeRowAction.Stage, icon: 'add', label: 'Stage', title: 'Stage nested repository' },
+            { action: ChangeRowAction.Open, icon: 'folder-opened', label: 'Open', title: 'Open nested repository' },
+        ];
+    }
     if (item.section === ChangeSectionId.Staged) {
         if (item.entry.isSubmodule) {
             return [
@@ -64,6 +72,7 @@ export function rowActionsFor(item: ChangeListItem): readonly ChangeActionDescri
 }
 
 export function primaryRowActionFor(item: ChangeListItem): ChangeRowAction | undefined {
+    if (item.nestedRepositoryContextId) { return ChangeRowAction.Open; }
     if (item.entry.isSubmodule) { return ChangeRowAction.Diff; }
     return item.section === ChangeSectionId.Conflicts
         ? ChangeRowAction.OpenMergeEditor
@@ -149,12 +158,12 @@ export function messageForBulkAction(section: ChangeSection, action: ChangeBulkA
 
 function discardableFilePaths(section: ChangeSection): readonly string[] {
     return section.items
-        .filter((item) => !item.entry.isSubmodule)
+        .filter(isFileActionItem)
         .map((item) => item.entry.filePath);
 }
 
 function hasDiscardableItems(section: ChangeSection): boolean {
-    return section.items.some((item) => !item.entry.isSubmodule);
+    return section.items.some(isFileActionItem);
 }
 
 export function messageForChangesToolbarCommand(command: ChangesToolbarCommand): ChangesWebviewToExtensionMessage {

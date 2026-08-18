@@ -48,16 +48,10 @@ export interface RepositoriesChangedPush {
     readonly type: 'repo/repositoriesChanged';
     readonly repositories: Resource<readonly RepositorySummary[]>;
     readonly activeContextId: Resource<string | undefined>;
-    readonly listContextId: Resource<string | undefined>;
 }
 
-export interface SelectRepositoryContextMessage {
-    readonly type: 'repo/selectRepository';
-    readonly contextId: string;
-}
-
-export interface ShowRepositoryListMessage {
-    readonly type: 'repo/showRepositoryList';
+export interface NavigateRepositoryMessage {
+    readonly type: 'repo/navigateRepository';
     readonly contextId?: string;
 }
 
@@ -67,6 +61,5 @@ export interface OpenRepositoryInNewWindowMessage {
 }
 
 export type RepositoryNavigationMessage =
-    | SelectRepositoryContextMessage
-    | ShowRepositoryListMessage
+    | NavigateRepositoryMessage
     | OpenRepositoryInNewWindowMessage;

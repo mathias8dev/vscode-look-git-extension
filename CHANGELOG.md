@@ -9,6 +9,12 @@ All notable changes to Look Git are documented in this file.
 #### Multi-Repo
 - Add a resource-scoped `lookGit.repositoryScanMaxDepth` setting with live repository redetection and independent values for each workspace folder
 
+### Fixed
+
+#### Multi-Repo
+- Keep the active repository content visible while browsing collapsible child repositories, with semantic parent and root navigation shared by Changes, Commit History, and Look Graph
+- Render discovered untracked nested repositories as navigable repository rows in Changes without exposing file-only diff, discard, patch, or stash actions
+
 ## [1.2.8] - 2026-08-13
 
 ### Added

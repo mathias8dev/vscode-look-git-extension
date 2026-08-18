@@ -12,13 +12,28 @@ describe('multi-repository navigator e2e', () => {
         await focusChangesView();
         await openWebviewBySelector('main.changes-shell');
         try {
-            await waitForRepositoryOverview(['app', 'api'], ['plugin']);
+            await waitForRepositoryDetail('workspace', 'section[aria-label="Repository changes"]');
+            await waitForChildRepositories(['app', 'api'], ['plugin']);
+            await navigateNestedRepositoryChange('app/');
+            await waitForRepositoryDetail('app', 'section[aria-label="Repository changes"]');
+            await navigateBackToParentRepository();
+            await waitForRepositoryDetail('workspace', 'section[aria-label="Repository changes"]');
+            await setChildRepositoriesExpanded(false);
+            await waitForRepositoryDetail('workspace', 'section[aria-label="Repository changes"]');
+            await setChildRepositoriesExpanded(true);
             await navigateRepository('app');
             await waitForRepositoryDetail('app', 'section[aria-label="Repository changes"]');
-            await showNestedRepositories();
-            await waitForRepositoryOverview(['plugin'], ['api']);
-            await navigateBackToParentRepositories();
-            await waitForRepositoryOverview(['app', 'api'], ['plugin']);
+            await waitForChildRepositories(['plugin']);
+            await navigateRepository('plugin');
+            await waitForRepositoryDetail('plugin', 'section[aria-label="Repository changes"]');
+            await navigateBackToParentRepository();
+            await waitForRepositoryDetail('app', 'section[aria-label="Repository changes"]');
+            await navigateBackToParentRepository();
+            await waitForRepositoryDetail('workspace', 'section[aria-label="Repository changes"]');
+            await navigateBackToRepositories();
+            await waitForRepositoryOverview(['workspace'], ['app', 'api', 'plugin']);
+            await navigateRepository('workspace');
+            await waitForRepositoryDetail('workspace', 'section[aria-label="Repository changes"]');
             await navigateRepository('app');
             await waitForRepositoryDetail('app', 'section[aria-label="Repository changes"]');
         } finally {
@@ -37,8 +52,10 @@ describe('multi-repository navigator e2e', () => {
         await openWebviewBySelector('.repository-navigator-detail-content > .graph-shell');
         try {
             await waitForRepositoryDetail('app', '.graph-center .graph-scope-content');
+            await navigateBackToParentRepository();
+            await waitForRepositoryDetail('workspace', '.graph-center .graph-scope-content');
             await navigateBackToRepositories();
-            await waitForRepositoryOverview(['app', 'api']);
+            await waitForRepositoryOverview(['workspace'], ['app', 'api']);
         } finally {
             await closeWebview();
         }
@@ -46,7 +63,7 @@ describe('multi-repository navigator e2e', () => {
         await focusChangesView();
         await openWebviewBySelector('main.changes-shell');
         try {
-            await waitForRepositoryOverview(['app', 'api'], ['plugin']);
+            await waitForRepositoryOverview(['workspace'], ['app', 'api', 'plugin']);
         } finally {
             await closeWebview();
         }
@@ -59,7 +76,9 @@ describe('multi-repository navigator e2e', () => {
         await focusChangesView();
         await openWebviewBySelector('main.changes-shell');
         try {
-            await waitForRepositoryOverview(['app', 'api'], ['deep-repository', 'plugin']);
+            await navigateRepository('workspace');
+            await waitForRepositoryDetail('workspace', 'section[aria-label="Repository changes"]');
+            await waitForChildRepositories(['app', 'api'], ['deep-repository', 'plugin']);
         } finally {
             await closeWebview();
         }
@@ -72,7 +91,8 @@ describe('multi-repository navigator e2e', () => {
             await focusChangesView();
             await openWebviewBySelector('main.changes-shell');
             try {
-                await waitForRepositoryOverview(['app', 'api', 'deep-repository'], ['plugin']);
+                await waitForRepositoryDetail('workspace', 'section[aria-label="Repository changes"]');
+                await waitForChildRepositories(['app', 'api', 'deep-repository'], ['plugin']);
             } finally {
                 await closeWebview();
             }
@@ -223,18 +243,54 @@ async function navigateRepository(label: string): Promise<void> {
     }, `Expected repository row "${label}".\n${snapshot}`);
 }
 
-async function showNestedRepositories(): Promise<void> {
+async function navigateNestedRepositoryChange(filePath: string): Promise<void> {
     let snapshot = '';
     await pollUntil(async () => {
         snapshot = await webviewSnapshot();
-        return await browser.execute(() => {
-            const button = document.querySelector<HTMLButtonElement>('button[aria-label="Show nested repositories"]');
-            if (!button) { return false; }
-            button.scrollIntoView({ block: 'center', inline: 'nearest' });
-            button.click();
+        return await browser.execute((expectedPath: string) => {
+            const row = Array.from(document.querySelectorAll<HTMLElement>('article.change-row'))
+                .find((candidate) => candidate.title === expectedPath);
+            if (!row) { return false; }
+            row.scrollIntoView({ block: 'center', inline: 'nearest' });
+            row.click();
             return true;
-        });
-    }, `Expected nested repositories action.\n${snapshot}`);
+        }, filePath);
+    }, `Expected nested repository change "${filePath}".\n${snapshot}`);
+}
+
+async function waitForChildRepositories(repositoryLabels: readonly string[], hiddenLabels: readonly string[] = []): Promise<void> {
+    let snapshot = '';
+    try {
+        await pollUntil(async () => {
+            snapshot = await webviewSnapshot();
+            return await browser.execute((labels: readonly string[], absentLabels: readonly string[]) => {
+                const childList = document.querySelector('.repository-navigator-child-list');
+                const text = childList?.textContent ?? '';
+                return Boolean(childList)
+                    && labels.every((label) => text.includes(label))
+                    && absentLabels.every((label) => !text.includes(label));
+            }, repositoryLabels, hiddenLabels);
+        }, `Expected child repositories ${repositoryLabels.join(', ')}.`);
+    } catch (error) {
+        throw new Error(`Expected child repositories ${repositoryLabels.join(', ')}. Last snapshot:\n${snapshot}`, { cause: error });
+    }
+}
+
+async function setChildRepositoriesExpanded(expanded: boolean): Promise<void> {
+    let snapshot = '';
+    await pollUntil(async () => {
+        snapshot = await webviewSnapshot();
+        return await browser.execute((nextExpanded: boolean) => {
+            const button = document.querySelector<HTMLButtonElement>('.repository-navigator-children-header');
+            if (!button) { return false; }
+            const currentExpanded = button.getAttribute('aria-expanded') === 'true';
+            if (currentExpanded !== nextExpanded) {
+                button.scrollIntoView({ block: 'center', inline: 'nearest' });
+                button.click();
+            }
+            return button.getAttribute('aria-expanded') === String(nextExpanded);
+        }, expanded);
+    }, `Expected child repositories to be ${expanded ? 'expanded' : 'collapsed'}.\n${snapshot}`);
 }
 
 async function waitForRepositoryDetail(label: string, contentSelector: string): Promise<void> {
@@ -246,8 +302,7 @@ async function waitForRepositoryDetail(label: string, contentSelector: string): 
                 const header = document.querySelector('.repository-navigator-detail-header');
                 const text = header?.textContent ?? '';
                 return text.includes(expectedLabel)
-                    && Boolean(document.querySelector(expectedContentSelector))
-                    && !Boolean(document.querySelector('.repository-navigator-list'));
+                    && Boolean(document.querySelector(expectedContentSelector));
             }, label, contentSelector);
         }, `Expected repository detail "${label}" with ${contentSelector}.`);
     } catch (error) {
@@ -255,12 +310,12 @@ async function waitForRepositoryDetail(label: string, contentSelector: string): 
     }
 }
 
-async function navigateBackToParentRepositories(): Promise<void> {
+async function navigateBackToParentRepository(): Promise<void> {
     let snapshot = '';
     await pollUntil(async () => {
         snapshot = await webviewSnapshot();
         return await browser.execute(() => {
-            const button = document.querySelector<HTMLButtonElement>('button[aria-label="Back to parent folder"]');
+            const button = document.querySelector<HTMLButtonElement>('button[aria-label="Back to parent repository"]');
             if (!button) { return false; }
             button.click();
             return true;

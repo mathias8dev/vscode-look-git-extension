@@ -30,7 +30,6 @@ export enum ChangeSelectionMode {
 export interface ChangesState {
     readonly repositorySummaries: Resource<readonly RepositorySummary[]>;
     readonly activeRepositoryContextId: Resource<string | undefined>;
-    readonly repositoryListContextId: Resource<string | undefined>;
     readonly status: StatusData;
     readonly viewMode: ChangesViewMode;
     readonly sortMode: ChangesSortMode;
@@ -108,14 +107,12 @@ export type ChangesAction =
     | { readonly type: 'toggleSubmodule'; readonly path: string }
     | { readonly type: 'requestSubmoduleStatus'; readonly path: string }
     | { readonly type: 'toggleSubmoduleStash'; readonly key: string }
-    | { readonly type: 'selectRepositoryContext'; readonly contextId: string }
-    | { readonly type: 'showRepositoryList'; readonly contextId?: string };
+    | { readonly type: 'navigateRepository'; readonly contextId?: string };
 
 export function createInitialChangesState(preferences: ChangesStatePreferences = {}): ChangesState {
     return {
         repositorySummaries: { status: 'ready', data: [] },
         activeRepositoryContextId: { status: 'ready', data: undefined },
-        repositoryListContextId: { status: 'ready', data: undefined },
         status: emptyStatusData(),
         viewMode: preferences.viewMode ?? ChangesViewMode.List,
         sortMode: preferences.sortMode ?? ChangesSortMode.Path,
@@ -213,14 +210,8 @@ export function reduceChangesState(state: ChangesState, action: ChangesAction): 
             return { ...state, loadingSubmoduleStatusPaths: addedPath(state.loadingSubmoduleStatusPaths, action.path) };
         case 'toggleSubmoduleStash':
             return { ...state, expandedSubmoduleStashKeys: toggledPath(state.expandedSubmoduleStashKeys, action.key) };
-        case 'selectRepositoryContext':
+        case 'navigateRepository':
             return resetForRepositoryNavigation(state, action.contextId);
-        case 'showRepositoryList':
-            return {
-                ...state,
-                activeRepositoryContextId: { status: 'ready', data: undefined },
-                repositoryListContextId: { status: 'ready', data: action.contextId },
-            };
         case 'clearError':
             return { ...state, error: undefined };
         case 'clearOperationStatus':
@@ -444,7 +435,7 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
             };
         case 'repo/contextChanged':
             return {
-                ...resetForRepositoryNavigation(state),
+                ...resetForRepositoryNavigation(state, message.context?.id),
                 activeRepositoryContextId: { status: 'ready', data: message.context?.id },
             };
         case 'repo/repositoriesChanged':
@@ -452,7 +443,6 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 ...state,
                 repositorySummaries: message.repositories,
                 activeRepositoryContextId: message.activeContextId,
-                repositoryListContextId: message.listContextId,
             };
         case 'ui/fontSizeChanged':
             return state;
@@ -466,7 +456,7 @@ function reduceChangesOperationStatus(state: ChangesState, message: ChangesOpera
     return { ...state, operationStatus: message };
 }
 
-function resetForRepositoryNavigation(state: ChangesState, contextId?: string): ChangesState {
+function resetForRepositoryNavigation(state: ChangesState, contextId: string | undefined): ChangesState {
     return {
         ...createInitialChangesState({
             viewMode: state.viewMode,
@@ -476,10 +466,7 @@ function resetForRepositoryNavigation(state: ChangesState, contextId?: string): 
             commitMessageHistory: state.commitMessageHistory,
         }),
         repositorySummaries: state.repositorySummaries,
-        repositoryListContextId: state.repositoryListContextId,
-        activeRepositoryContextId: contextId === undefined
-            ? state.activeRepositoryContextId
-            : { status: 'ready', data: contextId },
+        activeRepositoryContextId: { status: 'ready', data: contextId },
     };
 }
 

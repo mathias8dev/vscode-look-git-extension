@@ -34,6 +34,27 @@ describe('RepositorySelectionStore', () => {
         expect(store.currentContext).toBeUndefined();
     });
 
+    it('identifies a sole top-level repository independently of its child repositories', () => {
+        const store = new RepositorySelectionStore();
+        const parent = createRepoContext('/workspace');
+        const child = createRepoContext('/workspace/packages/app', parent.id);
+
+        store.setContexts([parent, child]);
+
+        expect(store.soleTopLevelContext).toEqual(parent);
+    });
+
+    it('does not choose between multiple top-level repositories', () => {
+        const store = new RepositorySelectionStore();
+
+        store.setContexts([
+            createRepoContext('/workspace/app'),
+            createRepoContext('/workspace/api'),
+        ]);
+
+        expect(store.soleTopLevelContext).toBeUndefined();
+    });
+
     it('selects the repository that contains a resource path', () => {
         const store = new RepositorySelectionStore();
         const first = createRepoContext('/repo-a');

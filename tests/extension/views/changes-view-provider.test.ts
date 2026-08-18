@@ -376,10 +376,10 @@ describe('ChangesViewProvider', () => {
         const view = makeWebviewView();
 
         provider.resolveWebviewView(view);
-        view.messageHandler?.({ type: 'repo/selectRepository', contextId: 'repo-2' });
+        view.messageHandler?.({ type: 'repo/navigateRepository', contextId: 'repo-2' });
 
         await vi.waitFor(() => {
-            expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/selectRepository', contextId: 'repo-2' });
+            expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/navigateRepository', contextId: 'repo-2' });
         });
         vi.clearAllTimers();
     });

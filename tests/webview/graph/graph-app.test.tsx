@@ -214,7 +214,6 @@ describe('GraphApp', () => {
                 data: repositories,
             },
             activeContextId: { status: 'ready', data: undefined },
-            listContextId: { status: 'ready', data: undefined },
         }));
 
         expect(screen.getByRole('list')).toBeInTheDocument();
@@ -227,7 +226,6 @@ describe('GraphApp', () => {
                 data: repositories,
             },
             activeContextId: { status: 'ready', data: 'repo-a' },
-            listContextId: { status: 'ready', data: undefined },
         }));
 
         await waitFor(() => expect(document.querySelector('.repository-navigator-detail .graph-shell')).toBeInTheDocument());

@@ -239,10 +239,10 @@ describe('CommitHistoryViewProvider', () => {
         const view = makeWebviewView();
 
         provider.resolveWebviewView(view);
-        view.messageHandler?.({ type: 'repo/showRepositoryList', contextId: 'repo-child' });
+        view.messageHandler?.({ type: 'repo/navigateRepository', contextId: 'repo-child' });
 
         await expect.poll(() => onRepositoryNavigation.mock.calls.length).toBe(1);
-        expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/showRepositoryList', contextId: 'repo-child' });
+        expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/navigateRepository', contextId: 'repo-child' });
     });
 
     it('keeps file history panels alive while hidden so pending commit details can resolve', async () => {
