@@ -6,7 +6,8 @@ import type { GitGraphCommit } from '@core/git/domain/git-commit';
 import type { GitWorktree } from '@core/git/domain/git-worktree';
 import type { GitExecutionContext, GitRuntime } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
-import type { GraphExtensionToWebviewMessage } from '@protocol/graph/messages';
+import { GitPushOutcome } from '@application/ports/git-capabilities';
+import { GraphOperationStatus, type GraphExtensionToWebviewMessage } from '@protocol/graph/messages';
 import type { RepositoryLocator } from '@protocol/shared/repo';
 import { CliGitRuntime } from '@extension/git/cli-git-runtime';
 import { GitCliBackend } from '@extension/git/git-cli-backend';
@@ -551,7 +552,89 @@ describe('GraphMessageRouter', () => {
         expect(messages.some((message) => message.type === 'graph/dataResponse')).toBe(false);
         expect(messages.some((message) => message.type === 'graph/error')).toBe(false);
     });
+
+    it('does not report success or refresh when native publication is delegated', async () => {
+        const registry = new RepositoryRegistry();
+        registerRuntimeRepository(registry, pushRuntime(GitPushOutcome.Delegated, true));
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const router = graphRouter(registry, messages, onRepositoryUpdated);
+
+        await router.handle({ type: 'graph/branchCommand', command: 'push', branch: 'main', isRemote: false });
+
+        expect(messages
+            .filter((message) => message.type === 'graph/operationStatus')
+            .map((message) => message.status))
+            .toEqual([GraphOperationStatus.Running, GraphOperationStatus.Delegated]);
+        expect(onRepositoryUpdated).not.toHaveBeenCalled();
+    });
+
+    it('reports success and refreshes after a completed branch push', async () => {
+        const registry = new RepositoryRegistry();
+        const runtime = pushRuntime(GitPushOutcome.Completed, true);
+        registerRuntimeRepository(registry, runtime);
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const router = graphRouter(registry, messages, onRepositoryUpdated);
+
+        await router.handle({ type: 'graph/branchCommand', command: 'push', branch: 'main', isRemote: false });
+
+        expect(operationStatuses(messages)).toEqual([GraphOperationStatus.Running, GraphOperationStatus.Success]);
+        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
+    });
+
+    it('does not report success or refresh when a worktree publication is delegated', async () => {
+        const registry = new RepositoryRegistry();
+        registerRuntimeRepository(registry, pushRuntime(GitPushOutcome.Delegated, false));
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const router = graphRouter(registry, messages, onRepositoryUpdated);
+
+        await router.handle({ type: 'graph/worktreeCommand', command: 'push' });
+
+        expect(operationStatuses(messages)).toEqual([GraphOperationStatus.Running, GraphOperationStatus.Delegated]);
+        expect(onRepositoryUpdated).not.toHaveBeenCalled();
+    });
 });
+
+function graphRouter(
+    registry: RepositoryRegistry,
+    messages: GraphExtensionToWebviewMessage[],
+    onRepositoryUpdated: () => Promise<void>,
+): GraphMessageRouter {
+    return new GraphMessageRouter(
+        { currentContext: { id: 'repo-id', cwd: '/repo', kind: RepoKind.Main, label: 'repo' } },
+        (message) => { messages.push(message); },
+        onRepositoryUpdated,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        registry,
+    );
+}
+
+function pushRuntime(outcome: GitPushOutcome, includeBranches: boolean): GitRuntime {
+    return {
+        supports: () => true,
+        async execute<TInput = unknown, TResult = unknown>(operation: SemanticGitOperation, _context: GitExecutionContext, _input: TInput): Promise<TResult> {
+            if (includeBranches && operation === 'listBranches') {
+                return [branch({ upstream: undefined })] as TResult; // The fixture returns the result defined by this semantic operation.
+            }
+            if (operation === 'push' || operation === 'pushBranch') {
+                return outcome as TResult; // The fixture returns the result defined by this semantic operation.
+            }
+            throw new Error(`Unexpected operation ${operation}`);
+        },
+    };
+}
+
+function operationStatuses(messages: readonly GraphExtensionToWebviewMessage[]): readonly GraphOperationStatus[] {
+    return messages
+        .filter((message) => message.type === 'graph/operationStatus')
+        .map((message) => message.status);
+}
 
 function commitFromInput(input: unknown): string {
     if (typeof input === 'object' && input !== null && 'commit' in input && typeof input.commit === 'string') {
@@ -675,7 +758,7 @@ function graphDataResult(overrides: Partial<GraphDataResult> = {}): GraphDataRes
     };
 }
 
-function branch(): GitBranch {
+function branch(overrides: Partial<GitBranch> = {}): GitBranch {
     return {
         name: 'main',
         isRemote: false,
@@ -683,6 +766,7 @@ function branch(): GitBranch {
         hash: 'abc123',
         ahead: 0,
         behind: 0,
+        ...overrides,
     };
 }
 

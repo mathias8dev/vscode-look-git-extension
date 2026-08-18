@@ -7,80 +7,82 @@ import { showBranchNameInput } from '@extension/utils/branch-name-input';
 import { openChangesWithWorkingTree } from '@extension/commands/git-command-helpers';
 import { requireRuntimeRepository, requireRuntimeTargets, requireRuntimeWorktree, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
 import { samePath } from '@extension/utils/path-compare';
+import { commandExecutionResult, pushCommandExecutionResult, type CommandExecutionResult } from '@extension/commands/command-execution-result';
 
 export async function runWorktreeCommand(
     repo: GitRepository,
     command: WorktreeCommand,
     wtPath: string | undefined,
     runtimeTargets: RuntimeCommandTargets = {},
-): Promise<boolean> {
+): Promise<CommandExecutionResult> {
     const runtimeRepository = requireRuntimeRepository(runtimeTargets);
     switch (command) {
         case 'open': {
             const pathValue = requireWorktreePath(wtPath);
             const choice = await vscode.window.showQuickPick(['Open in New Window', 'Open in Current Window'], { placeHolder: 'Open worktree' });
-            if (!choice) { return false; }
+            if (!choice) { return commandExecutionResult(false); }
             await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(pathValue), { forceNewWindow: choice === 'Open in New Window' });
-            return false;
+            return commandExecutionResult(false);
         }
         case 'openInNewWindow':
             await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(requireWorktreePath(wtPath)), { forceNewWindow: true });
-            return false;
+            return commandExecutionResult(false);
         case 'reveal':
             await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(requireWorktreePath(wtPath)));
-            return false;
+            return commandExecutionResult(false);
         case 'showDiffWithHead': {
             const pathValue = requireWorktreePath(wtPath);
             await openChangesWithWorkingTree(repo, pathValue, 'HEAD', `Diff ${path.basename(pathValue)} with HEAD`);
-            return false;
+            return commandExecutionResult(false);
         }
         case 'showDiffWithMainWorktree':
             await showDiffWithMainWorktree(repo, requireWorktreePath(wtPath));
-            return false;
+            return commandExecutionResult(false);
         case 'fetch':
             await runtimeRepository.fetchAll({});
-            return true;
+            return commandExecutionResult(true);
         case 'pull':
             await requireRuntimeWorktree(runtimeTargets).pull({});
-            return true;
-        case 'push':
-            await requireRuntimeWorktree(runtimeTargets).push(undefined, {});
-            return true;
+            return commandExecutionResult(true);
+        case 'push': {
+            const outcome = await requireRuntimeWorktree(runtimeTargets).push(undefined, {});
+            return pushCommandExecutionResult(outcome);
+        }
         case 'commit':
-            return commitWorktree(repo, requireWorktreePath(wtPath), runtimeTargets);
+            return commandExecutionResult(await commitWorktree(repo, requireWorktreePath(wtPath), runtimeTargets));
         case 'stash':
-            return stashWorktree(repo, requireWorktreePath(wtPath), runtimeTargets);
+            return commandExecutionResult(await stashWorktree(repo, requireWorktreePath(wtPath), runtimeTargets));
         case 'newBranch': {
             const branch = await showBranchNameInput({ prompt: 'New branch from worktree HEAD:' });
-            if (!branch) { return false; }
+            if (!branch) { return commandExecutionResult(false); }
             await requireRuntimeWorktree(runtimeTargets).checkoutNewBranch(branch, undefined);
-            return true;
+            return commandExecutionResult(true);
         }
         case 'checkoutBranch': {
             const branchList = await runtimeRepository.listBranches();
             const branches = branchList.filter((branch) => !branch.isRemote).map((branch) => branch.name);
             const branch = await vscode.window.showQuickPick(branches, { placeHolder: 'Checkout branch in worktree' });
-            if (!branch) { return false; }
+            if (!branch) { return commandExecutionResult(false); }
             await requireRuntimeWorktree(runtimeTargets).checkout(branch, {});
-            return true;
+            return commandExecutionResult(true);
         }
         case 'lock':
             await assertNotMainWorktree(runtimeRepository, requireWorktreePath(wtPath), 'locked');
             await runtimeRepository.lockWorktree(requireWorktreePath(wtPath));
-            return true;
+            return commandExecutionResult(true);
         case 'unlock':
             await assertNotMainWorktree(runtimeRepository, requireWorktreePath(wtPath), 'unlocked');
             await runtimeRepository.unlockWorktree(requireWorktreePath(wtPath));
-            return true;
+            return commandExecutionResult(true);
         case 'add': {
             const p = await vscode.window.showInputBox({ prompt: 'Worktree path (absolute):' });
-            if (!p) { return false; }
+            if (!p) { return commandExecutionResult(false); }
             const b = await showBranchNameInput({ prompt: 'Branch name:' });
-            if (!b) { return false; }
+            if (!b) { return commandExecutionResult(false); }
             const branches = await runtimeRepository.listBranches();
             const createNew = !branches.some((br) => br.name === b);
             await runtimeRepository.addWorktree({ path: p, branch: b, createNew });
-            return true;
+            return commandExecutionResult(true);
         }
         case 'remove':
         case 'removeForce': {
@@ -89,15 +91,15 @@ export async function runWorktreeCommand(
             const force = command === 'removeForce';
             if (force) {
                 const choice = await showModalWarningMessage(`Force remove worktree at "${pathValue}"?`, 'Force Remove');
-                if (choice !== 'Force Remove') { return false; }
+                if (choice !== 'Force Remove') { return commandExecutionResult(false); }
                 const destructiveChoice = await showModalWarningMessage('Uncommitted changes in this worktree will be permanently lost.', 'Discard Changes and Remove');
-                if (destructiveChoice !== 'Discard Changes and Remove') { return false; }
+                if (destructiveChoice !== 'Discard Changes and Remove') { return commandExecutionResult(false); }
             } else {
                 const choice = await showModalWarningMessage(`Remove worktree at "${pathValue}"?`, 'Remove');
-                if (choice !== 'Remove') { return false; }
+                if (choice !== 'Remove') { return commandExecutionResult(false); }
             }
             await runtimeRepository.removeWorktree(pathValue, force);
-            return true;
+            return commandExecutionResult(true);
         }
     }
 }

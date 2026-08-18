@@ -33,6 +33,7 @@ async function main(): Promise<void> {
                 repositoryFixture.workspaceFile,
                 `--user-data-dir=${userDataDir}`,
                 '--disable-workspace-trust',
+                '--disable-extension=vscode.github',
             ],
             version: TEST_VSCODE_VERSION,
         });

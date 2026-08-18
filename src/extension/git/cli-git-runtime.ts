@@ -10,7 +10,7 @@ import { querySubmoduleStatus, updateSubmodule } from '@extension/git/queries/qu
 import { addWorktree, queryWorktrees, removeWorktree } from '@extension/git/queries/query-worktrees';
 import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
-import type { CommitGraphQuery, RebaseOptions } from '@application/ports/git-capabilities';
+import { GitPushOutcome, type CommitGraphQuery, type RebaseOptions } from '@application/ports/git-capabilities';
 import { requireRemoteBranchName } from '@extension/git/remote-branch';
 
 interface CliInvocation {
@@ -231,9 +231,11 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
     },
     push: async (input, runProcess, context, signal) => {
         await push(input, runProcess, context, signal);
+        return GitPushOutcome.Completed;
     },
     pushBranch: async (input, runProcess, context, signal) => {
         await pushBranch(input, runProcess, context, signal);
+        return GitPushOutcome.Completed;
     },
     checkPatch: async (input, runProcess, context, signal) => {
         try {

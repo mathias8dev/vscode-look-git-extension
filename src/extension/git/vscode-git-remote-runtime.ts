@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { GitPushOutcome } from '@application/ports/git-capabilities';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
 import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '@application/ports/git-runtime';
 import {
@@ -51,11 +52,9 @@ export class VscodeGitRemoteRuntime implements GitRuntime {
                 await repository.pull();
                 return runtimeResult(undefined);
             case 'push':
-                await this.push(repository, context, input);
-                return runtimeResult(undefined);
+                return runtimeResult(await this.push(repository, context, input));
             case 'pushBranch':
-                await this.pushBranch(repository, context, input);
-                return runtimeResult(undefined);
+                return runtimeResult(await this.pushBranch(repository, context, input));
             case 'forcePushWithLease':
                 await repository.push(
                     requiredStringField(input, 'remote'),
@@ -79,7 +78,7 @@ export class VscodeGitRemoteRuntime implements GitRuntime {
         return repository;
     }
 
-    private async pushBranch(repository: VscodeGitRepository, context: GitExecutionContext, input: unknown): Promise<void> {
+    private async pushBranch(repository: VscodeGitRepository, context: GitExecutionContext, input: unknown): Promise<GitPushOutcome> {
         const branch = requiredStringField(input, 'branch');
         const options = objectField(input, 'options');
         const remote = optionalStringField(input, 'remote') ?? remoteForBranch(repository, branch);
@@ -87,25 +86,35 @@ export class VscodeGitRemoteRuntime implements GitRuntime {
             if (!isHeadBranch(repository, branch) || hasForceOption(options)) {
                 throw new UnsupportedGitOperationError('pushBranch', context);
             }
-            await this.executeCommand('git.publish', repository);
-            return;
+            this.delegateNativePublish(repository);
+            return GitPushOutcome.Delegated;
         }
         await repository.push(remote, branch, optionalBooleanField(options, 'setUpstream') ?? !hasUpstream(repository, branch), forceMode(input));
+        return GitPushOutcome.Completed;
     }
 
-    private async push(repository: VscodeGitRepository, context: GitExecutionContext, input: unknown): Promise<void> {
+    private async push(repository: VscodeGitRepository, context: GitExecutionContext, input: unknown): Promise<GitPushOutcome> {
         const options = objectField(input, 'options');
         const requestedRemote = optionalStringField(input, 'remote');
         if (requestedRemote || hasCurrentUpstream(repository)) {
             await repository.push(requestedRemote, undefined, false, forceMode(input));
-            return;
+            return GitPushOutcome.Completed;
         }
 
         const branch = repository.state.HEAD?.name;
         if (!branch || hasForceOption(options)) {
             throw new UnsupportedGitOperationError('push', context);
         }
-        await this.executeCommand('git.publish', repository);
+        this.delegateNativePublish(repository);
+        return GitPushOutcome.Delegated;
+    }
+
+    private delegateNativePublish(repository: VscodeGitRepository): void {
+        // Native publishers own their Quick Pick lifecycle; some do not settle this command after cancellation.
+        void Promise.resolve(this.executeCommand('git.publish', repository)).catch((error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error);
+            void vscode.window.showErrorMessage(`Publish failed: ${message}`);
+        });
     }
 }
 

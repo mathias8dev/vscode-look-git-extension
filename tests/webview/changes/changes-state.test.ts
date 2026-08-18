@@ -845,6 +845,14 @@ describe('changesState', () => {
             type: 'message',
             message: { type: 'changes/operationStatus', operationId: 'op-0', status: OperationStatus.Success, command: 'fetch' },
         });
+        const staleDelegated = reduceChangesState(running, {
+            type: 'message',
+            message: { type: 'changes/operationStatus', operationId: 'op-0', status: OperationStatus.Delegated, command: 'push' },
+        });
+        const delegated = reduceChangesState(running, {
+            type: 'message',
+            message: { type: 'changes/operationStatus', operationId: 'op-1', status: OperationStatus.Delegated, command: 'push' },
+        });
         const success = reduceChangesState(running, {
             type: 'message',
             message: { type: 'changes/operationStatus', operationId: 'op-1', status: OperationStatus.Success, command: 'pull' },
@@ -853,6 +861,8 @@ describe('changesState', () => {
 
         expect(running.operationStatus?.status).toBe(OperationStatus.Running);
         expect(staleSuccess.operationStatus?.operationId).toBe('op-1');
+        expect(staleDelegated.operationStatus?.operationId).toBe('op-1');
+        expect(delegated.operationStatus).toBeUndefined();
         expect(success.operationStatus?.status).toBe(OperationStatus.Success);
         expect(cleared.operationStatus).toBeUndefined();
     });

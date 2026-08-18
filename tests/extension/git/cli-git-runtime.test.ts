@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { GitPushOutcome } from '@application/ports/git-capabilities';
 import { UnsupportedGitOperationError } from '@application/ports/git-runtime';
 import { CliGitRuntime } from '@extension/git/cli-git-runtime';
 import type { GitExecutionContext } from '@application/ports/git-runtime';
@@ -71,7 +72,8 @@ describe('CliGitRuntime', () => {
             return '';
         });
 
-        await runtime.execute('pushBranch', context, { branch: 'main', options: {} });
+        await expect(runtime.execute<unknown, GitPushOutcome>('pushBranch', context, { branch: 'main', options: {} }))
+            .resolves.toBe(GitPushOutcome.Completed);
 
         expect(calls).toEqual([
             ['rev-parse', '--abbrev-ref', 'main@{upstream}'],
@@ -123,7 +125,8 @@ describe('CliGitRuntime', () => {
             return '';
         });
 
-        await runtime.execute('push', context, { options: {} });
+        await expect(runtime.execute<unknown, GitPushOutcome>('push', context, { options: {} }))
+            .resolves.toBe(GitPushOutcome.Completed);
 
         expect(calls).toEqual([
             ['rev-parse', '--abbrev-ref', 'HEAD'],

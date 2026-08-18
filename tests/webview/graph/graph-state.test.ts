@@ -842,6 +842,26 @@ describe('graphState', () => {
                 command: 'fetch',
             },
         });
+        const staleDelegated = reduceGraphState(running, {
+            type: 'message',
+            message: {
+                type: 'graph/operationStatus',
+                operationId: 'op-stale',
+                status: GraphOperationStatus.Delegated,
+                category: GraphOperationCategory.Branch,
+                command: 'push',
+            },
+        });
+        const delegated = reduceGraphState(running, {
+            type: 'message',
+            message: {
+                type: 'graph/operationStatus',
+                operationId: 'op-1',
+                status: GraphOperationStatus.Delegated,
+                category: GraphOperationCategory.Branch,
+                command: 'push',
+            },
+        });
         const success = reduceGraphState(staleSuccess, {
             type: 'message',
             message: {
@@ -857,6 +877,8 @@ describe('graphState', () => {
 
         expect(running.operationStatus?.status).toBe(GraphOperationStatus.Running);
         expect(staleSuccess.operationStatus?.operationId).toBe('op-1');
+        expect(staleDelegated.operationStatus?.operationId).toBe('op-1');
+        expect(delegated.operationStatus).toBeUndefined();
         expect(success.operationStatus?.status).toBe(GraphOperationStatus.Success);
         expect(clearedWrong.operationStatus).toBeDefined();
         expect(cleared.operationStatus).toBeUndefined();

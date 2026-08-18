@@ -5,6 +5,8 @@ import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
 import type { GitBranch, GitStatus } from '@core/git/domain/git-status';
 import type { GitExecutionContext, GitRuntime } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
+import { GitPushOutcome } from '@application/ports/git-capabilities';
+import { OperationStatus } from '@protocol/shared/operation';
 import { CliGitRuntime } from '@extension/git/cli-git-runtime';
 import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
@@ -121,6 +123,54 @@ describe('CommitHistoryViewProvider', () => {
             input: { remote: undefined, branch: 'feature/topic', options: {} },
         }));
         expect(calls).not.toContainEqual(expect.objectContaining({ operation: 'push' }));
+    });
+
+    it('does not report success or refresh when native publication is delegated', async () => {
+        const context = repoContext();
+        const calls: RuntimeCall[] = [];
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            onRepositoryUpdated,
+            undefined,
+            undefined,
+            runtimeRegistry(context, historyRuntime(calls, GitPushOutcome.Delegated)),
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'push' });
+
+        await expect.poll(() => view.messages
+            .filter((message) => isRecord(message) && message.type === 'history/operationStatus')
+            .map((message) => isRecord(message) ? message.status : undefined))
+            .toEqual([OperationStatus.Running, OperationStatus.Delegated]);
+        expect(onRepositoryUpdated).not.toHaveBeenCalled();
+    });
+
+    it('reports success and refreshes after a completed push', async () => {
+        const context = repoContext();
+        const calls: RuntimeCall[] = [];
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            onRepositoryUpdated,
+            undefined,
+            undefined,
+            runtimeRegistry(context, historyRuntime(calls)),
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'push' });
+
+        await expect.poll(() => view.messages
+            .filter((message) => isRecord(message) && message.type === 'history/operationStatus')
+            .map((message) => isRecord(message) ? message.status : undefined))
+            .toEqual([OperationStatus.Running, OperationStatus.Success]);
+        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
     });
 
     it('runs toolbar actions against the navigated nested repository', async () => {
@@ -475,7 +525,7 @@ function runtimeRegistryForUnbornContext(context: RepoContext, runtime: GitRunti
     return registry;
 }
 
-function historyRuntime(calls: RuntimeCall[]): GitRuntime {
+function historyRuntime(calls: RuntimeCall[], pushOutcome = GitPushOutcome.Completed): GitRuntime {
     return {
         supports: () => true,
         async execute<TInput = unknown, TResult = unknown>(operation: SemanticGitOperation, context: GitExecutionContext, input: TInput): Promise<TResult> {
@@ -504,6 +554,7 @@ function historyRuntime(calls: RuntimeCall[]): GitRuntime {
                 case 'updateRef':
                 case 'pushBranch':
                 case 'push':
+                    return runtimeResult(pushOutcome);
                 case 'cherryPick':
                     return runtimeResult(undefined);
                 default:

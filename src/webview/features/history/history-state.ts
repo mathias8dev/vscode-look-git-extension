@@ -1,8 +1,8 @@
-import { OperationStatus } from '@protocol/shared/operation';
 import type { HistoryExtensionToWebviewMessage, HistoryOperationStatusPush } from '@protocol/history/messages';
 import type { HistoryCommit, HistoryCommitDetails, HistoryData } from '@protocol/history/types';
 import type { ProtocolError, Resource } from '@protocol/shared/base';
 import type { RepositorySummary } from '@protocol/shared/repo';
+import { nextOperationStatus } from '@webview/shared/operation-state';
 
 export interface HistoryState {
     readonly repositorySummaries: Resource<readonly RepositorySummary[]>;
@@ -121,10 +121,8 @@ function resetForRepositoryNavigation(state: HistoryState, contextId: string | u
 }
 
 function reduceHistoryOperationStatus(state: HistoryState, message: HistoryOperationStatusPush): HistoryState {
-    if (message.status !== OperationStatus.Running && state.operationStatus?.operationId && state.operationStatus.operationId !== message.operationId) {
-        return state;
-    }
-    return { ...state, operationStatus: message };
+    const operationStatus = nextOperationStatus(state.operationStatus, message);
+    return operationStatus === state.operationStatus ? state : { ...state, operationStatus };
 }
 
 function toggleCommit(state: HistoryState, hash: string): HistoryState {

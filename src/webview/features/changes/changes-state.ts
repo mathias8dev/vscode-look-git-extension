@@ -2,8 +2,8 @@ import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush } fro
 import { ConflictState, RepositoryState } from '@protocol/changes/types';
 import type { StashFileEntry, StatusData, SubmoduleStatusData } from '@protocol/changes/types';
 import type { ProtocolError, Resource } from '@protocol/shared/base';
-import { OperationStatus } from '@protocol/shared/operation';
 import type { RepositorySummary } from '@protocol/shared/repo';
+import { nextOperationStatus } from '@webview/shared/operation-state';
 import { readProtocolError } from '@webview/shared/use-protocol-error';
 import { buildChangeSections, ChangeSectionId } from '@webview/features/changes/change-tree';
 import { rememberCommitMessage } from '@webview/features/changes/commit-composer-model';
@@ -452,10 +452,8 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
 }
 
 function reduceChangesOperationStatus(state: ChangesState, message: ChangesOperationStatusPush): ChangesState {
-    if (message.status !== OperationStatus.Running && state.operationStatus?.operationId && state.operationStatus.operationId !== message.operationId) {
-        return state;
-    }
-    return { ...state, operationStatus: message };
+    const operationStatus = nextOperationStatus(state.operationStatus, message);
+    return operationStatus === state.operationStatus ? state : { ...state, operationStatus };
 }
 
 function resetForRepositoryNavigation(state: ChangesState, contextId: string | undefined): ChangesState {

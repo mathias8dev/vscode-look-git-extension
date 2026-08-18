@@ -220,6 +220,8 @@ function historyOperationMessage(command: HistoryToolbarCommand, status: Operati
             return `${sentenceCase(label)}...`;
         case OperationStatus.Success:
             return `${pastTense(label)}.`;
+        case OperationStatus.Delegated:
+            return `${sentenceCase(label)} continues in VS Code.`;
         case OperationStatus.Failed:
             return `Could not ${label}.`;
         case OperationStatus.Conflict:

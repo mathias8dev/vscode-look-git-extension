@@ -20,6 +20,7 @@ import type { GitStatus } from '@core/git/domain/git-status';
 import type { GitWorktree } from '@core/git/domain/git-worktree';
 import { summarizeStatusEntries } from '@core/parsing/parse-status';
 import type { GitRepository } from '@application/ports/git-topology';
+import { GitPushOutcome } from '@application/ports/git-capabilities';
 import { GetGraphDataUseCase, type GraphDataResult, type GraphWorktreeWip } from '@application/usecases/graph/get-graph-data';
 import { GetCommitDetailsUseCase } from '@application/usecases/graph/get-commit-details';
 import { GetWorktreeDetailsUseCase } from '@application/usecases/graph/get-worktree-details';
@@ -92,9 +93,15 @@ export class GraphMessageRouter {
 
         try {
             existingConflicts = await this.conflictFilesBeforeOperation(msg);
-            await this.dispatch(msg);
+            const outcome = await this.dispatch(msg);
             if (operation && operationId) {
-                this.postGraphOperation({ ...operation, operationId, status: GraphOperationStatus.Success });
+                this.postGraphOperation({
+                    ...operation,
+                    operationId,
+                    status: outcome === GitPushOutcome.Delegated
+                        ? GraphOperationStatus.Delegated
+                        : GraphOperationStatus.Success,
+                });
             }
         } catch (error) {
             if (isAbortError(error)) { return; }
@@ -146,7 +153,7 @@ export class GraphMessageRouter {
         }
     }
 
-    private async dispatch(msg: GraphWebviewToExtensionMessage): Promise<void> {
+    private async dispatch(msg: GraphWebviewToExtensionMessage): Promise<GitPushOutcome | undefined> {
         switch (msg.type) {
             case 'graph/ready':
                 break;
@@ -269,12 +276,10 @@ export class GraphMessageRouter {
                 break;
 
             case 'graph/branchCommand':
-                await this.handleBranchCommand(msg);
-                break;
+                return this.handleBranchCommand(msg);
 
             case 'graph/worktreeCommand':
-                await this.handleWorktreeCommand(msg);
-                break;
+                return this.handleWorktreeCommand(msg);
 
             case 'graph/commitCommand':
                 await this.handleCommitCommand(msg);
@@ -496,11 +501,11 @@ export class GraphMessageRouter {
         await this.refreshAfterRepositoryChange();
     }
 
-    private async handleBranchCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/branchCommand' }>): Promise<void> {
+    private async handleBranchCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/branchCommand' }>): Promise<GitPushOutcome | undefined> {
         const runtimeTargets = this.runtimeTargetsForRepository(msg.repository);
         const repo = requireRuntimeRepository(runtimeTargets);
-        const shouldRefresh = await runBranchCommand(repo, msg.command, msg.branch, msg.isRemote, undefined, runtimeTargets, this.extensionUri, this.storageUri);
-        if (!shouldRefresh) { return; }
+        const result = await runBranchCommand(repo, msg.command, msg.branch, msg.isRemote, undefined, runtimeTargets, this.extensionUri, this.storageUri);
+        if (!result.shouldRefresh) { return result.pushOutcome; }
         // `delete` removes the branch and `rename` frees its old name; if the graph is
         // filtered to that branch, the next reload would query a now-missing ref, so the
         // webview has to drop the filter first.
@@ -508,15 +513,17 @@ export class GraphMessageRouter {
         await this.refreshAfterRepositoryChange(invalidatesBranchFilter
             ? { branch: msg.branch, repository: msg.repository }
             : undefined);
+        return result.pushOutcome;
     }
 
-    private async handleWorktreeCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/worktreeCommand' }>): Promise<void> {
+    private async handleWorktreeCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/worktreeCommand' }>): Promise<GitPushOutcome | undefined> {
         const runtimeTargets = msg.path
             ? this.runtimeTargetsForWorktree(msg.repository, msg.worktree, msg.path)
             : this.runtimeTargetsForRepository(msg.repository);
         const repo = requireRuntimeRepository(runtimeTargets);
-        const shouldRefresh = await runWorktreeCommand(repo, msg.command, msg.path, runtimeTargets);
-        if (shouldRefresh) { await this.refreshAfterRepositoryChange(); }
+        const result = await runWorktreeCommand(repo, msg.command, msg.path, runtimeTargets);
+        if (result.shouldRefresh) { await this.refreshAfterRepositoryChange(); }
+        return result.pushOutcome;
     }
 
     private async handleCommitCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/commitCommand' }>): Promise<void> {

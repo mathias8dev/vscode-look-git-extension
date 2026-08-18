@@ -3,6 +3,7 @@ import * as path from 'path';
 import type { GitCommit, GitFileChange } from '@core/git/domain/git-commit';
 import type { GitBranch, GitTag } from '@core/git/domain/git-status';
 import type { GitRepository, Worktree } from '@application/ports/git-topology';
+import { GitPushOutcome } from '@application/ports/git-capabilities';
 import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
 import type { ErrorCode, Pagination, RequestId } from '@protocol/shared/base';
 import { OperationStatus } from '@protocol/shared/operation';
@@ -308,10 +309,17 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                         await this.requireRuntimeWorktreeForHistoryScope().pull({});
                     }
                 } else {
+                    let outcome: GitPushOutcome;
                     if (selectedBranch) {
-                        await (selectedBranchWorktree ?? this.requireRuntimeWorktreeForHistoryScope()).pushBranch(undefined, selectedBranch, {});
+                        outcome = await (selectedBranchWorktree ?? this.requireRuntimeWorktreeForHistoryScope()).pushBranch(undefined, selectedBranch, {});
                     } else {
-                        await this.requireRuntimeWorktreeForHistoryScope().push(undefined, {});
+                        outcome = await this.requireRuntimeWorktreeForHistoryScope().push(undefined, {});
+                    }
+                    if (outcome === GitPushOutcome.Delegated) {
+                        if (!nativeFileContext) {
+                            this.postHistoryOperation({ operationId, status: OperationStatus.Delegated, command: operation });
+                        }
+                        return;
                     }
                 }
             }

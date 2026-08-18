@@ -5,6 +5,8 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { discoverRepositoryContexts } from '@extension/repositories/repository-discovery';
 import { getRepositoryScanMaxDepth } from '@extension/repositories/repository-discovery-settings';
+import { VscodeGitRemoteRuntime } from '@extension/git/vscode-git-remote-runtime';
+import { GitPushOutcome } from '@application/ports/git-capabilities';
 import { removeDirSyncWithRetry, samePath } from '@tests/helpers/git-repo';
 
 export async function run(): Promise<void> {
@@ -44,6 +46,8 @@ export async function run(): Promise<void> {
 
     report('validating multi-repository discovery');
     await verifyRepositoryScanDepth(multiRepositoryWorkspace);
+    report('validating native publish cancellation');
+    await verifyNativePublishCancellation(multiRepositoryWorkspace);
     report('validating repository lifecycle');
     await verifyRepositoryLifecycle(lifecycleWorkspace);
     report('completed');
@@ -55,6 +59,7 @@ interface NativeGitExtension {
 
 interface NativeGitApi {
     readonly repositories: readonly NativeGitApiRepository[];
+    registerRemoteSourcePublisher(publisher: NativeRemoteSourcePublisher): vscode.Disposable;
 }
 
 interface NativeGitApiRepository {
@@ -64,9 +69,15 @@ interface NativeGitApiRepository {
             readonly name?: string;
             readonly ahead?: number;
         };
+        readonly remotes: readonly { readonly name: string }[];
         readonly indexChanges: readonly unknown[];
         readonly workingTreeChanges: readonly unknown[];
     };
+}
+
+interface NativeRemoteSourcePublisher {
+    readonly name: string;
+    publishRepository(repository: NativeGitApiRepository): Promise<void>;
 }
 
 async function verifyRepositoryScanDepth(workspacePath: string): Promise<void> {
@@ -105,6 +116,46 @@ async function verifyRepositoryScanDepth(workspacePath: string): Promise<void> {
         assert.equal(deepRepository.parentId, root.id);
     } finally {
         await configuration.update('repositoryScanMaxDepth', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
+    }
+}
+
+async function verifyNativePublishCancellation(repoPath: string): Promise<void> {
+    const gitApi = await nativeGitApi();
+    const repository = await waitForGitRepository(repoPath);
+    assert.deepEqual(repository.state.remotes, []);
+    let publishedRepositoryPath: string | undefined;
+    let notifyPickerOpened: (() => void) | undefined;
+    const pickerOpened = new Promise<void>((resolve) => { notifyPickerOpened = resolve; });
+    const publisher = gitApi.registerRemoteSourcePublisher({
+        name: 'Look Git E2E Publisher',
+        async publishRepository(repositoryToPublish): Promise<void> {
+            publishedRepositoryPath = repositoryToPublish.rootUri.fsPath;
+            notifyPickerOpened?.();
+            const selection = await vscode.window.showQuickPick(['Publish'], {
+                placeHolder: 'Look Git E2E native publish',
+            });
+            if (selection) { return; }
+            await new Promise<void>(() => {});
+        },
+    });
+
+    try {
+        const runtime = new VscodeGitRemoteRuntime();
+        const push = runtime.execute<unknown, GitPushOutcome>('push', {
+            cwd: repoPath,
+            gitDir: git(repoPath, ['rev-parse', '--absolute-git-dir']),
+            repositoryId: 'native-publish-e2e',
+            kind: 'main',
+        }, { options: {} });
+        await withTimeout(pickerOpened, 'Native publish picker did not open.');
+        await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+        const outcome = await withTimeout(push, 'Look Git push remained pending after native publish cancellation.');
+
+        assert.equal(outcome, GitPushOutcome.Delegated);
+        assert.ok(publishedRepositoryPath && samePath(publishedRepositoryPath, repoPath));
+        assert.equal(git(repoPath, ['remote']), '');
+    } finally {
+        publisher.dispose();
     }
 }
 
@@ -155,12 +206,16 @@ async function refreshLookGitViews(): Promise<void> {
 }
 
 async function executeCommandWithTimeout(command: string): Promise<void> {
+    await withTimeout(vscode.commands.executeCommand(command), `VS Code command timed out: ${command}`);
+}
+
+async function withTimeout<T>(promise: PromiseLike<T>, message: string): Promise<T> {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
-        await Promise.race([
-            vscode.commands.executeCommand(command),
+        return await Promise.race([
+            Promise.resolve(promise),
             new Promise<never>((_resolve, reject) => {
-                timeout = setTimeout(() => reject(new Error(`VS Code command timed out: ${command}`)), 10_000);
+                timeout = setTimeout(() => reject(new Error(message)), 10_000);
             }),
         ]);
     } finally {

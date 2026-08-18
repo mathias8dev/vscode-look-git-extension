@@ -5,6 +5,7 @@ import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
 import type { GitBranch, GitStatus } from '@core/git/domain/git-status';
 import type { GitExecutionContext, GitRuntime, RepositoryKind } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
+import { GitPushOutcome } from '@application/ports/git-capabilities';
 import type { RepositoryContextAccessor } from '@extension/repositories/repository-selection-store';
 import { CliGitRuntime } from '@extension/git/cli-git-runtime';
 import { GitCliBackend } from '@extension/git/git-cli-backend';
@@ -16,6 +17,8 @@ import { makeWebviewView, resetVscodeMock } from '@tests/helpers/provider-runtim
 import { createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
 import { setInputBoxValue } from '@tests/mocks/vscode';
 import { CommitMode, RepositoryState } from '@protocol/changes/types';
+import type { ChangesOperationStatusPush } from '@protocol/changes/messages';
+import { OperationStatus } from '@protocol/shared/operation';
 
 describe('ChangesViewProvider', () => {
     const repos: TempGitRepo[] = [];
@@ -582,6 +585,70 @@ describe('ChangesViewProvider', () => {
         expect(view.messages).toContainEqual(expect.objectContaining({ type: 'repo/navigationStarted' }));
         expect(view.messages.some((message) => isMessageType(message, 'changes/statusData'))).toBe(false);
     });
+
+    it('does not report success or refresh when native publication is delegated', async () => {
+        const context = {
+            id: 'repo-1',
+            cwd: '/repo-1',
+            kind: RepoKind.Main,
+            label: 'repo-1',
+        } satisfies RepoContext;
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const runtime = pushRuntime(GitPushOutcome.Delegated);
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            repositorySelection(context),
+            onRepositoryUpdated,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry(context, runtime),
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        provider.registerNativeContextCommands();
+
+        await vscode.commands.executeCommand('lookGit.changes.push');
+
+        expect(view.messages
+            .filter(isChangesOperationStatusMessage)
+            .map((message) => message.status))
+            .toEqual([OperationStatus.Running, OperationStatus.Delegated]);
+        expect(onRepositoryUpdated).not.toHaveBeenCalled();
+    });
+
+    it('reports success and refreshes after a completed push', async () => {
+        const context = {
+            id: 'repo-1',
+            cwd: '/repo-1',
+            kind: RepoKind.Main,
+            label: 'repo-1',
+        } satisfies RepoContext;
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const runtime = pushRuntime(GitPushOutcome.Completed);
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            repositorySelection(context),
+            onRepositoryUpdated,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry(context, runtime),
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        provider.registerNativeContextCommands();
+
+        await vscode.commands.executeCommand('lookGit.changes.push');
+
+        expect(view.messages
+            .filter(isChangesOperationStatusMessage)
+            .map((message) => message.status))
+            .toEqual([OperationStatus.Running, OperationStatus.Success]);
+        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
+    });
 });
 
 function repositorySelection(
@@ -640,6 +707,18 @@ function runtimeRegistryForUnbornContext(context: RepoContext): RepositoryRegist
         dirty: false,
     }, runtime));
     return registry;
+}
+
+function pushRuntime(outcome: GitPushOutcome): GitRuntime {
+    return {
+        supports: () => true,
+        async execute<TInput = unknown, TResult = unknown>(operation: SemanticGitOperation, _context: GitExecutionContext, _input: TInput): Promise<TResult> {
+            if (operation === 'push') {
+                return outcome as TResult; // The fixture returns the result defined by this semantic operation.
+            }
+            throw new Error(`Unexpected operation ${operation}`);
+        },
+    };
 }
 
 function repositoryKindForTest(context: RepoContext): RepositoryKind {
@@ -755,4 +834,8 @@ function currentBranch(): GitBranch {
 
 function isMessageType(message: unknown, type: string): boolean {
     return typeof message === 'object' && message !== null && 'type' in message && message.type === type;
+}
+
+function isChangesOperationStatusMessage(message: unknown): message is ChangesOperationStatusPush {
+    return isMessageType(message, 'changes/operationStatus');
 }

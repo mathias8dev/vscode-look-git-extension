@@ -1,4 +1,4 @@
-import { GraphOperationStatus, type GraphExtensionToWebviewMessage, type GraphOperationStatusPush } from '@protocol/graph/messages';
+import type { GraphExtensionToWebviewMessage, GraphOperationStatusPush } from '@protocol/graph/messages';
 import type { BranchDetails, BranchInfo, CommitFileChange, GraphCommit, GraphData, GraphFilters, GraphSubmoduleInfo, TagInfo, WorktreeInfo, WorktreeWip } from '@protocol/graph/types';
 import type { ProtocolError, Resource } from '@protocol/shared/base';
 import type { RepositoryLocator, RepositorySummary } from '@protocol/shared/repo';
@@ -7,6 +7,7 @@ import { mainGraphRepositorySelection, sameRepositoryLocator, submoduleGraphRepo
 import type { GraphRow, LaneData, LineDef } from '@webview/features/graph/layout/graph-lane-model';
 import { layoutGraphRowsV4, type GraphLayoutStateV4 } from '@webview/features/graph/layout/layout-graph-rows-v4';
 import { sameResourcePath } from '@webview/shared/resource-path';
+import { nextOperationStatus } from '@webview/shared/operation-state';
 
 export type DisplayRow =
     | { readonly kind: 'commit'; readonly row: GraphRow }
@@ -496,10 +497,8 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
 
 function reduceGraphOperationStatus(state: GraphState, message: GraphOperationStatusPush): GraphState {
     if (!matchesSelectedRuntimeRepository(message.repository, state.repository)) { return state; }
-    if (message.status !== GraphOperationStatus.Running && state.operationStatus?.operationId && state.operationStatus.operationId !== message.operationId) {
-        return state;
-    }
-    return { ...state, operationStatus: message };
+    const operationStatus = nextOperationStatus(state.operationStatus, message);
+    return operationStatus === state.operationStatus ? state : { ...state, operationStatus };
 }
 
 function resetForRepositoryNavigation(state: GraphState, contextId: string | undefined): GraphState {
