@@ -1,7 +1,7 @@
 import type { ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
 import { ChangeRowAction, messageForRowAction, type ChangeActionDescriptor } from '@webview/features/changes/change-commands';
 import { changesSelectionTarget, hasPatchableSelectionTarget } from '@webview/features/changes/change-selection-model';
-import { ChangeSectionId, type ChangeListItem } from '@webview/features/changes/change-tree';
+import { ChangeSectionId, isFileActionItem, type ChangeListItem } from '@webview/features/changes/change-tree';
 
 export enum ChangeSelectionAction {
     Open = 'open',
@@ -78,7 +78,7 @@ function hasSection(items: readonly ChangeListItem[], section: ChangeSectionId):
 }
 
 function hasActionableSection(items: readonly ChangeListItem[], section: ChangeSectionId): boolean {
-    return items.some((item) => item.section === section && !item.entry.isSubmodule);
+    return items.some((item) => item.section === section && isFileActionItem(item));
 }
 
 function hasPatchableSelection(items: readonly ChangeListItem[]): boolean {
@@ -91,7 +91,7 @@ function pathsForSection(items: readonly ChangeListItem[], section: ChangeSectio
 
 function actionablePathsForSection(items: readonly ChangeListItem[], section: ChangeSectionId): readonly string[] {
     return items
-        .filter((item) => item.section === section && !item.entry.isSubmodule)
+        .filter((item) => item.section === section && isFileActionItem(item))
         .map((item) => item.entry.filePath);
 }
 

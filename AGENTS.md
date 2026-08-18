@@ -421,7 +421,7 @@ useEffect(() => {
 | Message routers | vitest | `tests/extension/messaging/` | Mock webview + mock repo |
 | React components | vitest + RTL or React server rendering | `tests/webview/` | No VS Code runtime; prefer pure rendering tests for icon wrappers |
 | Feature reducers/stores | vitest | `tests/webview/` | Import reducer/store, dispatch actions, assert state |
-| E2E | WebdriverIO | `tests/e2e/` | Real VS Code instance |
+| E2E | `@vscode/test-electron` | `tests/e2e/` | Real VS Code instance |
 
 Rules:
 - Every parsing function tests: empty output, null-byte separators, special path chars, unicode

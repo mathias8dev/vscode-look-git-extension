@@ -11,14 +11,19 @@ export interface RepositorySelectionAccessor {
     readonly currentContext: RepoContext | undefined;
 }
 
-export class RepositorySelectionStore implements RepositorySelectionAccessor, vscode.Disposable {
+export interface RepositoryContextAccessor extends RepositorySelectionAccessor {
+    readonly contexts: readonly RepoContext[];
+}
+
+export class RepositorySelectionStore implements RepositoryContextAccessor, vscode.Disposable {
     private readonly onDidChangeEmitter = new vscode.EventEmitter<RepositorySelectionState>();
     readonly onDidChange = this.onDidChangeEmitter.event;
 
     private readonly contextStore = new RepositoryContextStore();
 
     constructor() {
-        this.contextStore.onDidChange(({ activeContext }) => {
+        this.contextStore.onDidChange(({ activeContext, activeContextChanged }) => {
+            if (!activeContextChanged) { return; }
             this.onDidChangeEmitter.fire({ context: activeContext });
         });
     }
@@ -29,6 +34,11 @@ export class RepositorySelectionStore implements RepositorySelectionAccessor, vs
 
     get contexts(): readonly RepoContext[] {
         return this.contextStore.contexts;
+    }
+
+    get soleTopLevelContext(): RepoContext | undefined {
+        const contexts = this.contextStore.contexts.filter((context) => !context.parentId);
+        return contexts.length === 1 ? contexts[0] : undefined;
     }
 
     setContexts(contexts: readonly RepoContext[]): void {

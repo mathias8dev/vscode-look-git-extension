@@ -85,4 +85,5 @@ describe('selectionCommands', () => {
         });
         expect(changesSelectionTarget(selected).patchUnstagedFilePaths).toEqual(['src/app.ts']);
     });
+
 });

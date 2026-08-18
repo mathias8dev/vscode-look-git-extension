@@ -8,9 +8,10 @@ import type { StatusData, StatusEntry } from '@protocol/changes/types';
 import type { ErrorCode, RequestId } from '@protocol/shared/base';
 import { OperationStatus } from '@protocol/shared/operation';
 import { SubmoduleStatus } from '@protocol/shared/repo';
-import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
+import type { RepositoryContextAccessor } from '@extension/repositories/repository-selection-store';
 import type { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import type { GitRepository as RuntimeGitRepository, Worktree } from '@application/ports/git-topology';
+import { GitPushOutcome } from '@application/ports/git-capabilities';
 import { confirmTypedPhrase, showModalWarningMessage } from '@extension/utils/confirmation';
 import { createReadonlyDocumentUri, openReadonlyDiffDocument } from '@extension/utils/readonly-diff-documents';
 import { toProtocolSubmoduleStatus } from '@extension/mapping/to-protocol';
@@ -24,6 +25,7 @@ import { requireRuntimeLocator } from '@extension/repositories/runtime-repositor
 import { currentLocalBranchName } from '@extension/git/current-branch';
 import { requireRemoteBranchName } from '@extension/git/remote-branch';
 import { inputBranchName, inputText, pickBranch, pickLocalBranch, pickMergeOptions, pickRef, pickRemote, pickRemoteBranch, pickStash, pickTag } from '@extension/git/reference-pickers';
+import { excludeNestedRepositoryChanges, nestedRepositoryPaths } from '@extension/repositories/nested-repository-boundaries';
 
 type PostMessage = (msg: ChangesExtensionToWebviewMessage) => void;
 type RefreshCallback = () => Promise<void>;
@@ -47,7 +49,7 @@ export class ChangesMessageRouter {
     private submoduleCommitMessagePresetSequence = 0;
 
     constructor(
-        private readonly repositories: RepositorySelectionAccessor,
+        private readonly repositories: RepositoryContextAccessor,
         private readonly postMessage: PostMessage,
         private readonly refresh: RefreshCallback,
         private readonly onRepositoryUpdated: RepositoryUpdatedCallback = async () => {},
@@ -124,7 +126,7 @@ export class ChangesMessageRouter {
                 break;
 
             case 'changes/stageAll':
-                await currentRuntimeWorktree().stageAll();
+                await this.stageAllVisibleChanges(currentRuntimeWorktree());
                 await this.refreshAfterRepositoryUpdate();
                 break;
 
@@ -169,7 +171,7 @@ export class ChangesMessageRouter {
                             code: 'gitOperationFailed',
                         });
                     }
-                    const status = await currentRuntimeWorktree().getStatus();
+                    const status = this.visibleStatus(await currentRuntimeWorktree().getStatus());
                     for (const entry of status.unstaged) {
                         await discardRuntimeFile(currentRuntimeWorktree(), entry.filePath);
                     }
@@ -807,6 +809,26 @@ export class ChangesMessageRouter {
         }
     }
 
+    private async stageAllVisibleChanges(worktree: Worktree): Promise<void> {
+        const repositoryPaths = this.currentNestedRepositoryPaths();
+        if (repositoryPaths.size === 0) {
+            await worktree.stageAll();
+            return;
+        }
+        const status = excludeNestedRepositoryChanges(await worktree.getStatus(), repositoryPaths);
+        const filePaths = [...new Set([...status.unstaged, ...status.conflicts].map((entry) => entry.filePath))];
+        if (filePaths.length > 0) { await worktree.stage(filePaths); }
+    }
+
+    private visibleStatus(status: GitStatus): GitStatus {
+        return excludeNestedRepositoryChanges(status, this.currentNestedRepositoryPaths());
+    }
+
+    private currentNestedRepositoryPaths(): ReadonlySet<string> {
+        const context = this.repositories.currentContext;
+        return context ? nestedRepositoryPaths(context, this.repositories.contexts) : new Set();
+    }
+
     private currentRuntimeWorktree(): Worktree | undefined {
         try {
             return requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext).worktree();
@@ -894,9 +916,7 @@ export class ChangesMessageRouter {
                 return;
             case 'push':
                 await this.runTrackedToolbarOperation(command, async () => {
-                    await requireRuntimeWorktree().push(undefined, {});
-                    await this.refreshAfterRepositoryUpdate();
-                    return undefined;
+                    return this.completePush(await requireRuntimeWorktree().push(undefined, {}));
                 });
                 return;
             case 'fetch':
@@ -919,7 +939,7 @@ export class ChangesMessageRouter {
                 await this.runTrackedToolbarOperation(command, () =>
                     this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), async () => {
                         await requireRuntimeWorktree().pull({ rebase: true });
-                        await requireRuntimeWorktree().push(undefined, {});
+                        return requireRuntimeWorktree().push(undefined, {});
                     }, 'Sync stopped with conflicts.'));
                 return;
             case 'pullRebase':
@@ -1065,9 +1085,7 @@ export class ChangesMessageRouter {
             }
             case 'publishBranch': {
                 await this.runTrackedToolbarOperation(command, async () => {
-                    await requireRuntimeWorktree().push(undefined, {});
-                    await this.refreshAfterRepositoryUpdate();
-                    return undefined;
+                    return this.completePush(await requireRuntimeWorktree().push(undefined, {}));
                 });
                 return;
             }
@@ -1275,16 +1293,17 @@ export class ChangesMessageRouter {
 
     private async runRepositoryMutationWithConflictNotice(
         worktree: Worktree,
-        mutation: () => Promise<void>,
+        mutation: () => Promise<void | GitPushOutcome>,
         conflictMessage: string,
     ): Promise<OperationStatus | undefined> {
         const existingConflicts = await conflictFileSet(worktree);
         try {
-            await mutation();
+            const outcome = await mutation();
             await this.refreshAfterRepositoryUpdate();
-            return await this.notifyNewConflicts(worktree, existingConflicts, conflictMessage)
-                ? OperationStatus.Conflict
-                : undefined;
+            if (await this.notifyNewConflicts(worktree, existingConflicts, conflictMessage)) {
+                return OperationStatus.Conflict;
+            }
+            return outcome === GitPushOutcome.Delegated ? OperationStatus.Delegated : undefined;
         } catch (error) {
             if (await this.refreshAndNotifyNewConflicts(worktree, existingConflicts, conflictMessage)) { return OperationStatus.Conflict; }
             throw error;
@@ -1323,6 +1342,12 @@ export class ChangesMessageRouter {
 
     private async refreshAfterRepositoryUpdate(): Promise<void> {
         await this.onRepositoryUpdated();
+    }
+
+    private async completePush(outcome: GitPushOutcome): Promise<OperationStatus | undefined> {
+        if (outcome === GitPushOutcome.Delegated) { return OperationStatus.Delegated; }
+        await this.refreshAfterRepositoryUpdate();
+        return undefined;
     }
 
     private postChangesError(

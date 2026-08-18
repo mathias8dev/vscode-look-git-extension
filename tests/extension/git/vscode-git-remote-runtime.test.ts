@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import * as vscode from 'vscode';
+import { GitPushOutcome } from '@application/ports/git-capabilities';
 import { UnsupportedGitOperationError, type GitExecutionContext } from '@application/ports/git-runtime';
 import type { VscodeGitApi, VscodeGitRepository } from '@extension/git/vscode-git-api';
 import { VscodeGitRemoteRuntime, type VscodeCommandExecutor } from '@extension/git/vscode-git-remote-runtime';
+import { window } from '@tests/mocks/vscode';
 
 const context = {
     cwd: '/repo',
@@ -49,8 +51,9 @@ describe('VscodeGitRemoteRuntime', () => {
         });
         const runtime = new VscodeGitRemoteRuntime(async () => gitApi(repository));
 
-        await runtime.execute('push', context, { options: {} });
+        const outcome = await runtime.execute<unknown, GitPushOutcome>('push', context, { options: {} });
 
+        expect(outcome).toBe(GitPushOutcome.Completed);
         expect(repository.pushCalls).toEqual([
             { remoteName: undefined, branchName: undefined, setUpstream: false, force: undefined },
         ]);
@@ -61,10 +64,91 @@ describe('VscodeGitRemoteRuntime', () => {
         const commandCalls: CommandCall[] = [];
         const runtime = new VscodeGitRemoteRuntime(async () => gitApi(repository), recordingCommandExecutor(commandCalls));
 
-        await runtime.execute('push', context, { options: {} });
+        const outcome = await runtime.execute<unknown, GitPushOutcome>('push', context, { options: {} });
 
+        expect(outcome).toBe(GitPushOutcome.Delegated);
         expect(commandCalls).toEqual([{ command: 'git.publish', args: [repository] }]);
         expect(repository.pushCalls).toEqual([]);
+    });
+
+    it('returns after opening native publish UI without waiting for the publisher to settle', async () => {
+        const repository = recordingRepository('/repo', { HEAD: { name: 'feature/auth' }, remotes: [] });
+        const commandCalls: CommandCall[] = [];
+        const runtime = new VscodeGitRemoteRuntime(
+            async () => gitApi(repository),
+            pendingCommandExecutor(commandCalls),
+        );
+
+        const operation = runtime.execute<unknown, GitPushOutcome>('push', context, { options: {} });
+
+        expect(await settlesPromptly(operation)).toBe(GitPushOutcome.Delegated);
+        expect(commandCalls).toEqual([{ command: 'git.publish', args: [repository] }]);
+    });
+
+    it('reports a native publisher failure after returning the delegated outcome', async () => {
+        const repository = recordingRepository('/repo', { HEAD: { name: 'feature/auth' }, remotes: [] });
+        const runtime = new VscodeGitRemoteRuntime(
+            async () => gitApi(repository),
+            () => Promise.reject(new Error('publisher unavailable')),
+        );
+        window.errorMessages.length = 0;
+
+        const outcome = await runtime.execute<unknown, GitPushOutcome>('push', context, { options: {} });
+
+        expect(outcome).toBe(GitPushOutcome.Delegated);
+        await expect.poll(() => window.errorMessages).toContain('Publish failed: publisher unavailable');
+    });
+
+    it('publishes the exact nested repository when VS Code resolves its parent by containment', async () => {
+        const parent = recordingRepository('/workspace', { HEAD: { name: 'main' }, remotes: [] });
+        const child = recordingRepository('/workspace/app', { HEAD: { name: 'feature/app' }, remotes: [] });
+        const commandCalls: CommandCall[] = [];
+        const runtime = new VscodeGitRemoteRuntime(
+            async () => containingParentGitApi(parent, child),
+            recordingCommandExecutor(commandCalls),
+        );
+
+        await runtime.execute('push', nestedContext(), { options: {} });
+
+        expect(commandCalls).toEqual([{ command: 'git.publish', args: [child] }]);
+        expect(parent.pushCalls).toEqual([]);
+    });
+
+    it('routes every supported remote operation to the exact nested repository', async () => {
+        const repositoryState = {
+            HEAD: { name: 'feature/app', upstream: { remote: 'origin', name: 'feature/app' } },
+            remotes: [{ name: 'origin' }],
+        } satisfies Partial<VscodeGitRepository['state']>;
+        const parent = recordingRepository('/workspace', repositoryState);
+        const child = recordingRepository('/workspace/app', repositoryState);
+        const runtime = new VscodeGitRemoteRuntime(async () => containingParentGitApi(parent, child));
+        const childContext = nestedContext();
+
+        await runtime.execute('fetch', childContext, { remote: 'origin', options: { prune: true } });
+        await runtime.execute('fetchAll', childContext, { options: { prune: true } });
+        await runtime.execute('pull', childContext, { options: {} });
+        await runtime.execute('push', childContext, { remote: 'origin', options: {} });
+        await runtime.execute('pushBranch', childContext, { remote: 'origin', branch: 'feature/app', options: {} });
+        await runtime.execute('forcePushWithLease', childContext, { remote: 'origin', branch: 'feature/app' });
+
+        expect(parent.fetchCalls).toEqual([]);
+        expect(parent.pullCalls).toBe(0);
+        expect(parent.pushCalls).toEqual([]);
+        expect(child.fetchCalls).toEqual([
+            { remote: 'origin', prune: true },
+            { all: true, prune: true },
+        ]);
+        expect(child.pullCalls).toBe(1);
+        expect(child.pushCalls).toHaveLength(3);
+    });
+
+    it('falls back instead of running against a containing parent when the nested repository is not open in VS Code', async () => {
+        const parent = recordingRepository('/workspace', { remotes: [{ name: 'origin' }] });
+        const runtime = new VscodeGitRemoteRuntime(async () => containingParentGitApi(parent));
+
+        await expect(runtime.execute('push', nestedContext(), { remote: 'origin', options: {} }))
+            .rejects.toBeInstanceOf(UnsupportedGitOperationError);
+        expect(parent.pushCalls).toEqual([]);
     });
 
     it('resolves pushBranch remote from the current branch upstream', async () => {
@@ -109,8 +193,9 @@ describe('VscodeGitRemoteRuntime', () => {
         const commandCalls: CommandCall[] = [];
         const runtime = new VscodeGitRemoteRuntime(async () => gitApi(repository), recordingCommandExecutor(commandCalls));
 
-        await runtime.execute('pushBranch', context, { branch: 'feature/auth', options: { setUpstream: true } });
+        const outcome = await runtime.execute<unknown, GitPushOutcome>('pushBranch', context, { branch: 'feature/auth', options: { setUpstream: true } });
 
+        expect(outcome).toBe(GitPushOutcome.Delegated);
         expect(commandCalls).toEqual([{ command: 'git.publish', args: [repository] }]);
         expect(repository.pushCalls).toEqual([]);
     });
@@ -186,9 +271,41 @@ function gitApi(repository: VscodeGitRepository): VscodeGitApi {
     };
 }
 
+function containingParentGitApi(parent: VscodeGitRepository, child?: VscodeGitRepository): VscodeGitApi {
+    return {
+        repositories: child ? [parent, child] : [parent],
+        getRepository(): VscodeGitRepository {
+            return parent;
+        },
+    };
+}
+
+function nestedContext(): GitExecutionContext {
+    return {
+        cwd: '/workspace/app',
+        gitDir: '/workspace/app/.git',
+        repositoryId: 'app',
+        kind: 'main',
+    };
+}
+
 function recordingCommandExecutor(calls: CommandCall[]): VscodeCommandExecutor {
     return <T = unknown>(command: string, ...args: readonly unknown[]): PromiseLike<T> => {
         calls.push({ command, args });
         return Promise.resolve(undefined as T); // Test executor emulates commands whose return value is intentionally ignored.
     };
+}
+
+function pendingCommandExecutor(calls: CommandCall[]): VscodeCommandExecutor {
+    return <T = unknown>(command: string, ...args: readonly unknown[]): PromiseLike<T> => {
+        calls.push({ command, args });
+        return new Promise<T>(() => {});
+    };
+}
+
+async function settlesPromptly<T>(promise: Promise<T>): Promise<T | undefined> {
+    return Promise.race([
+        promise,
+        new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 50)),
+    ]);
 }

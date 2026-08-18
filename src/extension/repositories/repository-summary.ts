@@ -3,6 +3,7 @@ import type { GitBranch } from '@core/git/domain/git-status';
 import type { RepositorySummary } from '@protocol/shared/repo';
 import { RuntimeRepositoryFactory } from '@extension/git/runtime-repository-factory';
 import { toSerializedRepoContext } from '@extension/mapping/to-protocol';
+import { excludeNestedRepositoryChanges, nestedRepositoryPaths } from '@extension/repositories/nested-repository-boundaries';
 
 export class RepositorySummaryService {
     constructor(
@@ -10,12 +11,16 @@ export class RepositorySummaryService {
     ) {}
 
     async summarize(contexts: readonly RepoContext[], signal?: AbortSignal): Promise<readonly RepositorySummary[]> {
-        return Promise.all(contexts.map((context) => this.summarizeContext(context, signal)));
+        return Promise.all(contexts.map((context) => this.summarizeContext(context, contexts, signal)));
     }
 
-    private async summarizeContext(context: RepoContext, signal?: AbortSignal): Promise<RepositorySummary> {
+    private async summarizeContext(
+        context: RepoContext,
+        contexts: readonly RepoContext[],
+        signal?: AbortSignal,
+    ): Promise<RepositorySummary> {
         const repository = this.runtimeRepositoryFactory.createRepository(context);
-        const mainWorktree = await this.runtimeRepositoryFactory.createMainWorktree(context);
+        const mainWorktree = await this.runtimeRepositoryFactory.createMainWorktree(context, signal);
         const [branches, remotes, submodules, worktrees, status] = await Promise.all([
             repository.listBranches(signal),
             repository.listRemotes(signal),
@@ -24,6 +29,7 @@ export class RepositorySummaryService {
             mainWorktree.getStatus(signal),
         ]);
         const currentBranch = currentLocalBranch(branches);
+        const visibleStatus = excludeNestedRepositoryChanges(status, nestedRepositoryPaths(context, contexts));
 
         return {
             context: toSerializedRepoContext(context),
@@ -33,9 +39,9 @@ export class RepositorySummaryService {
             branchCount: branches.filter((branch) => !branch.isRemote).length,
             submoduleCount: submodules.length,
             worktreeCount: worktrees.filter((worktree) => !worktree.isPrunable).length,
-            stagedCount: status.staged.length,
-            unstagedCount: status.unstaged.length,
-            conflictCount: status.conflicts.length,
+            stagedCount: visibleStatus.staged.length,
+            unstagedCount: visibleStatus.unstaged.length,
+            conflictCount: visibleStatus.conflicts.length,
         };
     }
 }

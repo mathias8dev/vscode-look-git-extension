@@ -7,8 +7,10 @@ import { HybridGitRuntime } from '@extension/git/hybrid-git-runtime';
 import { RuntimeRepositoryFactory } from '@extension/git/runtime-repository-factory';
 import { VscodeGitRemoteRuntime } from '@extension/git/vscode-git-remote-runtime';
 import { RepositoryRuntimeRegistrar } from '@extension/repositories/repository-runtime-registrar';
+import { RepositoryNavigationCoordinator } from '@extension/repositories/repository-navigation-coordinator';
 import { RepositorySelectionStore } from '@extension/repositories/repository-selection-store';
 import { discoverChildRepositoryContexts, discoverRepositoryContexts } from '@extension/repositories/repository-discovery';
+import { getRepositoryScanMaxDepth, registerRepositoryScanMaxDepthListener } from '@extension/repositories/repository-discovery-settings';
 import { RepositorySummaryService } from '@extension/repositories/repository-summary';
 import { RepositoryRefreshCoordinator } from '@extension/repositories/repository-refresh-coordinator';
 import { registerRuntimeContextWithRecovery } from '@extension/repositories/runtime-registration-recovery';
@@ -26,7 +28,7 @@ import { RepositoryDiscoveryWatcher } from '@extension/watchers/repository-disco
 import type { RepoContext } from '@core/git/domain/repo-context';
 import type { Resource } from '@protocol/shared/base';
 import type { RepositoriesChangedPush, RepositoryNavigationMessage, RepositorySummary } from '@protocol/shared/repo';
-import { createErrorPayload } from '@extension/messaging/error-serialization';
+import { createErrorPayload, isAbortError } from '@extension/messaging/error-serialization';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     await migrateLookGitStorage(context);
@@ -54,32 +56,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const runtimeRepositories = new RepositoryRegistry();
     let repositoriesResource: Resource<readonly RepositorySummary[]> = { status: 'loading' };
     let navigatedRepositoryContextId: string | undefined;
-    let listedRepositoryContextId: string | undefined;
+    let hasExplicitRepositoryNavigation = false;
     let activeRuntimeContextId: string | undefined;
     let repositoryStateGeneration = 0;
     let dynamicRepositoryContexts = new Map<string, RepoContext>();
-    const childDiscoveryInFlight = new Set<string>();
+    const childDiscoveryInFlight = new Map<string, Promise<void>>();
     async function handleRepositoryNavigation(message: RepositoryNavigationMessage): Promise<void> {
         switch (message.type) {
-            case 'repo/selectRepository':
-                if (!repositories.contexts.some((contextItem) => contextItem.id === message.contextId)) { return; }
+            case 'repo/navigateRepository':
+                if (message.contextId && !repositories.contexts.some((contextItem) => contextItem.id === message.contextId)) { return; }
+                hasExplicitRepositoryNavigation = true;
                 navigatedRepositoryContextId = message.contextId;
                 repositories.selectContext(message.contextId);
-                {
-                    const repository = repositories.contexts.find((contextItem) => contextItem.id === message.contextId);
-                    if (repository) { void syncChildRepositories(repository); }
-                }
-                return;
-            case 'repo/showRepositoryList':
-                if (message.contextId && !repositories.contexts.some((contextItem) => contextItem.id === message.contextId)) { return; }
-                listedRepositoryContextId = message.contextId;
-                navigatedRepositoryContextId = undefined;
-                repositories.selectContext(undefined);
-                notifyRepositoriesChanged();
-                if (message.contextId) {
-                    const repository = repositories.contexts.find((contextItem) => contextItem.id === message.contextId);
-                    if (repository) { void syncChildRepositories(repository); }
-                }
                 return;
             case 'repo/openRepositoryInNewWindow': {
                 const repository = repositories.contexts.find((contextItem) => contextItem.id === message.contextId);
@@ -92,9 +80,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     function refreshAll(): Promise<void> {
         return repositoryRefreshCoordinator.refresh();
     }
-    const graphProvider = new GraphViewProvider(context.extensionUri, repositories, refreshAll, context.globalStorageUri, runtimeRepositories, handleRepositoryNavigation);
+    const graphProvider = new GraphViewProvider(context.extensionUri, repositories, refreshAll, context.globalStorageUri, runtimeRepositories, handleRepositoryNavigation, async () => isRuntimeReadyForCurrentContext());
     const changesProvider = new ChangesViewProvider(context.extensionUri, repositories, refreshAll, undefined, undefined, undefined, undefined, runtimeRepositories, undefined, async () => isRuntimeReadyForCurrentContext(), handleRepositoryNavigation);
-    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshAll, context.globalStorageUri, undefined, runtimeRepositories, handleRepositoryNavigation);
+    const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshAll, context.globalStorageUri, undefined, runtimeRepositories, handleRepositoryNavigation, async () => isRuntimeReadyForCurrentContext());
     const repositoryRefreshCoordinator = new RepositoryRefreshCoordinator({
         isReady: isRuntimeReadyForCurrentContext,
         refreshRuntime: async () => {
@@ -146,25 +134,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             type: 'repo/repositoriesChanged',
             repositories: repositoriesResource,
             activeContextId: { status: 'ready', data: activeNavigatorContextId() },
-            listContextId: { status: 'ready', data: activeListContextId() },
         };
     }
 
     function activeNavigatorContextId(): string | undefined {
         const currentContext = repositories.currentContext;
+        if (hasExplicitRepositoryNavigation) {
+            return navigatedRepositoryContextId;
+        }
         if (currentContext && activeRuntimeContextId !== currentContext.id) {
             return undefined;
         }
-        if (repositoriesResource.status === 'ready' && repositoriesResource.data.length <= 1) {
+        if (repositories.soleTopLevelContext) {
             return currentContext?.id;
         }
-        return navigatedRepositoryContextId;
-    }
-
-    function activeListContextId(): string | undefined {
-        return repositories.contexts.some((contextItem) => contextItem.id === listedRepositoryContextId)
-            ? listedRepositoryContextId
-            : undefined;
+        return undefined;
     }
 
     function notifyRepositoriesChanged(): void {
@@ -180,11 +164,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     function syncActiveRepo(): void {
-        if (navigatedRepositoryContextId || listedRepositoryContextId) {
+        if (hasExplicitRepositoryNavigation) {
             notifyRepositoriesChanged();
             return;
         }
         repositories.selectContextForResource(vscode.window.activeTextEditor?.document.uri.fsPath);
+        if (!repositories.currentContext && repositories.soleTopLevelContext) {
+            repositories.selectContext(repositories.soleTopLevelContext.id);
+        }
         notifyRepositoriesChanged();
     }
 
@@ -194,6 +181,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         notifyRepositoriesChanged();
         const discoveredContexts = await discoverRepositoryContexts({
             workspaceFolders: vscode.workspace.workspaceFolders,
+            resolveRepositoryScanMaxDepth: (workspaceFolder) => getRepositoryScanMaxDepth(workspaceFolder.uri),
         });
         if (generation !== repositoryStateGeneration) { return; }
         const contexts = await mergeDynamicRepositoryContexts(discoveredContexts);
@@ -201,9 +189,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         repositories.setContexts(contexts);
         if (navigatedRepositoryContextId && !contexts.some((repoContext) => repoContext.id === navigatedRepositoryContextId)) {
             navigatedRepositoryContextId = undefined;
-        }
-        if (listedRepositoryContextId && !contexts.some((repoContext) => repoContext.id === listedRepositoryContextId)) {
-            listedRepositoryContextId = undefined;
+            hasExplicitRepositoryNavigation = false;
         }
         gitWatcher.setContexts(contexts);
         repositoryDiscoveryWatcher.setContexts(contexts);
@@ -214,10 +200,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         void syncVisibleRepositoryChildren();
     }
 
-    async function loadRepositorySummaries(contexts: readonly RepoContext[]): Promise<Resource<readonly RepositorySummary[]>> {
+    async function loadRepositorySummaries(contexts: readonly RepoContext[], signal?: AbortSignal): Promise<Resource<readonly RepositorySummary[]>> {
         try {
-            return { status: 'ready', data: await repositorySummaryService.summarize(contexts) };
+            return { status: 'ready', data: await repositorySummaryService.summarize(contexts, signal) };
         } catch (error) {
+            if (isAbortError(error)) { throw error; }
             return {
                 status: 'error',
                 error: createErrorPayload(error, {
@@ -229,38 +216,58 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
     }
 
-    async function syncChildRepositories(repoContext: RepoContext): Promise<void> {
-        if (childDiscoveryInFlight.has(repoContext.id)) { return; }
-        childDiscoveryInFlight.add(repoContext.id);
-        try {
-            const childContexts = await discoverChildRepositoryContexts(repoContext);
+    function syncChildRepositories(repoContext: RepoContext, signal?: AbortSignal): Promise<void> {
+        const existing = childDiscoveryInFlight.get(repoContext.id);
+        if (existing) {
+            return waitForPromise(existing, signal).catch((error: unknown) => {
+                if (signal?.aborted || !isAbortError(error)) { throw error; }
+                if (childDiscoveryInFlight.get(repoContext.id) === existing) {
+                    childDiscoveryInFlight.delete(repoContext.id);
+                }
+                return syncChildRepositories(repoContext, signal);
+            });
+        }
+
+        const discovery = (async () => {
+            const childContexts = await discoverChildRepositoryContexts(
+                repoContext,
+                getRepositoryScanMaxDepth(vscode.Uri.file(repoContext.cwd)),
+                signal,
+            );
+            signal?.throwIfAborted();
             if (!repositories.contexts.some((contextItem) => contextItem.id === repoContext.id)) { return; }
             const knownContextIds = new Set(repositories.contexts.map((contextItem) => contextItem.id));
             const missingContexts = childContexts.filter((contextItem) => !knownContextIds.has(contextItem.id));
             if (missingContexts.length === 0) { return; }
 
             const generation = ++repositoryStateGeneration;
+            const contexts = [...repositories.contexts, ...missingContexts];
+            const nextRepositoriesResource = await loadRepositorySummaries(contexts, signal);
+            signal?.throwIfAborted();
+            if (generation !== repositoryStateGeneration) { return; }
             for (const childContext of childContexts) {
                 dynamicRepositoryContexts.set(childContext.id, childContext);
             }
-            const contexts = [...repositories.contexts, ...missingContexts];
             repositories.setContexts(contexts);
             gitWatcher.setContexts(contexts);
             repositoryDiscoveryWatcher.setContexts(contexts);
-            const nextRepositoriesResource = await loadRepositorySummaries(contexts);
-            if (generation !== repositoryStateGeneration) { return; }
             repositoriesResource = nextRepositoriesResource;
             notifyRepositoriesChanged();
             void syncVisibleRepositoryChildren();
-        } finally {
-            childDiscoveryInFlight.delete(repoContext.id);
-        }
+        })();
+        childDiscoveryInFlight.set(repoContext.id, discovery);
+        void discovery.finally(() => {
+            if (childDiscoveryInFlight.get(repoContext.id) === discovery) {
+                childDiscoveryInFlight.delete(repoContext.id);
+            }
+        }).catch(() => {});
+        return discovery;
     }
 
     function syncVisibleRepositoryChildren(): void {
         if (repositoriesResource.status !== 'ready') { return; }
         const summaries = repositoriesResource.data;
-        const visibleParentId = activeListContextId();
+        const visibleParentId = activeNavigatorContextId();
         const visibleRepositoryIds = summaries
             .filter((summary) => visibleParentId
                 ? summary.context.parentId === visibleParentId
@@ -285,7 +292,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             for (const parentId of parentIdsToScan) {
                 const parentContext = contextsById.get(parentId);
                 if (!parentContext) { continue; }
-                for (const childContext of await discoverChildRepositoryContexts(parentContext)) {
+                for (const childContext of await discoverChildRepositoryContexts(
+                    parentContext,
+                    getRepositoryScanMaxDepth(vscode.Uri.file(parentContext.cwd)),
+                )) {
                     refreshedDynamicContexts.set(childContext.id, childContext);
                     const wasKnownDynamicParent = dynamicParentIds.has(childContext.id);
                     if (!contextsById.has(childContext.id)) {
@@ -303,9 +313,39 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return [...contextsById.values()];
     }
 
-    async function handleRepositoryChanged(repoContext: RepoContext | undefined): Promise<void> {
-        await vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', Boolean(repoContext));
-        if (!repoContext) {
+    const repositoryNavigationCoordinator = new RepositoryNavigationCoordinator({
+        navigationStarted: (repoContext) => {
+            activeRuntimeContextId = undefined;
+            changesProvider.notifyRepoNavigationStarted(repoContext);
+            commitHistoryProvider.notifyRepoNavigationStarted(repoContext);
+            graphProvider.notifyRepoNavigationStarted(repoContext);
+        },
+        prepare: async (repoContext, signal) => {
+            await vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', true);
+            await syncChildRepositories(repoContext, signal);
+            signal.throwIfAborted();
+            await registerRuntimeContextWithRecovery({
+                repositories,
+                runtimeRegistrar,
+                runtimeRepositories,
+                repoContext,
+                syncActiveRepository: syncActiveRepo,
+                signal,
+            });
+        },
+        ready: async (repoContext) => {
+            if (repositories.currentContext?.id !== repoContext.id) { return; }
+            activeRuntimeContextId = repoContext.id;
+            notifyRepositoriesChanged();
+            await Promise.all([
+                changesProvider.notifyRepoChanged(repoContext),
+                commitHistoryProvider.notifyRepoChanged(repoContext),
+                graphProvider.notifyRepoChanged(repoContext),
+            ]);
+        },
+        unavailable: async (signal) => {
+            await vscode.commands.executeCommand('setContext', 'lookGit.hasRepository', false);
+            signal.throwIfAborted();
             activeRuntimeContextId = undefined;
             runtimeRepositories.clear();
             notifyRepositoriesChanged();
@@ -314,45 +354,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 commitHistoryProvider.notifyRepoChanged(undefined),
                 graphProvider.notifyRepoChanged(undefined),
             ]);
-            return;
-        }
-
-        activeRuntimeContextId = undefined;
-        try {
-            await registerRuntimeContextWithRecovery({
-                repositories,
-                runtimeRegistrar,
-                runtimeRepositories,
-                repoContext,
-                syncActiveRepository: syncActiveRepo,
-            });
-        } catch (error) {
+        },
+        failed: (_repoContext, error) => {
             appendErrorToOutput({
                 code: 'gitOperationFailed',
                 message: error instanceof Error ? error.message : String(error),
                 operation: 'runtimeRepositoryRegistration',
                 recoverable: true,
             }, 'runtimeRepositoryRegistration');
-            return;
-        }
-
-        if (repositories.currentContext?.id !== repoContext.id) { return; }
-        activeRuntimeContextId = repoContext.id;
-        notifyRepositoriesChanged();
-        await Promise.all([
-            changesProvider.notifyRepoChanged(repoContext),
-            commitHistoryProvider.notifyRepoChanged(repoContext),
-            graphProvider.notifyRepoChanged(repoContext),
-        ]);
-        void syncChildRepositories(repoContext);
-    }
+            changesProvider.notifyRepoNavigationFailed(error);
+            commitHistoryProvider.notifyRepoNavigationFailed(error);
+            graphProvider.notifyRepoNavigationFailed(error);
+        },
+    });
 
     context.subscriptions.push(
         repositories,
+        repositoryNavigationCoordinator,
         registerReadonlyDiffDocumentProvider(),
         registerGitBlobDocumentProvider(),
         gitWatcher,
         repositoryDiscoveryWatcher,
+        registerRepositoryScanMaxDepthListener(debouncedSyncDiscoveredRepositories),
         ...changesProvider.registerNativeContextCommands(),
         ...commitHistoryProvider.registerNativeContextCommands(),
         ...graphProvider.registerNativeContextCommands(),
@@ -381,12 +404,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     await syncDiscoveredRepositories();
     syncActiveRepo();
-    await handleRepositoryChanged(repositories.currentContext);
+    await repositoryNavigationCoordinator.activate(repositories.currentContext);
     context.subscriptions.push(
         repositories.onDidChange(({ context: repoContext }) => {
-            void handleRepositoryChanged(repoContext);
+            void repositoryNavigationCoordinator.activate(repoContext);
         }),
     );
 }
 
 export function deactivate(): void {}
+
+function waitForPromise(promise: Promise<void>, signal?: AbortSignal): Promise<void> {
+    if (!signal) { return promise; }
+    signal.throwIfAborted();
+    return new Promise<void>((resolve, reject) => {
+        const abort = () => { reject(signal.reason); };
+        signal.addEventListener('abort', abort, { once: true });
+        void promise.then(resolve, reject).finally(() => {
+            signal.removeEventListener('abort', abort);
+        });
+    });
+}

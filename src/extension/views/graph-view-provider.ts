@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
-import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
+import type { RepositoryContextAccessor } from '@extension/repositories/repository-selection-store';
 import type { GitRepository } from '@application/ports/git-topology';
 import type { GitBranch } from '@core/git/domain/git-status';
-import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, WorktreeCommand } from '@protocol/graph/messages';
+import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, RepoContextChangedPush, RepoNavigationStartedPush, WorktreeCommand } from '@protocol/graph/messages';
 import type { GraphContextTarget } from '@protocol/graph/types';
 import type { RepoContext } from '@core/git/domain/repo-context';
 import type { RepositoriesChangedPush, RepositoryNavigationMessage } from '@protocol/shared/repo';
@@ -12,6 +12,7 @@ import { getWebviewHtml } from '@extension/views/webview-html';
 import { webviewFontSizeMessage } from '@extension/views/webview-font';
 import type { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import { requireRuntimeLocator } from '@extension/repositories/runtime-repository-locator';
+import { createErrorPayload } from '@extension/messaging/error-serialization';
 
 const GRAPH_COMMIT_COMMANDS: readonly { readonly id: string; readonly command: CommitCommand }[] = [
     { id: 'lookGit.graph.commit.copyRevisionNumber', command: 'copyRevisionNumber' },
@@ -89,14 +90,16 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
     private router?: GraphMessageRouter;
     private contextTarget?: GraphContextTarget;
     private repositoriesChangedMessage?: RepositoriesChangedPush;
+    private repositoryLifecycleMessage?: RepoNavigationStartedPush | RepoContextChangedPush;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
-        private readonly repositories: RepositorySelectionAccessor,
+        private readonly repositories: RepositoryContextAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
         private readonly storageUri?: vscode.Uri,
         private readonly runtimeRepositories?: RepositoryRegistry,
         private readonly onRepositoryNavigation: (message: RepositoryNavigationMessage) => Promise<void> = async () => {},
+        private readonly beforeRequest: () => Promise<boolean> = async () => true,
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -115,22 +118,13 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         }, this.onRepositoryUpdated, undefined, undefined, undefined, this.extensionUri, this.storageUri, this.runtimeRepositories);
 
         webviewView.webview.onDidReceiveMessage((msg: GraphWebviewToExtensionMessage) => {
-            if (isRepositoryNavigationMessage(msg)) {
-                void this.onRepositoryNavigation(msg);
-                return;
-            }
-            if (msg.type === 'graph/ready') {
-                this.postRepositoriesChangedMessage();
-            }
-            if (msg.type === 'graph/contextTarget') {
-                this.contextTarget = msg.target;
-                return;
-            }
-            void this.router!.handle(msg);
+            void this.handleWebviewMessage(msg);
         });
 
         webviewView.onDidChangeVisibility(() => {
-            if (webviewView.visible) { void this.router?.refreshGraphData(); }
+            if (webviewView.visible) {
+                void this.refreshWhenReady();
+            }
         });
     }
 
@@ -150,13 +144,35 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         ];
     }
 
+    notifyRepoNavigationStarted(context: RepoContext | undefined): void {
+        this.contextTarget = undefined;
+        this.router?.resetRefreshCache();
+        this.repositoryLifecycleMessage = {
+            type: 'repo/navigationStarted',
+            ...(context ? { context: toSerializedRepoContext(context) } : {}),
+        };
+        this.postRepositoryLifecycleMessage();
+    }
+
+    notifyRepoNavigationFailed(error: unknown): void {
+        this.view?.webview.postMessage({
+            type: 'graph/error',
+            ...createErrorPayload(error, {
+                code: 'refreshFailed',
+                operation: 'repo/navigation',
+                recoverable: true,
+            }),
+        });
+    }
+
     /** Called by RepoRegistry when the active repo changes. */
     async notifyRepoChanged(context: RepoContext | undefined): Promise<void> {
         this.router?.resetRefreshCache();
-        this.view?.webview.postMessage({
+        this.repositoryLifecycleMessage = {
             type: 'repo/contextChanged',
             ...(context ? { context: toSerializedRepoContext(context) } : {}),
-        });
+        };
+        this.postRepositoryLifecycleMessage();
         if (!context) { await this.router?.pushGraphData(undefined, undefined); }
     }
 
@@ -173,6 +189,36 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
         if (this.repositoriesChangedMessage) {
             void this.view?.webview.postMessage(this.repositoriesChangedMessage);
         }
+    }
+
+    private postRepositoryLifecycleMessage(): void {
+        if (this.repositoryLifecycleMessage) {
+            void this.view?.webview.postMessage(this.repositoryLifecycleMessage);
+        }
+    }
+
+    private async handleWebviewMessage(message: GraphWebviewToExtensionMessage): Promise<void> {
+        if (isRepositoryNavigationMessage(message)) {
+            await this.onRepositoryNavigation(message);
+            return;
+        }
+        if (message.type === 'graph/ready') {
+            this.postRepositoriesChangedMessage();
+            this.postRepositoryLifecycleMessage();
+            await this.router?.handle(message);
+            return;
+        }
+        if (message.type === 'graph/contextTarget') {
+            this.contextTarget = message.target;
+            return;
+        }
+        if (!await this.beforeRequest()) { return; }
+        await this.router?.handle(message);
+    }
+
+    private async refreshWhenReady(): Promise<void> {
+        if (!await this.beforeRequest()) { return; }
+        await this.router?.refreshGraphData();
     }
 
     async refresh(): Promise<void> {
@@ -296,8 +342,7 @@ async function branchContainsCommit(repo: GitRepository, branch: GitBranch, hash
 }
 
 function isRepositoryNavigationMessage(message: GraphWebviewToExtensionMessage): message is RepositoryNavigationMessage {
-    return message.type === 'repo/selectRepository'
-        || message.type === 'repo/showRepositoryList'
+    return message.type === 'repo/navigateRepository'
         || message.type === 'repo/openRepositoryInNewWindow';
 }
 

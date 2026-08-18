@@ -83,7 +83,6 @@ describe('graphState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: 'repo-a' },
-                listContextId: { status: 'ready', data: undefined },
             },
         });
 
@@ -150,11 +149,10 @@ describe('graphState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: undefined },
-                listContextId: { status: 'ready', data: undefined },
             },
         });
 
-        const selected = reduceGraphState(withNavigator, { type: 'selectRepositoryContext', contextId: 'repo-b' });
+        const selected = reduceGraphState(withNavigator, { type: 'navigateRepository', contextId: 'repo-b' });
         const confirmed = reduceGraphState(selected, {
             type: 'message',
             message: {
@@ -162,7 +160,7 @@ describe('graphState', () => {
                 context: { id: 'repo-b', cwd: '/work/repo-b', kind: 'main', label: 'repo-b' },
             },
         });
-        const back = reduceGraphState(selected, { type: 'showRepositoryList' });
+        const back = reduceGraphState(selected, { type: 'navigateRepository' });
 
         expect(selected.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-b' });
         expect(selected.rows).toEqual([]);
@@ -170,6 +168,30 @@ describe('graphState', () => {
         expect(selected.activeGraphRequestId).toBeUndefined();
         expect(confirmed.activeGraphRequestId).toBe(graphRequestId(0, 'replace'));
         expect(back.activeRepositoryContextId).toEqual({ status: 'ready', data: undefined });
+    });
+
+    it('clears stale graph data without requesting the new repository before it is ready', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message',
+            message: {
+                type: 'graph/dataResponse',
+                requestId: graphRequestId(0, 'replace'),
+                data: graphData([commit('a')], 1, false),
+            },
+        });
+
+        const navigating = reduceGraphState(loaded, {
+            type: 'message',
+            message: {
+                type: 'repo/navigationStarted',
+                context: { id: 'repo-b', cwd: '/work/repo-b', kind: 'main', label: 'repo-b' },
+            },
+        });
+
+        expect(navigating.rows).toEqual([]);
+        expect(navigating.loading).toBe(true);
+        expect(navigating.activeGraphRequestId).toBeUndefined();
+        expect(navigating.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-b' });
     });
 
     it('tracks load-more requests and clears them when graph data arrives', () => {
@@ -820,6 +842,26 @@ describe('graphState', () => {
                 command: 'fetch',
             },
         });
+        const staleDelegated = reduceGraphState(running, {
+            type: 'message',
+            message: {
+                type: 'graph/operationStatus',
+                operationId: 'op-stale',
+                status: GraphOperationStatus.Delegated,
+                category: GraphOperationCategory.Branch,
+                command: 'push',
+            },
+        });
+        const delegated = reduceGraphState(running, {
+            type: 'message',
+            message: {
+                type: 'graph/operationStatus',
+                operationId: 'op-1',
+                status: GraphOperationStatus.Delegated,
+                category: GraphOperationCategory.Branch,
+                command: 'push',
+            },
+        });
         const success = reduceGraphState(staleSuccess, {
             type: 'message',
             message: {
@@ -835,6 +877,8 @@ describe('graphState', () => {
 
         expect(running.operationStatus?.status).toBe(GraphOperationStatus.Running);
         expect(staleSuccess.operationStatus?.operationId).toBe('op-1');
+        expect(staleDelegated.operationStatus?.operationId).toBe('op-1');
+        expect(delegated.operationStatus).toBeUndefined();
         expect(success.operationStatus?.status).toBe(GraphOperationStatus.Success);
         expect(clearedWrong.operationStatus).toBeDefined();
         expect(cleared.operationStatus).toBeUndefined();

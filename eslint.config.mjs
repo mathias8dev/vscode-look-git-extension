@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint';
 
 export default [
   {
-    ignores: ['dist/**', 'out/**', 'node_modules/**', '.wdio-vscode/**'],
+    ignores: ['dist/**', 'out/**', 'node_modules/**'],
   },
   {
     files: ['**/*.js', '**/*.cjs', '**/*.mjs'],

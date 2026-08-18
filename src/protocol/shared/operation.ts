@@ -1,6 +1,7 @@
 export enum OperationStatus {
     Running = 'running',
     Success = 'success',
+    Delegated = 'delegated',
     Failed = 'failed',
     Conflict = 'conflict',
 }

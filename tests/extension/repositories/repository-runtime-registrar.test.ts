@@ -161,6 +161,28 @@ describe('RepositoryRuntimeRegistrar', () => {
             }),
         ]);
     });
+
+    it('keeps the registered runtime intact when replacement preparation is aborted', async () => {
+        const context = createRepoContext('/repo');
+        const registry = new RepositoryRegistry();
+        const initialRegistrar = new RepositoryRuntimeRegistrar(new RuntimeRepositoryFactory(runtimeWithLinkedWorktrees([])));
+        await initialRegistrar.registerContext(registry, context);
+        const initialRepository = registry.repositories()[0];
+        const initialWorktree = registry.worktrees(context.id)[0];
+        const submodules = deferred<readonly GitSubmodule[]>();
+        const replacementRegistrar = new RepositoryRuntimeRegistrar(new RuntimeRepositoryFactory(
+            runtimeWithDeferredSubmodules(submodules.promise),
+        ));
+        const controller = new AbortController();
+
+        const registration = replacementRegistrar.registerContext(registry, context, controller.signal);
+        controller.abort();
+        submodules.resolve([]);
+
+        await expect(registration).rejects.toMatchObject({ name: 'AbortError' });
+        expect(registry.repositories()).toEqual([initialRepository]);
+        expect(registry.worktrees(context.id)).toEqual([initialWorktree]);
+    });
 });
 
 interface MutableLinkedWorktreeRuntime extends GitRuntime {
@@ -209,6 +231,24 @@ function runtimeWithSubmodules(submodules: readonly GitSubmodule[]): GitRuntime 
                 default:
                     throw new Error(`Unexpected operation: ${operation}`);
             }
+        },
+    };
+}
+
+function runtimeWithDeferredSubmodules(submodules: Promise<readonly GitSubmodule[]>): GitRuntime {
+    const runtime = runtimeWithSubmodules([]);
+    return {
+        ...runtime,
+        execute: async <TInput, TResult>(
+            operation: SemanticGitOperation,
+            context: GitExecutionContext,
+            input: TInput,
+            signal?: AbortSignal,
+        ): Promise<TResult> => {
+            if (operation === 'listSubmodules') {
+                return runtimeResult(await submodules);
+            }
+            return runtime.execute<TInput, TResult>(operation, context, input, signal);
         },
     };
 }
@@ -273,5 +313,17 @@ function gitWorktree(worktreePath: string, isMain = true): GitWorktree {
         isMain,
         isDetached: false,
         isLocked: false,
+    };
+}
+
+function deferred<T>(): {
+    readonly promise: Promise<T>;
+    resolve(value: T): void;
+} {
+    let resolvePromise = (_value: T): void => {};
+    const promise = new Promise<T>((resolve) => { resolvePromise = resolve; });
+    return {
+        promise,
+        resolve: resolvePromise,
     };
 }

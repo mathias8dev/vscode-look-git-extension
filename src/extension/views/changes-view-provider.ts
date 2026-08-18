@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
-import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush, ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
+import type { RepositoryContextAccessor } from '@extension/repositories/repository-selection-store';
+import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush, ChangesSortPreference, ChangesToolbarCommand, ChangesViewPreference, ChangesWebviewToExtensionMessage, RepoContextChangedPush, RepoNavigationStartedPush } from '@protocol/changes/messages';
 import { CommitMode, type ChangesContextTarget, type StatusData } from '@protocol/changes/types';
 import type { RepositoriesChangedPush, RepositoryNavigationMessage } from '@protocol/shared/repo';
 import type { RepoContext } from '@core/git/domain/repo-context';
@@ -27,6 +27,7 @@ import { operationActionsForStatus } from '@extension/utils/operation-feedback';
 import { withCancellationSignal } from '@extension/utils/vscode-cancellation';
 import { webviewFontSizeMessage } from '@extension/views/webview-font';
 import { statusDataEqual } from '@protocol/shared/protocol-data-equality';
+import { excludeNestedRepositoryChanges, nestedRepositoryPaths } from '@extension/repositories/nested-repository-boundaries';
 import { DISTINCT_MESSAGE_LAST_VALUE_ONLY, DistinctMessagePoster } from '@extension/messaging/distinct-message-poster';
 
 const APPLY_PATCH_FROM_CLIPBOARD = 'From Clipboard';
@@ -204,6 +205,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     private refreshTimer?: ReturnType<typeof setTimeout>;
     private contextTarget?: ChangesContextTarget;
     private repositoriesChangedMessage?: RepositoriesChangedPush;
+    private repositoryLifecycleMessage?: RepoNavigationStartedPush | RepoContextChangedPush;
     private viewAsTree = false;
     private readonly refreshDebounceMs = 50;
     private operationSequence = 0;
@@ -217,7 +219,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     constructor(
         private readonly extensionUri: vscode.Uri,
-        private readonly repositories: RepositorySelectionAccessor,
+        private readonly repositories: RepositoryContextAccessor,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
         private readonly generateCommitMessage = new GenerateCommitMessageUseCase(new VscodeLanguageModelCommitMessageGenerator()),
         private readonly createChangesPatch: CreateChangesPatchUseCase = defaultCreateChangesPatch,
@@ -268,6 +270,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             if (msg.type === 'changes/ready') {
                 this.statusDataPoster.clear();
                 this.postRepositoriesChangedMessage();
+                this.postRepositoryLifecycleMessage();
             }
             void this.router!.handle(msg);
         });
@@ -703,9 +706,13 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 if (!await this.beforeRefresh()) { continue; }
 
                 const { status, stashes, submodules, currentBranch, worktree } = await this.loadChangesStatus(controller.signal);
+                const visibleStatus = excludeNestedRepositoryChanges(
+                    status,
+                    nestedRepositoryPaths(context, this.repositories.contexts),
+                );
                 this.router?.setKnownSubmodulePaths(submodules.map((submodule) => submodule.path));
-                this.updateBadge(status.staged.length + status.unstaged.length + status.conflicts.length);
-                this.postStatusDataIfChanged(buildStatusData(status, stashes, submodules, currentBranch));
+                this.updateBadge(visibleStatus.staged.length + visibleStatus.unstaged.length + visibleStatus.conflicts.length);
+                this.postStatusDataIfChanged(buildStatusData(visibleStatus, stashes, submodules, currentBranch));
                 await this.postSquashMergeMessagePresetIfNeeded(worktree, controller.signal);
             } catch (error) {
                 if (isAbortError(error)) { continue; }
@@ -761,15 +768,45 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         return submodulePath;
     }
 
+    notifyRepoNavigationStarted(context: RepoContext | undefined): void {
+        this.contextTarget = undefined;
+        this.pendingRefresh = false;
+        if (this.refreshTimer) {
+            clearTimeout(this.refreshTimer);
+            this.refreshTimer = undefined;
+        }
+        this.refreshAbortController?.abort();
+        this.statusDataPoster.clear();
+        this.router?.setKnownSubmodulePaths([]);
+        this.repositoryLifecycleMessage = {
+            type: 'repo/navigationStarted',
+            ...(context ? { context: toSerializedRepoContext(context) } : {}),
+        };
+        this.postRepositoryLifecycleMessage();
+    }
+
+    notifyRepoNavigationFailed(error: unknown): void {
+        this.updateBadge(0);
+        this.postMessage({
+            type: 'changes/error',
+            ...createErrorPayload(error, {
+                code: 'refreshFailed',
+                operation: 'repo/navigation',
+                recoverable: true,
+            }),
+        });
+    }
+
     /** Called by RepoRegistry when the active repo changes. */
     async notifyRepoChanged(context: RepoContext | undefined): Promise<void> {
         this.contextTarget = undefined;
         this.statusDataPoster.clear();
         this.router?.setKnownSubmodulePaths([]);
-        this.view?.webview.postMessage({
+        this.repositoryLifecycleMessage = {
             type: 'repo/contextChanged',
             ...(context ? { context: toSerializedRepoContext(context) } : {}),
-        });
+        };
+        this.postRepositoryLifecycleMessage();
         this.scheduleRefresh();
     }
 
@@ -815,6 +852,12 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    private postRepositoryLifecycleMessage(): void {
+        if (this.repositoryLifecycleMessage) {
+            void this.view?.webview.postMessage(this.repositoryLifecycleMessage);
+        }
+    }
+
     private nextOperationId(): string {
         this.operationSequence += 1;
         return `changes-provider-op-${this.operationSequence}`;
@@ -826,8 +869,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 }
 
 function isRepositoryNavigationMessage(message: ChangesWebviewToExtensionMessage): message is RepositoryNavigationMessage {
-    return message.type === 'repo/selectRepository'
-        || message.type === 'repo/showRepositoryList'
+    return message.type === 'repo/navigateRepository'
         || message.type === 'repo/openRepositoryInNewWindow';
 }
 

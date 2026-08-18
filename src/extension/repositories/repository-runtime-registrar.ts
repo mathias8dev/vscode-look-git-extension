@@ -1,4 +1,5 @@
 import * as path from 'path';
+import type { GitRepository, Worktree } from '@application/ports/git-topology';
 import type { RepoContext } from '@core/git/domain/repo-context';
 import type { GitSubmodule } from '@core/git/domain/git-worktree';
 import { RuntimeRepositoryFactory } from '@extension/git/runtime-repository-factory';
@@ -10,43 +11,60 @@ export class RepositoryRuntimeRegistrar {
         private readonly runtimeRepositoryFactory = new RuntimeRepositoryFactory(),
     ) {}
 
-    async refreshWorktrees(registry: RepositoryRegistry, context: RepoContext): Promise<void> {
-        const worktrees = await this.runtimeRepositoryFactory.createWorktrees(context);
+    async refreshWorktrees(registry: RepositoryRegistry, context: RepoContext, signal?: AbortSignal): Promise<void> {
+        const worktrees = await this.runtimeRepositoryFactory.createWorktrees(context, signal);
         registry.replaceWorktrees(context.id, worktrees);
     }
 
-    async registerContext(registry: RepositoryRegistry, context: RepoContext): Promise<void> {
+    async registerContext(registry: RepositoryRegistry, context: RepoContext, signal?: AbortSignal): Promise<void> {
         const [repository, worktrees] = await Promise.all([
             this.runtimeRepositoryFactory.createRepository(context),
-            this.runtimeRepositoryFactory.createWorktrees(context),
+            this.runtimeRepositoryFactory.createWorktrees(context, signal),
         ]);
+        const submoduleRegistrations = await this.createSubmoduleRuntimeRegistrations(
+            context,
+            await repository.listSubmodules(signal),
+            signal,
+        );
+        signal?.throwIfAborted();
+
         registry.unregisterRepositoryTree(repository.repoId);
         registry.replaceRepository(repository, worktrees);
-        await this.registerSubmoduleRuntimeContexts(registry, context, await repository.listSubmodules());
-    }
-
-    private async registerSubmoduleRuntimeContexts(
-        registry: RepositoryRegistry,
-        parentContext: RepoContext,
-        submodules: readonly GitSubmodule[],
-    ): Promise<void> {
-        for (const submodule of submodules) {
-            if (submodule.status === '-') { continue; }
-            await this.registerSubmoduleRuntimeContext(registry, parentContext, submodule);
+        for (const registration of submoduleRegistrations) {
+            registry.replaceRepository(registration.repository, registration.worktrees);
         }
     }
 
-    private async registerSubmoduleRuntimeContext(
-        registry: RepositoryRegistry,
+    private async createSubmoduleRuntimeRegistrations(
+        parentContext: RepoContext,
+        submodules: readonly GitSubmodule[],
+        signal?: AbortSignal,
+    ): Promise<readonly RuntimeRegistration[]> {
+        const registrations: RuntimeRegistration[] = [];
+        for (const submodule of submodules) {
+            if (submodule.status === '-') { continue; }
+            signal?.throwIfAborted();
+            registrations.push(await this.createSubmoduleRuntimeRegistration(parentContext, submodule, signal));
+        }
+        return registrations;
+    }
+
+    private async createSubmoduleRuntimeRegistration(
         parentContext: RepoContext,
         submodule: GitSubmodule,
-    ): Promise<void> {
+        signal?: AbortSignal,
+    ): Promise<RuntimeRegistration> {
         const submoduleCwd = path.resolve(parentContext.cwd, submodule.path);
         const context = createSubmoduleRepoContext(submoduleCwd, parentContext.id);
-        const [runtimeRepository, worktrees] = await Promise.all([
+        const [repository, worktrees] = await Promise.all([
             this.runtimeRepositoryFactory.createRepository(context),
-            this.runtimeRepositoryFactory.createWorktrees(context),
+            this.runtimeRepositoryFactory.createWorktrees(context, signal),
         ]);
-        registry.replaceRepository(runtimeRepository, worktrees);
+        return { repository, worktrees };
     }
+}
+
+interface RuntimeRegistration {
+    readonly repository: GitRepository;
+    readonly worktrees: readonly Worktree[];
 }

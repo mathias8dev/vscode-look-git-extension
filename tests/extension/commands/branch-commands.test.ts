@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { GitPushOutcome } from '@application/ports/git-capabilities';
 import { runBranchCommand } from '@extension/commands/branch-commands';
 import type { RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
 import { CliGitRuntime } from '@extension/git/cli-git-runtime';
@@ -55,7 +56,7 @@ describe('runBranchCommand', () => {
         setQuickPickValue(undefined);
 
         await expect(runBranchCommand(targets.repository, 'push', 'local-only', false, undefined, targets))
-            .resolves.toBe(true);
+            .resolves.toEqual({ shouldRefresh: true, pushOutcome: GitPushOutcome.Completed });
 
         expect(fixture.remote.gitTrim(['rev-parse', 'refs/heads/local-only']))
             .toBe(fixture.local.gitTrim(['rev-parse', 'local-only']));
@@ -71,7 +72,7 @@ describe('runBranchCommand', () => {
         setQuickPickValue(undefined);
 
         await expect(runBranchCommand(targets.repository, 'push', 'local-only', false, undefined, targets))
-            .resolves.toBe(true);
+            .resolves.toEqual({ shouldRefresh: true, pushOutcome: GitPushOutcome.Completed });
 
         expect(fixture.remote.gitTrim(['rev-parse', 'refs/heads/local-only']))
             .toBe(fixture.local.gitTrim(['rev-parse', 'local-only']));
@@ -86,7 +87,7 @@ describe('runBranchCommand', () => {
         setWarningChoice(undefined);
 
         await expect(runBranchCommand(targets.repository, 'push', 'local-only', false, undefined, targets))
-            .resolves.toBe(false);
+            .resolves.toEqual({ shouldRefresh: false });
 
         expect(fixture.local.gitTrim(['rev-parse', 'local-only'])).toBe(localHead);
     });
@@ -99,7 +100,7 @@ describe('runBranchCommand', () => {
         setWarningChoice('Update Branch');
 
         await expect(runBranchCommand(targets.repository, 'push', 'local-only', false, undefined, targets))
-            .resolves.toBe(true);
+            .resolves.toEqual({ shouldRefresh: true });
 
         expect(fixture.local.gitTrim(['rev-parse', 'local-only']))
             .toBe(fixture.local.gitTrim(['rev-parse', 'origin/local-only']));
@@ -113,7 +114,7 @@ describe('runBranchCommand', () => {
         setQuickPickValue('Check Out Branch');
 
         await expect(runBranchCommand(targets.repository, 'push', 'local-only', false, undefined, targets))
-            .resolves.toBe(true);
+            .resolves.toEqual({ shouldRefresh: true });
 
         expect(fixture.local.gitTrim(['rev-parse', '--abbrev-ref', 'HEAD'])).toBe('local-only');
         expect(fixture.remote.gitTrim(['rev-parse', 'refs/heads/local-only'])).toBe(remoteHead);
@@ -128,7 +129,7 @@ describe('runBranchCommand', () => {
         setQuickPickValue('Update Branch');
 
         await expect(runBranchCommand(targets.repository, 'push', 'local-only', false, undefined, targets))
-            .resolves.toBe(true);
+            .resolves.toEqual({ shouldRefresh: true });
 
         expect(fixture.remote.gitTrim(['rev-parse', 'refs/heads/local-only'])).toBe(remoteHead);
         expect(() => fixture.local.git(['merge-base', '--is-ancestor', 'origin/local-only', 'local-only'])).not.toThrow();
@@ -168,7 +169,7 @@ describe('runBranchCommand', () => {
         setWarningChoice(undefined);
 
         await expect(runBranchCommand(targets.repository, 'push', 'local-only', false, undefined, targets))
-            .resolves.toBe(false);
+            .resolves.toEqual({ shouldRefresh: false });
 
         expect(fixture.remote.gitTrim(['rev-parse', 'refs/heads/local-only'])).toBe(remoteHead);
     });
@@ -181,7 +182,7 @@ describe('runBranchCommand', () => {
         setQuickPickValue(undefined);
 
         await expect(runBranchCommand(targets.repository, 'push', 'local-only', false, undefined, targets))
-            .resolves.toBe(false);
+            .resolves.toEqual({ shouldRefresh: false });
 
         expect(fixture.remote.gitTrim(['rev-parse', 'refs/heads/local-only'])).toBe(remoteHead);
     });
@@ -197,10 +198,28 @@ describe('runBranchCommand', () => {
         setQuickPickValue('Force Push with Lease');
 
         await expect(runBranchCommand(targets.repository, 'push', 'local-only', false, undefined, targets))
-            .resolves.toBe(true);
+            .resolves.toEqual({ shouldRefresh: true, pushOutcome: GitPushOutcome.Completed });
 
         expect(fixture.remote.gitTrim(['rev-parse', 'refs/heads/local-only']))
             .toBe(fixture.local.gitTrim(['rev-parse', 'local-only']));
+    });
+
+    it('refreshes fetched tracking refs when stale push recovery is dismissed', async () => {
+        const fixture = track(createRemoteWorkflowFixture());
+        const targets = runtimeTargetsFor(fixture);
+        fixture.local.git(['push', '-q', '-u', 'origin', 'local-only']);
+        fixture.local.git(['checkout', '-q', 'local-only']);
+        fixture.local.commitFile('stale-local.txt', 'stale local\n', 'stale local update');
+        fixture.local.git(['checkout', '-q', 'main']);
+        advanceRemoteLocalOnlyBranch(fixture, false);
+        const remoteHead = fixture.remote.gitTrim(['rev-parse', 'refs/heads/local-only']);
+        setQuickPickValue(undefined);
+
+        await expect(runBranchCommand(targets.repository, 'push', 'local-only', false, undefined, targets))
+            .resolves.toEqual({ shouldRefresh: true });
+
+        expect(fixture.local.gitTrim(['rev-parse', 'origin/local-only'])).toBe(remoteHead);
+        expect(fixture.remote.gitTrim(['rev-parse', 'refs/heads/local-only'])).toBe(remoteHead);
     });
 
     it('prompts for merge mode and runs a squash merge when selected', async () => {

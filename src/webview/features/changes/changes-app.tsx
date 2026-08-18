@@ -70,8 +70,7 @@ interface ChangesAppProps {
     readonly onToggleSubmoduleStash: (submodulePath: string, index: number) => void;
     readonly onSubmoduleStashAction: (submodulePath: string, index: number, action: StashEntryAction) => void;
     readonly onSubmoduleStashFileDiff: (submodulePath: string, index: number, file: StashFileEntry) => void;
-    readonly onRepositoryNavigate?: (contextId: string) => void;
-    readonly onRepositoryList?: (contextId: string | undefined) => void;
+    readonly onRepositoryNavigate?: (contextId: string | undefined) => void;
     readonly onOpenRepositoryInNewWindow?: (contextId: string) => void;
 }
 
@@ -117,7 +116,6 @@ export function ChangesApp({
     onSubmoduleStashAction,
     onSubmoduleStashFileDiff,
     onRepositoryNavigate = noop,
-    onRepositoryList = noop,
     onOpenRepositoryInNewWindow = noop,
 }: ChangesAppProps) {
     const rawSections = useMemo(() => buildChangeSections(state.status), [state.status]);
@@ -177,10 +175,8 @@ export function ChangesApp({
             <RepositoryNavigator
                 repositories={state.repositorySummaries}
                 activeContextId={state.activeRepositoryContextId}
-                listContextId={state.repositoryListContextId}
                 title="Repositories"
                 onNavigate={onRepositoryNavigate}
-                onShowRepositoryList={onRepositoryList}
                 onOpenInNewWindow={onOpenRepositoryInNewWindow}
             >
             <ErrorNotice
@@ -232,7 +228,7 @@ export function ChangesApp({
             />
 
             <section className="changes-content" aria-label="Repository changes">
-                {state.loading ? <EmptyState title="Loading" subtitle="Reading repository state…" icon="loading" iconSpin /> : null}
+                {state.loading ? <EmptyState className="delayed-loading-indicator" title="Loading" subtitle="Reading repository state…" icon="loading" iconSpin /> : null}
                 {!state.loading && !hasRepository ? <EmptyState title="No repository" subtitle="Open a Git repository to see changes" icon="source-control" /> : null}
                 {!state.loading && hasRepository && changeCount === 0 ? <EmptyState title="No changes" subtitle="Working tree is clean" icon="pass" /> : null}
                 {!state.loading && hasRepository && changeCount > 0 && visibleChangeCount === 0 ? (
@@ -354,6 +350,8 @@ function changesOperationMessage(command: ChangesToolbarCommand, status: Operati
             return `${sentenceCase(label)}...`;
         case OperationStatus.Success:
             return `${pastTense(label)}.`;
+        case OperationStatus.Delegated:
+            return `${sentenceCase(label)} continues in VS Code.`;
         case OperationStatus.Failed:
             return `Could not ${label}.`;
         case OperationStatus.Conflict:

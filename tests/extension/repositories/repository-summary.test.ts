@@ -72,6 +72,31 @@ describe('RepositorySummaryService', () => {
         expect(summaries.map((summary) => summary.hasRemote)).toEqual([false, false]);
     });
 
+    it('excludes registered nested repositories from parent change counts', async () => {
+        const parent = createRepoContext('/repo');
+        const child = createRepoContext('/repo/packages/app', parent.id);
+        const service = new RepositorySummaryService(new RuntimeRepositoryFactory(recordingRuntime({
+            branches: [branch('main', { current: true })],
+            remotes: [],
+            submodules: [],
+            worktrees: [worktree('/repo'), worktree('/repo/packages/app')],
+            status: {
+                staged: [],
+                unstaged: [
+                    { indexStatus: '?', workTreeStatus: '?', filePath: 'packages/app/' },
+                    { indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/app.ts' },
+                ],
+                conflicts: [],
+                conflictState: 'none',
+            },
+        })));
+
+        const summaries = await service.summarize([parent, child]);
+
+        expect(summaries[0]?.unstagedCount).toBe(1);
+        expect(summaries[1]?.unstagedCount).toBe(2);
+    });
+
     it('summarizes an initialized repository without commits', async () => {
         const repo = createTempGitRepo();
         repos.push(repo);
@@ -91,6 +116,23 @@ describe('RepositorySummaryService', () => {
             unstagedCount: 0,
             conflictCount: 0,
         }]);
+    });
+
+    it('summarizes a repository whose index contains a gitlink without a .gitmodules mapping', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        const commit = repo.commitFile('README.md', 'parent\n', 'initial commit');
+        repo.git(['update-index', '--add', '--cacheinfo', `160000,${commit},.worktrees/push-destination-ownership`]);
+        const context = createRepoContext(repo.cwd);
+        const runtime = new CliGitRuntime((args, runtimeContext, options) => new GitCliBackend(runtimeContext.cwd).run(args, options));
+        const service = new RepositorySummaryService(new RuntimeRepositoryFactory(runtime));
+
+        await expect(service.summarize([context])).resolves.toEqual([
+            expect.objectContaining({
+                context: expect.objectContaining({ id: context.id }),
+                submoduleCount: 0,
+            }),
+        ]);
     });
 
     it('summarizes an initialized worktree context without commits', async () => {

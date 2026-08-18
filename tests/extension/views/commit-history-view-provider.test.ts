@@ -5,6 +5,8 @@ import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
 import type { GitBranch, GitStatus } from '@core/git/domain/git-status';
 import type { GitExecutionContext, GitRuntime } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
+import { GitPushOutcome } from '@application/ports/git-capabilities';
+import { OperationStatus } from '@protocol/shared/operation';
 import { CliGitRuntime } from '@extension/git/cli-git-runtime';
 import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
@@ -123,6 +125,91 @@ describe('CommitHistoryViewProvider', () => {
         expect(calls).not.toContainEqual(expect.objectContaining({ operation: 'push' }));
     });
 
+    it('does not report success or refresh when native publication is delegated', async () => {
+        const context = repoContext();
+        const calls: RuntimeCall[] = [];
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            onRepositoryUpdated,
+            undefined,
+            undefined,
+            runtimeRegistry(context, historyRuntime(calls, GitPushOutcome.Delegated)),
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'push' });
+
+        await expect.poll(() => view.messages
+            .filter((message) => isRecord(message) && message.type === 'history/operationStatus')
+            .map((message) => isRecord(message) ? message.status : undefined))
+            .toEqual([OperationStatus.Running, OperationStatus.Delegated]);
+        expect(onRepositoryUpdated).not.toHaveBeenCalled();
+    });
+
+    it('reports success and refreshes after a completed push', async () => {
+        const context = repoContext();
+        const calls: RuntimeCall[] = [];
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            onRepositoryUpdated,
+            undefined,
+            undefined,
+            runtimeRegistry(context, historyRuntime(calls)),
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'push' });
+
+        await expect.poll(() => view.messages
+            .filter((message) => isRecord(message) && message.type === 'history/operationStatus')
+            .map((message) => isRecord(message) ? message.status : undefined))
+            .toEqual([OperationStatus.Running, OperationStatus.Success]);
+        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
+    });
+
+    it('runs toolbar actions against the navigated nested repository', async () => {
+        const parent = {
+            id: 'workspace-id',
+            cwd: '/workspace',
+            kind: RepoKind.Main,
+            label: 'workspace',
+        } satisfies RepoContext;
+        const child = {
+            id: 'app-id',
+            cwd: '/workspace/app',
+            kind: RepoKind.Main,
+            parentId: parent.id,
+            label: 'app',
+        } satisfies RepoContext;
+        const calls: RuntimeCall[] = [];
+        const runtime = historyRuntime(calls);
+        const registry = new RepositoryRegistry();
+        registerRuntimeContext(registry, parent, runtime);
+        registerRuntimeContext(registry, child, runtime);
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: child },
+            async () => {},
+            undefined,
+            undefined,
+            registry,
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'push' });
+
+        await expect.poll(() => calls.filter((call) => call.operation === 'push')).toEqual([
+            expect.objectContaining({ context: expect.objectContaining({ repositoryId: child.id, cwd: child.cwd }) }),
+        ]);
+    });
+
     it('scopes the default history load to the current branch instead of all refs', async () => {
         const calls: RuntimeCall[] = [];
         const provider = providerFor(historyRuntime(calls));
@@ -239,10 +326,99 @@ describe('CommitHistoryViewProvider', () => {
         const view = makeWebviewView();
 
         provider.resolveWebviewView(view);
-        view.messageHandler?.({ type: 'repo/showRepositoryList', contextId: 'repo-child' });
+        view.messageHandler?.({ type: 'repo/navigateRepository', contextId: 'repo-child' });
 
         await expect.poll(() => onRepositoryNavigation.mock.calls.length).toBe(1);
-        expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/showRepositoryList', contextId: 'repo-child' });
+        expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/navigateRepository', contextId: 'repo-child' });
+    });
+
+    it('announces navigation without loading history before the runtime is ready', () => {
+        const context = repoContext();
+        const runtime = historyRuntime([]);
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            async () => {},
+            undefined,
+            undefined,
+            runtimeRegistry(context, runtime),
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messages.length = 0;
+
+        provider.notifyRepoNavigationStarted(context);
+
+        expect(view.messages).toEqual([{
+            type: 'repo/navigationStarted',
+            context: { id: context.id, cwd: context.cwd, kind: 'main', label: context.label },
+        }]);
+    });
+
+    it('cancels stale history loading when repository navigation starts', async () => {
+        const context = repoContext();
+        let signalFromGraphRequest: AbortSignal | undefined;
+        let markGraphStarted = (): void => {};
+        const graphStarted = new Promise<void>((resolve) => { markGraphStarted = resolve; });
+        const runtime: GitRuntime = {
+            supports: () => true,
+            async execute<TInput = unknown, TResult = unknown>(operation: SemanticGitOperation, _context: GitExecutionContext, _input: TInput, signal?: AbortSignal): Promise<TResult> {
+                if (operation === 'getCommitGraph') {
+                    signalFromGraphRequest = signal;
+                    markGraphStarted();
+                    return await new Promise<TResult>((_resolve, reject) => {
+                        signal?.addEventListener('abort', () => { reject(signal.reason); }, { once: true });
+                    });
+                }
+                if (operation === 'listBranches' || operation === 'listTags' || operation === 'listSubmodules') {
+                    return runtimeResult([]);
+                }
+                throw new Error(`Unexpected operation: ${operation}`);
+            },
+        };
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            async () => {},
+            undefined,
+            undefined,
+            runtimeRegistry(context, runtime),
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messages.length = 0;
+        const refresh = provider.refresh();
+        await graphStarted;
+
+        provider.notifyRepoNavigationStarted(context);
+        await refresh;
+
+        expect(signalFromGraphRequest?.aborted).toBe(true);
+        expect(view.messages).toEqual([expect.objectContaining({ type: 'repo/navigationStarted' })]);
+    });
+
+    it('replays pending navigation without loading history when the webview becomes ready', async () => {
+        const context = repoContext();
+        const beforeRefresh = vi.fn(async () => false);
+        const provider = new CommitHistoryViewProvider(
+            vscode.Uri.file('/extension'),
+            { currentContext: context },
+            async () => {},
+            undefined,
+            undefined,
+            runtimeRegistry(context, historyRuntime([])),
+            async () => {},
+            beforeRefresh,
+        );
+        provider.notifyRepoNavigationStarted(context);
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'history/ready' });
+        await expect.poll(() => beforeRefresh.mock.calls.length).toBe(1);
+
+        expect(view.messages).toContainEqual(expect.objectContaining({ type: 'repo/navigationStarted' }));
+        expect(view.messages.some((message) => isMessageType(message, 'history/data'))).toBe(false);
     });
 
     it('keeps file history panels alive while hidden so pending commit details can resolve', async () => {
@@ -297,6 +473,11 @@ function repoContext(): RepoContext {
 
 function runtimeRegistry(context: RepoContext, runtime: GitRuntime): RepositoryRegistry {
     const registry = new RepositoryRegistry();
+    registerRuntimeContext(registry, context, runtime);
+    return registry;
+}
+
+function registerRuntimeContext(registry: RepositoryRegistry, context: RepoContext, runtime: GitRuntime): void {
     registry.registerRepository(new RuntimeGitRepository({
         repoId: context.id,
         cwd: context.cwd,
@@ -315,7 +496,6 @@ function runtimeRegistry(context: RepoContext, runtime: GitRuntime): RepositoryR
         branch: 'main',
         dirty: false,
     }, runtime));
-    return registry;
 }
 
 function runtimeRegistryForUnbornContext(context: RepoContext, runtime: GitRuntime): RepositoryRegistry {
@@ -345,7 +525,7 @@ function runtimeRegistryForUnbornContext(context: RepoContext, runtime: GitRunti
     return registry;
 }
 
-function historyRuntime(calls: RuntimeCall[]): GitRuntime {
+function historyRuntime(calls: RuntimeCall[], pushOutcome = GitPushOutcome.Completed): GitRuntime {
     return {
         supports: () => true,
         async execute<TInput = unknown, TResult = unknown>(operation: SemanticGitOperation, context: GitExecutionContext, input: TInput): Promise<TResult> {
@@ -373,6 +553,8 @@ function historyRuntime(calls: RuntimeCall[]): GitRuntime {
                 case 'fetchAll':
                 case 'updateRef':
                 case 'pushBranch':
+                case 'push':
+                    return runtimeResult(pushOutcome);
                 case 'cherryPick':
                     return runtimeResult(undefined);
                 default:

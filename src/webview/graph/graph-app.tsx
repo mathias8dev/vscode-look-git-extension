@@ -58,6 +58,12 @@ interface GraphAppProps {
 export function GraphApp({ sendMessage }: GraphAppProps) {
     const [state, dispatch] = useReducer(reduceGraphState, undefined, createInitialGraphState);
     const scopeAnimationKey = graphRepositorySelectionKey(state.selectedRepository);
+    const loadingEmptyGraph = state.loading && state.rows.length === 0;
+    const loadingUnpreparedGraph = loadingEmptyGraph
+        && state.repository === undefined
+        && state.branches.length === 0
+        && state.worktrees.length === 0
+        && state.submodules.length === 0;
     const showGraphEmptyState = !state.loading && state.displayRows.length === 0 && !state.hasMore;
     const emptyState = graphEmptyStateModel({
         filters: state.filters,
@@ -229,15 +235,10 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
         <RepositoryNavigator
             repositories={state.repositorySummaries}
             activeContextId={state.activeRepositoryContextId}
-            listContextId={state.repositoryListContextId}
             title="Repositories"
             onNavigate={(contextId) => {
-                dispatch({ type: 'selectRepositoryContext', contextId });
-                sendMessage({ type: 'repo/selectRepository', contextId });
-            }}
-            onShowRepositoryList={(contextId) => {
-                dispatch({ type: 'showRepositoryList', contextId });
-                sendMessage({ type: 'repo/showRepositoryList', ...(contextId ? { contextId } : {}) });
+                dispatch({ type: 'navigateRepository', contextId });
+                sendMessage({ type: 'repo/navigateRepository', ...(contextId ? { contextId } : {}) });
             }}
             onOpenInNewWindow={(contextId) => sendMessage({ type: 'repo/openRepositoryInNewWindow', contextId })}
         >
@@ -254,8 +255,9 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                     ariaLabel="Resize branches panel"
                     title="Drag or use arrow keys to resize branches panel"
                 >
-                    {(style) => (
-                        <BranchPanel
+                    {(style) => loadingUnpreparedGraph
+                        ? <div className="graph-branch-panel" style={style} />
+                        : <BranchPanel
                             key={`branch-panel:${scopeAnimationKey}`}
                             style={style}
                             branches={state.branches}
@@ -277,13 +279,12 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                             onOpenWorktree={(path) => sendMessage(messageForWorktreeCommand('openInNewWindow', path, state.repository, state.worktrees.find((worktree) => sameResourcePath(worktree.path, path))?.locator))}
                             onAddWorktree={() => sendMessage(messageForWorktreeCommand('add', undefined, state.repository))}
                             onContextTarget={handleContextTarget}
-                        />
-                    )}
+                        />}
                 </ResizablePanel>
 
                 <div className="graph-center">
                     <div key={`graph-scope:${scopeAnimationKey}`} className="graph-scope-content graph-scope-transition-surface">
-                        <GraphToolbar
+                        {!loadingUnpreparedGraph ? <GraphToolbar
                             filters={state.filters}
                             branches={state.branches}
                             selectedBranchFilter={state.selectedBranchFilter}
@@ -291,7 +292,7 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                             onFiltersChange={(filters) => dispatch({ type: 'setFilters', filters })}
                             onBranchFilterChange={(branch) => dispatch({ type: 'setBranchFilter', branch })}
                             onRefresh={() => dispatch({ type: 'refreshRequested' })}
-                        />
+                        /> : null}
 
                         <GraphOperationNotice
                             operation={state.operationStatus}
@@ -309,8 +310,8 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                             secondaryAction={state.error?.details ? { label: 'Show Output', onClick: () => sendMessage({ type: 'graph/showOutput' }) } : undefined}
                         />
 
-                        {state.loading && state.rows.length === 0 ? (
-                            <div className="graph-loading">
+                        {loadingEmptyGraph ? (
+                            <div className="graph-loading delayed-loading-indicator">
                                 <i className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
                                 <span>Loading graph…</span>
                             </div>

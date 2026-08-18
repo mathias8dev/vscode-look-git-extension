@@ -12,6 +12,11 @@ export interface RepoContextChangedPush {
     readonly context?: SerializedRepoContext;
 }
 
+export interface RepoNavigationStartedPush {
+    readonly type: 'repo/navigationStarted';
+    readonly context?: SerializedRepoContext;
+}
+
 export interface GraphDataPush {
     readonly type: 'graph/dataPush';
     readonly repoId: string;
@@ -287,6 +292,7 @@ export interface GraphRepositoryCommandRequest {
 
 export type GraphExtensionToWebviewMessage =
     | RepoContextChangedPush
+    | RepoNavigationStartedPush
     | RepositoriesChangedPush
     | WebviewFontSizeChangedPush
     | GraphRefreshRequestedPush

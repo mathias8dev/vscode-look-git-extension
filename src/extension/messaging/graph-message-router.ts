@@ -20,11 +20,12 @@ import type { GitStatus } from '@core/git/domain/git-status';
 import type { GitWorktree } from '@core/git/domain/git-worktree';
 import { summarizeStatusEntries } from '@core/parsing/parse-status';
 import type { GitRepository } from '@application/ports/git-topology';
+import { GitPushOutcome } from '@application/ports/git-capabilities';
 import { GetGraphDataUseCase, type GraphDataResult, type GraphWorktreeWip } from '@application/usecases/graph/get-graph-data';
 import { GetCommitDetailsUseCase } from '@application/usecases/graph/get-commit-details';
 import { GetWorktreeDetailsUseCase } from '@application/usecases/graph/get-worktree-details';
 import { GetBranchDetailsUseCase } from '@application/usecases/graph/get-branch-details';
-import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
+import type { RepositoryContextAccessor } from '@extension/repositories/repository-selection-store';
 import { toProtocolBranch, toProtocolGraphCommit, toProtocolGraphSubmodule, toProtocolWorktree } from '@extension/mapping/to-protocol';
 import { runCommitCommand } from '@extension/commands/commit-commands';
 import { runBranchCommand } from '@extension/commands/branch-commands';
@@ -42,6 +43,12 @@ import { stableRepoContextId } from '@extension/repositories/repo-context-id';
 import { graphDataEqual } from '@protocol/shared/protocol-data-equality';
 import { DISTINCT_MESSAGE_LAST_VALUE_ONLY, DistinctMessagePoster } from '@extension/messaging/distinct-message-poster';
 import { samePath } from '@extension/utils/path-compare';
+import {
+    excludeNestedRepositoryChanges,
+    excludeNestedRepositoryWorktreeFiles,
+    nestedRepositoryPaths,
+    resolveNestedRepositoryPaths,
+} from '@extension/repositories/nested-repository-boundaries';
 
 type PostMessage = (msg: GraphExtensionToWebviewMessage) => void;
 const ACTIVE_REPOSITORY_KEY = 'active';
@@ -63,7 +70,7 @@ export class GraphMessageRouter {
     private operationSequence = 0;
 
     constructor(
-        private readonly repositories: RepositorySelectionAccessor,
+        private readonly repositories: RepositoryContextAccessor,
         private readonly postMessage: PostMessage,
         private readonly onRepositoryUpdated: () => Promise<void> = async () => {},
         private readonly getGraphData = new GetGraphDataUseCase(),
@@ -92,9 +99,15 @@ export class GraphMessageRouter {
 
         try {
             existingConflicts = await this.conflictFilesBeforeOperation(msg);
-            await this.dispatch(msg);
+            const outcome = await this.dispatch(msg);
             if (operation && operationId) {
-                this.postGraphOperation({ ...operation, operationId, status: GraphOperationStatus.Success });
+                this.postGraphOperation({
+                    ...operation,
+                    operationId,
+                    status: outcome === GitPushOutcome.Delegated
+                        ? GraphOperationStatus.Delegated
+                        : GraphOperationStatus.Success,
+                });
             }
         } catch (error) {
             if (isAbortError(error)) { return; }
@@ -146,7 +159,7 @@ export class GraphMessageRouter {
         }
     }
 
-    private async dispatch(msg: GraphWebviewToExtensionMessage): Promise<void> {
+    private async dispatch(msg: GraphWebviewToExtensionMessage): Promise<GitPushOutcome | undefined> {
         switch (msg.type) {
             case 'graph/ready':
                 break;
@@ -209,6 +222,7 @@ export class GraphMessageRouter {
                         filePath: file.filePath,
                         origPath: file.origPath,
                         parentHash: file.parentHash,
+                        ...(file.isSubmodule ? { isSubmodule: true } : {}),
                     })),
                 };
                 this.postMessage(response);
@@ -219,13 +233,18 @@ export class GraphMessageRouter {
                 const runtimeWorktree = this.runtimeTargetsForWorktree(msg.repository, msg.worktree, msg.path).worktree;
                 if (!runtimeWorktree) { throw new Error('No runtime worktree available.'); }
                 const details = await this.getWorktreeDetails.execute(runtimeWorktree);
+                const repositoryPaths = await this.nestedRepositoryPathsForWorktree(
+                    msg.repository,
+                    runtimeWorktree.path,
+                    details.files.filter((file) => file.status === '?').map((file) => file.filePath),
+                );
                 const response: WorktreeDetailsResponse = {
                     type: 'graph/worktreeDetailsResponse',
                     requestId: msg.requestId,
                     path: details.path,
                     head: details.head,
                     branch: details.branch,
-                    files: details.files,
+                    files: excludeNestedRepositoryWorktreeFiles(details.files, repositoryPaths),
                 };
                 this.postMessage(response);
                 break;
@@ -269,12 +288,10 @@ export class GraphMessageRouter {
                 break;
 
             case 'graph/branchCommand':
-                await this.handleBranchCommand(msg);
-                break;
+                return this.handleBranchCommand(msg);
 
             case 'graph/worktreeCommand':
-                await this.handleWorktreeCommand(msg);
-                break;
+                return this.handleWorktreeCommand(msg);
 
             case 'graph/commitCommand':
                 await this.handleCommitCommand(msg);
@@ -476,7 +493,17 @@ export class GraphMessageRouter {
             const runtimeWorktree = runtimeWorktrees.find((candidate) => samePath(candidate.path, worktree.path));
             if (!runtimeWorktree) { return undefined; }
             try {
-                return toGraphWorktreeWip(worktree, await runtimeWorktree.getStatus(signal));
+                const status = await runtimeWorktree.getStatus(signal);
+                const visibleStatus = excludeNestedRepositoryChanges(
+                    status,
+                    await this.nestedRepositoryPathsForWorktree(
+                        repository,
+                        worktree.path,
+                        untrackedStatusPaths(status),
+                        signal,
+                    ),
+                );
+                return toGraphWorktreeWip(worktree, visibleStatus);
             } catch (error) {
                 // One unreadable worktree (locked, pruned mid-refresh) must not hide the others' WIP rows.
                 if (isAbortError(error)) { throw error; }
@@ -484,6 +511,21 @@ export class GraphMessageRouter {
             }
         }));
         return wips.filter((wip): wip is GraphWorktreeWip => wip !== undefined);
+    }
+
+    private async nestedRepositoryPathsForWorktree(
+        repository: RepositoryLocator | undefined,
+        worktreePath: string,
+        untrackedPaths: readonly string[],
+        signal?: AbortSignal,
+    ): Promise<ReadonlySet<string>> {
+        const context = this.repositories.contexts.find((candidate) => samePath(candidate.cwd, worktreePath))
+            ?? (repository
+                ? this.repositories.contexts.find((candidate) => candidate.id === repository.repoId
+                    || samePath(candidate.cwd, repository.path))
+                : this.repositories.currentContext);
+        const knownRepositoryPaths = context ? nestedRepositoryPaths(context, this.repositories.contexts) : new Set<string>();
+        return resolveNestedRepositoryPaths(worktreePath, untrackedPaths, knownRepositoryPaths, signal);
     }
 
     private async handleRepositoryCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/repositoryCommand' }>): Promise<void> {
@@ -496,11 +538,11 @@ export class GraphMessageRouter {
         await this.refreshAfterRepositoryChange();
     }
 
-    private async handleBranchCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/branchCommand' }>): Promise<void> {
+    private async handleBranchCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/branchCommand' }>): Promise<GitPushOutcome | undefined> {
         const runtimeTargets = this.runtimeTargetsForRepository(msg.repository);
         const repo = requireRuntimeRepository(runtimeTargets);
-        const shouldRefresh = await runBranchCommand(repo, msg.command, msg.branch, msg.isRemote, undefined, runtimeTargets, this.extensionUri, this.storageUri);
-        if (!shouldRefresh) { return; }
+        const result = await runBranchCommand(repo, msg.command, msg.branch, msg.isRemote, undefined, runtimeTargets, this.extensionUri, this.storageUri);
+        if (!result.shouldRefresh) { return result.pushOutcome; }
         // `delete` removes the branch and `rename` frees its old name; if the graph is
         // filtered to that branch, the next reload would query a now-missing ref, so the
         // webview has to drop the filter first.
@@ -508,15 +550,17 @@ export class GraphMessageRouter {
         await this.refreshAfterRepositoryChange(invalidatesBranchFilter
             ? { branch: msg.branch, repository: msg.repository }
             : undefined);
+        return result.pushOutcome;
     }
 
-    private async handleWorktreeCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/worktreeCommand' }>): Promise<void> {
+    private async handleWorktreeCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/worktreeCommand' }>): Promise<GitPushOutcome | undefined> {
         const runtimeTargets = msg.path
             ? this.runtimeTargetsForWorktree(msg.repository, msg.worktree, msg.path)
             : this.runtimeTargetsForRepository(msg.repository);
         const repo = requireRuntimeRepository(runtimeTargets);
-        const shouldRefresh = await runWorktreeCommand(repo, msg.command, msg.path, runtimeTargets);
-        if (shouldRefresh) { await this.refreshAfterRepositoryChange(); }
+        const result = await runWorktreeCommand(repo, msg.command, msg.path, runtimeTargets);
+        if (result.shouldRefresh) { await this.refreshAfterRepositoryChange(); }
+        return result.pushOutcome;
     }
 
     private async handleCommitCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/commitCommand' }>): Promise<void> {
@@ -673,6 +717,12 @@ function toGraphWorktreeWip(worktree: GitWorktree, status: GitStatus): GraphWork
         branch: worktree.branch?.replace(/^refs\/heads\//, ''),
         ...summary,
     };
+}
+
+function untrackedStatusPaths(status: GitStatus): readonly string[] {
+    return [...status.staged, ...status.unstaged, ...status.conflicts]
+        .filter((entry) => entry.indexStatus === '?' || entry.workTreeStatus === '?')
+        .map((entry) => entry.filePath);
 }
 
 function graphRequestKey(repoId: string, repository: RepositoryLocator | undefined, kind: 'replace' | 'more' | 'submodules'): string {

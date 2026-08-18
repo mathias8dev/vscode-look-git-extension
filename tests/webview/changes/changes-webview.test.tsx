@@ -32,6 +32,32 @@ describe('ChangesWebview', () => {
         expect(screen.queryByLabelText('More Actions')).not.toBeInTheDocument();
     });
 
+    it('delays the initial loading indicator to avoid flashing during fast repository navigation', async () => {
+        createMockVsCodeApi();
+        const { ChangesWebview } = await import('@webview/changes/changes-webview');
+
+        render(<ChangesWebview />);
+
+        expect(screen.getByText('Loading').closest('.empty-state')).toHaveClass('delayed-loading-indicator');
+    });
+
+    it('removes the previous repository changes in the navigation-start render', async () => {
+        createMockVsCodeApi();
+        const { ChangesWebview } = await import('@webview/changes/changes-webview');
+
+        render(<ChangesWebview />);
+        act(() => sendStatusData());
+        expect(await screen.findByTitle('src/app.ts')).toBeInTheDocument();
+
+        act(() => sendToWebview({
+            type: 'repo/navigationStarted',
+            context: { id: 'plugin', cwd: '/workspace/app/plugin', kind: 'main', label: 'plugin' },
+        }));
+
+        expect(screen.queryByTitle('src/app.ts')).not.toBeInTheDocument();
+        expect(screen.getByText('Loading').closest('.empty-state')).toHaveClass('delayed-loading-indicator');
+    });
+
     it('applies live Look Git font-size changes', async () => {
         createMockVsCodeApi();
         const { ChangesWebview } = await import('@webview/changes/changes-webview');

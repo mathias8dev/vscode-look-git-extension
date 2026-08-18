@@ -1,7 +1,7 @@
 import type { ChangesToolbarCommand, ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
 import type { ChangesSelectionContextTarget } from '@protocol/changes/types';
 import { ChangeRowAction, type ChangeActionDescriptor } from '@webview/shared/change-row-actions';
-import { ChangeSectionId, type ChangeListItem, type ChangeSection } from '@webview/features/changes/change-tree';
+import { ChangeSectionId, isFileActionItem, type ChangeListItem, type ChangeSection } from '@webview/features/changes/change-tree';
 
 export { ChangeRowAction };
 export type { ChangeActionDescriptor };
@@ -149,12 +149,12 @@ export function messageForBulkAction(section: ChangeSection, action: ChangeBulkA
 
 function discardableFilePaths(section: ChangeSection): readonly string[] {
     return section.items
-        .filter((item) => !item.entry.isSubmodule)
+        .filter(isFileActionItem)
         .map((item) => item.entry.filePath);
 }
 
 function hasDiscardableItems(section: ChangeSection): boolean {
-    return section.items.some((item) => !item.entry.isSubmodule);
+    return section.items.some(isFileActionItem);
 }
 
 export function messageForChangesToolbarCommand(command: ChangesToolbarCommand): ChangesWebviewToExtensionMessage {

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
 import { RepositoryContextStore } from '@extension/repositories/repository-context-store';
 import { createRepoContext } from '@extension/repositories/repo-context-factory';
@@ -45,6 +45,24 @@ describe('RepositoryContextStore', () => {
         store.setContexts([second, first]);
 
         expect(store.activeContext).toEqual(second);
+    });
+
+    it('distinguishes repository inventory changes from active repository changes', () => {
+        const store = new RepositoryContextStore();
+        const parent = context('parent');
+        const child = { ...context('child'), parentId: parent.id };
+        const listener = vi.fn();
+        store.setContexts([parent]);
+        store.onDidChange(listener);
+
+        store.setContexts([parent, child]);
+
+        expect(listener).toHaveBeenCalledOnce();
+        expect(listener).toHaveBeenCalledWith({
+            contexts: [parent, child],
+            activeContext: parent,
+            activeContextChanged: false,
+        });
     });
 
     it('falls back when the active repository disappears', () => {

@@ -148,11 +148,12 @@ export function SharedChangeRow<TItem extends SharedChangeRowItem, TAction exten
 }
 
 function fileName(filePath: string): string {
-    return filePath.split('/').pop() || filePath;
+    const normalized = filePath.replace(/\/+$/, '');
+    return normalized.split('/').pop() || normalized;
 }
 
 function parentPath(entry: StatusEntry): string {
-    const parts = entry.filePath.split('/');
+    const parts = entry.filePath.replace(/\/+$/, '').split('/');
     parts.pop();
     const parent = parts.join('/');
     if (entry.origPath) { return `${entry.origPath} -> ${parent || '.'}`; }

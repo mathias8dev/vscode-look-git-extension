@@ -75,5 +75,6 @@ The overview renders those states directly instead of showing a transient `Repos
 - Unit tests cover workspace repository discovery, nested repository module parent ids, and exclusion of registered submodules from module discovery.
 - Component tests cover single repository, multi repository, implicit parent module lists, child browsing, parent-list back navigation, search, loading, and error states.
 - Storybook includes a navigable repository hierarchy.
-- WDIO has a multimodule scenario for a Git workspace parent with nested modules, including `app -> plugin` browsing and cross-webview repository sync.
-- WDIO can use `LOOK_GIT_WDIO_CHROMEDRIVER_PATH` when the local environment cannot download the matching Chromium driver automatically.
+- The official `@vscode/test-electron` runner validates a Git workspace parent with nested modules, including scoped discovery depth and parent-child relationships.
+- The same Extension Host suite validates repository initialization, external commits, metadata removal, and reinitialization without a window reload.
+- A separate `@vscode/test-electron` scenario installs the packaged VSIX and validates activation from installed extension content.

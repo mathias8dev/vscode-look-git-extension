@@ -6,7 +6,7 @@ export interface RuntimeRegistrationSelection {
 }
 
 export interface RuntimeRegistrationRegistrar {
-    registerContext(runtimeRepositories: RepositoryRegistry, repoContext: RepoContext): Promise<void>;
+    registerContext(runtimeRepositories: RepositoryRegistry, repoContext: RepoContext, signal?: AbortSignal): Promise<void>;
 }
 
 export async function registerRuntimeContextWithRecovery(input: {
@@ -15,15 +15,17 @@ export async function registerRuntimeContextWithRecovery(input: {
     readonly runtimeRepositories: RepositoryRegistry;
     readonly repoContext: RepoContext;
     readonly syncActiveRepository: () => void;
+    readonly signal?: AbortSignal;
 }): Promise<void> {
     try {
-        await input.runtimeRegistrar.registerContext(input.runtimeRepositories, input.repoContext);
+        await input.runtimeRegistrar.registerContext(input.runtimeRepositories, input.repoContext, input.signal);
     } catch (error) {
         if (!isRecoverableRuntimeRegistrationError(error)) { throw error; }
         input.runtimeRepositories.clear();
         input.syncActiveRepository();
         if (input.repositories.currentContext?.id !== input.repoContext.id) { return; }
-        await input.runtimeRegistrar.registerContext(input.runtimeRepositories, input.repoContext);
+        input.signal?.throwIfAborted();
+        await input.runtimeRegistrar.registerContext(input.runtimeRepositories, input.repoContext, input.signal);
     }
 }
 

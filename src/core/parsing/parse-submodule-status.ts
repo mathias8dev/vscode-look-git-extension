@@ -19,8 +19,3 @@ export function parseSubmoduleStatus(output: string): GitSubmodule[] {
 
     return result;
 }
-
-/** Extract just the set of submodule paths from `git submodule status` output. */
-export function parseSubmodulePaths(output: string): Set<string> {
-    return new Set(parseSubmoduleStatus(output).map((s) => s.path));
-}

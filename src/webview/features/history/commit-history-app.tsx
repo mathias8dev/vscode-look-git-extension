@@ -25,8 +25,7 @@ interface CommitHistoryAppProps {
     readonly onShowOperationOutput?: () => void;
     readonly onDismissOperation?: () => void;
     readonly repositoryNavigatorEnabled?: boolean;
-    readonly onRepositoryNavigate?: (contextId: string) => void;
-    readonly onRepositoryList?: (contextId: string | undefined) => void;
+    readonly onRepositoryNavigate?: (contextId: string | undefined) => void;
     readonly onOpenRepositoryInNewWindow?: (contextId: string) => void;
 }
 
@@ -45,7 +44,6 @@ export function CommitHistoryApp({
     onDismissOperation,
     repositoryNavigatorEnabled = true,
     onRepositoryNavigate = noop,
-    onRepositoryList = noop,
     onOpenRepositoryInNewWindow = noop,
 }: CommitHistoryAppProps) {
     const commits = filterHistoryCommits(state.commits, query);
@@ -100,7 +98,7 @@ export function CommitHistoryApp({
 
             <section className="history-list" role="listbox" aria-label="Commits">
                 {state.loading && state.commits.length === 0 ? (
-                    <div className="history-loading">
+                    <div className="history-loading delayed-loading-indicator">
                         <i className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
                         <span>Loading commits...</span>
                     </div>
@@ -204,10 +202,8 @@ export function CommitHistoryApp({
                 <RepositoryNavigator
                     repositories={state.repositorySummaries}
                     activeContextId={state.activeRepositoryContextId}
-                    listContextId={state.repositoryListContextId}
                     title="Repositories"
                     onNavigate={onRepositoryNavigate}
-                    onShowRepositoryList={onRepositoryList}
                     onOpenInNewWindow={onOpenRepositoryInNewWindow}
                 >
                     {content}
@@ -224,6 +220,8 @@ function historyOperationMessage(command: HistoryToolbarCommand, status: Operati
             return `${sentenceCase(label)}...`;
         case OperationStatus.Success:
             return `${pastTense(label)}.`;
+        case OperationStatus.Delegated:
+            return `${sentenceCase(label)} continues in VS Code.`;
         case OperationStatus.Failed:
             return `Could not ${label}.`;
         case OperationStatus.Conflict:

@@ -38,6 +38,8 @@ function operationText(operation: GraphOperationStatusPush): string {
             return operation.background ? `Starting ${label}...` : `${sentenceCase(label)}...`;
         case OperationStatus.Success:
             return operation.background ? `${sentenceCase(label)} started.` : `${pastTense(label)}.`;
+        case OperationStatus.Delegated:
+            return `${sentenceCase(label)} continues in VS Code.`;
         case OperationStatus.Failed:
             return `Could not ${label}.`;
         case OperationStatus.Conflict:

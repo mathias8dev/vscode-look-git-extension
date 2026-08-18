@@ -102,6 +102,10 @@ export function statusLabel(entry: StatusEntry): string {
     return 'Changed';
 }
 
+export function isFileActionItem(item: ChangeListItem): boolean {
+    return item.entry.isSubmodule !== true;
+}
+
 function submoduleLabel(status: StatusEntry['submoduleStatus']): string {
     switch (status) {
         case SubmoduleStatus.Dirty:

@@ -11,6 +11,7 @@ import type {
     PatchApplyOptions,
     PullOptions,
     RebaseContinuationOptions,
+    GitPushOutcome,
     PushOptions,
     RebaseOptions,
     ResetMode,
@@ -407,11 +408,11 @@ export class RuntimeWorktree implements Worktree {
         return this.execute('pull', { options }, signal);
     }
 
-    push(remote: string | undefined, options: PushOptions, signal?: AbortSignal): Promise<void> {
+    push(remote: string | undefined, options: PushOptions, signal?: AbortSignal): Promise<GitPushOutcome> {
         return this.execute('push', { remote, options }, signal);
     }
 
-    pushBranch(remote: string | undefined, branch: string, options: PushOptions, signal?: AbortSignal): Promise<void> {
+    pushBranch(remote: string | undefined, branch: string, options: PushOptions, signal?: AbortSignal): Promise<GitPushOutcome> {
         return this.execute('pushBranch', { remote, branch, options }, signal);
     }
 

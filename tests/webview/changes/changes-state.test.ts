@@ -139,13 +139,11 @@ describe('changesState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: 'repo-a' },
-                listContextId: { status: 'ready', data: 'repo-parent' },
             },
         });
 
         expect(state.repositorySummaries).toEqual({ status: 'ready', data: repositories });
         expect(state.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-a' });
-        expect(state.repositoryListContextId).toEqual({ status: 'ready', data: 'repo-parent' });
     });
 
     it('clears repository data on context changes while preserving navigator resources and preferences', () => {
@@ -162,7 +160,6 @@ describe('changesState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: 'repo-a' },
-                listContextId: { status: 'ready', data: undefined },
             },
         });
         const withStatus = reduceChangesState(withNavigator, {
@@ -209,7 +206,6 @@ describe('changesState', () => {
                 type: 'repo/repositoriesChanged',
                 repositories: { status: 'ready', data: repositories },
                 activeContextId: { status: 'ready', data: undefined },
-                listContextId: { status: 'ready', data: undefined },
             },
         });
         const withStatus = reduceChangesState(withNavigator, {
@@ -219,13 +215,34 @@ describe('changesState', () => {
             }),
         });
 
-        const selected = reduceChangesState(withStatus, { type: 'selectRepositoryContext', contextId: 'repo-b' });
-        const back = reduceChangesState(selected, { type: 'showRepositoryList' });
+        const selected = reduceChangesState(withStatus, { type: 'navigateRepository', contextId: 'repo-b' });
+        const back = reduceChangesState(selected, { type: 'navigateRepository' });
 
         expect(selected.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-b' });
         expect(selected.status).toEqual(createStatusData());
         expect(selected.loading).toBe(true);
         expect(back.activeRepositoryContextId).toEqual({ status: 'ready', data: undefined });
+    });
+
+    it('clears stale changes when repository navigation starts in another webview', () => {
+        const loaded = reduceChangesState(createInitialChangesState(), {
+            type: 'message',
+            message: statusDataMessage({
+                unstaged: [{ indexStatus: ' ', workTreeStatus: '?', filePath: '.worktrees/child' }],
+            }),
+        });
+
+        const navigating = reduceChangesState(loaded, {
+            type: 'message',
+            message: {
+                type: 'repo/navigationStarted',
+                context: { id: 'repo-b', cwd: '/work/repo-b', kind: 'main', label: 'repo-b' },
+            },
+        });
+
+        expect(navigating.status).toEqual(createStatusData());
+        expect(navigating.loading).toBe(true);
+        expect(navigating.activeRepositoryContextId).toEqual({ status: 'ready', data: 'repo-b' });
     });
 
     it('keeps protocol errors visible across status refreshes', () => {
@@ -828,6 +845,14 @@ describe('changesState', () => {
             type: 'message',
             message: { type: 'changes/operationStatus', operationId: 'op-0', status: OperationStatus.Success, command: 'fetch' },
         });
+        const staleDelegated = reduceChangesState(running, {
+            type: 'message',
+            message: { type: 'changes/operationStatus', operationId: 'op-0', status: OperationStatus.Delegated, command: 'push' },
+        });
+        const delegated = reduceChangesState(running, {
+            type: 'message',
+            message: { type: 'changes/operationStatus', operationId: 'op-1', status: OperationStatus.Delegated, command: 'push' },
+        });
         const success = reduceChangesState(running, {
             type: 'message',
             message: { type: 'changes/operationStatus', operationId: 'op-1', status: OperationStatus.Success, command: 'pull' },
@@ -836,6 +861,8 @@ describe('changesState', () => {
 
         expect(running.operationStatus?.status).toBe(OperationStatus.Running);
         expect(staleSuccess.operationStatus?.operationId).toBe('op-1');
+        expect(staleDelegated.operationStatus?.operationId).toBe('op-1');
+        expect(delegated.operationStatus).toBeUndefined();
         expect(success.operationStatus?.status).toBe(OperationStatus.Success);
         expect(cleared.operationStatus).toBeUndefined();
     });

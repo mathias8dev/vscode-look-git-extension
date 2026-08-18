@@ -5,7 +5,8 @@ import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
 import type { GitBranch, GitStatus } from '@core/git/domain/git-status';
 import type { GitExecutionContext, GitRuntime, RepositoryKind } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
-import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
+import { GitPushOutcome } from '@application/ports/git-capabilities';
+import type { RepositoryContextAccessor } from '@extension/repositories/repository-selection-store';
 import { CliGitRuntime } from '@extension/git/cli-git-runtime';
 import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
@@ -14,7 +15,10 @@ import { RepositoryRegistry } from '@extension/repositories/repository-registry'
 import { ChangesViewProvider } from '@extension/views/changes-view-provider';
 import { makeWebviewView, resetVscodeMock } from '@tests/helpers/provider-runtime';
 import { createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
+import { setInputBoxValue } from '@tests/mocks/vscode';
 import { CommitMode, RepositoryState } from '@protocol/changes/types';
+import type { ChangesOperationStatusPush } from '@protocol/changes/messages';
+import { OperationStatus } from '@protocol/shared/operation';
 
 describe('ChangesViewProvider', () => {
     const repos: TempGitRepo[] = [];
@@ -36,7 +40,7 @@ describe('ChangesViewProvider', () => {
             kind: RepoKind.Main,
             label: 'repo',
         } satisfies RepoContext;
-        const repositories = { currentContext: context } satisfies RepositorySelectionAccessor;
+        const repositories = repositorySelection(context);
         const beforeRefresh = vi.fn(async () => false);
         const provider = new ChangesViewProvider(
             vscode.Uri.file('/extension'),
@@ -69,7 +73,7 @@ describe('ChangesViewProvider', () => {
         } satisfies RepoContext;
         const provider = new ChangesViewProvider(
             vscode.Uri.file('/extension'),
-            { currentContext: context },
+            repositorySelection(context),
             async () => {},
             undefined,
             undefined,
@@ -87,6 +91,141 @@ describe('ChangesViewProvider', () => {
         vi.clearAllTimers();
     });
 
+    it('hides registered nested repositories from the parent status', async () => {
+        const context = {
+            id: 'repo-1',
+            cwd: '/repo',
+            kind: RepoKind.Main,
+            label: 'repo',
+        } satisfies RepoContext;
+        const child = {
+            id: 'repo-2',
+            cwd: '/repo/packages/app',
+            kind: RepoKind.Main,
+            parentId: context.id,
+            label: 'app',
+        } satisfies RepoContext;
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            repositorySelection(context, [context, child]),
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry(context, changesRuntime({
+                staged: [],
+                unstaged: [
+                    { indexStatus: '?', workTreeStatus: '?', filePath: 'packages/app/' },
+                    { indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/app.ts' },
+                ],
+                conflicts: [],
+                conflictState: 'none',
+            })),
+        );
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        await provider.refresh();
+
+        expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/statusData',
+            data: expect.objectContaining({
+                unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/app.ts' }],
+            }),
+        }));
+        vi.clearAllTimers();
+    });
+
+    it('stages visible changes without adding registered nested repositories', async () => {
+        const context = {
+            id: 'repo-1',
+            cwd: '/repo',
+            kind: RepoKind.Main,
+            label: 'repo',
+        } satisfies RepoContext;
+        const child = {
+            id: 'repo-2',
+            cwd: '/repo/packages/app',
+            kind: RepoKind.Main,
+            parentId: context.id,
+            label: 'app',
+        } satisfies RepoContext;
+        const stagedPaths: string[][] = [];
+        const operations: SemanticGitOperation[] = [];
+        const status: GitStatus = {
+            staged: [],
+            unstaged: [
+                { indexStatus: '?', workTreeStatus: '?', filePath: 'packages/app/' },
+                { indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/app.ts' },
+            ],
+            conflicts: [],
+            conflictState: 'none',
+        };
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            repositorySelection(context, [context, child]),
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry(context, stageRecordingRuntime(status, operations, stagedPaths)),
+        );
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'changes/stageAll' });
+
+        await vi.waitFor(() => expect(stagedPaths).toEqual([['src/app.ts']]));
+        expect(operations).not.toContain('stageAll');
+        vi.clearAllTimers();
+    });
+
+    it('discards visible changes without deleting registered nested repositories', async () => {
+        const context = {
+            id: 'repo-1',
+            cwd: '/repo',
+            kind: RepoKind.Main,
+            label: 'repo',
+        } satisfies RepoContext;
+        const child = {
+            id: 'repo-2',
+            cwd: '/repo/packages/app',
+            kind: RepoKind.Main,
+            parentId: context.id,
+            label: 'app',
+        } satisfies RepoContext;
+        const discardedPaths: string[][] = [];
+        const status: GitStatus = {
+            staged: [],
+            unstaged: [
+                { indexStatus: '?', workTreeStatus: '?', filePath: 'packages/app/' },
+                { indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/app.ts' },
+            ],
+            conflicts: [],
+            conflictState: 'none',
+        };
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            repositorySelection(context, [context, child]),
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry(context, discardRecordingRuntime(status, discardedPaths)),
+        );
+        const view = makeWebviewView();
+        setInputBoxValue('DISCARD ALL');
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'changes/discardAll' });
+
+        await vi.waitFor(() => expect(discardedPaths).toEqual([['src/app.ts']]));
+        vi.clearAllTimers();
+    });
+
     it('posts the current status snapshot to a newly resolved webview even when data is unchanged', async () => {
         const context = {
             id: 'repo-1',
@@ -96,7 +235,7 @@ describe('ChangesViewProvider', () => {
         } satisfies RepoContext;
         const provider = new ChangesViewProvider(
             vscode.Uri.file('/extension'),
-            { currentContext: context },
+            repositorySelection(context),
             async () => {},
             undefined,
             undefined,
@@ -126,7 +265,7 @@ describe('ChangesViewProvider', () => {
         } satisfies RepoContext;
         const provider = new ChangesViewProvider(
             vscode.Uri.file('/extension'),
-            { currentContext: context },
+            repositorySelection(context),
             async () => {},
             undefined,
             undefined,
@@ -159,7 +298,7 @@ describe('ChangesViewProvider', () => {
         ]);
         const provider = new ChangesViewProvider(
             vscode.Uri.file('/extension'),
-            { currentContext: context },
+            repositorySelection(context),
             async () => {},
             undefined,
             undefined,
@@ -186,7 +325,7 @@ describe('ChangesViewProvider', () => {
         } satisfies RepoContext;
         const provider = new ChangesViewProvider(
             vscode.Uri.file('/extension'),
-            { currentContext: context },
+            repositorySelection(context),
             async () => {},
             undefined,
             undefined,
@@ -221,7 +360,7 @@ describe('ChangesViewProvider', () => {
         } satisfies RepoContext;
         const provider = new ChangesViewProvider(
             vscode.Uri.file('/extension'),
-            { currentContext: context },
+            repositorySelection(context),
             async () => {},
             undefined,
             undefined,
@@ -259,7 +398,7 @@ describe('ChangesViewProvider', () => {
         const onRepositoryUpdated = vi.fn(async () => {});
         const provider = new ChangesViewProvider(
             vscode.Uri.file('/extension'),
-            { currentContext: context },
+            repositorySelection(context),
             onRepositoryUpdated,
             undefined,
             undefined,
@@ -290,7 +429,7 @@ describe('ChangesViewProvider', () => {
         } satisfies RepoContext;
         const provider = new ChangesViewProvider(
             vscode.Uri.file('/extension'),
-            { currentContext: context },
+            repositorySelection(context),
             async () => {},
             undefined,
             undefined,
@@ -330,7 +469,7 @@ describe('ChangesViewProvider', () => {
         } satisfies RepoContext;
         const provider = new ChangesViewProvider(
             vscode.Uri.file('/extension'),
-            { currentContext: context },
+            repositorySelection(context),
             async () => {},
             undefined,
             undefined,
@@ -362,7 +501,7 @@ describe('ChangesViewProvider', () => {
         const onRepositoryNavigation = vi.fn(async () => {});
         const provider = new ChangesViewProvider(
             vscode.Uri.file('/extension'),
-            { currentContext: undefined },
+            repositorySelection(undefined),
             async () => {},
             undefined,
             undefined,
@@ -376,14 +515,148 @@ describe('ChangesViewProvider', () => {
         const view = makeWebviewView();
 
         provider.resolveWebviewView(view);
-        view.messageHandler?.({ type: 'repo/selectRepository', contextId: 'repo-2' });
+        view.messageHandler?.({ type: 'repo/navigateRepository', contextId: 'repo-2' });
 
         await vi.waitFor(() => {
-            expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/selectRepository', contextId: 'repo-2' });
+            expect(onRepositoryNavigation).toHaveBeenCalledWith({ type: 'repo/navigateRepository', contextId: 'repo-2' });
         });
         vi.clearAllTimers();
     });
+
+    it('announces navigation immediately without refreshing the unprepared repository', async () => {
+        const context = {
+            id: 'repo-2',
+            cwd: '/repo-2',
+            kind: RepoKind.Main,
+            label: 'repo-2',
+        } satisfies RepoContext;
+        const beforeRefresh = vi.fn(async () => false);
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            repositorySelection(context),
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            beforeRefresh,
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        view.messages.length = 0;
+
+        provider.notifyRepoNavigationStarted(context);
+        await vi.advanceTimersByTimeAsync(100);
+
+        expect(view.messages).toEqual([{
+            type: 'repo/navigationStarted',
+            context: { id: 'repo-2', cwd: '/repo-2', kind: 'main', label: 'repo-2' },
+        }]);
+        expect(beforeRefresh).not.toHaveBeenCalled();
+    });
+
+    it('replays pending navigation when the Changes webview becomes ready', async () => {
+        const context = {
+            id: 'repo-2',
+            cwd: '/repo-2',
+            kind: RepoKind.Main,
+            label: 'repo-2',
+        } satisfies RepoContext;
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            repositorySelection(context),
+            async () => {},
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            async () => false,
+        );
+        provider.notifyRepoNavigationStarted(context);
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        view.messageHandler?.({ type: 'changes/ready' });
+
+        expect(view.messages).toContainEqual(expect.objectContaining({ type: 'repo/navigationStarted' }));
+        expect(view.messages.some((message) => isMessageType(message, 'changes/statusData'))).toBe(false);
+    });
+
+    it('does not report success or refresh when native publication is delegated', async () => {
+        const context = {
+            id: 'repo-1',
+            cwd: '/repo-1',
+            kind: RepoKind.Main,
+            label: 'repo-1',
+        } satisfies RepoContext;
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const runtime = pushRuntime(GitPushOutcome.Delegated);
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            repositorySelection(context),
+            onRepositoryUpdated,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry(context, runtime),
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        provider.registerNativeContextCommands();
+
+        await vscode.commands.executeCommand('lookGit.changes.push');
+
+        expect(view.messages
+            .filter(isChangesOperationStatusMessage)
+            .map((message) => message.status))
+            .toEqual([OperationStatus.Running, OperationStatus.Delegated]);
+        expect(onRepositoryUpdated).not.toHaveBeenCalled();
+    });
+
+    it('reports success and refreshes after a completed push', async () => {
+        const context = {
+            id: 'repo-1',
+            cwd: '/repo-1',
+            kind: RepoKind.Main,
+            label: 'repo-1',
+        } satisfies RepoContext;
+        const onRepositoryUpdated = vi.fn(async () => {});
+        const runtime = pushRuntime(GitPushOutcome.Completed);
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            repositorySelection(context),
+            onRepositoryUpdated,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry(context, runtime),
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        provider.registerNativeContextCommands();
+
+        await vscode.commands.executeCommand('lookGit.changes.push');
+
+        expect(view.messages
+            .filter(isChangesOperationStatusMessage)
+            .map((message) => message.status))
+            .toEqual([OperationStatus.Running, OperationStatus.Success]);
+        expect(onRepositoryUpdated).toHaveBeenCalledOnce();
+    });
 });
+
+function repositorySelection(
+    currentContext: RepoContext | undefined,
+    contexts: readonly RepoContext[] = currentContext ? [currentContext] : [],
+): RepositoryContextAccessor {
+    return { currentContext, contexts };
+}
 
 function runtimeRegistry(context: RepoContext, runtime: GitRuntime): RepositoryRegistry {
     const registry = new RepositoryRegistry();
@@ -436,6 +709,18 @@ function runtimeRegistryForUnbornContext(context: RepoContext): RepositoryRegist
     return registry;
 }
 
+function pushRuntime(outcome: GitPushOutcome): GitRuntime {
+    return {
+        supports: () => true,
+        async execute<TInput = unknown, TResult = unknown>(operation: SemanticGitOperation, _context: GitExecutionContext, _input: TInput): Promise<TResult> {
+            if (operation === 'push') {
+                return outcome as TResult; // The fixture returns the result defined by this semantic operation.
+            }
+            throw new Error(`Unexpected operation ${operation}`);
+        },
+    };
+}
+
 function repositoryKindForTest(context: RepoContext): RepositoryKind {
     return context.kind === RepoKind.Submodule ? 'submodule' : 'main';
 }
@@ -478,6 +763,46 @@ function commitChangesRuntime(): GitRuntime {
     };
 }
 
+function stageRecordingRuntime(
+    status: GitStatus,
+    operations: SemanticGitOperation[],
+    stagedPaths: string[][],
+): GitRuntime {
+    return {
+        supports: () => true,
+        async execute<TInput = unknown, TResult = unknown>(operation: SemanticGitOperation, _context: GitExecutionContext, input: TInput): Promise<TResult> {
+            operations.push(operation);
+            if (operation === 'getStatus') { return status as TResult; }
+            if (operation === 'stage') {
+                if (!input || typeof input !== 'object' || !('paths' in input) || !Array.isArray(input.paths)) {
+                    throw new Error('Expected stage paths.');
+                }
+                stagedPaths.push(input.paths.filter((filePath): filePath is string => typeof filePath === 'string'));
+                return undefined as TResult;
+            }
+            throw new Error(`Unexpected operation ${operation}`);
+        },
+    };
+}
+
+function discardRecordingRuntime(status: GitStatus, discardedPaths: string[][]): GitRuntime {
+    return {
+        supports: () => true,
+        async execute<TInput = unknown, TResult = unknown>(operation: SemanticGitOperation, _context: GitExecutionContext, input: TInput): Promise<TResult> {
+            if (operation === 'unstageAll') { return undefined as TResult; }
+            if (operation === 'getStatus') { return status as TResult; }
+            if (operation === 'discard') {
+                if (!input || typeof input !== 'object' || !('paths' in input) || !Array.isArray(input.paths)) {
+                    throw new Error('Expected discard paths.');
+                }
+                discardedPaths.push(input.paths.filter((filePath): filePath is string => typeof filePath === 'string'));
+                return undefined as TResult;
+            }
+            throw new Error(`Unexpected operation ${operation}`);
+        },
+    };
+}
+
 function statusWithUnstagedFile(...filePaths: readonly string[]): GitStatus {
     return {
         staged: [],
@@ -509,4 +834,8 @@ function currentBranch(): GitBranch {
 
 function isMessageType(message: unknown, type: string): boolean {
     return typeof message === 'object' && message !== null && 'type' in message && message.type === type;
+}
+
+function isChangesOperationStatusMessage(message: unknown): message is ChangesOperationStatusPush {
+    return isMessageType(message, 'changes/operationStatus');
 }

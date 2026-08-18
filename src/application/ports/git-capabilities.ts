@@ -112,6 +112,11 @@ export interface PushOptions {
     readonly force?: boolean;
 }
 
+export enum GitPushOutcome {
+    Completed = 'completed',
+    Delegated = 'delegated',
+}
+
 export interface GitHistoryOperations {
     getCommitGraph(query: CommitGraphQuery, pageRequest: PageRequest, signal?: AbortSignal): Promise<Page<GitCommit>>;
     getCommitDetails(commit: string, signal?: AbortSignal): Promise<GitCommit>;
@@ -326,8 +331,8 @@ export interface GitCleanOperations {
 
 export interface GitPullPushOperations {
     pull(options: PullOptions, signal?: AbortSignal): Promise<void>;
-    push(remote: string | undefined, options: PushOptions, signal?: AbortSignal): Promise<void>;
-    pushBranch(remote: string | undefined, branch: string, options: PushOptions, signal?: AbortSignal): Promise<void>;
+    push(remote: string | undefined, options: PushOptions, signal?: AbortSignal): Promise<GitPushOutcome>;
+    pushBranch(remote: string | undefined, branch: string, options: PushOptions, signal?: AbortSignal): Promise<GitPushOutcome>;
     pushRef(remote: string, sourceRef: string, destinationRef: string, options: PushOptions, signal?: AbortSignal): Promise<void>;
     pushTags(remote: string, options: PushOptions, signal?: AbortSignal): Promise<void>;
     forcePushWithLease(remote: string, branch: string, signal?: AbortSignal): Promise<void>;

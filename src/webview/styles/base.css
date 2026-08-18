@@ -26,6 +26,17 @@
     box-sizing: border-box;
 }
 
+@keyframes look-git-reveal-delayed-loading {
+    to {
+        visibility: visible;
+    }
+}
+
+.delayed-loading-indicator {
+    visibility: hidden;
+    animation: look-git-reveal-delayed-loading 0s linear 120ms forwards;
+}
+
 .look-git-tooltip {
     position: fixed;
     z-index: 10000;

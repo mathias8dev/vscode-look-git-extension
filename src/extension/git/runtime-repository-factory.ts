@@ -25,7 +25,7 @@ export class RuntimeRepositoryFactory {
         }, this.runtime);
     }
 
-    async createMainWorktree(context: RepoContext): Promise<RuntimeWorktree> {
+    async createMainWorktree(context: RepoContext, signal?: AbortSignal): Promise<RuntimeWorktree> {
         const repository = this.createRepository(context);
         const baseWorktree = this.createWorktree({
             context,
@@ -36,9 +36,9 @@ export class RuntimeRepositoryFactory {
             isMain: context.kind !== RepoKind.Worktree,
         });
         const [head, currentBranch, status] = await Promise.all([
-            resolveHead(repository),
-            currentBranchNameOrUndefined(repository),
-            baseWorktree.getStatus(),
+            resolveHead(repository, signal),
+            currentBranchNameOrUndefined(repository, signal),
+            baseWorktree.getStatus(signal),
         ]);
 
         return new RuntimeWorktree({
@@ -55,17 +55,17 @@ export class RuntimeRepositoryFactory {
         }, this.runtime);
     }
 
-    async createWorktrees(context: RepoContext): Promise<readonly RuntimeWorktree[]> {
+    async createWorktrees(context: RepoContext, signal?: AbortSignal): Promise<readonly RuntimeWorktree[]> {
         const repository = this.createRepository(context);
-        const mainWorktree = await this.createMainWorktree(context);
-        const worktrees = await repository.listWorktrees();
+        const mainWorktree = await this.createMainWorktree(context, signal);
+        const worktrees = await repository.listWorktrees(signal);
         const linkedWorktrees = worktrees.filter((worktree) =>
             !worktree.isPrunable && !samePath(worktree.path, context.cwd));
-        const runtimeWorktrees = await Promise.all(linkedWorktrees.map((worktree) => this.createLinkedWorktree(context, worktree)));
+        const runtimeWorktrees = await Promise.all(linkedWorktrees.map((worktree) => this.createLinkedWorktree(context, worktree, signal)));
         return [mainWorktree, ...runtimeWorktrees];
     }
 
-    private async createLinkedWorktree(context: RepoContext, worktree: GitWorktree): Promise<RuntimeWorktree> {
+    private async createLinkedWorktree(context: RepoContext, worktree: GitWorktree, signal?: AbortSignal): Promise<RuntimeWorktree> {
         const runtimeWorktree = this.createWorktree({
             context,
             path: worktree.path,
@@ -74,7 +74,7 @@ export class RuntimeRepositoryFactory {
             branch: worktree.branch,
             isMain: worktree.isMain,
         });
-        const status = await runtimeWorktree.getStatus();
+        const status = await runtimeWorktree.getStatus(signal);
         return this.createWorktree({
             context,
             path: worktree.path,
@@ -126,9 +126,9 @@ function isDirty(status: GitStatus): boolean {
     return status.staged.length > 0 || status.unstaged.length > 0 || status.conflicts.length > 0;
 }
 
-async function resolveHead(repository: RuntimeGitRepository): Promise<string> {
+async function resolveHead(repository: RuntimeGitRepository, signal?: AbortSignal): Promise<string> {
     try {
-        return await repository.resolveRef('HEAD');
+        return await repository.resolveRef('HEAD', signal);
     } catch (error) {
         if (!isUnbornHeadError(error)) { throw error; }
         return 'HEAD';
