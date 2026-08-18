@@ -17,7 +17,7 @@ describe('release workflow', () => {
     it('guards packaging and release creation with release pull request eligibility', () => {
         const eligibilityGuard = "steps.release_pr.outputs.eligible == 'true'";
 
-        expect(workflow).toMatch(new RegExp(`- name: Package VSIX\\n\\s+if: ${eligibilityGuard.replaceAll('.', '\\.')}`));
-        expect(workflow).toMatch(new RegExp(`- name: Create tag and GitHub release\\n\\s+if: ${eligibilityGuard.replaceAll('.', '\\.')}`));
+        expect(workflow).toMatch(new RegExp(`- name: Package VSIX\\r?\\n\\s+if: ${eligibilityGuard.replaceAll('.', '\\.')}`));
+        expect(workflow).toMatch(new RegExp(`- name: Create tag and GitHub release\\r?\\n\\s+if: ${eligibilityGuard.replaceAll('.', '\\.')}`));
     });
 });
