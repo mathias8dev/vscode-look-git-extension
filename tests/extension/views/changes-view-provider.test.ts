@@ -182,6 +182,48 @@ describe('ChangesViewProvider', () => {
         vi.clearAllTimers();
     });
 
+    it('refreshes staged status without waiting for a slow repository-wide refresh', async () => {
+        const context = {
+            id: 'repo-1',
+            cwd: '/repo',
+            kind: RepoKind.Main,
+            label: 'repo',
+        } satisfies RepoContext;
+        const stagedPaths: string[][] = [];
+        const repositoryRefresh = deferredVoid();
+        const onRepositoryUpdated = vi.fn(() => repositoryRefresh.promise);
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'),
+            repositorySelection(context),
+            onRepositoryUpdated,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            runtimeRegistry(context, largeStageMutationRuntime(2_443, stagedPaths)),
+        );
+        const view = makeWebviewView();
+
+        provider.resolveWebviewView(view);
+        await provider.refresh();
+        vi.clearAllTimers();
+        view.messages.length = 0;
+        view.messageHandler?.({ type: 'changes/stageFile', filePath: 'src/file-0.c' });
+
+        await vi.waitFor(() => expect(onRepositoryUpdated).toHaveBeenCalledOnce());
+        expect(stagedPaths).toEqual([['src/file-0.c']]);
+        expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/statusData',
+            data: expect.objectContaining({
+                staged: [expect.objectContaining({ filePath: 'src/file-0.c' })],
+                unstaged: expect.not.arrayContaining([expect.objectContaining({ filePath: 'src/file-0.c' })]),
+            }),
+        }));
+
+        repositoryRefresh.resolve();
+        vi.clearAllTimers();
+    });
+
     it('discards visible changes without deleting registered nested repositories', async () => {
         const context = {
             id: 'repo-1',
@@ -783,6 +825,46 @@ function stageRecordingRuntime(
             throw new Error(`Unexpected operation ${operation}`);
         },
     };
+}
+
+function largeStageMutationRuntime(fileCount: number, stagedPaths: string[][]): GitRuntime {
+    let status = statusWithUnstagedFile(...Array.from({ length: fileCount }, (_, index) => `src/file-${index}.c`));
+    return {
+        supports: () => true,
+        async execute<TInput = unknown, TResult = unknown>(operation: SemanticGitOperation, _context: GitExecutionContext, input: TInput): Promise<TResult> {
+            if (operation === 'getStatus') { return status as TResult; }
+            if (operation === 'listStashes') { return new Page([], false) as TResult; }
+            if (operation === 'listSubmodules') { return [] as TResult; }
+            if (operation === 'listBranches') { return [currentBranch()] as TResult; }
+            if (operation === 'getSquashMergeMessage') { return undefined as TResult; }
+            if (operation === 'stage') {
+                if (!input || typeof input !== 'object' || !('paths' in input) || !Array.isArray(input.paths)) {
+                    throw new Error('Expected stage paths.');
+                }
+                const paths = input.paths.filter((filePath): filePath is string => typeof filePath === 'string');
+                const pathSet = new Set(paths);
+                stagedPaths.push(paths);
+                status = {
+                    ...status,
+                    staged: [
+                        ...status.staged,
+                        ...status.unstaged
+                            .filter((entry) => pathSet.has(entry.filePath))
+                            .map((entry) => ({ ...entry, indexStatus: 'M', workTreeStatus: ' ' })),
+                    ],
+                    unstaged: status.unstaged.filter((entry) => !pathSet.has(entry.filePath)),
+                };
+                return undefined as TResult;
+            }
+            throw new Error(`Unexpected operation ${operation}`);
+        },
+    };
+}
+
+function deferredVoid(): { readonly promise: Promise<void>; resolve(): void } {
+    let resolvePromise = (): void => {};
+    const promise = new Promise<void>((resolve) => { resolvePromise = resolve; });
+    return { promise, resolve: resolvePromise };
 }
 
 function discardRecordingRuntime(status: GitStatus, discardedPaths: string[][]): GitRuntime {

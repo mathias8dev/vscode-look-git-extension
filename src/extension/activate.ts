@@ -19,6 +19,7 @@ import { CommitHistoryViewProvider } from '@extension/views/commit-history-view-
 import { GraphViewProvider } from '@extension/views/graph-view-provider';
 import { registerReadonlyDiffDocumentProvider } from '@extension/utils/readonly-diff-documents';
 import { registerGitBlobDocumentProvider } from '@extension/utils/git-blob-documents';
+import { CoalescingTask } from '@extension/utils/coalescing-task';
 import { registerWebviewFontSizeSync } from '@extension/views/webview-font';
 import { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import { appendErrorToOutput } from '@extension/messaging/error-output-channel';
@@ -107,6 +108,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             ]);
         },
     });
+    const repositoryDiscoveryTask = new CoalescingTask(syncDiscoveredRepositories);
 
     const DEBOUNCE_MS = 150;
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -122,7 +124,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     function debouncedSyncDiscoveredRepositories(): void {
         if (repositoryDiscoveryTimer) { clearTimeout(repositoryDiscoveryTimer); }
         repositoryDiscoveryTimer = setTimeout(() => {
-            void syncDiscoveredRepositories().then(syncActiveRepo);
+            void repositoryDiscoveryTask.run().then(syncActiveRepo);
         }, DEBOUNCE_MS);
     }
 
@@ -177,27 +179,42 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     async function syncDiscoveredRepositories(): Promise<void> {
         const generation = ++repositoryStateGeneration;
-        repositoriesResource = { status: 'loading' };
-        notifyRepositoriesChanged();
-        const discoveredContexts = await discoverRepositoryContexts({
-            workspaceFolders: vscode.workspace.workspaceFolders,
-            resolveRepositoryScanMaxDepth: (workspaceFolder) => getRepositoryScanMaxDepth(workspaceFolder.uri),
-        });
-        if (generation !== repositoryStateGeneration) { return; }
-        const contexts = await mergeDynamicRepositoryContexts(discoveredContexts);
-        if (generation !== repositoryStateGeneration) { return; }
-        repositories.setContexts(contexts);
-        if (navigatedRepositoryContextId && !contexts.some((repoContext) => repoContext.id === navigatedRepositoryContextId)) {
-            navigatedRepositoryContextId = undefined;
-            hasExplicitRepositoryNavigation = false;
+        if (repositoriesResource.status !== 'ready') {
+            repositoriesResource = { status: 'loading' };
+            notifyRepositoriesChanged();
         }
-        gitWatcher.setContexts(contexts);
-        repositoryDiscoveryWatcher.setContexts(contexts);
-        const nextRepositoriesResource = await loadRepositorySummaries(contexts);
-        if (generation !== repositoryStateGeneration) { return; }
-        repositoriesResource = nextRepositoriesResource;
-        notifyRepositoriesChanged();
-        void syncVisibleRepositoryChildren();
+        try {
+            const discoveredContexts = await discoverRepositoryContexts({
+                workspaceFolders: vscode.workspace.workspaceFolders,
+                resolveRepositoryScanMaxDepth: (workspaceFolder) => getRepositoryScanMaxDepth(workspaceFolder.uri),
+            });
+            if (generation !== repositoryStateGeneration) { return; }
+            const contexts = await mergeDynamicRepositoryContexts(discoveredContexts);
+            if (generation !== repositoryStateGeneration) { return; }
+            repositories.setContexts(contexts);
+            if (navigatedRepositoryContextId && !contexts.some((repoContext) => repoContext.id === navigatedRepositoryContextId)) {
+                navigatedRepositoryContextId = undefined;
+                hasExplicitRepositoryNavigation = false;
+            }
+            gitWatcher.setContexts(contexts);
+            repositoryDiscoveryWatcher.setContexts(contexts);
+            const nextRepositoriesResource = await loadRepositorySummaries(contexts);
+            if (generation !== repositoryStateGeneration) { return; }
+            repositoriesResource = nextRepositoriesResource;
+            notifyRepositoriesChanged();
+            void syncVisibleRepositoryChildren();
+        } catch (error) {
+            if (generation !== repositoryStateGeneration) { return; }
+            repositoriesResource = {
+                status: 'error',
+                error: createErrorPayload(error, {
+                    code: 'gitOperationFailed',
+                    operation: 'repositoryDiscovery',
+                    recoverable: true,
+                }).error,
+            };
+            notifyRepositoriesChanged();
+        }
     }
 
     async function loadRepositorySummaries(contexts: readonly RepoContext[], signal?: AbortSignal): Promise<Resource<readonly RepositorySummary[]>> {
@@ -395,14 +412,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     context.subscriptions.push(
         vscode.workspace.onDidChangeWorkspaceFolders(() => {
-            void syncDiscoveredRepositories().then(syncActiveRepo);
+            void repositoryDiscoveryTask.run().then(syncActiveRepo);
         }),
         vscode.window.onDidChangeActiveTextEditor(() => {
             syncActiveRepo();
         }),
     );
 
-    await syncDiscoveredRepositories();
+    await repositoryDiscoveryTask.run();
     syncActiveRepo();
     await repositoryNavigationCoordinator.activate(repositories.currentContext);
     context.subscriptions.push(

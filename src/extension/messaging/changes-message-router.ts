@@ -1341,7 +1341,13 @@ export class ChangesMessageRouter {
     }
 
     private async refreshAfterRepositoryUpdate(): Promise<void> {
-        await this.onRepositoryUpdated();
+        await this.refresh();
+        void this.onRepositoryUpdated().catch((error: unknown) => {
+            this.postChangesError(error, {
+                operation: 'changes/repositoryRefresh',
+                code: 'refreshFailed',
+            });
+        });
     }
 
     private async completePush(outcome: GitPushOutcome): Promise<OperationStatus | undefined> {

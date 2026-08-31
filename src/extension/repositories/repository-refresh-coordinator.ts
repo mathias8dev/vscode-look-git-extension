@@ -1,3 +1,5 @@
+import { CoalescingTask } from '@extension/utils/coalescing-task';
+
 interface RepositoryRefreshCoordinatorOptions {
     readonly isReady: () => boolean;
     readonly refreshRuntime: () => Promise<void>;
@@ -5,32 +7,21 @@ interface RepositoryRefreshCoordinatorOptions {
 }
 
 export class RepositoryRefreshCoordinator {
-    private pending = false;
-    private inFlight: Promise<void> | undefined;
+    private readonly task: CoalescingTask;
 
     constructor(
         private readonly options: RepositoryRefreshCoordinatorOptions,
-    ) {}
-
-    async refresh(): Promise<void> {
-        this.pending = true;
-        while (this.pending || this.inFlight) {
-            if (!this.inFlight) {
-                const current = this.drain().finally(() => {
-                    if (this.inFlight === current) { this.inFlight = undefined; }
-                });
-                this.inFlight = current;
-            }
-            await this.inFlight;
-        }
+    ) {
+        this.task = new CoalescingTask(() => this.refreshOnce());
     }
 
-    private async drain(): Promise<void> {
-        while (this.pending) {
-            this.pending = false;
-            if (!this.options.isReady()) { continue; }
-            await this.options.refreshRuntime();
-            await this.options.refreshViews();
-        }
+    refresh(): Promise<void> {
+        return this.task.run();
+    }
+
+    private async refreshOnce(): Promise<void> {
+        if (!this.options.isReady()) { return; }
+        await this.options.refreshRuntime();
+        await this.options.refreshViews();
     }
 }
