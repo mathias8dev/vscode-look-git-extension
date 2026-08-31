@@ -4,6 +4,8 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+## [1.2.10] - 2026-08-31
+
 ### Fixed
 
 #### Repo loading
