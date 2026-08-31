@@ -4,6 +4,12 @@ All notable changes to Look Git are documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+#### Repo loading
+- Race loading issue resolved
+- Large repo git action application accelerated
+
 ## [1.2.9] - 2026-08-18
 
 ### Added
