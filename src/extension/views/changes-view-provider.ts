@@ -704,8 +704,10 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                     continue;
                 }
                 if (!await this.beforeRefresh()) { continue; }
+                controller.signal.throwIfAborted();
 
                 const { status, stashes, submodules, currentBranch, worktree } = await this.loadChangesStatus(controller.signal);
+                controller.signal.throwIfAborted();
                 const visibleStatus = excludeNestedRepositoryChanges(
                     status,
                     nestedRepositoryPaths(context, this.repositories.contexts),
@@ -715,7 +717,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 this.postStatusDataIfChanged(buildStatusData(visibleStatus, stashes, submodules, currentBranch));
                 await this.postSquashMergeMessagePresetIfNeeded(worktree, controller.signal);
             } catch (error) {
-                if (isAbortError(error)) { continue; }
+                if (controller.signal.aborted || isAbortError(error)) { continue; }
                 this.updateBadge(0);
                 this.view.webview.postMessage({
                     type: 'changes/error',
@@ -735,7 +737,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     private updateBadge(count: number): void {
         if (this.view) {
-            this.view.badge = { value: count, tooltip: `${count} change${count !== 1 ? 's' : ''}` };
+            this.view.badge = count > 0 ? { value: count, tooltip: `${count} change${count !== 1 ? 's' : ''}` } : undefined;
         }
     }
 
@@ -776,6 +778,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
             this.refreshTimer = undefined;
         }
         this.refreshAbortController?.abort();
+        this.updateBadge(0);
         this.statusDataPoster.clear();
         this.router?.setKnownSubmodulePaths([]);
         this.repositoryLifecycleMessage = {
@@ -799,6 +802,8 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     /** Called by RepoRegistry when the active repo changes. */
     async notifyRepoChanged(context: RepoContext | undefined): Promise<void> {
+        this.refreshAbortController?.abort();
+        this.updateBadge(0);
         this.contextTarget = undefined;
         this.statusDataPoster.clear();
         this.router?.setKnownSubmodulePaths([]);
@@ -821,6 +826,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     private async postSquashMergeMessagePresetIfNeeded(worktree: Worktree, signal?: AbortSignal): Promise<void> {
         const message = await worktree.getSquashMergeMessage(signal);
+        signal?.throwIfAborted();
         if (!message) {
             this.squashMessagePresetByWorktreeId.delete(worktree.worktreeId);
             return;

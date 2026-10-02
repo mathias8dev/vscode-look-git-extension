@@ -6,7 +6,7 @@ import type { GitBranch, GitStatus } from '@core/git/domain/git-status';
 import type { GitExecutionContext, GitRuntime, RepositoryKind } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
 import { GitPushOutcome } from '@application/ports/git-capabilities';
-import type { RepositoryContextAccessor } from '@extension/repositories/repository-selection-store';
+import { RepositorySelectionStore, type RepositoryContextAccessor } from '@extension/repositories/repository-selection-store';
 import { CliGitRuntime } from '@extension/git/cli-git-runtime';
 import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
@@ -89,6 +89,204 @@ describe('ChangesViewProvider', () => {
 
         expect(view.messages.filter((message) => isMessageType(message, 'changes/statusData'))).toHaveLength(1);
         vi.clearAllTimers();
+    });
+
+    it('removes the activity badge after committing while the Changes view is hidden', async () => {
+        const repo = createTempGitRepo();
+        repos.push(repo);
+        repo.write('src/app.ts', 'app\n');
+        repo.write('src/feature.ts', 'feature\n');
+        const context: RepoContext = { id: 'repo-1', cwd: repo.cwd, kind: RepoKind.Main, label: 'repo' };
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'), repositorySelection(context), async () => {},
+            undefined, undefined, undefined, undefined, runtimeRegistryForUnbornContext(context),
+        );
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        await provider.refresh();
+        vi.clearAllTimers();
+        expect(view.badge).toEqual({ value: 2, tooltip: '2 changes' });
+
+        view.visible = false;
+        repo.commit('feat: commit changes');
+        await provider.refresh();
+
+        expect(view.badge).toBeUndefined();
+        expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/statusData',
+            data: expect.objectContaining({ staged: [], unstaged: [], conflicts: [] }),
+        }));
+    });
+
+    it.each([true, false])('clears the old badge immediately when navigating to a repository: %s', async (hasRepository) => {
+        const { provider, view, repositories, child } = badgeFixture();
+        await provider.refresh();
+        vi.clearAllTimers();
+        expect(view.badge?.value).toBe(2);
+
+        const target = hasRepository ? child : undefined;
+        repositories.selectContext(target?.id);
+        provider.notifyRepoNavigationStarted(target);
+        const navigatingBadge = view.badge;
+        await provider.notifyRepoChanged(target);
+        await provider.refresh();
+
+        expect(navigatingBadge).toBeUndefined();
+        expect(view.badge?.value).toBe(hasRepository ? 1 : undefined);
+    });
+
+    it('does not restore an old badge when an aborted read resolves after navigation starts', async () => {
+        const { provider, view, repositories, child, worktree, badgeUpdates } = badgeFixture();
+        await provider.refresh();
+        vi.clearAllTimers();
+        view.messages.length = 0;
+        badgeUpdates.length = 0;
+        const started = deferredVoid();
+        const release = deferredVoid();
+        let signal: AbortSignal | undefined;
+        vi.spyOn(worktree, 'getStatus').mockImplementationOnce(async (requestSignal) => {
+            signal = requestSignal;
+            started.resolve();
+            await release.promise;
+            return statusWithUnstagedFile('old-a.ts', 'old-b.ts', 'old-c.ts');
+        });
+        const refresh = provider.refresh();
+        await started.promise;
+
+        repositories.selectContext(child.id);
+        provider.notifyRepoNavigationStarted(child);
+        release.resolve();
+        await refresh;
+
+        expect(signal?.aborted).toBe(true);
+        expect(view.badge).toBeUndefined();
+        expect(badgeUpdates).not.toContainEqual(expect.objectContaining({ value: 3 }));
+        expect(view.messages.some((message) => isMessageType(message, 'changes/statusData'))).toBe(false);
+    });
+
+    it.each([true, false])('ignores a late refresh failure after a context change with navigation: %s', async (announceNavigation) => {
+        const { provider, view, repositories, child, worktree, badgeUpdates } = badgeFixture();
+        await provider.refresh();
+        vi.clearAllTimers();
+        view.messages.length = 0;
+        badgeUpdates.length = 0;
+        const started = deferredVoid();
+        const release = deferredVoid();
+        let signal: AbortSignal | undefined;
+        vi.spyOn(worktree, 'getStatus').mockImplementationOnce(async (requestSignal) => {
+            signal = requestSignal;
+            started.resolve();
+            await release.promise;
+            throw new Error('The previous repository read failed.');
+        });
+        const refresh = provider.refresh();
+        await started.promise;
+
+        repositories.selectContext(child.id);
+        if (announceNavigation) { provider.notifyRepoNavigationStarted(child); }
+        await provider.notifyRepoChanged(child);
+        const navigatingBadge = view.badge;
+        release.resolve();
+        await refresh;
+
+        expect(signal?.aborted).toBe(true);
+        expect(navigatingBadge).toBeUndefined();
+        expect(view.badge).toEqual({ value: 1, tooltip: '1 change' });
+        expect(badgeUpdates).not.toContainEqual(expect.objectContaining({ value: 0 }));
+        expect(view.messages.some((message) => isMessageType(message, 'changes/error'))).toBe(false);
+    });
+
+    it('does not publish an outdated badge when a newer refresh cancels a read', async () => {
+        const { provider, view, worktree, badgeUpdates } = badgeFixture();
+        await provider.refresh();
+        vi.clearAllTimers();
+        view.messages.length = 0;
+        badgeUpdates.length = 0;
+        const started = deferredVoid();
+        const release = deferredVoid();
+        vi.spyOn(worktree, 'getStatus').mockImplementationOnce(async () => {
+            started.resolve();
+            await release.promise;
+            return statusWithUnstagedFile('old-a.ts', 'old-b.ts', 'old-c.ts');
+        });
+        const oldRefresh = provider.refresh();
+        await started.promise;
+        const newRefresh = provider.refresh();
+        release.resolve();
+        await oldRefresh;
+        await newRefresh;
+
+        expect(view.badge?.value).toBe(2);
+        expect(badgeUpdates).not.toContainEqual(expect.objectContaining({ value: 3 }));
+        expect(view.messages.some((message) => isMessageType(message, 'changes/statusData'))).toBe(false);
+    });
+
+    it('does not load another repository while an aborted readiness check finishes', async () => {
+        const { provider, view, repositories, child, registry, beforeRefresh } = badgeFixture();
+        await provider.refresh();
+        vi.clearAllTimers();
+        view.messages.length = 0;
+        const started = deferredVoid();
+        const release = deferredVoid();
+        beforeRefresh.mockImplementationOnce(async () => {
+            started.resolve();
+            await release.promise;
+            return true;
+        });
+        const childWorktree = registry.worktrees(child.id)[0];
+        if (!childWorktree) { throw new Error('Expected child worktree.'); }
+        const childStatus = vi.spyOn(childWorktree, 'getStatus');
+        const refresh = provider.refresh();
+        await started.promise;
+
+        repositories.selectContext(child.id);
+        provider.notifyRepoNavigationStarted(child);
+        release.resolve();
+        await refresh;
+
+        expect(childStatus).not.toHaveBeenCalled();
+        expect(view.badge).toBeUndefined();
+        expect(view.messages.some((message) => isMessageType(message, 'changes/statusData'))).toBe(false);
+    });
+
+    it('still clears the badge and reports a genuine active repository refresh failure', async () => {
+        const { provider, view, worktree } = badgeFixture();
+        await provider.refresh();
+        vi.clearAllTimers();
+        view.messages.length = 0;
+        vi.spyOn(worktree, 'getStatus').mockRejectedValueOnce(new Error('Active repository read failed.'));
+
+        await provider.refresh();
+
+        expect(view.badge).toBeUndefined();
+        expect(view.messages).toContainEqual(expect.objectContaining({
+            type: 'changes/error',
+            error: expect.objectContaining({ message: 'Active repository read failed.' }),
+        }));
+    });
+
+    it('does not publish a canceled squash message preset into the next repository', async () => {
+        const { provider, view, repositories, child, worktree } = badgeFixture();
+        await provider.refresh();
+        vi.clearAllTimers();
+        view.messages.length = 0;
+        const started = deferredVoid();
+        const release = deferredVoid();
+        vi.spyOn(worktree, 'getSquashMergeMessage').mockImplementationOnce(async () => {
+            started.resolve();
+            await release.promise;
+            return 'Squashed commits from the previous repository';
+        });
+        const refresh = provider.refresh();
+        await started.promise;
+
+        repositories.selectContext(child.id);
+        provider.notifyRepoNavigationStarted(child);
+        release.resolve();
+        await refresh;
+
+        expect(view.badge).toBeUndefined();
+        expect(view.messages.some((message) => isMessageType(message, 'changes/commitMessagePreset'))).toBe(false);
     });
 
     it('hides registered nested repositories from the parent status', async () => {
@@ -700,8 +898,7 @@ function repositorySelection(
     return { currentContext, contexts };
 }
 
-function runtimeRegistry(context: RepoContext, runtime: GitRuntime): RepositoryRegistry {
-    const registry = new RepositoryRegistry();
+function runtimeRegistry(context: RepoContext, runtime: GitRuntime, registry = new RepositoryRegistry()): RepositoryRegistry {
     registry.registerRepository(new RuntimeGitRepository({
         repoId: context.id,
         cwd: context.cwd,
@@ -721,6 +918,32 @@ function runtimeRegistry(context: RepoContext, runtime: GitRuntime): RepositoryR
         dirty: true,
     }, runtime));
     return registry;
+}
+
+function badgeFixture() {
+    const context: RepoContext = { id: 'repo-1', cwd: '/repo', kind: RepoKind.Main, label: 'repo' };
+    const child: RepoContext = { id: 'repo-2', cwd: '/repo/modules/child', kind: RepoKind.Submodule, parentId: context.id, label: 'child' };
+    const repositories = new RepositorySelectionStore();
+    repositories.setContexts([context, child]);
+    repositories.selectContext(context.id);
+    const registry = runtimeRegistry(context, changesRuntime(statusWithUnstagedFile('src/app.ts', 'src/feature.ts')));
+    runtimeRegistry(child, changesRuntime(statusWithUnstagedFile('src/child.ts')), registry);
+    const worktree = registry.worktrees(context.id)[0];
+    if (!worktree) { throw new Error('Expected parent worktree.'); }
+    const beforeRefresh = vi.fn(async () => true);
+    const provider = new ChangesViewProvider(
+        vscode.Uri.file('/extension'), repositories, async () => {},
+        undefined, undefined, undefined, undefined, registry, undefined, beforeRefresh,
+    );
+    const view = makeWebviewView();
+    const badgeUpdates: (vscode.ViewBadge | undefined)[] = [];
+    let badge = view.badge;
+    Object.defineProperty(view, 'badge', {
+        get: () => badge,
+        set: (value: vscode.ViewBadge | undefined) => { badge = value; badgeUpdates.push(value); },
+    });
+    provider.resolveWebviewView(view);
+    return { provider, view, repositories, context, child, worktree, registry, beforeRefresh, badgeUpdates };
 }
 
 function runtimeRegistryForUnbornContext(context: RepoContext): RepositoryRegistry {

@@ -2,6 +2,13 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [1.2.12] - Unreleased
+
+### Fixed
+
+#### Changes Panel
+- Clear the activity badge when the repository changes or becomes clean, and prevent canceled refreshes from restoring stale counts or errors
+
 ## [1.2.11] - 2026-10-02
 
 ### Fixed
