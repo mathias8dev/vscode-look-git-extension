@@ -1,9 +1,12 @@
+import { useId } from 'react';
 import { getLaneDataMaxLane, type LaneData, type LineDef } from '@webview/features/graph/layout/graph-lane-model';
 import { ROW_HEIGHT } from '@webview/features/graph/graph-row-sizing';
 
 export const LANE_WIDTH = 16;
 const DOT_RADIUS = 4;
 const LINE_WIDTH = 2;
+const RING_RADIUS = DOT_RADIUS + 1.5;
+const RING_STROKE_WIDTH = 2;
 
 interface GraphLaneCellProps {
     readonly laneData: LaneData;
@@ -13,9 +16,11 @@ interface GraphLaneCellProps {
 }
 
 export function GraphLaneCell({ laneData, merge = false, wip = false, rowHeight = ROW_HEIGHT }: GraphLaneCellProps) {
+    const maskId = `graph-marker-${useId()}`;
     const width = (getLaneDataMaxLane(laneData) + 1) * LANE_WIDTH;
     const cx = (laneData.lane + 0.5) * LANE_WIDTH;
     const cy = rowHeight / 2;
+    const doubleRing = wip || merge;
 
     return (
         <svg
@@ -25,34 +30,45 @@ export function GraphLaneCell({ laneData, merge = false, wip = false, rowHeight 
             aria-hidden="true"
             style={{ minWidth: width }}
         >
-            {laneData.lines.map((line, i) => (
-                <LaneLine key={i} line={line} rowHeight={rowHeight} />
-            ))}
-            {wip ? (
-                <circle
-                    cx={cx}
-                    cy={cy}
-                    r={DOT_RADIUS}
-                    fill="none"
-                    stroke={laneData.color}
-                    strokeWidth={1.5}
-                    strokeDasharray="3 2"
-                />
-            ) : merge ? (
+            {doubleRing && (
+                <defs>
+                    <mask
+                        id={maskId}
+                        maskUnits="userSpaceOnUse"
+                        maskContentUnits="userSpaceOnUse"
+                        x={-LINE_WIDTH}
+                        y={-LINE_WIDTH}
+                        width={width + LINE_WIDTH * 2}
+                        height={rowHeight + LINE_WIDTH * 2}
+                        style={{ maskType: 'alpha' }}
+                    >
+                        <path d={markerLineMaskPath(width, rowHeight, cx, cy)} fillRule="evenodd" />
+                    </mask>
+                </defs>
+            )}
+            <g mask={doubleRing ? `url(#${maskId})` : undefined}>
+                {laneData.lines.map((line, i) => (
+                    <LaneLine key={i} line={line} rowHeight={rowHeight} />
+                ))}
+            </g>
+            {doubleRing ? (
                 <>
                     <circle
                         cx={cx}
                         cy={cy}
-                        r={DOT_RADIUS + 1.5}
-                        fill="var(--vscode-editor-background, #1e1e1e)"
+                        r={RING_RADIUS}
+                        fill="none"
                         stroke={laneData.color}
-                        strokeWidth={2}
+                        strokeWidth={RING_STROKE_WIDTH}
+                        strokeDasharray={wip ? '3 2' : undefined}
                     />
                     <circle
                         cx={cx}
                         cy={cy}
                         r={DOT_RADIUS - 1.5}
-                        fill={laneData.color}
+                        fill={wip ? 'none' : laneData.color}
+                        stroke={wip ? laneData.color : undefined}
+                        strokeWidth={wip ? 1.5 : undefined}
                     />
                 </>
             ) : (
@@ -67,6 +83,13 @@ export function GraphLaneCell({ laneData, merge = false, wip = false, rowHeight 
             )}
         </svg>
     );
+}
+
+function markerLineMaskPath(width: number, rowHeight: number, cx: number, cy: number): string {
+    const radius = RING_RADIUS + RING_STROKE_WIDTH / 2;
+    const bounds = `M ${-LINE_WIDTH} ${-LINE_WIDTH} H ${width + LINE_WIDTH} V ${rowHeight + LINE_WIDTH} H ${-LINE_WIDTH} Z`;
+    const cutout = `M ${cx - radius} ${cy} a ${radius} ${radius} 0 1 0 ${radius * 2} 0 a ${radius} ${radius} 0 1 0 ${-radius * 2} 0 Z`;
+    return `${bounds} ${cutout}`;
 }
 
 function LaneLine({ line, rowHeight }: { readonly line: LineDef; readonly rowHeight: number }) {
