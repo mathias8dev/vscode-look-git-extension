@@ -1373,11 +1373,15 @@ function cleanPreviewPath(line: string): string {
 }
 
 function readonlyRawExec(runProcess: CliGitRuntimeProcess, context: GitExecutionContext): GitExec {
-    return async (args, signal) => await runProcess(args, context, { signal });
+    return async (args, signal) => await runProcess(args, context, {
+        signal,
+        env: { GIT_OPTIONAL_LOCKS: '0' },
+    });
 }
 
 function readonlyTrimmedExec(runProcess: CliGitRuntimeProcess, context: GitExecutionContext): GitExec {
-    return async (args, signal) => (await runProcess(args, context, { signal })).trim();
+    const execRaw = readonlyRawExec(runProcess, context);
+    return async (args, signal) => (await execRaw(args, signal)).trim();
 }
 
 function trimmedExec(runProcess: CliGitRuntimeProcess, context: GitExecutionContext): GitExec {

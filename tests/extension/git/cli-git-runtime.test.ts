@@ -201,6 +201,31 @@ describe('CliGitRuntime', () => {
         });
     });
 
+    it('disables optional locks for read-only probes but preserves locks for mutations', async () => {
+        const calls: Array<{
+            readonly args: readonly string[];
+            readonly env: Readonly<Record<string, string>> | undefined;
+        }> = [];
+        const runtime = new CliGitRuntime(async (args, _context, options) => {
+            calls.push({ args: [...args], env: options.env });
+            if (args[0] === 'config') {
+                return 'submodule.one.path\nlibs/one\0';
+            }
+            if (args[0] === 'submodule') {
+                return ' abc123 libs/one (heads/main)\n';
+            }
+            return '';
+        });
+
+        await runtime.execute('getStatus', context, undefined);
+        await runtime.execute('listSubmodules', context, undefined);
+        await runtime.execute('stage', context, { paths: ['src/app.ts'] });
+
+        expect(calls.find((call) => call.args[0] === 'status')?.env).toEqual({ GIT_OPTIONAL_LOCKS: '0' });
+        expect(calls.find((call) => call.args[0] === 'submodule')?.env).toEqual({ GIT_OPTIONAL_LOCKS: '0' });
+        expect(calls.find((call) => call.args[0] === 'add')?.env).toBeUndefined();
+    });
+
     it('returns typed branch and tag data', async () => {
         const runtime = new CliGitRuntime(async (args) => {
             if (args[0] === 'for-each-ref') {

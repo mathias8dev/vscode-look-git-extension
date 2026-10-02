@@ -11,6 +11,7 @@ All notable changes to Look Git are documented in this file.
 #### Repo loading
 - Race loading issue resolved
 - Large repo git action application accelerated
+- Prevent background repository reads from creating optional index locks and avoid redundant submodule status scans
 
 ## [1.2.9] - 2026-08-18
 
