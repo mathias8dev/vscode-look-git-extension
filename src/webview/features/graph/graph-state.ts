@@ -21,7 +21,7 @@ export function buildDisplayRows(rows: readonly GraphRow[], wips: readonly Workt
     for (const row of rows) {
         const rowWips = wipsByHead.get(row.commit.hash) ?? [];
         rowWips.forEach((wip, index) => {
-            result.push({ kind: 'wip', wip, laneData: wipLaneData(row.laneData, index) });
+            result.push({ kind: 'wip', wip, laneData: wipLaneData(row, index) });
         });
         if (rowWips.length > 0) {
             result.push({ kind: 'commit', row: connectCommitFromWip(row) });
@@ -55,17 +55,15 @@ function groupWipsByHead(wips: readonly WorktreeWip[]): ReadonlyMap<string, read
     return groups;
 }
 
-function wipLaneData(laneData: LaneData, index: number): LaneData {
-    const line: LineDef = {
-        fromLane: laneData.lane,
-        toLane: laneData.lane,
-        color: laneData.color,
-        type: 'straight',
-        role: 'pass-through',
-        startY: index === 0 ? 'center' : 'top',
-        endY: 'bottom',
-    };
-    return { ...laneData, lines: [line] };
+function wipLaneData(row: GraphRow, index: number): LaneData {
+    const { laneData } = row;
+    const lines = laneData.lines
+        .filter((line) => line.startY === 'top')
+        .map((line): LineDef => ({ ...line, toLane: line.fromLane, type: 'straight', endY: 'bottom' }));
+    if (!lines.some((line) => line.fromLane === laneData.lane)) {
+        lines.push(wipConnectionLine(row, index === 0 ? 'center' : 'top', 'bottom'));
+    }
+    return { ...laneData, lines };
 }
 
 function connectCommitFromWip(row: GraphRow): GraphRow {
@@ -74,17 +72,22 @@ function connectCommitFromWip(row: GraphRow): GraphRow {
         return row;
     }
 
-    const line: LineDef = {
+    const line = wipConnectionLine(row, 'top', 'center');
+    return { ...row, laneData: { ...laneData, lines: [line, ...laneData.lines] } };
+}
+
+function wipConnectionLine(row: GraphRow, startY: LineDef['startY'], endY: LineDef['endY']): LineDef {
+    const { laneData } = row;
+    return {
         fromLane: laneData.lane,
         toLane: laneData.lane,
         color: laneData.color,
         type: 'straight',
         targetHash: row.commit.hash,
         role: 'pass-through',
-        startY: 'top',
-        endY: 'center',
+        startY,
+        endY,
     };
-    return { ...row, laneData: { ...laneData, lines: [line, ...laneData.lines] } };
 }
 
 export interface CommitDetails {

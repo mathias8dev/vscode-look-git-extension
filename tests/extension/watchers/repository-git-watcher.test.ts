@@ -94,6 +94,31 @@ describe('repository git watcher', () => {
         expect(isGitMetadataChangePath('/repo/.git/index.lock')).toBe(false);
         expect(isGitMetadataChangePath('/repo/.git/.watchman-cookie-123')).toBe(false);
     });
+
+    it('still refreshes views for submodule and linked-worktree metadata but ignores their locks', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'look-git-topology-watch-'));
+        const gitDir = path.join(root, '.git');
+        fs.mkdirSync(gitDir);
+        const onDidChange = vi.fn();
+        const watcher = new RepositoryGitWatcher(onDidChange);
+        try {
+            watcher.setContexts([{ id: 'repo', cwd: root, kind: RepoKind.Main, label: 'repo' }]);
+            const submodules = relativeWatcher(gitDir, 'modules/**');
+            const worktrees = relativeWatcher(gitDir, 'worktrees/**');
+            expect(submodules).toBeDefined();
+            expect(worktrees).toBeDefined();
+
+            submodules?.fireDidChange(vscode.Uri.file(path.join(gitDir, 'modules', 'lib', 'HEAD')));
+            worktrees?.fireDidChange(vscode.Uri.file(path.join(gitDir, 'worktrees', 'feature', 'index')));
+            submodules?.fireDidCreate(vscode.Uri.file(path.join(gitDir, 'modules', 'lib', 'index.lock')));
+            worktrees?.fireDidDelete(vscode.Uri.file(path.join(gitDir, 'worktrees', 'feature', 'index.lock')));
+
+            expect(onDidChange).toHaveBeenCalledTimes(2);
+        } finally {
+            watcher.dispose();
+            removeDirSyncWithRetry(root);
+        }
+    });
 });
 
 function relativeWatcher(rootPath: string, pattern: string) {

@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as path from 'path';
+import * as fs from 'node:fs';
 import type { GitBranch, GitStatus } from '@core/git/domain/git-status';
 import type { GitSubmodule, GitWorktree } from '@core/git/domain/git-worktree';
 import { RepoKind } from '@core/git/domain/repo-context';
@@ -10,9 +11,9 @@ import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { RuntimeRepositoryFactory } from '@extension/git/runtime-repository-factory';
 import { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import { RepositoryRuntimeRegistrar } from '@extension/repositories/repository-runtime-registrar';
-import { createRepoContext } from '@extension/repositories/repo-context-factory';
+import { createRepoContext, createSubmoduleRepoContext } from '@extension/repositories/repo-context-factory';
 import { stableRepoContextId } from '@extension/repositories/repo-context-id';
-import { createTempGitRepo, samePath, type TempGitRepo } from '@tests/helpers/git-repo';
+import { createSubmoduleFixture, createTempGitRepo, samePath, type TempGitRepo } from '@tests/helpers/git-repo';
 
 describe('RepositoryRuntimeRegistrar', () => {
     const repos: TempGitRepo[] = [];
@@ -32,7 +33,7 @@ describe('RepositoryRuntimeRegistrar', () => {
         expect(registry.worktrees(context.id)).toHaveLength(1);
 
         runtime.linkedWorktrees = [gitWorktree(linkedWorktreePath, false)];
-        await registrar.refreshWorktrees(registry, context);
+        await registrar.refreshContext(registry, context);
 
         const worktrees = registry.worktrees(context.id);
         expect(worktrees).toHaveLength(2);
@@ -54,6 +55,79 @@ describe('RepositoryRuntimeRegistrar', () => {
             context.id,
             stableRepoContextId(path.resolve(context.cwd, 'modules/auth-kit')),
         ]);
+    });
+
+    it('registers a submodule initialized after the parent runtime was registered', async () => {
+        const fixture = createSubmoduleFixture();
+        try {
+            fixture.parent.git(['submodule', 'deinit', '-f', '--', fixture.subPath]);
+            const context = createRepoContext(fixture.parent.cwd);
+            const runtime = new CliGitRuntime((args, runtimeContext, options) => new GitCliBackend(runtimeContext.cwd).run(args, options));
+            const registrar = new RepositoryRuntimeRegistrar(new RuntimeRepositoryFactory(runtime));
+            const registry = new RepositoryRegistry();
+            await registrar.registerContext(registry, context);
+            const parent = registry.repositories()[0];
+            fixture.parent.git(['-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '--', fixture.subPath]);
+
+            await registrar.refreshContext(registry, context);
+
+            expect(registry.repositories()).toHaveLength(2);
+            expect(registry.repositories()[0]).toBe(parent);
+        } finally {
+            fixture.cleanup();
+        }
+    });
+
+    it('removes a deinitialized submodule from the runtime registry', async () => {
+        const fixture = createSubmoduleFixture();
+        try {
+            const context = createRepoContext(fixture.parent.cwd);
+            const runtime = new CliGitRuntime((args, runtimeContext, options) => new GitCliBackend(runtimeContext.cwd).run(args, options));
+            const registrar = new RepositoryRuntimeRegistrar(new RuntimeRepositoryFactory(runtime));
+            const registry = new RepositoryRegistry();
+            await registrar.registerContext(registry, context);
+            const child = registry.repositories().find((repository) => repository.parentRepositoryId === context.id);
+            expect(child).toBeDefined();
+            fixture.parent.git(['submodule', 'deinit', '-f', '--', fixture.subPath]);
+
+            await registrar.refreshContext(registry, context);
+
+            expect(registry.repositories()).toHaveLength(1);
+            expect(registry.worktrees(child?.repoId ?? '')).toEqual([]);
+        } finally {
+            fixture.cleanup();
+        }
+    });
+
+    it.each(['direct', 'symlink'] as const)('rejects actions on a stale submodule runtime opened through %s instead of committing in its parent', async (location) => {
+        const fixture = createSubmoduleFixture();
+        try {
+            const context = createRepoContext(fixture.parent.cwd);
+            const runtime = new CliGitRuntime((args, runtimeContext, options) => new GitCliBackend(runtimeContext.cwd).run(args, options));
+            const registrar = new RepositoryRuntimeRegistrar(new RuntimeRepositoryFactory(runtime));
+            const registry = new RepositoryRegistry();
+            await registrar.registerContext(registry, context);
+            const child = registry.repositories().find((repository) => repository.parentRepositoryId === context.id);
+            let worktree = child && registry.worktrees(child.repoId)[0];
+            if (!worktree) { throw new Error('Expected registered submodule worktree.'); }
+            if (location === 'symlink') {
+                fixture.parent.mkdir('aliases');
+                const linkedPath = path.join(fixture.parent.cwd, 'aliases', 'child');
+                fs.symlinkSync(path.resolve(fixture.parent.cwd, fixture.subPath), linkedPath, process.platform === 'win32' ? 'junction' : 'dir');
+                worktree = await new RuntimeRepositoryFactory(runtime).createMainWorktree(createSubmoduleRepoContext(linkedPath, context.id));
+            }
+            const parentHead = fixture.parent.gitTrim(['rev-parse', 'HEAD']);
+            fixture.parent.git(['submodule', 'deinit', '-f', '--', fixture.subPath]);
+            fixture.parent.write('parent-only.txt', 'parent changes\n');
+            fixture.parent.git(['add', 'parent-only.txt']);
+
+            await expect(worktree.commit('must not commit in parent', {})).rejects.toThrow();
+
+            expect(fixture.parent.gitTrim(['rev-parse', 'HEAD'])).toBe(parentHead);
+            expect(fixture.parent.gitTrim(['diff', '--cached', '--name-only'])).toBe('parent-only.txt');
+        } finally {
+            fixture.cleanup();
+        }
     });
 
     it('registers an initialized repository without commits', async () => {
@@ -182,6 +256,50 @@ describe('RepositoryRuntimeRegistrar', () => {
         await expect(registration).rejects.toMatchObject({ name: 'AbortError' });
         expect(registry.repositories()).toEqual([initialRepository]);
         expect(registry.worktrees(context.id)).toEqual([initialWorktree]);
+    });
+
+    it('reuses unchanged submodule runtimes without loading their status again', async () => {
+        const context = createRepoContext('/repo');
+        const factory = new RuntimeRepositoryFactory(runtimeWithSubmodules([{ path: 'modules/lib', status: ' ' }]));
+        const registrar = new RepositoryRuntimeRegistrar(factory);
+        const registry = new RepositoryRegistry();
+        await registrar.registerContext(registry, context);
+        const child = registry.repositories()[1];
+        if (!child) { throw new Error('Expected initialized submodule.'); }
+        const childWorktrees = registry.worktrees(child.repoId);
+        const createWorktrees = vi.spyOn(factory, 'createWorktrees');
+
+        await registrar.refreshContext(registry, context);
+
+        expect(registry.repositories()[1]).toBe(child);
+        expect(registry.worktrees(child.repoId)).toEqual(childWorktrees);
+        expect(createWorktrees).toHaveBeenCalledExactlyOnceWith(context, undefined);
+    });
+
+    it.each(['abort', 'unregister'] as const)('does not publish a refresh after %s while loading submodules', async (interrupt) => {
+        const context = createRepoContext('/repo');
+        const registrar = new RepositoryRuntimeRegistrar(new RuntimeRepositoryFactory(runtimeWithLinkedWorktrees([])));
+        const registry = new RepositoryRegistry();
+        await registrar.registerContext(registry, context);
+        const repository = registry.repositories()[0];
+        if (!repository) { throw new Error('Expected parent repository.'); }
+        const originalWorktrees = registry.worktrees(context.id);
+        const submodules = deferred<readonly GitSubmodule[]>();
+        vi.spyOn(repository, 'listSubmodules').mockReturnValue(submodules.promise);
+        const controller = new AbortController();
+        const refresh = registrar.refreshContext(registry, context, controller.signal);
+        if (interrupt === 'abort') { controller.abort(); }
+        else { registry.unregisterRepositoryTree(context.id); }
+        submodules.resolve([]);
+
+        if (interrupt === 'abort') {
+            await expect(refresh).rejects.toMatchObject({ name: 'AbortError' });
+            expect(registry.worktrees(context.id)).toEqual(originalWorktrees);
+        } else {
+            await refresh;
+            expect(registry.repositories()).toEqual([]);
+            expect(registry.worktrees(context.id)).toEqual([]);
+        }
     });
 });
 

@@ -8,6 +8,7 @@ import { CliGitRuntime } from '@extension/git/cli-git-runtime';
 import type { GitExecutionContext } from '@application/ports/git-runtime';
 import type { CliGitRuntimeProcess } from '@extension/git/cli-git-runtime';
 import { removeDirSyncWithRetry } from '@tests/helpers/git-repo';
+import { normalizePathForComparison } from '@extension/utils/path-compare';
 
 const context = {
     cwd: '/repo',
@@ -61,7 +62,7 @@ describe('CliGitRuntime', () => {
 
         await expect(runtime.execute('listRemotes', context, undefined)).resolves.toEqual(['origin', 'upstream']);
         await expect(runtime.execute('previewClean', context, { paths: [] })).resolves.toEqual(['tmp.txt', 'build/out.js']);
-        expect(previewEnvs).toEqual([{ LC_ALL: 'C', LANG: 'C' }]);
+        expect(previewEnvs).toEqual([expect.objectContaining({ LC_ALL: 'C', LANG: 'C' })]);
     });
 
     it('pushes a branch to its upstream remote when no remote is provided', async () => {
@@ -188,7 +189,7 @@ describe('CliGitRuntime', () => {
 
     it('returns typed status data from git status output', async () => {
         const runtime = new CliGitRuntime(async (args) => {
-            if (args[0] === 'status') { return ' M file.txt\0'; }
+            if (args[0] === 'status') { return '1 .M N... 100644 100644 100644 abc123 abc123 file.txt\0'; }
             if (args[0] === 'config') { return ''; }
             throw new Error(`Unexpected args: ${args.join(' ')}`);
         });
@@ -199,6 +200,32 @@ describe('CliGitRuntime', () => {
             conflicts: [],
             conflictState: 'none',
         });
+    });
+
+    it('disables optional locks for read-only probes but preserves locks for mutations', async () => {
+        const calls: Array<{
+            readonly args: readonly string[];
+            readonly env: Readonly<Record<string, string>> | undefined;
+        }> = [];
+        const runtime = new CliGitRuntime(async (args, _context, options) => {
+            calls.push({ args: [...args], env: options.env });
+            if (args[0] === 'config') {
+                return 'submodule.one.path\nlibs/one\0';
+            }
+            if (args[0] === 'submodule') {
+                return ' abc123 libs/one (heads/main)\n';
+            }
+            return '';
+        });
+
+        await runtime.execute('getStatus', context, undefined);
+        await runtime.execute('listSubmodules', context, undefined);
+        await runtime.execute('stage', context, { paths: ['src/app.ts'] });
+
+        expect(calls.find((call) => call.args[0] === 'status')?.env).toEqual(expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }));
+        expect(calls.find((call) => call.args[0] === 'submodule')?.env).toEqual(expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }));
+        expect(calls.find((call) => call.args[0] === 'add')?.env?.GIT_OPTIONAL_LOCKS).toBeUndefined();
+        expect(calls.every((call) => call.env?.GIT_CEILING_DIRECTORIES === path.dirname(normalizePathForComparison(context.cwd)))).toBe(true);
     });
 
     it('returns typed branch and tag data', async () => {
@@ -318,12 +345,27 @@ describe('CliGitRuntime', () => {
 
         await runtime.execute('addWorktree', context, { path: '/repo-feature', branch: 'feature/new', createNew: true, startPoint: 'origin/feature/new' });
         await runtime.execute('removeWorktree', context, { worktree: '/repo-feature', force: true });
-        await runtime.execute('updateSubmodule', context, { path: 'libs/one' });
+        await runtime.execute('updateSubmodule', context, { path: 'libs/one', options: { init: true } });
 
         expect(calls).toEqual([
             ['worktree', 'add', '-b', 'feature/new', '/repo-feature', 'origin/feature/new'],
             ['worktree', 'remove', '/repo-feature', '--force'],
-            ['-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', 'libs/one'],
+            ['-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '--', 'libs/one'],
+        ]);
+    });
+
+    it('preserves submodule update options and keeps initialization explicit', async () => {
+        const calls: string[][] = [];
+        const runtime = new CliGitRuntime(recordingProcess(calls));
+
+        await runtime.execute('updateSubmodule', context, { path: 'libs/one', options: {} });
+        await runtime.execute('updateSubmodule', context, { path: 'libs/one', options: { init: true, recursive: true, remote: true } });
+        await runtime.execute('initSubmodule', context, { path: 'libs/one' });
+
+        expect(calls).toEqual([
+            ['-c', 'protocol.file.allow=always', 'submodule', 'update', '--', 'libs/one'],
+            ['-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '--recursive', '--remote', '--', 'libs/one'],
+            ['-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '--', 'libs/one'],
         ]);
     });
 
@@ -494,10 +536,10 @@ describe('CliGitRuntime', () => {
             ['rev-parse', '--abbrev-ref', 'HEAD'],
             ['rebase', '--autosquash', '--autostash', 'parent123', 'main'],
         ]);
-        expect(calls.at(-1)?.env).toEqual({
+        expect(calls.at(-1)?.env).toEqual(expect.objectContaining({
             GIT_SEQUENCE_EDITOR: 'true',
             GIT_EDITOR: 'true',
-        });
+        }));
     });
 
     it('throws for unsupported semantic actions', async () => {

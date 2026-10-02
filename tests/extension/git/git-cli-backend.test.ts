@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { GitCliBackend } from '@extension/git/git-cli-backend';
@@ -66,5 +66,38 @@ describe('GitCliBackend', () => {
         controller.abort();
 
         await expect(backend.run(['status'], { signal: controller.signal })).rejects.toThrow();
+    });
+
+    it('cancels a lock retry without waiting for its delay to end', async () => {
+        const r = repo();
+        r.write('file.txt', 'content\n');
+        fs.writeFileSync(path.join(r.cwd, '.git', 'index.lock'), '');
+        const controller = new AbortController();
+        const originalSetTimeout = globalThis.setTimeout;
+        let notifyRetry: (() => void) | undefined;
+        const retryStarted = new Promise<void>((resolve) => { notifyRetry = resolve; });
+        let releaseRetry: (() => void) | undefined;
+        const timerSpy = vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
+            if (delay !== 80) { return originalSetTimeout(callback, delay, ...args); }
+            const timer = originalSetTimeout(callback, 60_000, ...args);
+            releaseRetry = () => { clearTimeout(timer); callback(...args); };
+            notifyRetry?.();
+            return timer;
+        });
+        let failure: unknown;
+        const operation = new GitCliBackend(r.cwd).run(['add', '--', 'file.txt'], { signal: controller.signal })
+            .catch((error: unknown) => { failure = error; });
+
+        try {
+            await retryStarted;
+            controller.abort();
+            await new Promise<void>((resolve) => setImmediate(resolve));
+
+            expect(failure).toMatchObject({ name: 'AbortError' });
+        } finally {
+            releaseRetry?.();
+            timerSpy.mockRestore();
+            await operation;
+        }
     });
 });

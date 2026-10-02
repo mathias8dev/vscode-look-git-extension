@@ -104,7 +104,9 @@ export class RepositoryDiscoveryWatcher implements vscode.Disposable {
     }
 
     private handleFileSystemChange(uri: vscode.Uri): void {
-        const repositoryPath = gitRepositoryPath(uri.fsPath);
+        const repositoryPath = path.basename(uri.fsPath) === '.gitmodules'
+            ? path.dirname(uri.fsPath)
+            : gitRepositoryPath(uri.fsPath);
         if (!repositoryPath) { return; }
         const isKnownRepository = this.contextKeys.has(normalizePathForComparison(repositoryPath));
         if (isKnownRepository && !isRepositoryDiscoveryMarkerPath(uri.fsPath) && !isRepositoryTopologyPath(uri.fsPath)) {
@@ -148,6 +150,9 @@ export function isRepositoryDiscoveryMarkerPath(resourcePath: string): boolean {
 function isRepositoryTopologyPath(resourcePath: string): boolean {
     const segments = path.normalize(resourcePath).split(/[\\/]+/);
     const markerIndex = segments.lastIndexOf('.git');
-    const metadataRoot = segments[markerIndex + 1];
-    return metadataRoot === 'modules' || metadataRoot === 'worktrees';
+    if (segments.at(-1) === '.gitmodules') { return true; }
+    if (markerIndex === -1 || segments[markerIndex + 1] !== 'worktrees') { return false; }
+    const relative = segments.slice(markerIndex + 2);
+    return relative.length <= 1
+        || (relative.length === 2 && (relative[1] === 'gitdir' || relative[1] === 'commondir'));
 }

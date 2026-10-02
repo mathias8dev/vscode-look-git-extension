@@ -2,21 +2,18 @@ import * as fs from 'fs/promises';
 import type { GitExec } from '@extension/git/git-exec';
 import type { GitStatus, GitStash } from '@core/git/domain/git-status';
 import type { GitFileChange } from '@core/git/domain/git-commit';
-import { detectConflictStateFromFiles, parsePorcelainStatus } from '@core/parsing/parse-status';
+import { detectConflictStateFromFiles, parsePorcelainV2Status } from '@core/parsing/parse-status';
 import { parseNameStatusZ } from '@core/parsing/parse-name-status';
-import { querySubmoduleStatus } from '@extension/git/queries/query-submodules';
 
 export async function queryStatus(
     execRawReadonly: GitExec,
     signal?: AbortSignal,
 ): Promise<GitStatus> {
-    const [output, submodulePaths] = await Promise.all([
-        execRawReadonly(['status', '--porcelain=v1', '-z', '-u'], signal),
-        querySubmodulePaths(execRawReadonly, signal),
-    ]);
-
-    const { staged, unstaged, conflicts } = parsePorcelainStatus(output, submodulePaths);
-    return { staged, unstaged, conflicts, conflictState: await queryConflictState(execRawReadonly, signal) };
+    const output = await execRawReadonly(['status', '--porcelain=v2', '-z', '-u'], signal);
+    const { staged, unstaged, conflicts } = parsePorcelainV2Status(output);
+    const conflictState = await queryConflictState(execRawReadonly, signal);
+    signal?.throwIfAborted();
+    return { staged, unstaged, conflicts, conflictState };
 }
 
 async function queryConflictState(execRawReadonly: GitExec, signal?: AbortSignal): Promise<GitStatus['conflictState']> {
@@ -37,7 +34,8 @@ async function gitPathExists(execRawReadonly: GitExec, path: string, signal?: Ab
         const gitPath = await execRawReadonly(['rev-parse', '--path-format=absolute', '--git-path', path], signal);
         await fs.access(gitPath.trim());
         return true;
-    } catch {
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') { throw error; }
         return false;
     }
 }
@@ -46,21 +44,9 @@ async function refExists(execRawReadonly: GitExec, ref: string, signal?: AbortSi
     try {
         await execRawReadonly(['rev-parse', '-q', '--verify', ref], signal);
         return true;
-    } catch {
-        return false;
-    }
-}
-
-export async function querySubmodulePaths(
-    execRawReadonly: GitExec,
-    signal?: AbortSignal,
-): Promise<Set<string>> {
-    try {
-        const submodules = await querySubmoduleStatus(execRawReadonly, signal);
-        return new Set(submodules.map((submodule) => submodule.path));
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') { throw error; }
-        return new Set();
+        return false;
     }
 }
 

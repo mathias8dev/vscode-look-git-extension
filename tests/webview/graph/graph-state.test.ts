@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { GraphOperationCategory, GraphOperationStatus } from '@protocol/graph/messages';
 import type { BranchInfo, GraphCommit, GraphData, WorktreeWip } from '@protocol/graph/types';
 import { SubmoduleStatus, type RepositorySummary } from '@protocol/shared/repo';
-import { buildDisplayRows, createInitialGraphState, graphRequestId, reduceGraphState } from '@webview/features/graph/graph-state';
+import { buildDisplayRows, createInitialGraphState, graphRequestId, reduceGraphState, type DisplayRow } from '@webview/features/graph/graph-state';
 import type { GraphRow, LaneData } from '@webview/features/graph/layout/graph-lane-model';
+import { layoutGraphRowsV4 } from '@webview/features/graph/layout/layout-graph-rows-v4';
 import { findAdjacentDisconnectedSameLaneIssues, findFloatingNodeIssues, findLaneContinuityIssues } from '@tests/helpers/graph-layout-assertions';
 
 const mainRepository = { repoId: 'main-repo-id', kind: 'main', path: '/repo' } as const;
@@ -72,6 +73,15 @@ function laneData(lines: LaneData['lines'] = []): LaneData {
         isPrimary: false,
         lines,
     };
+}
+
+function displayRowsAsGraphRows(displayRows: readonly DisplayRow[]): readonly GraphRow[] {
+    return displayRows.map((displayRow) => displayRow.kind === 'commit'
+        ? displayRow.row
+        : {
+            commit: commit(`wip:${displayRow.wip.path}`, [displayRow.wip.head]),
+            laneData: displayRow.laneData,
+        });
 }
 
 describe('graphState', () => {
@@ -1327,6 +1337,112 @@ describe('graphState', () => {
             endY: 'center',
         }));
         expect(commitRow.row.laneData.lines).toContain(parentLine);
+    });
+
+    it.each([
+        {
+            name: 'an incoming branch and a parallel branch',
+            commits: [commit('merge', ['head', 'feature']), commit('head', ['base']), commit('feature', ['base']), commit('base')],
+            heads: ['head'],
+        },
+        {
+            name: 'multiple worktrees on the same commit',
+            commits: [commit('merge', ['head', 'feature']), commit('head', ['base']), commit('feature', ['base']), commit('base')],
+            heads: ['head', 'head', 'head'],
+        },
+        {
+            name: 'a branch tip beside another active branch',
+            commits: [commit('master', ['base']), commit('head', ['base']), commit('base')],
+            heads: ['head', 'head'],
+        },
+        {
+            name: 'a merge commit with multiple parents',
+            commits: [commit('tip', ['merge']), commit('merge', ['head', 'feature']), commit('head', ['base']), commit('feature', ['base']), commit('base')],
+            heads: ['merge'],
+        },
+        {
+            name: 'WIPs on different branches',
+            commits: [commit('merge', ['head', 'feature']), commit('head', ['base']), commit('feature', ['base']), commit('base')],
+            heads: ['head', 'feature'],
+        },
+        {
+            name: 'a hidden parent boundary beside a WIP',
+            commits: [commit('master', ['hidden-parent']), commit('head', ['base']), commit('base')],
+            heads: ['head'],
+        },
+    ])('preserves graph continuity through $name', ({ commits, heads }) => {
+        const rows = layoutGraphRowsV4(commits, { showHiddenParentBoundaryEdges: true }).rows;
+        const originalRows = structuredClone(rows);
+        expect(findLaneContinuityIssues(rows)).toEqual([]);
+
+        const displayRows = buildDisplayRows(rows, heads.map((head, index) => wip(`/repo/wt-${index}`, head)));
+        const renderedRows = displayRowsAsGraphRows(displayRows);
+
+        expect(displayRows.filter((displayRow) => displayRow.kind === 'wip')).toHaveLength(heads.length);
+        expect(findLaneContinuityIssues(renderedRows)).toEqual([]);
+        expect(findFloatingNodeIssues(renderedRows)).toEqual([]);
+        expect(rows).toEqual(originalRows);
+        for (const displayRow of displayRows) {
+            if (displayRow.kind !== 'commit') { continue; }
+            const original = rows.find((row) => row.commit.hash === displayRow.row.commit.hash);
+            expect(displayRow.row.commit).toBe(original?.commit);
+            expect(displayRow.row.laneData.lane).toBe(original?.laneData.lane);
+            expect(displayRow.row.laneData.color).toBe(original?.laneData.color);
+            expect(displayRow.row.laneData.lines.filter((line) => line.startY === 'center'))
+                .toEqual(original?.laneData.lines.filter((line) => line.startY === 'center'));
+        }
+    });
+
+    it('keeps incoming lane changes on the real commit instead of repeating them on WIPs', () => {
+        const incoming = {
+            fromLane: 2,
+            toLane: 1,
+            color: '#79b8ff',
+            type: 'merge-left',
+            targetHash: 'head',
+            role: 'pass-through',
+            startY: 'top',
+            endY: 'center',
+        } satisfies LaneData['lines'][number];
+        const passThrough = {
+            fromLane: 3,
+            toLane: 0,
+            color: '#f97583',
+            type: 'merge-left',
+            hiddenTargetHash: 'hidden-parent',
+            role: 'pass-through',
+            startY: 'top',
+            endY: 'bottom',
+        } satisfies LaneData['lines'][number];
+        const original = row('head', laneData([incoming, passThrough]));
+        const displayRows = buildDisplayRows([original], [wip('/repo/wt-a', 'head'), wip('/repo/wt-b', 'head')]);
+
+        displayRows.forEach((displayRow, index) => {
+            if (displayRow.kind !== 'wip') { return; }
+            expect(displayRow.laneData.lines).toEqual([
+                { ...incoming, toLane: 2, type: 'straight', endY: 'bottom' },
+                { ...passThrough, toLane: 3, type: 'straight' },
+                expect.objectContaining({
+                    fromLane: 1,
+                    toLane: 1,
+                    targetHash: 'head',
+                    startY: index === 0 ? 'center' : 'top',
+                    endY: 'bottom',
+                }),
+            ]);
+        });
+        const commitRow = displayRows[2];
+        if (commitRow?.kind !== 'commit') { throw new Error('Expected commit row.'); }
+        expect(commitRow.row.laneData.lines).toContain(incoming);
+        expect(commitRow.row.laneData.lines).toContain(passThrough);
+        expect(commitRow.row.laneData.lines).toContainEqual(expect.objectContaining({
+            fromLane: 1,
+            toLane: 1,
+            targetHash: 'head',
+            startY: 'top',
+            endY: 'center',
+        }));
+        expect(original.laneData.lines).toEqual([incoming, passThrough]);
     });
 });
 

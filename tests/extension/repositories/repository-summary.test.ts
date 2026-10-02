@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GitBranch, GitStatus } from '@core/git/domain/git-status';
 import type { GitSubmodule, GitWorktree } from '@core/git/domain/git-worktree';
 import { RepoKind } from '@core/git/domain/repo-context';
@@ -70,6 +70,22 @@ describe('RepositorySummaryService', () => {
 
         expect(summaries.map((summary) => summary.context.id)).toEqual([first.id, second.id]);
         expect(summaries.map((summary) => summary.hasRemote)).toEqual([false, false]);
+    });
+
+    it('loads each repository status only once when producing a summary', async () => {
+        const runtime = recordingRuntime({
+            branches: [branch('main', { current: true })],
+            remotes: [],
+            submodules: [],
+            worktrees: [worktree('/repo')],
+            status: cleanStatus(),
+        });
+        const execute = vi.spyOn(runtime, 'execute');
+        const service = new RepositorySummaryService(new RuntimeRepositoryFactory(runtime));
+
+        await service.summarize([createRepoContext('/repo')]);
+
+        expect(execute.mock.calls.filter(([operation]) => operation === 'getStatus')).toHaveLength(1);
     });
 
     it('excludes registered nested repositories from parent change counts', async () => {

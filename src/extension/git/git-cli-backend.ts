@@ -30,7 +30,7 @@ export class GitCliBackend implements GitBackend {
                 return stdout;
             } catch (error) {
                 if (attempt >= this.maxLockRetries || !isIndexLockError(error)) { throw error; }
-                await sleep(delayMs);
+                await sleep(delayMs, options.signal);
                 delayMs *= 2;
             }
         }
@@ -53,6 +53,18 @@ function isIndexLockError(error: unknown): boolean {
         || (combined.includes('Unable to create') && combined.includes('File exists'));
 }
 
-async function sleep(ms: number): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, ms));
+async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted();
+    await new Promise<void>((resolve, reject) => {
+        const onAbort = () => {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', onAbort);
+            reject(signal?.reason);
+        };
+        const timer = setTimeout(() => {
+            signal?.removeEventListener('abort', onAbort);
+            resolve();
+        }, ms);
+        signal?.addEventListener('abort', onAbort, { once: true });
+    });
 }
