@@ -26,6 +26,13 @@ export class RuntimeRepositoryFactory {
     }
 
     async createMainWorktree(context: RepoContext, signal?: AbortSignal): Promise<RuntimeWorktree> {
+        return (await this.createMainWorktreeWithStatus(context, signal)).worktree;
+    }
+
+    async createMainWorktreeWithStatus(context: RepoContext, signal?: AbortSignal): Promise<{
+        readonly worktree: RuntimeWorktree;
+        readonly status: GitStatus;
+    }> {
         const repository = this.createRepository(context);
         const baseWorktree = this.createWorktree({
             context,
@@ -41,7 +48,7 @@ export class RuntimeRepositoryFactory {
             baseWorktree.getStatus(signal),
         ]);
 
-        return new RuntimeWorktree({
+        const worktree = new RuntimeWorktree({
             repoId: repositoryIdFor(context),
             worktreeId: context.id,
             path: context.cwd,
@@ -53,6 +60,7 @@ export class RuntimeRepositoryFactory {
             branch: currentBranch === 'HEAD' ? undefined : currentBranch,
             dirty: isDirty(status),
         }, this.runtime);
+        return { worktree, status };
     }
 
     async createWorktrees(context: RepoContext, signal?: AbortSignal): Promise<readonly RuntimeWorktree[]> {

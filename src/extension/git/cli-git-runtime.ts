@@ -12,6 +12,7 @@ import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime
 import type { SemanticGitOperation } from '@application/ports/git-operation';
 import { GitPushOutcome, type CommitGraphQuery, type RebaseOptions } from '@application/ports/git-capabilities';
 import { requireRemoteBranchName } from '@extension/git/remote-branch';
+import { normalizePathForComparison } from '@extension/utils/path-compare';
 
 interface CliInvocation {
     readonly args: readonly string[];
@@ -30,9 +31,15 @@ export type CliGitRuntimeProcess = (
 ) => Promise<string>;
 
 export class CliGitRuntime implements GitRuntime {
-    constructor(
-        private readonly runProcess: CliGitRuntimeProcess,
-    ) {}
+    private readonly runProcess: CliGitRuntimeProcess;
+
+    constructor(runProcess: CliGitRuntimeProcess) {
+        // A removed .git marker must never redirect a runtime action to an ancestor repository.
+        this.runProcess = (args, context, options) => runProcess(args, context, {
+            ...options,
+            env: { ...options.env, GIT_CEILING_DIRECTORIES: path.dirname(normalizePathForComparison(context.cwd)) },
+        });
+    }
 
     supports(operation: SemanticGitOperation): boolean {
         return operation in CLI_INVOCATIONS || operation in CLI_HANDLERS;
@@ -191,10 +198,15 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
         return submodule;
     },
     updateSubmodule: async (input, runProcess, context, signal) => {
-        await updateSubmodule(trimmedExec(runProcess, context), requiredStringField(input, 'path'), signal);
+        const options = objectField(input, 'options');
+        await updateSubmodule(trimmedExec(runProcess, context), requiredStringField(input, 'path'), {
+            init: booleanOption(options, 'init'),
+            recursive: booleanOption(options, 'recursive'),
+            remote: booleanOption(options, 'remote'),
+        }, signal);
     },
     initSubmodule: async (input, runProcess, context, signal) => {
-        await updateSubmodule(trimmedExec(runProcess, context), requiredStringField(input, 'path'), signal);
+        await updateSubmodule(trimmedExec(runProcess, context), requiredStringField(input, 'path'), { init: true }, signal);
     },
     acceptOurs: async (input, runProcess, context, signal) => {
         await acceptConflictSide(trimmedExec(runProcess, context), 'ours', requiredStringArrayField(input, 'paths'), signal);

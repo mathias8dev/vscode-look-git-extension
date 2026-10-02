@@ -12,9 +12,12 @@ import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
 import { RuntimeWorktree } from '@extension/git/runtime-worktree';
 import { RepositoryRegistry } from '@extension/repositories/repository-registry';
+import { RepositoryRuntimeRegistrar } from '@extension/repositories/repository-runtime-registrar';
+import { RuntimeRepositoryFactory } from '@extension/git/runtime-repository-factory';
+import { createRepoContext } from '@extension/repositories/repo-context-factory';
 import { CommitHistoryViewProvider } from '@extension/views/commit-history-view-provider';
 import { makeWebviewView, resetVscodeMock } from '@tests/helpers/provider-runtime';
-import { createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
+import { createSubmoduleFixture, createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
 import { commands, setQuickPickValue, window } from '@tests/mocks/vscode';
 import { commitContextActionIds } from '@tests/helpers/commit-context-commands';
 
@@ -33,6 +36,41 @@ describe('CommitHistoryViewProvider', () => {
 
         for (const command of commitContextActionIds('lookGit.history')) {
             expect(commands.registrations.has(command), command).toBe(true);
+        }
+    });
+
+    it('returns to parent history when the selected submodule is deinitialized', async () => {
+        const fixture = createSubmoduleFixture();
+        try {
+            const context = createRepoContext(fixture.parent.cwd);
+            const runtime = new CliGitRuntime((args, runtimeContext, options) => new GitCliBackend(runtimeContext.cwd).run(args, options));
+            const registry = new RepositoryRegistry();
+            const registrar = new RepositoryRuntimeRegistrar(new RuntimeRepositoryFactory(runtime));
+            await registrar.registerContext(registry, context);
+            const provider = new CommitHistoryViewProvider(vscode.Uri.file('/extension'), { currentContext: context }, async () => {}, undefined, undefined, registry);
+            const view = makeWebviewView();
+            provider.resolveWebviewView(view);
+            provider.registerNativeContextCommands();
+            setQuickPickValue(`Submodule: ${fixture.subPath}`);
+            const childHead = fixture.parent.gitTrim(['-C', fixture.subPath, 'rev-parse', 'HEAD']);
+
+            await vscode.commands.executeCommand('lookGit.history.selectRepositoryScope');
+
+            expect(view.messages).toContainEqual(expect.objectContaining({
+                type: 'history/data', data: expect.objectContaining({ commits: expect.arrayContaining([expect.objectContaining({ hash: childHead })]) }),
+            }));
+            view.messages.length = 0;
+            fixture.parent.git(['submodule', 'deinit', '-f', '--', fixture.subPath]);
+            await registrar.refreshContext(registry, context);
+
+            await provider.refresh();
+
+            expect(view.messages.some((message) => isMessageType(message, 'history/error'))).toBe(false);
+            expect(view.messages).toContainEqual(expect.objectContaining({
+                type: 'history/data', data: expect.objectContaining({ commits: expect.arrayContaining([expect.objectContaining({ hash: fixture.parent.gitTrim(['rev-parse', 'HEAD']) })]) }),
+            }));
+        } finally {
+            fixture.cleanup();
         }
     });
 

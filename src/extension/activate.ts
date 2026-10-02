@@ -90,7 +90,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             const currentContext = repositories.currentContext;
             if (currentContext) {
                 try {
-                    await runtimeRegistrar.refreshWorktrees(runtimeRepositories, currentContext);
+                    await runtimeRegistrar.refreshContext(runtimeRepositories, currentContext);
                 } catch (error) {
                     appendErrorToOutput(createErrorPayload(error, {
                         code: 'gitOperationFailed',

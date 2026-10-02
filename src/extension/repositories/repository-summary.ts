@@ -20,13 +20,12 @@ export class RepositorySummaryService {
         signal?: AbortSignal,
     ): Promise<RepositorySummary> {
         const repository = this.runtimeRepositoryFactory.createRepository(context);
-        const mainWorktree = await this.runtimeRepositoryFactory.createMainWorktree(context, signal);
-        const [branches, remotes, submodules, worktrees, status] = await Promise.all([
+        const { worktree: mainWorktree, status } = await this.runtimeRepositoryFactory.createMainWorktreeWithStatus(context, signal);
+        const [branches, remotes, submodules, worktrees] = await Promise.all([
             repository.listBranches(signal),
             repository.listRemotes(signal),
             repository.listSubmodules(signal),
             repository.listWorktrees(signal),
-            mainWorktree.getStatus(signal),
         ]);
         const currentBranch = currentLocalBranch(branches);
         const visibleStatus = excludeNestedRepositoryChanges(status, nestedRepositoryPaths(context, contexts));

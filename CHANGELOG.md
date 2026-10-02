@@ -12,6 +12,10 @@ All notable changes to Look Git are documented in this file.
 - Race loading issue resolved
 - Large repo git action application accelerated
 - Prevent background repository reads from creating optional index locks and avoid redundant submodule status scans
+- Reconcile initialized and deinitialized submodules without reloading the window, and prevent stale runtimes from executing actions in a parent repository
+- Identify gitlinks from Git status metadata, including removed and conflicted entries, without misclassifying ordinary files from stale `.gitmodules` configuration
+- Avoid repository rediscovery for routine submodule and worktree metadata writes and reuse status snapshots when loading repository summaries
+- Cancel index-lock retry waits immediately and honor initialization, recursive, and remote options when updating submodules
 
 ## [1.2.9] - 2026-08-18
 
