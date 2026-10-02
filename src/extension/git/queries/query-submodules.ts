@@ -1,4 +1,5 @@
 import type { GitExec } from '@extension/git/git-exec';
+import type { SubmoduleUpdateOptions } from '@application/ports/git-capabilities';
 import type { GitSubmodule } from '@core/git/domain/git-worktree';
 import { parseNullTerminatedGitConfigValues } from '@core/parsing/parse-git-config';
 import { parseSubmoduleStatus } from '@core/parsing/parse-submodule-status';
@@ -27,12 +28,14 @@ export async function queryRegisteredSubmodulePaths(execRawReadonly: GitExec, si
     }
 }
 
-export async function updateSubmodule(exec: GitExec, submodulePath: string, signal?: AbortSignal): Promise<void> {
-    await exec(['-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', submodulePath], signal);
-}
-
-export async function updateAllSubmodules(exec: GitExec, signal?: AbortSignal): Promise<void> {
-    await exec(['-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '--recursive'], signal);
+export async function updateSubmodule(exec: GitExec, submodulePath: string, options: SubmoduleUpdateOptions, signal?: AbortSignal): Promise<void> {
+    await exec([
+        '-c', 'protocol.file.allow=always', 'submodule', 'update',
+        ...(options.init ? ['--init'] : []),
+        ...(options.recursive ? ['--recursive'] : []),
+        ...(options.remote ? ['--remote'] : []),
+        '--', submodulePath,
+    ], signal);
 }
 
 function isAbortError(error: unknown): boolean {

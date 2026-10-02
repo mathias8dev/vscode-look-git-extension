@@ -716,7 +716,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
 
     private async selectRepositoryScope(): Promise<void> {
         try {
-            const submodules = await this.loadSubmodules();
+            const submodules = (await this.loadSubmodules()).filter((submodule) => submodule.status !== '-');
             await this.applySubmoduleScopeContext(submodules);
             if (submodules.length === 0) {
                 await vscode.window.showInformationMessage('No submodules found in this repository.');
@@ -757,9 +757,9 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async applySubmoduleScopeContext(submodules: readonly GitSubmodule[]): Promise<void> {
-        await vscode.commands.executeCommand('setContext', 'lookGit.historyHasSubmodules', submodules.length > 0);
+        await vscode.commands.executeCommand('setContext', 'lookGit.historyHasSubmodules', submodules.some((submodule) => submodule.status !== '-'));
         if (!this.selectedRepositoryScope) { return; }
-        if (submodules.some((submodule) => submodule.path === this.selectedRepositoryScope?.path)) { return; }
+        if (submodules.some((submodule) => submodule.status !== '-' && submodule.path === this.selectedRepositoryScope?.path)) { return; }
         this.selectedRepositoryScope = undefined;
         this.selectedHistoryRef = undefined;
         this.contextTarget = undefined;

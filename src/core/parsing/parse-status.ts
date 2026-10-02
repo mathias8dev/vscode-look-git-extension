@@ -39,18 +39,51 @@ export function parsePorcelainStatus(output: string, submodulePaths: ReadonlySet
 
         const isSubmodule = submodulePaths.has(filePath) || undefined;
         const entry: GitStatusEntry = { indexStatus, workTreeStatus, filePath, origPath, isSubmodule };
-        const isConflict = indexStatus === 'U' || workTreeStatus === 'U'
-            || (CONFLICT_CODES.has(indexStatus) && CONFLICT_CODES.has(workTreeStatus));
-
-        if (isConflict) {
-            conflicts.push(entry);
-        } else {
-            if (indexStatus !== ' ' && indexStatus !== '?') { staged.push(entry); }
-            if (workTreeStatus !== ' ' || indexStatus === '?') { unstaged.push(entry); }
-        }
+        appendEntry({ staged, unstaged, conflicts }, entry);
     }
 
     return { staged, unstaged, conflicts };
+}
+
+export function parsePorcelainV2Status(output: string): RawStatusResult {
+    const result: RawStatusResult = { staged: [], unstaged: [], conflicts: [] };
+    const tokens = output.split('\0');
+    for (let i = 0; i < tokens.length; i++) {
+        const line = tokens[i];
+        if (!line) { continue; }
+        if (line.startsWith('? ')) {
+            appendEntry(result, { indexStatus: '?', workTreeStatus: '?', filePath: line.slice(2) });
+            continue;
+        }
+
+        const fields = line.split(' ');
+        const kind = fields[0];
+        const pathIndex = kind === '1' ? 8 : kind === '2' ? 9 : kind === 'u' ? 10 : undefined;
+        const xy = fields[1];
+        if (pathIndex === undefined || fields.length <= pathIndex || xy?.length !== 2) { continue; }
+        const modeEnd = kind === 'u' ? 7 : 6;
+        const isSubmodule = fields[2]?.startsWith('S') || fields.slice(3, modeEnd).includes('160000') || undefined;
+        appendEntry(result, {
+            indexStatus: xy[0] === '.' ? ' ' : xy[0] ?? ' ',
+            workTreeStatus: xy[1] === '.' ? ' ' : xy[1] ?? ' ',
+            filePath: fields.slice(pathIndex).join(' '),
+            origPath: kind === '2' ? tokens[++i] || undefined : undefined,
+            isSubmodule,
+        });
+    }
+    return result;
+}
+
+function appendEntry(result: RawStatusResult, entry: GitStatusEntry): void {
+    const { indexStatus, workTreeStatus } = entry;
+    const isConflict = indexStatus === 'U' || workTreeStatus === 'U'
+        || (CONFLICT_CODES.has(indexStatus) && CONFLICT_CODES.has(workTreeStatus));
+    if (isConflict) {
+        result.conflicts.push(entry);
+        return;
+    }
+    if (indexStatus !== ' ' && indexStatus !== '?') { result.staged.push(entry); }
+    if (workTreeStatus !== ' ' || indexStatus === '?') { result.unstaged.push(entry); }
 }
 
 export function summarizePorcelainStatus(output: string): PorcelainStatusSummary {

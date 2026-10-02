@@ -87,8 +87,8 @@ describe('repository discovery watcher', () => {
         workspaceWatcher?.fireDidChange(vscode.Uri.file('/workspace/app/.git/HEAD'));
         workspaceWatcher?.fireDidChange(vscode.Uri.file('/workspace/app/.git/index'));
         workspaceWatcher?.fireDidDelete(vscode.Uri.file('/workspace/app/.git'));
-        workspaceWatcher?.fireDidCreate(vscode.Uri.file('/workspace/app/.git/worktrees/feature/HEAD'));
-        workspaceWatcher?.fireDidCreate(vscode.Uri.file('/workspace/app/.git/modules/lib/HEAD'));
+        workspaceWatcher?.fireDidCreate(vscode.Uri.file('/workspace/app/.git/worktrees/feature/gitdir'));
+        workspaceWatcher?.fireDidChange(vscode.Uri.file('/workspace/app/.gitmodules'));
 
         expect(onDidChange).toHaveBeenCalledTimes(3);
         watcher.dispose();
@@ -119,6 +119,28 @@ describe('repository discovery watcher', () => {
             watcher.dispose();
             vi.useRealTimers();
         }
+    });
+
+    it('does not rediscover repositories for internal submodule and worktree writes', () => {
+        const onDidChange = vi.fn();
+        const watcher = createDiscoveryWatcher(onDidChange);
+        watcher.setContexts([{ id: 'main', cwd: '/workspace/app', kind: RepoKind.Main, label: 'app' }]);
+        const workspaceWatcher = broadWorkspaceWatcher();
+
+        for (const resource of [
+            '/workspace/app/.git/modules/lib/index.lock',
+            '/workspace/app/.git/modules/lib/index',
+            '/workspace/app/.git/modules/lib/objects/aa/bb',
+            '/workspace/app/.git/modules/lib/HEAD',
+            '/workspace/app/.git/worktrees/feature/index.lock',
+            '/workspace/app/.git/worktrees/feature/index',
+            '/workspace/app/.git/worktrees/feature/HEAD',
+        ]) {
+            workspaceWatcher?.fireDidChange(vscode.Uri.file(resource));
+        }
+
+        expect(onDidChange).not.toHaveBeenCalled();
+        watcher.dispose();
     });
 
     it('detects marker recreation after a deletion event even when the creation event is missed', () => {
