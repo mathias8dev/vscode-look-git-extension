@@ -4,7 +4,7 @@ import type { GitStatus, GitStash } from '@core/git/domain/git-status';
 import type { GitFileChange } from '@core/git/domain/git-commit';
 import { detectConflictStateFromFiles, parsePorcelainStatus } from '@core/parsing/parse-status';
 import { parseNameStatusZ } from '@core/parsing/parse-name-status';
-import { querySubmoduleStatus } from '@extension/git/queries/query-submodules';
+import { queryRegisteredSubmodulePaths } from '@extension/git/queries/query-submodules';
 
 export async function queryStatus(
     execRawReadonly: GitExec,
@@ -56,8 +56,7 @@ export async function querySubmodulePaths(
     signal?: AbortSignal,
 ): Promise<Set<string>> {
     try {
-        const submodules = await querySubmoduleStatus(execRawReadonly, signal);
-        return new Set(submodules.map((submodule) => submodule.path));
+        return new Set(await queryRegisteredSubmodulePaths(execRawReadonly, signal));
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') { throw error; }
         return new Set();
