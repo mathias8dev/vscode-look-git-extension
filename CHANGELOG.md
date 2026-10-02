@@ -2,6 +2,13 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [1.2.13] - Unreleased
+
+### Fixed
+
+#### Webview
+- Dismiss custom tooltips when their target leaves the DOM, cancel pending hover delays, and restore temporary target attributes
+
 ## [1.2.12] - 2026-10-02
 
 ### Fixed

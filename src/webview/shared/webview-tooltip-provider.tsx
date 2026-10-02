@@ -46,7 +46,6 @@ export function WebviewTooltipProvider({ children }: WebviewTooltipProviderProps
             timerRef.current = undefined;
         };
         const restoreTarget = (active: ActiveTooltip) => {
-            if (!active.target.isConnected) { return; }
             if (active.target.getAttribute('aria-describedby') !== active.appliedDescribedBy) { return; }
             if (active.previousDescribedBy === null) {
                 active.target.removeAttribute('aria-describedby');
@@ -55,14 +54,18 @@ export function WebviewTooltipProvider({ children }: WebviewTooltipProviderProps
             active.target.setAttribute('aria-describedby', active.previousDescribedBy);
         };
         const deactivate = () => {
+            targetObserver.disconnect();
             clearTimer();
             const active = activeRef.current;
             if (active) { restoreTarget(active); }
             activeRef.current = undefined;
             setVisibleTooltip(undefined);
             setPosition(undefined);
+            syncSuppressedTitles();
         };
         const reveal = (active: ActiveTooltip) => {
+            if (activeRef.current !== active) { return; }
+            if (!active.target.isConnected) { deactivate(); return; }
             clearTimer();
             setPosition(undefined);
             setVisibleTooltip({ target: active.target, content: active.content });
@@ -87,6 +90,7 @@ export function WebviewTooltipProvider({ children }: WebviewTooltipProviderProps
             activeRef.current = active;
             target.removeAttribute('title');
             target.setAttribute('aria-describedby', appliedDescribedBy);
+            targetObserver.observe(document.body, { childList: true, subtree: true });
             if (focused) {
                 reveal(active);
                 return;
@@ -106,6 +110,8 @@ export function WebviewTooltipProvider({ children }: WebviewTooltipProviderProps
             return targets;
         };
         const syncSuppressedTitles = () => {
+            hoveredTitleTargets = hoveredTitleTargets.filter((target) => target.isConnected);
+            focusedTitleTargets = focusedTitleTargets.filter((target) => target.isConnected);
             const retainedTargets = new Set([...hoveredTitleTargets, ...focusedTitleTargets]);
             for (const target of retainedTargets) {
                 const title = target.getAttribute('title');
@@ -116,7 +122,7 @@ export function WebviewTooltipProvider({ children }: WebviewTooltipProviderProps
             }
             for (const [target, title] of suppressedTitles) {
                 if (retainedTargets.has(target)) { continue; }
-                if (target.isConnected && !target.hasAttribute('title')) {
+                if (!target.hasAttribute('title')) {
                     target.setAttribute('title', title);
                 }
                 suppressedTitles.delete(target);
@@ -178,6 +184,10 @@ export function WebviewTooltipProvider({ children }: WebviewTooltipProviderProps
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') { deactivate(); }
         };
+        const targetObserver = new MutationObserver(() => {
+            const active = activeRef.current;
+            if (active && !active.target.isConnected) { deactivate(); }
+        });
 
         document.addEventListener('pointerover', onPointerOver);
         document.addEventListener('pointerout', onPointerOut);
@@ -187,6 +197,7 @@ export function WebviewTooltipProvider({ children }: WebviewTooltipProviderProps
         window.addEventListener('resize', deactivate);
         window.addEventListener('scroll', deactivate, true);
         return () => {
+            targetObserver.disconnect();
             document.removeEventListener('pointerover', onPointerOver);
             document.removeEventListener('pointerout', onPointerOut);
             document.removeEventListener('focusin', onFocusIn);
@@ -199,7 +210,7 @@ export function WebviewTooltipProvider({ children }: WebviewTooltipProviderProps
             if (active) { restoreTarget(active); }
             activeRef.current = undefined;
             for (const [target, title] of suppressedTitles) {
-                if (target.isConnected && !target.hasAttribute('title')) {
+                if (!target.hasAttribute('title')) {
                     target.setAttribute('title', title);
                 }
             }
