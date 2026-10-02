@@ -2,7 +2,7 @@
 
 All notable changes to Look Git are documented in this file.
 
-## [1.2.13] - Unreleased
+## [1.2.13] - 2026-10-02
 
 ### Fixed
 
