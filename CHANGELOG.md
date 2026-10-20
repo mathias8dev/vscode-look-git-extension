@@ -2,6 +2,13 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [1.2.14] - 2026-10-20
+
+### Fixed
+
+#### Changes Panel
+- Clear a stale Activity Bar change badge after VS Code recreates the Changes webview with a clean repository
+
 ## [1.2.13] - 2026-10-02
 
 ### Fixed
