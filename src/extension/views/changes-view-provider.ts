@@ -216,6 +216,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     );
     private readonly squashMessagePresetByWorktreeId = new Map<string, string>();
     private commitMessagePresetSequence = 0;
+    private badgeStateSynchronized = false;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -233,6 +234,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
         this.view = webviewView;
+        this.badgeStateSynchronized = false;
         this.statusDataPoster.clear();
 
         webviewView.webview.options = {
@@ -736,9 +738,18 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
     }
 
     private updateBadge(count: number): void {
-        if (this.view) {
-            this.view.badge = count > 0 ? { value: count, tooltip: `${count} change${count !== 1 ? 's' : ''}` } : undefined;
+        if (!this.view) { return; }
+        if (count > 0) {
+            this.view.badge = { value: count, tooltip: `${count} change${count !== 1 ? 's' : ''}` };
+            this.badgeStateSynchronized = true;
+            return;
         }
+        if (!this.badgeStateSynchronized && this.view.badge === undefined) {
+            // Force VS Code to forward the clear when a recreated extension-host view has lost the workbench's stale badge state.
+            this.view.badge = { value: 0, tooltip: 'No changes' };
+        }
+        this.view.badge = undefined;
+        this.badgeStateSynchronized = true;
     }
 
     private postStatusDataIfChanged(message: ReturnType<typeof buildStatusData>): void {

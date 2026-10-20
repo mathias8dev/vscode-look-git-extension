@@ -118,6 +118,31 @@ describe('ChangesViewProvider', () => {
         }));
     });
 
+    it('clears a workbench badge that outlives its extension-host view state', async () => {
+        const context: RepoContext = { id: 'repo-1', cwd: '/repo', kind: RepoKind.Main, label: 'repo' };
+        const provider = new ChangesViewProvider(
+            vscode.Uri.file('/extension'), repositorySelection(context), async () => {},
+            undefined, undefined, undefined, undefined, runtimeRegistry(context, changesRuntime(statusWithUnstagedFile())),
+        );
+        const view = makeWebviewView();
+        let extensionHostBadge: vscode.ViewBadge | undefined;
+        let workbenchBadge: vscode.ViewBadge | undefined = { value: 6, tooltip: '6 changes' };
+        Object.defineProperty(view, 'badge', {
+            get: () => extensionHostBadge,
+            set: (badge: vscode.ViewBadge | undefined) => {
+                if (extensionHostBadge?.value === badge?.value && extensionHostBadge?.tooltip === badge?.tooltip) { return; }
+                extensionHostBadge = badge;
+                workbenchBadge = badge;
+            },
+        });
+
+        provider.resolveWebviewView(view);
+        await provider.refresh();
+
+        expect(workbenchBadge).toBeUndefined();
+        vi.clearAllTimers();
+    });
+
     it.each([true, false])('clears the old badge immediately when navigating to a repository: %s', async (hasRepository) => {
         const { provider, view, repositories, child } = badgeFixture();
         await provider.refresh();
