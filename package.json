@@ -2622,13 +2622,13 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run package",
+    "vscode:prepublish": "pnpm run package",
     "check-types": "tsc --noEmit",
     "build:extension": "node esbuild.js",
     "build:webview": "vite build",
     "clean:out": "node -e \"require('fs').rmSync('out', { recursive: true, force: true })\"",
-    "compile:tests": "npm run clean:out && tsc -p tsconfig.test.json && tsc-alias -p tsconfig.test.json",
-    "compile": "npm run check-types && npm run build:webview && npm run build:extension",
+    "compile:tests": "pnpm run clean:out && tsc -p tsconfig.test.json && tsc-alias -p tsconfig.test.json",
+    "compile": "pnpm run check-types && pnpm run build:webview && pnpm run build:extension",
     "dev:webview": "vite",
     "watch": "npm-run-all -p watch:*",
     "watch:extension": "node esbuild.js --watch",
@@ -2637,16 +2637,16 @@
     "icons:html": "node scripts/generate-icon-gallery.js",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build -o artifacts/storybook",
-    "package": "npm run check-types && npm run build:webview && node esbuild.js --production",
+    "package": "pnpm run check-types && pnpm run build:webview && node esbuild.js --production",
     "vsix": "node scripts/package-vsix.ts",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "test:integration": "npm run compile && npm run compile:tests && node ./out/tests/integration/run-test.js",
-    "test:e2e": "npm run compile && npm run compile:tests && node ./out/tests/e2e/run-e2e.js",
-    "test:e2e:vsix": "npm run compile && npm run compile:tests && node ./out/tests/e2e/run-installed-vsix-e2e.js",
+    "test:integration": "pnpm run compile && pnpm run compile:tests && node ./out/tests/integration/run-test.js",
+    "test:e2e": "pnpm run compile && pnpm run compile:tests && node ./out/tests/e2e/run-e2e.js",
+    "test:e2e:vsix": "pnpm run compile && pnpm run compile:tests && node ./out/tests/e2e/run-installed-vsix-e2e.js",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\" \"*.js\" \"*.mjs\" --max-warnings=0",
     "check:duplication": "jscpd src/ --min-lines 5 --min-tokens 50 --threshold 3",
-    "publish:ext": "npx @vscode/vsce publish"
+    "publish:ext": "pnpm exec vsce publish"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -2706,5 +2706,14 @@
   "galleryBanner": {
     "color": "#1e1e1e",
     "theme": "dark"
-  }
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@vscode/vsce-sign",
+      "esbuild",
+      "fsevents",
+      "keytar"
+    ]
+  },
+  "packageManager": "pnpm@10.34.5"
 }

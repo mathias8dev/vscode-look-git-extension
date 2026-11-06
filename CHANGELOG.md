@@ -285,7 +285,7 @@ All notable changes to Look Git are documented in this file.
 - Pin Windows CI jobs to `windows-2022` to avoid `windows-latest` runner image drift breaking E2E tests
 
 #### Packaging
-- Run VSCE through the local `@vscode/vsce` CLI entrypoint so `npm run vsix` works on Windows
+- Run VSCE through the local `@vscode/vsce` CLI entrypoint so `pnpm run vsix` works on Windows
 
 ## [1.0.2] - 2026-06-09
 

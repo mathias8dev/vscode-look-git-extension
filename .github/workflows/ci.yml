@@ -22,14 +22,17 @@ jobs:
       - name: Normalize git line endings (Windows)
         if: runner.os == 'Windows'
         run: git config --global core.autocrlf false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run compile
-      - run: npm test
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run compile
+      - run: pnpm run test
 
   e2e:
     name: E2E (${{ matrix.os }})
@@ -43,26 +46,29 @@ jobs:
       - name: Normalize git line endings (Windows)
         if: runner.os == 'Windows'
         run: git config --global core.autocrlf false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: Run integration tests
         if: runner.os != 'Linux'
-        run: npm run test:integration
+        run: pnpm run test:integration
       - name: Run integration tests under Xvfb
         if: runner.os == 'Linux'
-        run: xvfb-run -a npm run test:integration
+        run: xvfb-run -a pnpm run test:integration
       - name: Run E2E tests
         if: runner.os != 'Linux'
-        run: npm run test:e2e
+        run: pnpm run test:e2e
       - name: Run E2E tests under Xvfb
         if: runner.os == 'Linux'
-        run: xvfb-run -a npm run test:e2e
+        run: xvfb-run -a pnpm run test:e2e
       - name: Run packaged VSIX E2E under Xvfb
         if: runner.os == 'Linux'
-        run: xvfb-run -a npm run test:e2e:vsix
+        run: xvfb-run -a pnpm run test:e2e:vsix
       - name: Upload E2E diagnostics
         if: failure()
         uses: actions/upload-artifact@v7
@@ -110,13 +116,16 @@ jobs:
         if: steps.release_pr.outputs.eligible == 'true'
         with:
           fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
       - uses: actions/setup-node@v7
         if: steps.release_pr.outputs.eligible == 'true'
         with:
           node-version-file: .nvmrc
-          cache: npm
+          cache: pnpm
       - if: steps.release_pr.outputs.eligible == 'true'
-        run: npm ci
+        run: pnpm install --frozen-lockfile
       - name: Resolve version and tag state
         if: steps.release_pr.outputs.eligible == 'true'
         id: meta
@@ -132,7 +141,7 @@ jobs:
           fi
       - name: Package VSIX
         if: steps.release_pr.outputs.eligible == 'true' && steps.meta.outputs.exists == 'false'
-        run: npm run vsix -- release
+        run: pnpm run vsix release
       - name: Create tag and GitHub release
         if: steps.release_pr.outputs.eligible == 'true' && steps.meta.outputs.exists == 'false'
         uses: softprops/action-gh-release@v3

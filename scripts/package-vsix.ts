@@ -59,7 +59,7 @@ function packageOptions(args: readonly string[]): PackageOptions {
             createTag = true;
             continue;
         }
-        throw new Error('Usage: npm run vsix -- [experimental|release] [--tag] [--help]');
+        throw new Error('Usage: pnpm run vsix [experimental|release] [--tag] [--help]');
     }
     return { mode, createTag, help };
 }
@@ -84,7 +84,7 @@ function packageDisplayNameFor(baseDisplayName: string, mode: PackageMode): stri
 
 function printHelp(): void {
     process.stdout.write(`Usage:
-  npm run vsix -- [experimental|release] [--tag]
+  pnpm run vsix [experimental|release] [--tag]
 
 Modes:
   default        Package to look-git-<current>-YYYYMMDDhhmmss.vsix.

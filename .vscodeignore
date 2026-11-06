@@ -48,3 +48,6 @@ lookX
 
 # Source maps (optional — remove this line to keep them)
 dist/**/*.map
+
+# Generated dependency lockfile
+pnpm-lock.yaml
