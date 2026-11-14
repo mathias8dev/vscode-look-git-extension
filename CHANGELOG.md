@@ -36,6 +36,9 @@ All notable changes to Look Git are documented in this file.
 
 ### Fixed
 
+#### Changes Panel
+- Refresh the activity badge from the latest Git status without waiting for worktree topology, stashes or submodule metadata, including while Changes is hidden
+
 #### Look Graph Tags
 - Allow mouse and keyboard tag context-menu events to reach VS Code without replacing the tag context with its parent commit
 

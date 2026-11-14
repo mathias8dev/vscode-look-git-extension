@@ -23,9 +23,14 @@ export class GetRuntimeChangesStatusUseCase {
         repository: GitReferenceOperations & GitSubmoduleOperations,
         worktree: GitStatusOperations & GitStashOperations,
         signal?: AbortSignal,
+        onStatus?: (status: GitStatus) => void,
     ): Promise<RuntimeChangesStatusResult> {
         const [status, stashesPage, submodulesResult, branchesResult] = await Promise.all([
-            worktree.getStatus(signal),
+            worktree.getStatus(signal).then(status => {
+                signal?.throwIfAborted();
+                onStatus?.(status);
+                return status;
+            }),
             worktree.listStashes(this.stashPage, signal),
             settleOptional('changes/listSubmodules', repository.listSubmodules(signal)),
             settleOptional('changes/listBranches', repository.listBranches(signal)),

@@ -86,6 +86,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const commitHistoryProvider = new CommitHistoryViewProvider(context.extensionUri, repositories, refreshAll, context.globalStorageUri, undefined, runtimeRepositories, handleRepositoryNavigation, async () => isRuntimeReadyForCurrentContext());
     const repositoryRefreshCoordinator = new RepositoryRefreshCoordinator({
         isReady: isRuntimeReadyForCurrentContext,
+        refreshChanges: () => changesProvider.refresh(),
         refreshRuntime: async () => {
             const currentContext = repositories.currentContext;
             if (currentContext) {
@@ -102,7 +103,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         },
         refreshViews: async () => {
             await Promise.all([
-                changesProvider.refresh(),
                 commitHistoryProvider.refresh(),
                 graphProvider.refresh(),
             ]);
