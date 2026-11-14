@@ -20,6 +20,7 @@ interface ResizablePanelProps {
     readonly ariaLabel: string;
     readonly title: string;
     readonly onSizeChange?: (size: number) => void;
+    readonly getCurrentSize?: () => number | undefined;
     readonly children: (style: CSSProperties) => ReactNode;
 }
 
@@ -41,6 +42,7 @@ export function ResizablePanel({
     ariaLabel,
     title,
     onSizeChange,
+    getCurrentSize,
     children,
 }: ResizablePanelProps) {
     const [size, setSize] = useState(() => readSavedSize(storageKey, minSize, maxSize, defaultSize));
@@ -85,7 +87,7 @@ export function ResizablePanel({
         dragRef.current = {
             pointerId: event.pointerId,
             startCoordinate: coordinateForEvent(event, axis),
-            startSize: size,
+            startSize: clampSize(getCurrentSize?.() ?? size),
             previousCursor: document.body.style.cursor,
             previousUserSelect: document.body.style.userSelect,
         };
@@ -94,7 +96,7 @@ export function ResizablePanel({
         }
         document.body.style.cursor = axis === ResizeAxis.Horizontal ? 'col-resize' : 'row-resize';
         document.body.style.userSelect = 'none';
-    }, [axis, size]);
+    }, [axis, clampSize, getCurrentSize, size]);
 
     const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         const drag = dragRef.current;
@@ -118,14 +120,15 @@ export function ResizablePanel({
 
     const handleKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
         let nextSize: number | undefined;
+        const currentSize = clampSize(getCurrentSize?.() ?? size);
         const step = event.shiftKey ? KEYBOARD_STEP * 2 : KEYBOARD_STEP;
         if (axis === ResizeAxis.Horizontal) {
             switch (event.key) {
                 case 'ArrowLeft':
-                    nextSize = clampSize(size + (handleSide === ResizeHandleSide.Start ? step : -step));
+                    nextSize = clampSize(currentSize + (handleSide === ResizeHandleSide.Start ? step : -step));
                     break;
                 case 'ArrowRight':
-                    nextSize = clampSize(size + (handleSide === ResizeHandleSide.Start ? -step : step));
+                    nextSize = clampSize(currentSize + (handleSide === ResizeHandleSide.Start ? -step : step));
                     break;
                 case 'Home':
                     nextSize = minSize;
@@ -139,10 +142,10 @@ export function ResizablePanel({
         } else {
             switch (event.key) {
                 case 'ArrowUp':
-                    nextSize = clampSize(size + (handleSide === ResizeHandleSide.Start ? step : -step));
+                    nextSize = clampSize(currentSize + (handleSide === ResizeHandleSide.Start ? step : -step));
                     break;
                 case 'ArrowDown':
-                    nextSize = clampSize(size + (handleSide === ResizeHandleSide.Start ? -step : step));
+                    nextSize = clampSize(currentSize + (handleSide === ResizeHandleSide.Start ? -step : step));
                     break;
                 case 'Home':
                     nextSize = minSize;
@@ -156,7 +159,7 @@ export function ResizablePanel({
         }
         event.preventDefault();
         setPanelSize(nextSize, true);
-    }, [axis, clampSize, handleSide, maxSize, minSize, setPanelSize, size]);
+    }, [axis, clampSize, getCurrentSize, handleSide, maxSize, minSize, setPanelSize, size]);
 
     const style = styleForAxis(axis, size);
     const handle = (

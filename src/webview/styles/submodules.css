@@ -3,8 +3,7 @@
 .submodule-panel {
     display: grid;
     min-width: 0;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border, #3c3c3c));
+    margin-top: 4px;
 }
 
 .submodule-panel-header {
@@ -57,7 +56,6 @@
 .submodule-item {
     display: grid;
     min-width: 0;
-    border-top: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
 }
 
 .submodule-item-header {
@@ -150,7 +148,7 @@
     display: grid;
     min-width: 0;
     overflow: hidden;
-    padding: 0 8px 4px 18px;
+    padding: 0 8px 4px var(--look-git-changes-indent, 1.1em);
 }
 
 .submodule-change-areas {

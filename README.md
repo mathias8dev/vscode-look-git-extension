@@ -27,6 +27,7 @@ A modern, Git extension for Visual Studio Code — featuring a visual commit gra
 - **Submodule command menus** — run commit, pull, push, fetch, branch, stash, tag, and output actions against a submodule without leaving the Changes panel
 - **Conflict resolution** — dedicated section with merge editor, Accept Ours / Accept Theirs actions per file
 - **Tree & list view** — toggle between hierarchical folder tree and flat file list
+- **Resizable lists** — adjust the height of staged, unstaged, conflict, stash and submodule lists with remembered sizes and independent scrolling
 - **Sort controls** — order changes by path, file name, status, or extension
 - **Keyboard navigation** — ↑↓ to move between files, Enter to open diff
 

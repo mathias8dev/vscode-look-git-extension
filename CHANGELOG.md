@@ -6,6 +6,9 @@ All notable changes to Look Git are documented in this file.
 
 ### Added
 
+#### Changes Panel
+- Resize staged, unstaged, conflict, stash and submodule lists vertically, with independent scrolling and remembered sizes
+
 #### Branch Comparison
 - Compare any two local or remote branches in a separate editor window, with changes since divergence or between branch tips
 - Select two branches with Ctrl/Cmd-click and compare them directly from the toolbar or context menu
@@ -17,6 +20,9 @@ All notable changes to Look Git are documented in this file.
 - Compare two selected commits in the native VS Code changes editor
 
 ### Changed
+
+#### Changes Panel
+- Indent section children consistently and remove duplicate borders around resizable stash and submodule lists
 
 #### Webview
 - Share searchable dropdowns across branch comparison and graph filters, with keyboard navigation, loading states and paginated branch choices
