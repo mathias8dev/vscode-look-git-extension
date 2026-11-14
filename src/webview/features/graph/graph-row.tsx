@@ -67,9 +67,12 @@ export function GraphCommitRow({ row, branches, currentTagNames = [], tagPublica
                 onSelect(commit.hash, mode);
             }}
             onMouseDown={(event) => {
+                if (!ownsContextMenuTarget(event.currentTarget, event.target)) { return; }
                 if (event.button === 2) { onOpenContextMenu(commit); }
             }}
-            onContextMenu={() => onOpenContextMenu(commit)}
+            onContextMenu={event => {
+                if (ownsContextMenuTarget(event.currentTarget, event.target)) { onOpenContextMenu(commit); }
+            }}
             onKeyDown={(e) => {
                 if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                     e.preventDefault();
@@ -132,6 +135,10 @@ function formatGraphCommitDate(iso: string): string {
 
 function twoDigits(value: number): string {
     return String(value).padStart(2, '0');
+}
+
+function ownsContextMenuTarget(row: HTMLElement, target: EventTarget | null): boolean {
+    return target instanceof Element && target.closest('[data-vscode-context]') === row;
 }
 
 function graphCommitDisabledReasons(input: {

@@ -36,6 +36,9 @@ All notable changes to Look Git are documented in this file.
 
 ### Fixed
 
+#### Look Graph Tags
+- Allow mouse and keyboard tag context-menu events to reach VS Code without replacing the tag context with its parent commit
+
 #### Commit History and Look Graph
 - Adapt context menus to the selection and hide single-item actions, including comparisons with Local or Worktree, when multiple items are selected
 - Honour detached checkout options and resolve annotated tags to their target commits while retaining their tag object IDs

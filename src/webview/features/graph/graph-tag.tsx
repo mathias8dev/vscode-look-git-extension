@@ -33,7 +33,7 @@ export function GraphTag({ tag, isCurrent, variant, publication, checkedAt, onSe
                 event.stopPropagation();
                 if (event.button === 2) { selectContext(); }
             }}
-            onContextMenu={event => { event.stopPropagation(); selectContext(); }}
+            onContextMenu={selectContext}
             onKeyDown={event => {
                 event.stopPropagation();
                 if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {

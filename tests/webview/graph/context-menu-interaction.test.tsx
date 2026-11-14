@@ -19,6 +19,31 @@ describe('graph native context menu targets', () => {
         Object.defineProperty(window, 'ResizeObserver', { configurable: true, value: TestResizeObserver });
     });
 
+    it('preserves the nested tag context while the event reaches the native window listener', () => {
+        const onContextTarget = vi.fn<(target: GraphContextTarget) => void>();
+        const nativeMenu = vi.fn<(event: MouseEvent) => void>();
+        const rows = layoutGraphRowsV4([{ ...commit('tagged', []), refs: ['tag: v1'] }]).rows;
+        window.addEventListener('contextmenu', nativeMenu);
+        try {
+            render(<GraphTable rows={rows} displayRows={rows.map(row => ({ kind: 'commit', row }))}
+                branches={[]} selectedHashes={[]} selectedWorktreePath={undefined} hasMore={false} loadingMore={false}
+                onSelectCommit={() => undefined} onSelectWorktree={() => undefined} onContextTarget={onContextTarget}
+                onLoadMore={() => undefined} onBranchDoubleClick={() => undefined} onMoveFocus={() => undefined} />);
+            const tag = screen.getByRole('button', { name: /v1/ });
+            const icon = tag.querySelector('.codicon-tag');
+            if (!icon) { throw new Error('Expected the tag icon.'); }
+            fireEvent.mouseDown(icon, { button: 2 });
+            fireEvent.contextMenu(icon);
+            expect(nativeMenu).toHaveBeenCalledTimes(1);
+            expect(nativeMenu.mock.calls[0]?.[0].defaultPrevented).toBe(false);
+            expect(onContextTarget.mock.calls.every(([target]) => target.kind === 'tag')).toBe(true);
+            expect(onContextTarget).toHaveBeenLastCalledWith({ kind: 'tag', tag: 'v1', isCurrent: false });
+            fireEvent.keyDown(tag, { key: 'ContextMenu' });
+            expect(nativeMenu).toHaveBeenCalledTimes(2);
+            expect(onContextTarget.mock.calls.every(([target]) => target.kind === 'tag')).toBe(true);
+        } finally { window.removeEventListener('contextmenu', nativeMenu); }
+    });
+
     it('marks branch rows as VS Code native context targets', () => {
         const onContextTarget = vi.fn<(target: GraphContextTarget) => void>();
 

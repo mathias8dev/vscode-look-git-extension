@@ -40,24 +40,27 @@ describe('graph tag interactions', () => {
         expect(screen.queryAllByLabelText('Pushed')).toHaveLength(0);
     });
 
-    it('keeps tag selection and its native context menu independent of the parent commit menu', () => {
-        const parentContext = vi.fn();
+    it.each(['badge', 'list'] as const)('lets the native host receive mouse and keyboard menus from a tag %s', variant => {
+        const nativeMenu = vi.fn<(event: MouseEvent) => void>();
         const onSelect = vi.fn();
         const onContextTarget = vi.fn();
-        render(<div onContextMenu={parentContext}>
-            <GraphTag tag={{ name: 'v1', hash: 'base' }} isCurrent={false} variant="badge" onSelect={onSelect} onContextTarget={onContextTarget} />
-        </div>);
-        const button = screen.getByRole('button', { name: /v1/ });
-        fireEvent.click(button);
-        expect(onSelect).toHaveBeenCalledWith('base');
-        expect(onContextTarget).not.toHaveBeenCalled();
-        fireEvent.contextMenu(button);
-        expect(parentContext).not.toHaveBeenCalled();
-        expect(onContextTarget).toHaveBeenLastCalledWith({ kind: 'tag', tag: 'v1', isCurrent: false });
-        expect(button.getAttribute('data-vscode-context')).toContain('"webviewSection":"graphTag"');
-        fireEvent.keyDown(button, { key: 'F10', shiftKey: true });
-        expect(parentContext).not.toHaveBeenCalled();
-        expect(onContextTarget).toHaveBeenCalledTimes(3);
+        window.addEventListener('contextmenu', nativeMenu);
+        try {
+            render(<GraphTag tag={{ name: 'v1', hash: 'base' }} isCurrent={false} variant={variant}
+                onSelect={onSelect} onContextTarget={onContextTarget} />);
+            const button = screen.getByRole('button', { name: /v1/ });
+            fireEvent.click(button);
+            expect(onSelect).toHaveBeenCalledWith('base');
+            expect(onContextTarget).not.toHaveBeenCalled();
+            fireEvent.contextMenu(button);
+            expect(nativeMenu).toHaveBeenCalledTimes(1);
+            expect(nativeMenu.mock.calls[0]?.[0].defaultPrevented).toBe(false);
+            expect(onContextTarget).toHaveBeenLastCalledWith({ kind: 'tag', tag: 'v1', isCurrent: false });
+            expect(button.getAttribute('data-vscode-context')).toContain('"webviewSection":"graphTag"');
+            fireEvent.keyDown(button, { key: 'F10', shiftKey: true });
+            expect(nativeMenu).toHaveBeenCalledTimes(2);
+            expect(nativeMenu.mock.calls[1]?.[0].defaultPrevented).toBe(false);
+        } finally { window.removeEventListener('contextmenu', nativeMenu); }
     });
 
     it('checks tags in the background, preserves the check across graph refreshes, and returns to the previous branch', async () => {
