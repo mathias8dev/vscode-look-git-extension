@@ -4,6 +4,7 @@ import type { GitCommit, GitFileChange } from '@core/git/domain/git-commit';
 import type { GitBranch, GitTag } from '@core/git/domain/git-status';
 import type { GitRepository, Worktree } from '@application/ports/git-topology';
 import { GitPushOutcome } from '@application/ports/git-capabilities';
+import { GetCommitDetailsUseCase } from '@application/usecases/graph/get-commit-details';
 import type { RepositorySelectionAccessor } from '@extension/repositories/repository-selection-store';
 import type { ErrorCode, Pagination, RequestId } from '@protocol/shared/base';
 import { OperationStatus } from '@protocol/shared/operation';
@@ -43,6 +44,7 @@ const HISTORY_COMMIT_COMMANDS: readonly { readonly id: string; readonly command:
     { id: 'lookGit.history.checkoutRevision', command: 'checkoutRevision' },
     { id: 'lookGit.history.showRepositoryAtRevision', command: 'showRepositoryAtRevision' },
     { id: 'lookGit.history.compareWithLocal', command: 'compareWithLocal' },
+    { id: 'lookGit.history.compareSelected', command: 'compareSelected' },
     { id: 'lookGit.history.newWorktreeFromCommit', command: 'newWorktreeFromCommit' },
     { id: 'lookGit.history.compareCommitWithWorktree', command: 'compareCommitWithWorktree' },
     { id: 'lookGit.history.resetCurrentBranchToHere', command: 'resetCurrentBranchToHere' },
@@ -516,6 +518,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
             );
             if (shouldRefresh) { await this.refresh(); }
         } catch (error) {
+            if (isAbortError(error)) { return; }
             this.postHistoryError(error, `history/${command}`, 'gitOperationFailed');
         }
     }
@@ -686,7 +689,7 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
     }
 
     private runtimeTargetsForHistoryScope(): RuntimeCommandTargets {
-        if (this.contextRepository) { return {}; }
+        if (this.contextRepository) { return { repository: this.contextRepository }; }
         try {
             const locator = requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext);
             if (this.selectedRepositoryScope) {
@@ -995,14 +998,10 @@ async function loadHistoryCommits(
 }
 
 async function loadCommitDetails(repo: GitRepository, hash: string, signal?: AbortSignal): Promise<HistoryCommitDetails> {
-    const [fullMessage, files] = await Promise.all([
-        repo.getCommitMessage(hash, signal),
-        repo.getCommitFiles(hash, signal),
-    ]);
+    const details = await new GetCommitDetailsUseCase().execute(repo, hash, signal);
     return {
-        hash,
-        fullMessage,
-        files: files.map(toHistoryCommitFile),
+        ...details,
+        files: details.files.map(toHistoryCommitFile),
     };
 }
 

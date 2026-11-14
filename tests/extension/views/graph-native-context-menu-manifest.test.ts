@@ -65,13 +65,13 @@ describe('Graph native context menu manifest', () => {
             enablement: 'graphBranchCanDelete',
         });
         expect(webviewContextMenu
-            .filter((entry) => entry.when === "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'")
+            .filter((entry) => entry.when.startsWith( "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'"))
             .map((entry) => entry.command))
             .toEqual(expectedCommitCommands);
         expect(webviewContextMenu).toEqual(expect.arrayContaining([
             expect.objectContaining({
                 command: 'lookGit.graph.commit.copyRevisionNumber',
-                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.commit.explainDiff',
@@ -83,43 +83,43 @@ describe('Graph native context menu manifest', () => {
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.commit.squashInto',
-                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && graphCommitHasMultipleSelectedCommits",
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.commit.undoCommit',
-                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.commit.goToChildCommit',
-                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.commit.goToParentCommit',
-                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.branch.openBranchWorktree',
-                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree",
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree && !graphBranchHasSelectedPair",
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.branch.rename',
-                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsRemote",
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsRemote && !graphBranchHasSelectedPair",
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.branch.push',
-                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchHasSelectedPair",
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.branch.update',
-                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchCanUpdate",
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchCanUpdate && !graphBranchHasSelectedPair",
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.branch.publish',
-                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchHasSelectedPair",
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.branch.delete',
-                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+                when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchHasSelectedPair",
             }),
             expect.objectContaining({
                 command: 'lookGit.graph.worktree.showDiffWithMainWorktree',

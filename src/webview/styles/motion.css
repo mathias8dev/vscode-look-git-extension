@@ -30,7 +30,6 @@
     .submodule-files,
     .submodule-change-areas,
     .history-item-expanded,
-    .history-file-tree,
     .history-details,
     .graph-details-panel,
     .graph-details-file-tree,
@@ -49,7 +48,6 @@
     .stash-panel-header,
     .submodule-panel-header,
     .history-row,
-    .history-file-tree-row,
     .branch-group-header,
     .branch-node,
     .graph-resource-row,
@@ -107,7 +105,6 @@
     .change-section-header span,
     .stash-panel-header span,
     .submodule-panel-header span,
-    .history-file-count,
     .commit-file-count {
         transition:
             background-color var(--look-git-motion-fast) var(--look-git-motion-ease),
@@ -119,10 +116,8 @@
     .branch-leaf-icon,
     .branch-folder-icon,
     .history-row-chevron,
-    .history-file-chevron,
     .folder-chevron,
-    .file-tree-chevron,
-    .file-tree-folder-icon {
+    .file-tree-chevron {
         transition:
             color var(--look-git-motion-fast) var(--look-git-motion-ease),
             opacity var(--look-git-motion-fast) var(--look-git-motion-ease),

@@ -78,6 +78,10 @@ export function messageForBranchCheckout(branch: string, isRemote: boolean, repo
     return messageForBranchCommand('checkout', branch, isRemote, repository);
 }
 
+export function messageForBranchComparison(baseRef: string, headRef: string, repository?: RepositoryLocator): GraphWebviewToExtensionMessage {
+    return { type: 'graph/compareBranches', baseRef, headRef, ...repositoryProperty(repository) };
+}
+
 export function messageForBranchCommand(command: BranchCommand, branch: string, isRemote: boolean, repository?: RepositoryLocator): GraphWebviewToExtensionMessage {
     return {
         type: 'graph/branchCommand',

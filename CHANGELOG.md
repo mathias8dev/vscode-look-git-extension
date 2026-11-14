@@ -2,6 +2,31 @@
 
 All notable changes to Look Git are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+#### Branch Comparison
+- Compare any two local or remote branches in a separate editor window, with changes since divergence or between branch tips
+- Select two branches with Ctrl/Cmd-click and compare them directly from the toolbar or context menu
+- Search changed files by path and paginated commits by message, author or hash, inspect each commit's full message and changed files, and open native VS Code diffs
+- Track viewed files and resize results and commit-message panels
+- Keep comparisons pinned to specific commits and offer refresh when branches move
+
+#### Commit History and Look Graph
+- Compare two selected commits in the native VS Code changes editor
+
+### Changed
+
+#### Webview
+- Share searchable dropdowns across branch comparison and graph filters, with keyboard navigation, loading states and paginated branch choices
+- Reuse commit details and file trees across history, graph and comparison views
+
+### Fixed
+
+#### Commit History and Look Graph
+- Adapt context menus to the selection and hide single-item actions, including comparisons with Local or Worktree, when multiple items are selected
+
 ## [1.2.14] - 2026-10-20
 
 ### Fixed

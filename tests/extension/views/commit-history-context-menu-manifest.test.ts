@@ -145,7 +145,7 @@ describe('Commit History native context menu manifest', () => {
             }),
         ]));
         expect(webviewContextMenu
-            .filter((entry) => entry.when === "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'")
+            .filter((entry) => entry.when.includes("webviewSection == 'historyCommit'"))
             .map((entry) => entry.command))
             .toEqual(expectedCommitCommands);
         expect(webviewContextMenu).toEqual(expect.arrayContaining([
@@ -163,19 +163,19 @@ describe('Commit History native context menu manifest', () => {
             }),
             expect.objectContaining({
                 command: 'lookGit.history.squashInto',
-                when: "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+                when: "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && historyHasMultipleSelectedCommits",
             }),
             expect.objectContaining({
                 command: 'lookGit.history.undoCommit',
-                when: "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+                when: "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
             }),
             expect.objectContaining({
                 command: 'lookGit.history.goToChildCommit',
-                when: "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+                when: "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
             }),
             expect.objectContaining({
                 command: 'lookGit.history.goToParentCommit',
-                when: "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+                when: "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
             }),
             expect.objectContaining({
                 command: 'lookGit.history.openFileDiff',

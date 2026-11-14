@@ -8,6 +8,25 @@ import { CommitHistoryApp } from '@webview/features/history/commit-history-app';
 import { createInitialHistoryState } from '@webview/features/history/history-state';
 
 describe('CommitHistoryApp', () => {
+    it.each([1, 2, 3])('exposes %i selected commits while keeping unselected rows individual', count => {
+        const commits = [commit('a', 'first'), commit('b', 'second'), commit('c', 'third'), commit('d', 'outside')];
+        const onSelectCommit = vi.fn();
+        const onContextTarget = vi.fn();
+        renderApp({ state: { ...createInitialHistoryState(), commits, selectedHashes: commits.slice(0, count).map(commit => commit.hash), loading: false },
+            onSelectCommit, onContextTarget });
+        const first = screen.getByRole('option', { name: /first/ });
+        expect(first.getAttribute('data-vscode-context')).toContain(`"historySelectedCount":${count}`);
+        fireEvent.contextMenu(first);
+        expect(onSelectCommit).not.toHaveBeenCalled();
+        expect(onContextTarget).toHaveBeenLastCalledWith(expect.objectContaining({ hashes: commits.slice(0, count).map(commit => commit.hash) }));
+        const outside = screen.getByRole('option', { name: /outside/ });
+        expect(outside.getAttribute('data-vscode-context')).toContain('"historySelectedCount":1');
+        expect(outside.getAttribute('data-vscode-context')).toContain('"historyHasMultipleSelectedCommits":false');
+        fireEvent.contextMenu(outside);
+        expect(onSelectCommit).toHaveBeenCalledWith('d', HistoryCommitSelectionMode.Replace, ['a', 'b', 'c', 'd']);
+        expect(onContextTarget).toHaveBeenLastCalledWith(expect.objectContaining({ hash: 'd', hashes: ['d'] }));
+    });
+
     it('renders commits and dispatches selection', () => {
         const onSelectCommit = vi.fn<(hash: string, mode: HistoryCommitSelectionMode, visibleHashes: readonly string[]) => void>();
         const onToggleCommit = vi.fn<(hash: string) => void>();
@@ -165,6 +184,7 @@ describe('CommitHistoryApp', () => {
         expect(row.getAttribute('data-vscode-context')).toContain('"webviewSection":"historyCommit"');
         expect(row.getAttribute('data-vscode-context')).toContain('"historyCanCherryPick":true');
         expect(row.getAttribute('data-vscode-context')).toContain('"historyHasMultipleSelectedCommits":true');
+        expect(row.getAttribute('data-vscode-context')).toContain('"historySelectedCount":2');
         expect(row.getAttribute('data-vscode-context')).toContain('"historyCommitDisabledReason"');
         expect(onContextTarget).toHaveBeenCalledWith({
             kind: 'commit',

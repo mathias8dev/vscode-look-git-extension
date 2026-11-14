@@ -13,7 +13,7 @@ const meta = {
         parentHash: graphRows[0].commit.parentHashes[0],
         canUndoCommit: true,
         canCherryPick: true,
-        hasMultipleSelectedCommits: false,
+        selectedCommitCount: 1,
         rowHeight: 28,
         style: { height: 28 },
         onSelect: noop,
@@ -53,6 +53,6 @@ export const MergeCommit = {
     args: {
         row: graphRows[1],
         canUndoCommit: false,
-        hasMultipleSelectedCommits: true,
+        selectedCommitCount: 2,
     },
 } satisfies Story;

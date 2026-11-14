@@ -188,6 +188,12 @@
         "category": "Look Git"
       },
       {
+        "command": "lookGit.history.compareSelected",
+        "title": "Compare Selected Commits",
+        "category": "Look Git",
+        "icon": "$(compare-changes)"
+      },
+      {
         "command": "lookGit.history.newWorktreeFromCommit",
         "title": "New Branch + Worktree from Here...",
         "category": "Look Git",
@@ -1015,6 +1021,12 @@
         "category": "Look Git"
       },
       {
+        "command": "lookGit.graph.commit.compareSelected",
+        "title": "Compare Selected Commits",
+        "category": "Look Git",
+        "icon": "$(compare-changes)"
+      },
+      {
         "command": "lookGit.graph.commit.newWorktreeFromCommit",
         "title": "New Branch + Worktree from Here...",
         "category": "Look Git",
@@ -1134,6 +1146,12 @@
       {
         "command": "lookGit.graph.branch.compareWithCurrent",
         "title": "Compare with Current Branch",
+        "category": "Look Git",
+        "icon": "$(compare-changes)"
+      },
+      {
+        "command": "lookGit.graph.branch.compareSelected",
+        "title": "Compare Selected Branches",
         "category": "Look Git",
         "icon": "$(compare-changes)"
       },
@@ -2195,7 +2213,7 @@
         },
         {
           "command": "lookGit.history.copyRevisionNumber",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
           "group": "1_history_copy@1"
         },
         {
@@ -2215,32 +2233,37 @@
         },
         {
           "command": "lookGit.history.checkoutRevision",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
           "group": "2_history_revision@1"
         },
         {
           "command": "lookGit.history.showRepositoryAtRevision",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
           "group": "2_history_revision@2"
         },
         {
           "command": "lookGit.history.compareWithLocal",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
+          "group": "2_history_revision@3"
+        },
+        {
+          "command": "lookGit.history.compareSelected",
+          "when": "(webviewId == 'lookGit.commitHistory' || webviewId == 'lookGit.fileHistory') && webviewSection == 'historyCommit' && historySelectedCount == 2",
           "group": "2_history_revision@3"
         },
         {
           "command": "lookGit.history.newWorktreeFromCommit",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
           "group": "2_history_revision@4"
         },
         {
           "command": "lookGit.history.compareCommitWithWorktree",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
           "group": "2_history_revision@5"
         },
         {
           "command": "lookGit.history.resetCurrentBranchToHere",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
           "group": "3_history_mutate@1"
         },
         {
@@ -2250,22 +2273,22 @@
         },
         {
           "command": "lookGit.history.undoCommit",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
           "group": "3_history_mutate@3"
         },
         {
           "command": "lookGit.history.editCommitMessage",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
           "group": "4_history_rewrite@1"
         },
         {
           "command": "lookGit.history.fixup",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
           "group": "4_history_rewrite@2"
         },
         {
           "command": "lookGit.history.squashInto",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && historyHasMultipleSelectedCommits",
           "group": "4_history_rewrite@3"
         },
         {
@@ -2275,32 +2298,32 @@
         },
         {
           "command": "lookGit.history.interactiveRebaseFromHere",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
           "group": "4_history_rewrite@5"
         },
         {
           "command": "lookGit.history.pushAllUpToHere",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
           "group": "4_history_rewrite@6"
         },
         {
           "command": "lookGit.history.newBranch",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
           "group": "5_history_refs@1"
         },
         {
           "command": "lookGit.history.newTag",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
           "group": "5_history_refs@2"
         },
         {
           "command": "lookGit.history.goToChildCommit",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
           "group": "6_history_navigation@1"
         },
         {
           "command": "lookGit.history.goToParentCommit",
-          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit'",
+          "when": "webviewId == 'lookGit.commitHistory' && webviewSection == 'historyCommit' && !historyHasMultipleSelectedCommits",
           "group": "6_history_navigation@2"
         },
         {
@@ -2310,7 +2333,7 @@
         },
         {
           "command": "lookGit.graph.commit.copyRevisionNumber",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
           "group": "1_graph_commit_copy@1"
         },
         {
@@ -2330,32 +2353,37 @@
         },
         {
           "command": "lookGit.graph.commit.checkoutRevision",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
           "group": "2_graph_commit_revision@1"
         },
         {
           "command": "lookGit.graph.commit.showRepositoryAtRevision",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
           "group": "2_graph_commit_revision@2"
         },
         {
           "command": "lookGit.graph.commit.compareWithLocal",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
+          "group": "2_graph_commit_revision@3"
+        },
+        {
+          "command": "lookGit.graph.commit.compareSelected",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && graphCommitSelectedCount == 2",
           "group": "2_graph_commit_revision@3"
         },
         {
           "command": "lookGit.graph.commit.newWorktreeFromCommit",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
           "group": "2_graph_commit_revision@4"
         },
         {
           "command": "lookGit.graph.commit.compareCommitWithWorktree",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
           "group": "2_graph_commit_revision@5"
         },
         {
           "command": "lookGit.graph.commit.resetCurrentBranchToHere",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
           "group": "3_graph_commit_mutate@1"
         },
         {
@@ -2365,22 +2393,22 @@
         },
         {
           "command": "lookGit.graph.commit.undoCommit",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
           "group": "3_graph_commit_mutate@3"
         },
         {
           "command": "lookGit.graph.commit.editCommitMessage",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
           "group": "4_graph_commit_rewrite@1"
         },
         {
           "command": "lookGit.graph.commit.fixup",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
           "group": "4_graph_commit_rewrite@2"
         },
         {
           "command": "lookGit.graph.commit.squashInto",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && graphCommitHasMultipleSelectedCommits",
           "group": "4_graph_commit_rewrite@3"
         },
         {
@@ -2390,147 +2418,147 @@
         },
         {
           "command": "lookGit.graph.commit.interactiveRebaseFromHere",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
           "group": "4_graph_commit_rewrite@5"
         },
         {
           "command": "lookGit.graph.commit.pushAllUpToHere",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
           "group": "4_graph_commit_rewrite@6"
         },
         {
           "command": "lookGit.graph.commit.newBranch",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
           "group": "5_graph_commit_refs@1"
         },
         {
           "command": "lookGit.graph.commit.newTag",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
           "group": "5_graph_commit_refs@2"
         },
         {
           "command": "lookGit.graph.commit.goToChildCommit",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
           "group": "6_graph_commit_navigation@1"
         },
         {
           "command": "lookGit.graph.commit.goToParentCommit",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",
           "group": "6_graph_commit_navigation@2"
         },
         {
           "command": "lookGit.graph.branch.checkout",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchHasSelectedPair",
           "group": "1_graph_branch_open@1"
         },
         {
           "command": "lookGit.graph.branch.newBranchFrom",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchHasSelectedPair",
           "group": "1_graph_branch_open@2"
         },
         {
           "command": "lookGit.graph.branch.checkoutRebaseOnto",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent && !graphBranchHasSelectedPair",
           "group": "1_graph_branch_open@3"
         },
         {
           "command": "lookGit.graph.branch.newWorktreeFromBranch",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchHasSelectedPair",
           "group": "1_graph_branch_open@4"
         },
         {
           "command": "lookGit.graph.branch.openBranchWorktree",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree && !graphBranchHasSelectedPair",
           "group": "1_graph_branch_open@5"
         },
         {
           "command": "lookGit.graph.branch.revealBranchWorktree",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree && !graphBranchHasSelectedPair",
           "group": "1_graph_branch_open@6"
         },
         {
           "command": "lookGit.graph.branch.compareWithCurrent",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent && !graphBranchHasSelectedPair",
           "group": "2_graph_branch_diff@1"
         },
         {
           "command": "lookGit.graph.branch.showDiffWithWorkingTree",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchHasSelectedPair",
           "group": "2_graph_branch_diff@2"
         },
         {
           "command": "lookGit.graph.branch.compareBranchWithWorktree",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchHasSelectedPair",
           "group": "2_graph_branch_diff@3"
         },
         {
           "command": "lookGit.graph.branch.showDiffWithBranchWorktree",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree && !graphBranchHasSelectedPair",
           "group": "2_graph_branch_diff@4"
         },
         {
           "command": "lookGit.graph.branch.rebaseOnto",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent && !graphBranchHasSelectedPair",
           "group": "3_graph_branch_history@1"
         },
         {
           "command": "lookGit.graph.branch.planInteractiveRebaseOnto",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent && !graphBranchIsRemote",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent && !graphBranchIsRemote && !graphBranchHasSelectedPair",
           "group": "3_graph_branch_history@2"
         },
         {
           "command": "lookGit.graph.branch.mergeInto",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsCurrent && !graphBranchHasSelectedPair",
           "group": "3_graph_branch_history@3"
         },
         {
           "command": "lookGit.graph.branch.update",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchCanUpdate",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchCanUpdate && !graphBranchHasSelectedPair",
           "group": "4_graph_branch_publish@0"
         },
         {
           "command": "lookGit.graph.branch.push",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchHasSelectedPair",
           "group": "4_graph_branch_publish@1"
         },
         {
           "command": "lookGit.graph.branch.publish",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchHasSelectedPair",
           "group": "4_graph_branch_publish@1"
         },
         {
           "command": "lookGit.graph.branch.pullBranchWorktree",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree && !graphBranchHasSelectedPair",
           "group": "4_graph_branch_publish@2"
         },
         {
           "command": "lookGit.graph.branch.pushBranchWorktree",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree && !graphBranchHasSelectedPair",
           "group": "4_graph_branch_publish@3"
         },
         {
           "command": "lookGit.graph.branch.lockBranchWorktree",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree && !graphBranchWorktreeIsMain && !graphBranchWorktreeIsLocked",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree && !graphBranchWorktreeIsMain && !graphBranchWorktreeIsLocked && !graphBranchHasSelectedPair",
           "group": "5_graph_branch_worktree@1"
         },
         {
           "command": "lookGit.graph.branch.unlockBranchWorktree",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree && !graphBranchWorktreeIsMain && graphBranchWorktreeIsLocked",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree && !graphBranchWorktreeIsMain && graphBranchWorktreeIsLocked && !graphBranchHasSelectedPair",
           "group": "5_graph_branch_worktree@2"
         },
         {
           "command": "lookGit.graph.branch.removeBranchWorktree",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree && !graphBranchWorktreeIsMain",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasWorktree && !graphBranchWorktreeIsMain && !graphBranchHasSelectedPair",
           "group": "5_graph_branch_worktree@3"
         },
         {
           "command": "lookGit.graph.branch.rename",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsRemote",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchIsRemote && !graphBranchHasSelectedPair",
           "group": "6_graph_branch_manage@1"
         },
         {
           "command": "lookGit.graph.branch.delete",
-          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch'",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchHasSelectedPair",
           "group": "6_graph_branch_manage@2"
         },
         {
@@ -2617,6 +2645,11 @@
           "command": "lookGit.graph.worktree.removeForce",
           "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphWorktree' && !graphWorktreeIsMain",
           "group": "6_graph_worktree_manage@4"
+        },
+        {
+          "command": "lookGit.graph.branch.compareSelected",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasSelectedPair",
+          "group": "2_compare@1"
         }
       ]
     }

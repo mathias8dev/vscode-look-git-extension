@@ -23,6 +23,7 @@ import {
     messageForOpenDiff,
     messageForOpenWorktreeDiff,
     messageForBranchCommand,
+    messageForBranchComparison,
     messageForGraphRepositoryCommand,
     messageForWorktreeCommand,
     messageForWorktreeDetails,
@@ -258,7 +259,7 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                     {(style) => loadingUnpreparedGraph
                         ? <div className="graph-branch-panel" style={style} />
                         : <BranchPanel
-                            key={`branch-panel:${scopeAnimationKey}`}
+                            key={`branch-panel:${state.repository?.repoId ?? ''}:${scopeAnimationKey}`}
                             style={style}
                             branches={state.branches}
                             worktrees={state.worktrees}
@@ -274,6 +275,7 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                             onSelectMainRepository={() => dispatch({ type: 'selectMainRepository' })}
                             onSelectSubmodule={handleSelectSubmodule}
                             onBranchCommand={(command, branch, isRemote) => sendMessage(messageForBranchCommand(command, branch, isRemote, state.repository))}
+                            onCompareBranches={(baseRef, headRef) => sendMessage(messageForBranchComparison(baseRef, headRef, state.repository))}
                             onFetch={() => sendMessage(messageForGraphRepositoryCommand('fetch', state.repository))}
                             onSelectWorktree={handleSelectWorktree}
                             onOpenWorktree={(path) => sendMessage(messageForWorktreeCommand('openInNewWindow', path, state.repository, state.worktrees.find((worktree) => sameResourcePath(worktree.path, path))?.locator))}

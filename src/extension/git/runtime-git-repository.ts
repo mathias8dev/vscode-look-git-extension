@@ -1,5 +1,6 @@
 import type { GitCommit, GitFileChange } from '@core/git/domain/git-commit';
 import type { Page, PageRequest } from '@core/git/domain/page';
+import type { ChangedFilesPage, ChangedFilesPageRequest } from '@core/git/domain/git-comparison';
 import type { GitBranch, GitTag } from '@core/git/domain/git-status';
 import type { GitSubmodule, GitWorktree } from '@core/git/domain/git-worktree';
 import type {
@@ -145,7 +146,7 @@ export class RuntimeGitRepository implements GitRepository {
         return this.execute('compareFiles', { baseRef, headRef, path }, signal);
     }
 
-    listChangedFiles(baseRef: string, headRef: string, pageRequest: PageRequest, signal?: AbortSignal): Promise<Page<GitFileChange>> {
+    listChangedFiles(baseRef: string, headRef: string, pageRequest: ChangedFilesPageRequest, signal?: AbortSignal): Promise<ChangedFilesPage> {
         return this.execute('listChangedFiles', { baseRef, headRef, pageRequest }, signal);
     }
 

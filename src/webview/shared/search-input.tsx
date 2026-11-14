@@ -6,10 +6,12 @@ interface SearchInputProps {
     readonly value: string;
     readonly placeholder: string;
     readonly ariaLabel: string;
+    readonly ariaControls?: string;
+    readonly ariaActiveDescendant?: string;
     readonly onChange: (value: string) => void;
 }
 
-export function SearchInput({ className, inputRef, value, placeholder, ariaLabel, onChange }: SearchInputProps) {
+export function SearchInput({ className, inputRef, value, placeholder, ariaLabel, ariaControls, ariaActiveDescendant, onChange }: SearchInputProps) {
     return (
         <div className={['search-field', className].filter(Boolean).join(' ')}>
             <i className="codicon codicon-search search-field-icon" aria-hidden="true" />
@@ -20,6 +22,8 @@ export function SearchInput({ className, inputRef, value, placeholder, ariaLabel
                 value={value}
                 placeholder={placeholder}
                 aria-label={ariaLabel}
+                aria-controls={ariaControls}
+                aria-activedescendant={ariaActiveDescendant}
                 onChange={(event) => onChange(event.currentTarget.value)}
             />
         </div>

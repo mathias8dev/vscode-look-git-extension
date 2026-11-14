@@ -473,6 +473,7 @@ export const window = {
             disposed: false,
             reveal(_column?: unknown) {},
             onDidDispose(listener: () => unknown) { return disposeEmitter.event(listener); },
+            onDidChangeViewState(_listener: () => unknown) { return { dispose() {} }; },
             webview: {
                 options: {},
                 html: '',

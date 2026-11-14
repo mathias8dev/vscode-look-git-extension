@@ -1,0 +1,104 @@
+.look-git-dropdown {
+    display: inline-flex;
+    align-items: center;
+    gap: .5em;
+    min-width: 0;
+    min-height: var(--look-git-control-min-height, 26px);
+    padding: .3em .6em;
+    border: 1px solid var(--vscode-dropdown-border, #454545);
+    border-radius: 3px;
+    background: var(--vscode-dropdown-background, #313131);
+    color: var(--vscode-dropdown-foreground, #ccc);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.look-git-dropdown-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.look-git-dropdown:disabled {
+    cursor: default;
+    opacity: .5;
+}
+
+.look-git-dropdown:focus-visible,
+.look-git-dropdown-menu :focus-visible {
+    outline: 1px solid var(--vscode-focusBorder, #007fd4);
+    outline-offset: -1px;
+}
+
+.look-git-dropdown-menu {
+    position: fixed;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    gap: .35em;
+    padding: .4em;
+    border: 1px solid var(--vscode-widget-border, #454545);
+    border-radius: 4px;
+    background: var(--vscode-quickInput-background, #252526);
+    color: var(--vscode-quickInput-foreground, #ccc);
+    box-shadow: 0 3px 12px var(--vscode-widget-shadow, #0006);
+    overflow: hidden;
+}
+
+.look-git-dropdown-options {
+    min-height: 0;
+    overflow: auto;
+}
+
+.look-git-dropdown-options button,
+.look-git-dropdown-more {
+    display: flex;
+    align-items: center;
+    gap: .6em;
+    width: 100%;
+    min-height: 26px;
+    padding: .35em .5em;
+    border: 0;
+    border-radius: 2px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.look-git-dropdown-options button > span {
+    flex: 1;
+    overflow-wrap: anywhere;
+}
+
+.look-git-dropdown-options small,
+.look-git-dropdown-status {
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    font-size: .9em;
+}
+
+.look-git-dropdown-options .look-git-dropdown-option-active {
+    background: var(--vscode-list-focusBackground, #04395e);
+    color: var(--vscode-list-focusForeground, #fff);
+}
+
+.look-git-dropdown-options button:disabled {
+    opacity: .5;
+    cursor: default;
+}
+
+.look-git-dropdown-more {
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--vscode-button-secondaryBackground, #333);
+    color: var(--vscode-button-secondaryForeground, #ccc);
+}
+
+.look-git-dropdown-status {
+    padding: .35em .5em;
+}

@@ -131,7 +131,15 @@ export interface GraphWorktreeContextTarget {
     readonly worktree?: WorktreeLocator;
 }
 
+export interface GraphBranchPairContextTarget {
+    readonly kind: 'branchPair';
+    readonly baseRef: string;
+    readonly headRef: string;
+    readonly repository?: RepositoryLocator;
+}
+
 export type GraphContextTarget =
     | GraphCommitContextTarget
     | GraphBranchContextTarget
+    | GraphBranchPairContextTarget
     | GraphWorktreeContextTarget;

@@ -204,7 +204,7 @@ describe('BranchPanel', () => {
         fireEvent.click(screen.getByLabelText('Update Selected Branch'));
         fireEvent.click(screen.getByLabelText('Push Selected Branch...'));
         fireEvent.click(screen.getByLabelText('Delete Selected Branch'));
-        fireEvent.click(screen.getByLabelText('Compare with Local'));
+        fireEvent.click(screen.getByLabelText('Compare Branches...'));
         fireEvent.click(screen.getByLabelText('Show My Branch'));
         fireEvent.click(screen.getByLabelText('Fetch'));
 

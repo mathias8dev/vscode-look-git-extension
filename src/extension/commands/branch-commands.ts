@@ -10,7 +10,6 @@ import { showModalWarningMessage } from '@extension/utils/confirmation';
 import { showBranchNameInput } from '@extension/utils/branch-name-input';
 import {
     compareRefWithPickedWorktree,
-    openChangesBetweenMergeBaseAndRef,
     openChangesWithWorkingTree,
     promptNewWorktreePath,
 } from '@extension/commands/git-command-helpers';
@@ -20,6 +19,7 @@ import { isNonFastForwardPushError } from '@extension/git/git-error';
 import { confirmBehindBranchUpdate, pickDivergedPushAction, pickMergeOptions } from '@extension/git/reference-pickers';
 import { localBranchNameForRemote, localNameForRemoteBranch, resolveRemoteBranch } from '@extension/git/remote-branch';
 import { openVisualRebasePanel } from '@extension/utils/visual-rebase-panel';
+import { openComparisonPanel } from '@extension/views/comparison-panel';
 import { commandExecutionResult, pushCommandExecutionResult, type CommandExecutionResult } from '@extension/commands/command-execution-result';
 
 export async function runBranchCommand(
@@ -61,7 +61,8 @@ export async function runBranchCommand(
             await revealBranchWorktree(repo, branch, isRemote);
             return commandExecutionResult(false);
         case 'compareWithCurrent':
-            await openChangesBetweenMergeBaseAndRef(repo, currentBranch, branch, `Diff ${currentBranch}...${branch}`);
+            if (!extensionUri) { throw new Error('The extension URI is required to open branch comparison.'); }
+            openComparisonPanel(repo, extensionUri, currentBranch, `${isRemote ? 'refs/remotes/' : 'refs/heads/'}${branch}`);
             return commandExecutionResult(false);
         case 'showDiffWithWorkingTree':
             await openChangesWithWorkingTree(repo, repo.cwd, branch, `Diff ${branch}..working tree`);

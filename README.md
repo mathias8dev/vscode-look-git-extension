@@ -57,10 +57,12 @@ A modern, Git extension for Visual Studio Code — featuring a visual commit gra
 - **Commit details panel** — click any commit to see its full message, author, and changed files in a side panel
 - **Commit actions** — copy revisions, create patches, explain diffs, cherry-pick, checkout revisions, compare with local or worktrees, reset, revert, undo, reword, fixup, squash, drop, visual rebase, branch, tag, and push up to a commit
 - **Branch actions** — checkout, push, publish, rename, delete, rebase, merge, compare with current or worktrees, and create new branches or worktrees from any branch
+- **Selection-aware menus** — right-click a pair of selected commits in the graph or history to compare their snapshots in the native VS Code changes editor, ordered from older to newer. Multi-selection hides actions that apply to a single item, including comparisons with Local or Worktree.
+- **Branch comparison** — open “Compare with Current Branch” or “Compare Branches...” in the branch panel to open a separate editor window, then choose any local or remote base and target. Ctrl/Cmd-click two branches and use “Compare Selected Branches” in the context menu or toolbar to compare them directly; the first selected branch is the base. The results and commit-message panels are resizable. Review changes since divergence or between branch tips, search paginated files, open native VS Code diffs, and track viewed files. The Commits tab searches messages, authors and hashes across all pages and opens the existing file tree and full commit message for each selected commit. Comparisons pin commit revisions and offer a refresh when branches change; uncommitted changes are excluded.
 - **Safe branch pushing** — publish branches directly, update branches that are behind, recover diverged branches through checkout or update actions, prefer force-with-lease, and keep raw force push behind an explicit confirmation
 - **Worktree support** — add, remove, open, reveal, lock, unlock, fetch, pull, push, commit, stash, and diff linked worktrees; WIP status fetched per worktree
 - **Submodule visibility** — display submodule entries in the graph branch panel with their repository context
-- **Filters** — search by text/hash, filter by branch, author, or path
+- **Filters** — search by text/hash, filter by branch with the shared searchable dropdown, author, or path
 - **Operation feedback** — long-running git actions report progress and expose the Look Git output channel when details are needed
 
 ## Screenshots

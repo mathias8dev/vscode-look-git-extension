@@ -25,6 +25,7 @@ import { GetGraphDataUseCase, type GraphDataResult, type GraphWorktreeWip } from
 import { GetCommitDetailsUseCase } from '@application/usecases/graph/get-commit-details';
 import { GetWorktreeDetailsUseCase } from '@application/usecases/graph/get-worktree-details';
 import { GetBranchDetailsUseCase } from '@application/usecases/graph/get-branch-details';
+import { openComparisonPanel } from '@extension/views/comparison-panel';
 import type { RepositoryContextAccessor } from '@extension/repositories/repository-selection-store';
 import { toProtocolBranch, toProtocolGraphCommit, toProtocolGraphSubmodule, toProtocolWorktree } from '@extension/mapping/to-protocol';
 import { runCommitCommand } from '@extension/commands/commit-commands';
@@ -32,8 +33,8 @@ import { runBranchCommand } from '@extension/commands/branch-commands';
 import { runWorktreeCommand } from '@extension/commands/worktree-commands';
 import { requireRuntimeRepository, requireRuntimeWorktree, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
 import { operationActionsForStatus } from '@extension/utils/operation-feedback';
-import { openCommitGitlinkDiff, openWorktreeGitlinkDiff } from '@extension/utils/gitlink-diff';
-import { emptyDiffUri } from '@extension/utils/diff-uris';
+import { openWorktreeGitlinkDiff } from '@extension/utils/gitlink-diff';
+import { emptyDiffUri, openCommitFileDiff } from '@extension/utils/diff-uris';
 import { gitBlobUri } from '@extension/utils/git-blob-documents';
 import { createErrorPayload, isAbortError } from '@extension/messaging/error-serialization';
 import { appendErrorToOutput, showErrorOutput } from '@extension/messaging/error-output-channel';
@@ -299,13 +300,22 @@ export class GraphMessageRouter {
                 await this.handleCommitCommand(msg);
                 break;
 
+            case 'graph/compareBranches':
+                if (!this.extensionUri) { throw new Error('The extension URI is required to open branch comparison.'); }
+                openComparisonPanel(this.requireRuntimeRepositoryForRequest(msg.repository), this.extensionUri, msg.baseRef, msg.headRef);
+                break;
+
             case 'graph/openDiff': {
-                if (msg.isSubmodule) {
-                    await openCommitGitlinkDiff(this.requireRuntimeRepositoryForRequest(msg.repository), msg);
-                    break;
+                const repository = this.requireRuntimeRepositoryForRequest(msg.repository);
+                const key = `commitDiff:${repository.repoId}`;
+                this.pending.get(key)?.abort();
+                const controller = new AbortController();
+                this.pending.set(key, controller);
+                try {
+                    await openCommitFileDiff(repository, msg, undefined, controller.signal);
+                } finally {
+                    if (this.pending.get(key) === controller) { this.pending.delete(key); }
                 }
-                const { left, right } = await createCommitFileDiffUris(msg, this.requireRuntimeRepositoryForRequest(msg.repository));
-                await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(msg.filePath)} (${msg.commitHash.substring(0, 7)})`);
                 break;
             }
 
@@ -811,6 +821,7 @@ function errorCodeFor(msg: GraphWebviewToExtensionMessage): ErrorCode {
 
 function shouldNotifyUserForError(msg: GraphWebviewToExtensionMessage): boolean {
     return msg.type === 'graph/branchCommand'
+        || msg.type === 'graph/compareBranches'
         || msg.type === 'graph/commitCommand'
         || msg.type === 'graph/worktreeCommand'
         || msg.type === 'graph/repositoryCommand'
@@ -968,6 +979,7 @@ function graphCommitOperation(msg: Extract<GraphWebviewToExtensionMessage, { rea
         case 'explainDiff':
         case 'showRepositoryAtRevision':
         case 'compareWithLocal':
+        case 'compareSelected':
         case 'compareCommitWithWorktree':
             return undefined;
     }
@@ -976,45 +988,6 @@ function graphCommitOperation(msg: Extract<GraphWebviewToExtensionMessage, { rea
 function diffExplanationScopeFor(repository: RepositoryLocator | undefined): { readonly label: string; readonly value: string } | undefined {
     if (repository?.kind !== 'submodule') { return undefined; }
     return { label: 'Submodule', value: repository.path };
-}
-
-async function createCommitFileDiffUris(
-    file: {
-        readonly commitHash: string;
-        readonly filePath: string;
-        readonly origPath?: string;
-        readonly parentHash?: string;
-        readonly status: string;
-    },
-    repository: GitRepository,
-): Promise<{ readonly left: vscode.Uri; readonly right: vscode.Uri }> {
-    const parentRef = file.parentHash ?? `${file.commitHash}~1`;
-    const status = file.status.charAt(0);
-    const origPath = file.origPath ?? file.filePath;
-
-    if (status === 'A') {
-        return {
-            left: emptyDiffUri(file.commitHash, file.filePath, 'parent'),
-            right: await commitBlobUri(repository, file.commitHash, file.filePath, 'commit'),
-        };
-    }
-
-    if (status === 'D') {
-        return {
-            left: await commitBlobUri(repository, parentRef, origPath, 'parent'),
-            right: emptyDiffUri(file.commitHash, file.filePath, 'commit'),
-        };
-    }
-
-    return {
-        left: await commitBlobUri(repository, parentRef, origPath, 'parent'),
-        right: await commitBlobUri(repository, file.commitHash, file.filePath, 'commit'),
-    };
-}
-
-async function commitBlobUri(repository: GitRepository, ref: string, filePath: string, side: string): Promise<vscode.Uri> {
-    const content = await repository.getFileAtRevision(filePath, ref);
-    return gitBlobUri(ref, filePath, side, content);
 }
 
 async function createWorktreeDiffUris(

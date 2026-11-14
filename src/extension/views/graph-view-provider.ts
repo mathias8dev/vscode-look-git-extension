@@ -22,6 +22,7 @@ const GRAPH_COMMIT_COMMANDS: readonly { readonly id: string; readonly command: C
     { id: 'lookGit.graph.commit.checkoutRevision', command: 'checkoutRevision' },
     { id: 'lookGit.graph.commit.showRepositoryAtRevision', command: 'showRepositoryAtRevision' },
     { id: 'lookGit.graph.commit.compareWithLocal', command: 'compareWithLocal' },
+    { id: 'lookGit.graph.commit.compareSelected', command: 'compareSelected' },
     { id: 'lookGit.graph.commit.newWorktreeFromCommit', command: 'newWorktreeFromCommit' },
     { id: 'lookGit.graph.commit.compareCommitWithWorktree', command: 'compareCommitWithWorktree' },
     { id: 'lookGit.graph.commit.resetCurrentBranchToHere', command: 'resetCurrentBranchToHere' },
@@ -141,6 +142,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
             vscode.commands.registerCommand('lookGit.graph.commit.goToChildCommit', () => this.selectContextCommit('child')),
             vscode.commands.registerCommand('lookGit.graph.commit.goToParentCommit', () => this.selectContextCommit('parent')),
             vscode.commands.registerCommand('lookGit.graph.worktree.showDetails', () => this.selectContextWorktree()),
+            vscode.commands.registerCommand('lookGit.graph.branch.compareSelected', () => this.compareSelectedBranches()),
         ];
     }
 
@@ -244,6 +246,13 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
             hashes: target.hashes,
             ...(target.repository ? { repository: target.repository } : {}),
         });
+    }
+
+    private async compareSelectedBranches(): Promise<void> {
+        const target = this.contextTarget;
+        if (target?.kind !== 'branchPair') { return; }
+        await this.router?.handle({ type: 'graph/compareBranches', baseRef: target.baseRef, headRef: target.headRef,
+            ...(target.repository ? { repository: target.repository } : {}) });
     }
 
     private async runBranchContextCommand(command: BranchCommand, options: BranchContextCommandOptions = {}): Promise<void> {

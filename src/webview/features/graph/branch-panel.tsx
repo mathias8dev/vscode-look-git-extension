@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useReducer, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { GraphOperationCategory, GraphOperationStatus, type BranchCommand, type GraphOperationStatusPush } from '@protocol/graph/messages';
 import type { BranchInfo, GraphContextTarget, GraphSubmoduleInfo, WorktreeInfo } from '@protocol/graph/types';
@@ -10,6 +10,7 @@ import { IconButton } from '@webview/shared/icon-button';
 import { SearchInput } from '@webview/shared/search-input';
 import { selectBranchFilter } from '@webview/features/graph/graph-branch-selection';
 import { sameResourcePath } from '@webview/shared/resource-path';
+import { comparisonBranchRef, reduceBranchComparisonSelection } from '@webview/features/graph/branch-comparison-selection';
 
 interface BranchPanelProps {
     readonly style?: CSSProperties;
@@ -27,6 +28,7 @@ interface BranchPanelProps {
     readonly onSelectMainRepository?: () => void;
     readonly onSelectSubmodule?: (submodule: GraphSubmoduleInfo) => void;
     readonly onBranchCommand: (command: BranchCommand, branch: string, isRemote: boolean) => void;
+    readonly onCompareBranches?: (baseRef: string, headRef: string) => void;
     readonly onFetch: () => void;
     readonly onSelectWorktree: (path: string) => void;
     readonly onOpenWorktree: (path: string) => void;
@@ -50,6 +52,7 @@ export function BranchPanel({
     onSelectMainRepository = () => undefined,
     onSelectSubmodule = () => undefined,
     onBranchCommand,
+    onCompareBranches,
     onFetch,
     onSelectWorktree,
     onOpenWorktree,
@@ -57,6 +60,13 @@ export function BranchPanel({
     onContextTarget,
 }: BranchPanelProps) {
     const [search, setSearch] = useState('');
+    const [comparisonSelection, dispatchComparisonSelection] = useReducer(reduceBranchComparisonSelection, []);
+    const comparisonBranches = comparisonSelection.flatMap(ref => {
+        const branch = branches.find(item => comparisonBranchRef(item) === ref);
+        return branch ? [branch] : [];
+    });
+    const baseBranch = comparisonBranches[0];
+    const headBranch = comparisonBranches[1];
     const [localCollapsed, setLocalCollapsed] = useState(false);
     const [remoteCollapsed, setRemoteCollapsed] = useState(false);
     const [worktreesCollapsed, setWorktreesCollapsed] = useState(false);
@@ -78,7 +88,7 @@ export function BranchPanel({
     const remoteBranches = filtered.filter((b) => b.isRemote);
     const localTree = buildBranchTree(localBranches);
     const remoteTree = buildRemoteBranchTree(remoteBranches);
-    const selectedBranch = selectedBranchFilter
+    const selectedBranch = selectedBranchFilter && comparisonBranches.length === 0
         ? branches.find((branch) => branch.name === selectedBranchFilter)
         : undefined;
     const currentBranchInfo = branches.find((branch) => !branch.isRemote && branch.name === currentBranch) ?? {
@@ -92,13 +102,21 @@ export function BranchPanel({
     const selectedBranchIsUnpublished = Boolean(selectedBranch && !selectedBranch.isRemote && !selectedBranch.upstream);
     const updateSelectedDisabled = selectedLocalBranchDisabled || selectedBranchIsUnpublished;
     const deleteSelectedDisabled = !selectedBranch || selectedBranch.isCurrent;
-    const compareWithLocalDisabled = !selectedBranch || selectedBranch.isCurrent;
+    const compareWithLocalDisabled = comparisonBranches.length > 0
+        ? !baseBranch || !headBranch || !onCompareBranches
+        : !selectedBranch || selectedBranch.isCurrent;
     const fetching = isRunningRepositoryOperation(operationStatus, 'fetch');
     const updatingSelected = isRunningBranchOperation(operationStatus, 'update', selectedBranch?.name);
     const pushingSelected = isRunningBranchOperation(operationStatus, 'push', selectedBranch?.name);
 
     const handleSelect = (fullName: string) => {
+        dispatchComparisonSelection({ type: 'clear' });
         onSelectBranch(selectBranchFilter(fullName, selectedBranchFilter));
+    };
+
+    const toggleComparison = (branch: BranchInfo) => {
+        const anchor = branches.find(item => item.name === selectedBranchFilter);
+        dispatchComparisonSelection({ type: 'toggle', ref: comparisonBranchRef(branch), anchor: anchor ? comparisonBranchRef(anchor) : undefined });
     };
 
     const runBranchCommand = (command: BranchCommand, branch: BranchInfo | undefined) => {
@@ -108,6 +126,7 @@ export function BranchPanel({
 
     const showCurrentBranch = () => {
         setSearch('');
+        dispatchComparisonSelection({ type: 'clear' });
         onSelectBranch(currentBranch);
     };
 
@@ -127,6 +146,8 @@ export function BranchPanel({
         branch.isRemote ? undefined : worktrees.find((worktree) => shortWorktreeBranch(worktree.branch) === branch.name);
 
     const branchContextFor = (branch: BranchInfo): Record<string, unknown> => {
+        const selectedPair = baseBranch !== undefined && headBranch !== undefined
+            && comparisonBranches.some(item => comparisonBranchRef(item) === comparisonBranchRef(branch));
         const branchWorktree = branchWorktreeFor(branch);
         const hasUpstream = Boolean(branch.upstream);
         const canUpdate = !branch.isRemote && hasUpstream;
@@ -136,6 +157,7 @@ export function BranchPanel({
         const disabledReasons = branchDisabledReasons(branch, { canPush, canPublish, canDelete });
         return {
             webviewSection: 'graphBranch',
+            graphBranchHasSelectedPair: selectedPair,
             graphBranchIsRemote: branch.isRemote,
             graphBranchIsCurrent: branch.isCurrent,
             graphBranchHasUpstream: hasUpstream,
@@ -152,6 +174,11 @@ export function BranchPanel({
     };
 
     const handleOpenContextMenu = (branch: BranchInfo) => {
+        if (baseBranch && headBranch && comparisonBranches.some(item => comparisonBranchRef(item) === comparisonBranchRef(branch))) {
+            onContextTarget({ kind: 'branchPair', baseRef: comparisonBranchRef(baseBranch), headRef: comparisonBranchRef(headBranch) });
+            return;
+        }
+        dispatchComparisonSelection({ type: 'clear' });
         const hasUpstream = Boolean(branch.upstream);
         const canUpdate = !branch.isRemote && hasUpstream;
         onContextTarget({
@@ -203,9 +230,12 @@ export function BranchPanel({
                     />
                     <IconButton
                         icon="arrow-swap"
-                        title="Compare with Local"
+                        title={comparisonBranches.length > 0 ? 'Compare selected branches' : 'Compare Branches...'}
                         disabled={compareWithLocalDisabled}
-                        onClick={() => runBranchCommand('compareWithCurrent', selectedBranch)}
+                        onClick={() => {
+                            if (baseBranch && headBranch) { onCompareBranches?.(comparisonBranchRef(baseBranch), comparisonBranchRef(headBranch)); }
+                            else { runBranchCommand('compareWithCurrent', selectedBranch); }
+                        }}
                     />
                     <IconButton
                         icon="info"
@@ -239,6 +269,10 @@ export function BranchPanel({
                 </div>
 
                 <div className="graph-branch-content">
+                    {comparisonBranches.length > 0 ? <div className="branch-comparison-hint" role="status">
+                        <span>{baseBranch?.name}{headBranch ? ` → ${headBranch.name}` : ' · Ctrl/Cmd+click a second branch'}</span>
+                        <IconButton icon="close" title="Clear branch comparison selection" onClick={() => dispatchComparisonSelection({ type: 'clear' })} />
+                    </div> : null}
                     <div className="branch-search">
                         <SearchInput
                             value={search}
@@ -293,6 +327,8 @@ export function BranchPanel({
                                                 hasRemotes={hasRemotes}
                                                 expansionRequest={treeExpansionRequest}
                                                 onSelect={handleSelect}
+                                                comparisonSelection={comparisonBranches.map(comparisonBranchRef)}
+                                                onToggleComparison={toggleComparison}
                                                 onOpenContextMenu={handleOpenContextMenu}
                                                 contextForBranch={branchContextFor}
                                             />
@@ -324,6 +360,8 @@ export function BranchPanel({
                                         hasRemotes={hasRemotes}
                                         expansionRequest={treeExpansionRequest}
                                         onSelect={handleSelect}
+                                        comparisonSelection={comparisonBranches.map(comparisonBranchRef)}
+                                        onToggleComparison={toggleComparison}
                                         onOpenContextMenu={handleOpenContextMenu}
                                         contextForBranch={branchContextFor}
                                     />

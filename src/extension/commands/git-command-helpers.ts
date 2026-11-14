@@ -4,7 +4,8 @@ import * as fs from 'fs/promises';
 import type { GitRepository, Worktree } from '@application/ports/git-topology';
 import type { GitFileChange } from '@core/git/domain/git-commit';
 import { openReadonlyDiffDocument } from '@extension/utils/readonly-diff-documents';
-import { emptyDiffUri, refBlobUriFrom } from '@extension/utils/diff-uris';
+import { commitFileTempDiffUris, emptyDiffUri, refBlobUriFrom } from '@extension/utils/diff-uris';
+import { gitBlobUri } from '@extension/utils/git-blob-documents';
 import { samePath } from '@extension/utils/path-compare';
 
 type ChangesResource = readonly [vscode.Uri, vscode.Uri, vscode.Uri];
@@ -33,14 +34,35 @@ export async function compareRefWithPickedWorktree(repo: GitRepository, worktree
     return true;
 }
 
-export async function openChangesBetweenMergeBaseAndRef(repo: GitRepository, leftRef: string, rightRef: string, title: string): Promise<void> {
-    const mergeBase = await repo.getMergeBase(leftRef, rightRef);
-    await openChangesBetweenRefs(repo, mergeBase, rightRef, title);
-}
-
 export async function openChangesWithWorkingTree(repo: GitRepository, worktreePath: string, baseRef: string, title: string): Promise<void> {
     const resources = await workingTreeChangeResources(repo, worktreePath, baseRef);
     await openChangesEditor(title, resources);
+}
+
+export async function openChangesBetweenRefs(
+    repo: GitRepository,
+    baseRef: string,
+    headRef: string,
+    signal: AbortSignal,
+    onProgress: (processedFiles: number) => void,
+): Promise<void> {
+    const resources: ChangesResource[] = [];
+    let cursor: string | undefined;
+    do {
+        const page = await repo.listChangedFiles(baseRef, headRef, { limit: 100, encodedCursor: cursor }, signal);
+        for (const file of page.items) {
+            signal.throwIfAborted();
+            const uris = file.isSubmodule ? {
+                left: gitBlobUri(baseRef, file.filePath, 'submodule-before', `${file.oldRevision ?? ''}\n`),
+                right: gitBlobUri(headRef, file.filePath, 'submodule-after', `${file.newRevision ?? ''}\n`),
+            } : await commitFileTempDiffUris(repo, repo.cwd, { ...file, commitHash: headRef, parentHash: baseRef }, signal);
+            resources.push([vscode.Uri.file(path.join(repo.cwd, file.filePath)), uris.left, uris.right]);
+            onProgress(resources.length);
+        }
+        cursor = page.encodedNextCursor;
+    } while (cursor !== undefined);
+    signal.throwIfAborted();
+    await openChangesEditor(`Compare ${baseRef.slice(0, 8)} → ${headRef.slice(0, 8)}`, resources);
 }
 
 async function pathExists(filePath: string): Promise<boolean> {
@@ -59,11 +81,6 @@ async function pickWorktree(worktrees: readonly Worktree[], placeHolder: string)
     return selectedPath ? worktrees.find((worktree) => samePath(worktree.path, selectedPath)) : undefined;
 }
 
-async function openChangesBetweenRefs(repo: GitRepository, leftRef: string, rightRef: string, title: string): Promise<void> {
-    const resources = await Promise.all((await repo.compareRefs(leftRef, rightRef, { includeRenames: true })).map((entry) => refChangeResource(repo, leftRef, rightRef, entry)));
-    await openChangesEditor(title, resources);
-}
-
 async function openChangesEditor(title: string, resources: readonly ChangesResource[]): Promise<void> {
     if (resources.length === 0) {
         await openDiffDocument(title, 'No changes.\n');
@@ -75,23 +92,6 @@ async function openChangesEditor(title: string, resources: readonly ChangesResou
 async function workingTreeChangeResources(repo: GitRepository, worktreePath: string, baseRef: string): Promise<readonly ChangesResource[]> {
     const changes = await repo.compareWithWorkingTree(baseRef, worktreePath, { includeRenames: true });
     return Promise.all(changes.map((entry) => workingTreeChangeResource(repo, worktreePath, baseRef, entry)));
-}
-
-async function refChangeResource(repo: GitRepository, leftRef: string, rightRef: string, entry: GitFileChange): Promise<ChangesResource> {
-    const fileUri = vscode.Uri.file(path.join(repo.cwd, entry.filePath));
-    const origPath = entry.origPath ?? entry.filePath;
-
-    if (entry.status === 'A') {
-        return [fileUri, emptyDiffUri(rightRef, entry.filePath, 'original'), await runtimeRefBlobUri(repo, rightRef, entry.filePath, 'modified')];
-    }
-    if (entry.status === 'D') {
-        return [fileUri, await runtimeRefBlobUri(repo, leftRef, origPath, 'original'), emptyDiffUri(leftRef, entry.filePath, 'modified')];
-    }
-    return [
-        fileUri,
-        await runtimeRefBlobUri(repo, leftRef, origPath, 'original'),
-        await runtimeRefBlobUri(repo, rightRef, entry.filePath, 'modified'),
-    ];
 }
 
 async function workingTreeChangeResource(repo: GitRepository, worktreePath: string, baseRef: string, entry: GitFileChange): Promise<ChangesResource> {

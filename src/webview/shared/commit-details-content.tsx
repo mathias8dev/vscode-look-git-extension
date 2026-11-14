@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { CommitFileChange } from '@protocol/graph/types';
+import type { CommitFileChange } from '@protocol/shared/commit';
 import { ResizablePanel } from '@webview/shared/resizable-panel';
 import { ResizeAxis } from '@webview/shared/resize-axis';
 import { ResizeHandleSide } from '@webview/shared/resize-handle-side';
@@ -9,7 +9,6 @@ import { ViewMode } from '@webview/shared/view-mode';
 import { readViewMode, writeViewMode } from '@webview/shared/view-mode-storage';
 import { CommitFileTree } from '@webview/shared/commit-file-tree';
 import { filterCommitDetailFiles } from '@webview/shared/commit-file-filter';
-import type { CommitDetails } from '@webview/features/graph/graph-state';
 
 const COMMIT_MESSAGE_PANEL_MIN = 72;
 const COMMIT_MESSAGE_PANEL_MAX = 420;
@@ -18,14 +17,21 @@ const COMMIT_MESSAGE_PANEL_STORAGE_KEY = 'lookGit.commitDetailsMessagePanelHeigh
 const COMMIT_DETAILS_FILE_VIEW_MODE_STORAGE_KEY = 'lookGit.commitDetailsFileViewMode';
 
 interface CommitDetailsContentProps {
-    readonly details: CommitDetails;
+    readonly details: { readonly hash: string; readonly fullMessage: string; readonly files: readonly CommitFileChange[] };
     readonly onDiff: (file: CommitFileChange) => void;
+    readonly search?: string;
+    readonly onSearch?: (search: string) => void;
+    readonly hasMore?: boolean;
+    readonly loadingMore?: boolean;
+    readonly onLoadMore?: () => void;
+    readonly submodulesDiffable?: boolean;
 }
 
-export function CommitDetailsContent({ details, onDiff }: CommitDetailsContentProps) {
+export function CommitDetailsContent({ details, onDiff, search, onSearch, hasMore = false, loadingMore = false, onLoadMore, submodulesDiffable = true }: CommitDetailsContentProps) {
     const [fileSearch, setFileSearch] = useState('');
     const [fileViewMode, setFileViewMode] = useState(() => readViewMode(COMMIT_DETAILS_FILE_VIEW_MODE_STORAGE_KEY, ViewMode.Tree));
-    const filteredFiles = filterCommitDetailFiles(details.files, fileSearch);
+    const visibleSearch = search ?? fileSearch;
+    const filteredFiles = onSearch ? details.files : filterCommitDetailFiles(details.files, visibleSearch);
 
     const changeFileViewMode = (nextViewMode: ViewMode) => {
         setFileViewMode(nextViewMode);
@@ -36,19 +42,20 @@ export function CommitDetailsContent({ details, onDiff }: CommitDetailsContentPr
         <>
             <div className="graph-details-file-search">
                 <SearchInput
-                    value={fileSearch}
+                    value={visibleSearch}
                     placeholder="Search files"
                     ariaLabel="Search changed files"
-                    onChange={setFileSearch}
+                    onChange={onSearch ?? setFileSearch}
                 />
                 <ViewModeToggle viewMode={fileViewMode} onChange={changeFileViewMode} />
             </div>
             <div className="graph-details-file-tree">
                 {filteredFiles.length > 0 ? (
-                    <CommitFileTree files={filteredFiles} viewMode={fileViewMode} onDiff={onDiff} />
+                    <CommitFileTree files={filteredFiles} viewMode={fileViewMode} onDiff={onDiff} submodulesDiffable={submodulesDiffable} />
                 ) : (
                     <div className="graph-details-file-empty">No files match</div>
                 )}
+                {hasMore && onLoadMore ? <button type="button" className="comparison-load-more" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? 'Loading…' : 'Load more files'}</button> : null}
             </div>
             <ResizablePanel
                 storageKey={COMMIT_MESSAGE_PANEL_STORAGE_KEY}

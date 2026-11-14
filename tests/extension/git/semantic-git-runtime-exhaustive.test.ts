@@ -8,7 +8,6 @@ import { createSemanticRuntimeFixture } from '@tests/helpers/semantic-runtime-fi
 const unsupportedCliOperations = [
     'branchFromStash',
     'commitAll',
-    'compareFiles',
     'createFixupCommit',
     'createSquashCommit',
     'deinitSubmodule',

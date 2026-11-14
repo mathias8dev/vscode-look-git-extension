@@ -2,6 +2,9 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import { Page } from '@core/git/domain/page';
+import { ChangedFilesPage } from '@core/git/domain/git-comparison';
+import { parseNumstat } from '@core/parsing/parse-numstat';
+import { parseDiffRawZ } from '@core/parsing/parse-diff-raw';
 import type { GitExec } from '@extension/git/git-exec';
 import { queryAllBranches, queryAllTags, queryCommitFiles, queryCommitLineRangeLog, queryCommitLog, queryCommitMessage, queryCurrentBranch, queryGraphLog } from '@extension/git/queries/query-graph';
 import { queryStatus, queryStashList } from '@extension/git/queries/query-status';
@@ -421,10 +424,25 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
         const headRef = requiredStringField(input, 'headRef');
         const pageRequest = pageRequestFromInput(input);
         const offset = decodeOffset(pageRequest.encodedCursor);
-        const args = ['diff', '--name-status', '-z', baseRef, headRef, '--'];
-        const output = await readonlyRawExec(runProcess, context)(args, signal);
-        const allChanges = output ? parseNameStatusZ(output) : [];
-        return pageFromOffset(allChanges.slice(offset), pageRequest.limit, offset);
+        const exec = readonlyRawExec(runProcess, context);
+        const [raw, numstat] = await Promise.all([
+            exec(['diff', '--raw', '--no-abbrev', '-z', '-M', baseRef, headRef, '--'], signal),
+            exec(['diff', '--numstat', '-z', '-M', '--no-ext-diff', '--no-textconv', baseRef, headRef, '--'], signal),
+        ]);
+        const stats = new Map(parseNumstat(numstat).map((entry) => [entry.filePath, entry]));
+        const allChanges = parseDiffRawZ(raw).map((entry) => ({ ...entry, additions: stats.get(entry.filePath)?.additions ?? null, deletions: stats.get(entry.filePath)?.deletions ?? null }));
+        const search = optionalStringField(objectField(input, 'pageRequest'), 'search')?.trim().toLowerCase();
+        const matching = search ? allChanges.filter((entry) => entry.filePath.toLowerCase().includes(search) || entry.origPath?.toLowerCase().includes(search)) : allChanges;
+        const page = pageFromOffset(matching.slice(offset), pageRequest.limit, offset);
+        return new ChangedFilesPage(page.items, page.hasMore, page.encodedNextCursor, allChanges.length, matching.length,
+            allChanges.reduce((sum, entry) => sum + (entry.isSubmodule ? 0 : entry.additions ?? 0), 0),
+            allChanges.reduce((sum, entry) => sum + (entry.isSubmodule ? 0 : entry.deletions ?? 0), 0));
+    },
+    compareFiles: async (input, runProcess, context, signal) => {
+        const filePath = requiredStringField(input, 'path');
+        return readonlyRawExec(runProcess, context)(['diff', '--no-ext-diff', '--no-textconv', '--no-color', '-M',
+            requiredStringField(input, 'baseRef'), requiredStringField(input, 'headRef'), '--',
+            `:(literal)${filePath}`], signal);
     },
     getInteractiveRebasePlan: async (input, runProcess, context, signal) => {
         return interactiveRebasePlan(runProcess, context, requiredStringField(input, 'baseRef'), requiredStringField(input, 'headRef'), signal);

@@ -17,7 +17,7 @@ describe('GraphCommitRow', () => {
                 parentHash={undefined}
                 canUndoCommit={false}
                 canCherryPick={true}
-                hasMultipleSelectedCommits={false}
+                selectedCommitCount={1}
                 style={{}}
                 onSelect={() => undefined}
                 onMoveFocus={() => undefined}
@@ -34,7 +34,7 @@ describe('GraphCommitRow', () => {
                 parentHash={undefined}
                 canUndoCommit={false}
                 canCherryPick={true}
-                hasMultipleSelectedCommits={false}
+                selectedCommitCount={1}
                 style={{}}
                 onSelect={() => undefined}
                 onMoveFocus={() => undefined}
@@ -57,7 +57,7 @@ describe('GraphCommitRow', () => {
                 parentHash={undefined}
                 canUndoCommit={false}
                 canCherryPick={true}
-                hasMultipleSelectedCommits={false}
+                selectedCommitCount={1}
                 style={{}}
                 onSelect={() => undefined}
                 onMoveFocus={() => undefined}
@@ -80,7 +80,7 @@ describe('GraphCommitRow', () => {
                 parentHash={undefined}
                 canUndoCommit={false}
                 canCherryPick={true}
-                hasMultipleSelectedCommits={false}
+                selectedCommitCount={1}
                 rowHeight={35}
                 style={{ height: 35 }}
                 onSelect={() => undefined}
@@ -103,7 +103,7 @@ describe('GraphCommitRow', () => {
                 parentHash={undefined}
                 canUndoCommit={false}
                 canCherryPick={true}
-                hasMultipleSelectedCommits={false}
+                selectedCommitCount={1}
                 style={{}}
                 onSelect={() => undefined}
                 onMoveFocus={() => undefined}
@@ -126,7 +126,7 @@ describe('GraphCommitRow', () => {
                 parentHash={undefined}
                 canUndoCommit={false}
                 canCherryPick={true}
-                hasMultipleSelectedCommits={false}
+                selectedCommitCount={1}
                 style={{}}
                 onSelect={() => undefined}
                 onMoveFocus={() => undefined}

@@ -20,6 +20,7 @@ import { makeWebviewView, resetVscodeMock } from '@tests/helpers/provider-runtim
 import { createSubmoduleFixture, createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
 import { commands, setQuickPickValue, window } from '@tests/mocks/vscode';
 import { commitContextActionIds } from '@tests/helpers/commit-context-commands';
+import { createComparisonFixture } from '@tests/helpers/comparison-fixture';
 
 describe('CommitHistoryViewProvider', () => {
     const repos: TempGitRepo[] = [];
@@ -37,6 +38,32 @@ describe('CommitHistoryViewProvider', () => {
         for (const command of commitContextActionIds('lookGit.history')) {
             expect(commands.registrations.has(command), command).toBe(true);
         }
+    });
+
+    it.each(['history', 'fileHistory'] as const)('compares both context commits from %s', async surface => {
+        const { repo, ancestor, feature } = createComparisonFixture();
+        repos.push(repo);
+        const context = createRepoContext(repo.cwd);
+        const runtime = new CliGitRuntime((args, runtimeContext, options) => new GitCliBackend(runtimeContext.cwd).run(args, options));
+        const provider = new CommitHistoryViewProvider(vscode.Uri.file('/extension'), { currentContext: context },
+            async () => {}, undefined, undefined, runtimeRegistry(context, runtime));
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        provider.registerNativeContextCommands();
+        const target = { kind: 'commit', hash: feature, hashes: [feature, ancestor], canUndoCommit: false } as const;
+        let panel: typeof window.webviewPanels[number] | undefined;
+        if (surface === 'fileHistory') {
+            await provider.showFileHistory(vscode.Uri.file(`${repo.cwd}/src/edited.ts`));
+            panel = window.webviewPanels.at(-1);
+            panel?.webview.messageHandler?.({ type: 'history/contextTarget', target });
+        } else {
+            view.messageHandler?.({ type: 'history/contextTarget', target });
+        }
+        await vscode.commands.executeCommand('lookGit.history.compareSelected');
+        expect(commands.calls).toContainEqual({ command: 'vscode.changes', args: [
+            `Compare ${ancestor.slice(0, 8)} → ${feature.slice(0, 8)}`, expect.any(Array),
+        ] });
+        panel?.dispose();
     });
 
     it('returns to parent history when the selected submodule is deinitialized', async () => {

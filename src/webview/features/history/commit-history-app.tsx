@@ -132,7 +132,7 @@ export function CommitHistoryApp({
                                 parentHash={commit.parentHashes[0]}
                                 canUndoCommit={state.commits[0]?.hash === commit.hash}
                                 canCherryPick={selected ? selectedCanCherryPick : commit.canCherryPick ?? true}
-                                hasMultipleSelectedCommits={selected && state.selectedHashes.length > 1}
+                                selectedCommitCount={selected ? state.selectedHashes.length : 1}
                                 onSelect={selectCommit}
                                 onContextMenu={() => {
                                     if (!selectedHashSet.has(commit.hash)) {

@@ -14,7 +14,7 @@ const meta = {
         parentHash: historyCommit.parentHashes[0],
         canUndoCommit: true,
         canCherryPick: true,
-        hasMultipleSelectedCommits: false,
+        selectedCommitCount: 1,
         onSelect: noop,
         onContextMenu: noop,
     },

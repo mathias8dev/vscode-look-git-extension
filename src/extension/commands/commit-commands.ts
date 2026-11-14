@@ -19,7 +19,7 @@ import { openDiffExplanationDocument, showDiffExplanationError } from '@extensio
 import { isAbortError } from '@extension/messaging/error-serialization';
 import { withCancellationSignal } from '@extension/utils/vscode-cancellation';
 import { showBranchNameInput } from '@extension/utils/branch-name-input';
-import { compareRefWithPickedWorktree, openChangesWithWorkingTree, promptNewWorktreePath } from '@extension/commands/git-command-helpers';
+import { compareRefWithPickedWorktree, openChangesBetweenRefs, openChangesWithWorkingTree, promptNewWorktreePath } from '@extension/commands/git-command-helpers';
 import { promptForCommitMessage } from '@extension/utils/commit-message-editor';
 import { requireRuntimeRepository, requireRuntimeTargets, requireRuntimeWorktree, requireRuntimeWorktrees, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
 import { currentBranchName } from '@extension/git/current-branch';
@@ -48,6 +48,9 @@ export async function runCommitCommand(
     runtimeTargets: RuntimeCommandTargets = {},
 ): Promise<boolean> {
     const selected = normalizeSelectedHashes(hash, hashes);
+    if ((command === 'compareWithLocal' || command === 'compareCommitWithWorktree') && selected.length !== 1) {
+        throw new Error('This comparison requires a single selected commit. Use Compare Selected Commits for a pair.');
+    }
     switch (command) {
         case 'copyRevisionNumber':
             await commitReferenceActions.copyRevisionNumber(hash);
@@ -76,6 +79,17 @@ export async function runCommitCommand(
         case 'compareWithLocal':
             await openChangesWithWorkingTree(repo, repo.cwd, hash, `Diff ${hash.substring(0, 7)}..local`);
             return false;
+        case 'compareSelected': {
+            if (selected.length !== 2) { throw new Error('Select exactly two commits to compare.'); }
+            const repository = requireRuntimeRepository(runtimeTargets);
+            await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Comparing selected commits', cancellable: true },
+                (progress, token) => withCancellationSignal(token, async signal => {
+                    const [base, head] = await repository.orderCommits(selected, 'oldestFirst', signal);
+                    if (!base || !head) { throw new Error('The selected commits could not be resolved.'); }
+                    await openChangesBetweenRefs(repository, base, head, signal, count => progress.report({ message: `${count} files` }));
+                }));
+            return false;
+        }
         case 'resetCurrentBranchToHere':
             await resetCurrentBranchToHere(repo, hash, runtimeTargets);
             return true;

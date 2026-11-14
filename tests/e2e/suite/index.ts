@@ -7,6 +7,9 @@ import { discoverRepositoryContexts } from '@extension/repositories/repository-d
 import { getRepositoryScanMaxDepth } from '@extension/repositories/repository-discovery-settings';
 import { VscodeGitRemoteRuntime } from '@extension/git/vscode-git-remote-runtime';
 import { GitPushOutcome } from '@application/ports/git-capabilities';
+import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
+import { openComparisonPanel } from '@extension/views/comparison-panel';
+import type { ComparisonRequest } from '@protocol/comparison/messages';
 import { removeDirSyncWithRetry, samePath } from '@tests/helpers/git-repo';
 
 export async function run(): Promise<void> {
@@ -44,6 +47,9 @@ export async function run(): Promise<void> {
     await vscode.commands.executeCommand('lookGit.history.refresh');
     await vscode.commands.executeCommand('workbench.view.extension.look-git-graph');
 
+    report('validating branch comparison window initialization');
+    await verifyBranchComparison(diffRepo);
+
     report('validating multi-repository discovery');
     await verifyRepositoryScanDepth(multiRepositoryWorkspace);
     report('validating native publish cancellation');
@@ -51,6 +57,23 @@ export async function run(): Promise<void> {
     report('validating repository lifecycle');
     await verifyRepositoryLifecycle(lifecycleWorkspace);
     report('completed');
+}
+
+async function verifyBranchComparison(cwd: string): Promise<void> {
+    const extension = vscode.extensions.getExtension('mathias8dev.look-git');
+    assert.ok(extension, 'Look Git extension is unavailable.');
+    git(cwd, ['branch', 'comparison-base', 'HEAD~1']);
+    const repository = new RuntimeGitRepository({ repoId: cwd, cwd, gitDir: path.join(cwd, '.git'), kind: 'main', label: 'Diff fixture' });
+    const panel = openComparisonPanel(repository, extension.extensionUri, 'comparison-base', 'main');
+    const requests: ComparisonRequest[] = [];
+    const subscription = panel.webview.onDidReceiveMessage((message: ComparisonRequest) => requests.push(message));
+    try {
+        const start = Date.now();
+        while (!requests.some(request => request.type === 'comparison/dataRequest') && Date.now() - start < 15_000) { await delay(100); }
+        assert.ok(requests.some(request => request.type === 'comparison/ready'), 'Comparison webview did not initialize.');
+        assert.ok(requests.some(request => request.type === 'comparison/dataRequest'), 'Comparison webview did not request branch data.');
+        assert.equal(git(cwd, ['branch', '--show-current']).trim(), 'main');
+    } finally { subscription.dispose(); panel.dispose(); }
 }
 
 interface NativeGitExtension {

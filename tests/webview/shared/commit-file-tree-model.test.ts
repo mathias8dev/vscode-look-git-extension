@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildHistoryFileTree } from '@webview/features/history/history-file-tree';
+import { buildFileTree } from '@webview/shared/commit-file-tree-model';
 
-describe('historyFileTree', () => {
+describe('shared commit file tree model', () => {
     it('groups commit files into sorted folders before files', () => {
-        const tree = buildHistoryFileTree([
+        const tree = buildFileTree([
             { status: 'M', filePath: 'README.md' },
             { status: 'A', filePath: 'src/history/HistoryWebview.tsx' },
             { status: 'D', filePath: 'src/history/old.ts' },
@@ -17,12 +17,23 @@ describe('historyFileTree', () => {
     });
 
     it('keeps submodule leaf metadata', () => {
-        const tree = buildHistoryFileTree([
+        const tree = buildFileTree([
             { status: 'A', filePath: 'modules/auth-kit', isSubmodule: true },
         ]);
 
         expect(tree[0]?.name).toBe('modules');
         expect(tree[0]?.children[0]?.name).toBe('auth-kit');
         expect(tree[0]?.children[0]?.file?.isSubmodule).toBe(true);
+    });
+
+    it('keeps separate merge-parent changes for the same file', () => {
+        const tree = buildFileTree([
+            { status: 'M', filePath: 'src/shared.ts', parentHash: 'parent-one' },
+            { status: 'M', filePath: 'src/shared.ts', parentHash: 'parent-two' },
+        ]);
+        const files = tree[0]?.children ?? [];
+        expect(files).toHaveLength(2);
+        expect(new Set(files.map(node => node.id)).size).toBe(2);
+        expect(files.map(node => node.file?.parentHash)).toEqual(['parent-one', 'parent-two']);
     });
 });

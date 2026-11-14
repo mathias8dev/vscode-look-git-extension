@@ -26,8 +26,9 @@ export async function openStatusGitlinkDiff(worktree: Worktree, input: StatusGit
     await openGitlinkDiffDocument(input.filePath, diff);
 }
 
-export async function openCommitGitlinkDiff(repo: GitRepository, input: CommitGitlinkDiffInput): Promise<void> {
-    const diff = await commitGitlinkDiff(repo, input);
+export async function openCommitGitlinkDiff(repo: GitRepository, input: CommitGitlinkDiffInput, signal?: AbortSignal): Promise<void> {
+    const diff = await commitGitlinkDiff(repo, input, signal);
+    signal?.throwIfAborted();
     await openGitlinkDiffDocument(input.filePath, diff);
 }
 
@@ -36,12 +37,12 @@ export async function openWorktreeGitlinkDiff(worktree: Worktree, input: Worktre
     await openGitlinkDiffDocument(input.filePath, diff);
 }
 
-async function commitGitlinkDiff(repo: GitRepository, input: CommitGitlinkDiffInput): Promise<string> {
+async function commitGitlinkDiff(repo: GitRepository, input: CommitGitlinkDiffInput, signal?: AbortSignal): Promise<string> {
     if (input.parentHash || input.status.charAt(0) !== 'A') {
         const parentRef = input.parentHash ?? `${input.commitHash}~1`;
-        return repo.compareFiles(parentRef, input.commitHash, input.filePath);
+        return repo.compareFiles(parentRef, input.commitHash, input.filePath, signal);
     }
-    return repo.getCommitFileDiff(input.commitHash, input.filePath);
+    return repo.getCommitFileDiff(input.commitHash, input.filePath, signal);
 }
 
 async function openGitlinkDiffDocument(filePath: string, diff: string): Promise<void> {

@@ -46,32 +46,56 @@ describe('GraphViewProvider', () => {
         ]));
     });
 
-    it('forwards the complete commit selection to graph context commands', async () => {
+    it.each(['createPatch', 'compareSelected'] as const)('forwards the complete commit selection to %s', async command => {
         resetVscodeMock();
         const handle = vi.spyOn(GraphMessageRouter.prototype, 'handle').mockResolvedValue();
         const provider = new GraphViewProvider(vscode.Uri.file('/extension'), { currentContext: undefined, contexts: [] });
         const view = makeWebviewView();
         provider.resolveWebviewView(view);
         provider.registerNativeContextCommands();
+        const hashes = command === 'compareSelected' ? ['newest', 'clicked'] : ['newest', 'clicked', 'oldest'];
         view.messageHandler?.({
             type: 'graph/contextTarget',
             target: {
                 kind: 'commit',
                 hash: 'clicked',
-                hashes: ['newest', 'clicked', 'oldest'],
+                hashes,
                 canUndoCommit: false,
             },
         });
 
-        await vscode.commands.executeCommand('lookGit.graph.commit.createPatch');
+        await vscode.commands.executeCommand(`lookGit.graph.commit.${command}`);
 
         expect(handle).toHaveBeenCalledWith({
             type: 'graph/commitCommand',
-            command: 'createPatch',
+            command,
             hash: 'clicked',
-            hashes: ['newest', 'clicked', 'oldest'],
+            hashes,
         });
         handle.mockRestore();
+    });
+
+    it('routes a selected branch pair to comparison and ignores single-branch commands', async () => {
+        resetVscodeMock();
+        const handle = vi.spyOn(GraphMessageRouter.prototype, 'handle').mockResolvedValue();
+        try {
+            const provider = new GraphViewProvider(vscode.Uri.file('/extension'), { currentContext: undefined, contexts: [] });
+            const view = makeWebviewView();
+            provider.resolveWebviewView(view);
+            provider.registerNativeContextCommands();
+            view.messageHandler?.({ type: 'graph/contextTarget', target: {
+                kind: 'branchPair', baseRef: 'refs/heads/main', headRef: 'refs/remotes/upstream/feature',
+                repository: { repositoryId: 'repo', worktreeId: 'worktree' },
+            } });
+            await vscode.commands.executeCommand('lookGit.graph.branch.compareSelected');
+            expect(handle).toHaveBeenCalledWith({
+                type: 'graph/compareBranches', baseRef: 'refs/heads/main', headRef: 'refs/remotes/upstream/feature',
+                repository: { repositoryId: 'repo', worktreeId: 'worktree' },
+            });
+            handle.mockClear();
+            await vscode.commands.executeCommand('lookGit.graph.branch.compareWithCurrent');
+            expect(handle).not.toHaveBeenCalled();
+        } finally { handle.mockRestore(); }
     });
 
     it('routes repository navigation messages through the navigation callback', async () => {

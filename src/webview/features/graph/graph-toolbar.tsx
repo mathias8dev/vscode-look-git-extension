@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import type { BranchInfo, GraphFilters } from '@protocol/graph/types';
 import { SearchInput } from '@webview/shared/search-input';
+import { Dropdown } from '@webview/shared/dropdown';
 
 interface GraphToolbarProps {
     readonly filters: GraphFilters;
@@ -34,19 +35,19 @@ export function GraphToolbar({
                 onChange={(value) => onFiltersChange({ search: value || undefined })}
             />
 
-            <select
+            <Dropdown
                 className="graph-filter-select"
                 value={selectedBranchFilter ?? ''}
-                aria-label="Filter by branch"
-                onChange={(e) => onBranchFilterChange(e.currentTarget.value || undefined)}
-            >
-                <option value="">All branches</option>
-                {branches.map((b) => (
-                    <option key={`${b.isRemote ? 'r' : 'l'}:${b.name}`} value={b.name}>
-                        {b.isCurrent ? `★ ${b.name}` : b.name}
-                    </option>
-                ))}
-            </select>
+                ariaLabel="Filter by branch"
+                searchable
+                searchPlaceholder="Search branches"
+                onChange={value => onBranchFilterChange(value || undefined)}
+                options={[
+                    { value: '', label: 'All branches' },
+                    ...branches.map(branch => ({ value: branch.name, label: branch.name,
+                        description: branch.isCurrent ? 'current' : branch.isRemote ? 'remote' : undefined })),
+                ]}
+            />
 
             <input
                 type="text"

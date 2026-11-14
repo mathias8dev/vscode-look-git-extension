@@ -107,6 +107,7 @@ describe('graph native context menu targets', () => {
         const commits = [
             commit('head1234567890abcdef', ['base1234567890abcdef']),
             commit('base1234567890abcdef', []),
+            commit('outside1234567890abcdef', []),
         ];
         const rows = layoutGraphRowsV4(commits).rows;
         const displayRows: readonly DisplayRow[] = rows.map((row) => ({ kind: 'commit', row }));
@@ -138,6 +139,7 @@ describe('graph native context menu targets', () => {
         expect(context).toContain('"graphCommitCanCherryPick":true');
         expect(context).toContain('"graphCommitCanSquash":true');
         expect(context).toContain('"graphCommitHasMultipleSelectedCommits":true');
+        expect(context).toContain('"graphCommitSelectedCount":2');
         expect(context).toContain('"graphCommitDisabledReason"');
 
         fireEvent.contextMenu(row);
@@ -153,6 +155,12 @@ describe('graph native context menu targets', () => {
             canCherryPick: true,
             canSquash: true,
         });
+        const outside = screen.getByTitle(/commit outside1234567890abcdef/);
+        expect(outside.getAttribute('data-vscode-context')).toContain('"graphCommitSelectedCount":1');
+        expect(outside.getAttribute('data-vscode-context')).toContain('"graphCommitHasMultipleSelectedCommits":false');
+        fireEvent.contextMenu(outside);
+        expect(onSelectCommit).toHaveBeenCalledWith('outside1234567890abcdef', 'replace');
+        expect(onContextTarget).toHaveBeenLastCalledWith(expect.objectContaining({ hash: 'outside1234567890abcdef', hashes: ['outside1234567890abcdef'] }));
     });
 
     it('disables cherry-pick for mixed commit selections when one selected commit is already in current history', () => {

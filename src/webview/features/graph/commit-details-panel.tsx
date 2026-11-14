@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { CommitFileChange } from '@protocol/graph/types';
 import type { CommitDetails } from '@webview/features/graph/graph-state';
-import { CommitDetailsContent } from '@webview/features/graph/commit-details-content';
+import { CommitDetailsContent } from '@webview/shared/commit-details-content';
 import { GraphDetailsPanel } from '@webview/features/graph/graph-details-panel';
 
 interface CommitDetailsPanelProps {

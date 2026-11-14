@@ -1,5 +1,6 @@
 import type { GitCommit, GitFileChange } from '@core/git/domain/git-commit';
 import type { Page, PageRequest } from '@core/git/domain/page';
+import type { ChangedFilesPage, ChangedFilesPageRequest } from '@core/git/domain/git-comparison';
 import type { GitBranch, GitStash, GitStatus, GitTag } from '@core/git/domain/git-status';
 import type { GitSubmodule, GitWorktree } from '@core/git/domain/git-worktree';
 
@@ -150,7 +151,7 @@ export interface GitCompareOperations {
     compareBranches(baseBranch: string, headBranch: string, options: RefCompareOptions, signal?: AbortSignal): Promise<readonly GitFileChange[]>;
     compareWithWorkingTree(baseRef: string, worktree: string, options: RefCompareOptions, signal?: AbortSignal): Promise<readonly GitFileChange[]>;
     compareFiles(baseRef: string, headRef: string, path: string, signal?: AbortSignal): Promise<string>;
-    listChangedFiles(baseRef: string, headRef: string, pageRequest: PageRequest, signal?: AbortSignal): Promise<Page<GitFileChange>>;
+    listChangedFiles(baseRef: string, headRef: string, pageRequest: ChangedFilesPageRequest, signal?: AbortSignal): Promise<ChangedFilesPage>;
 }
 
 export interface GitReferenceOperations {

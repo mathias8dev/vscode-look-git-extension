@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { BranchInfo } from '@protocol/graph/types';
 import type { BranchNode } from '@webview/features/graph/graph-branch-tree';
+import { comparisonBranchRef } from '@webview/features/graph/branch-comparison-selection';
 
 export interface BranchTreeExpansionRequest {
     readonly mode: 'expanded' | 'collapsed';
@@ -14,11 +15,13 @@ interface BranchTreeNodeProps {
     readonly hasRemotes: boolean;
     readonly expansionRequest: BranchTreeExpansionRequest;
     readonly onSelect: (fullName: string) => void;
+    readonly comparisonSelection?: readonly string[];
+    readonly onToggleComparison?: (branch: BranchInfo) => void;
     readonly onOpenContextMenu: (branch: BranchInfo) => void;
     readonly contextForBranch: (branch: BranchInfo) => Record<string, unknown>;
 }
 
-export function BranchTreeNode({ node, depth, selectedBranch, hasRemotes, expansionRequest, onSelect, onOpenContextMenu, contextForBranch }: BranchTreeNodeProps) {
+export function BranchTreeNode({ node, depth, selectedBranch, hasRemotes, expansionRequest, onSelect, comparisonSelection = [], onToggleComparison, onOpenContextMenu, contextForBranch }: BranchTreeNodeProps) {
     const [localCollapse, setLocalCollapse] = useState<{ readonly version: number; readonly collapsed: boolean }>();
     const collapsed = localCollapse?.version === expansionRequest.version
         ? localCollapse.collapsed
@@ -49,6 +52,8 @@ export function BranchTreeNode({ node, depth, selectedBranch, hasRemotes, expans
                         hasRemotes={hasRemotes}
                         expansionRequest={expansionRequest}
                         onSelect={onSelect}
+                        comparisonSelection={comparisonSelection}
+                        onToggleComparison={onToggleComparison}
                         onOpenContextMenu={onOpenContextMenu}
                         contextForBranch={contextForBranch}
                     />
@@ -58,19 +63,24 @@ export function BranchTreeNode({ node, depth, selectedBranch, hasRemotes, expans
     }
 
     const branch = node.branch;
-    const isActive = selectedBranch === node.fullName;
+    const isActive = comparisonSelection.length === 0 && selectedBranch === node.fullName;
     const isCurrent = branch?.isCurrent ?? false;
     const isNotPublished = hasRemotes && branch !== undefined && !branch.isRemote && !branch.upstream;
     const disabledReason = branch ? branchDisabledReason(branch) : undefined;
+    const comparisonIndex = branch ? comparisonSelection.indexOf(comparisonBranchRef(branch)) : -1;
 
     return (
         <button
             type="button"
-            className={`branch-node branch-leaf${isActive ? ' branch-node-active' : ''}`}
+            className={`branch-node branch-leaf${isActive ? ' branch-node-active' : ''}${comparisonIndex >= 0 ? ' branch-node-comparison' : ''}`}
+            aria-pressed={comparisonIndex >= 0 || isActive}
             style={{ paddingLeft: `${10 + depth * 14}px` }}
             title={disabledReason ? `${node.fullName}\n${disabledReason}` : node.fullName}
             data-vscode-context={branch ? JSON.stringify(contextForBranch(branch)) : undefined}
-            onClick={() => onSelect(node.fullName)}
+            onClick={event => {
+                if ((event.ctrlKey || event.metaKey) && branch && onToggleComparison) { onToggleComparison(branch); }
+                else { onSelect(node.fullName); }
+            }}
             onContextMenu={() => {
                 if (!branch) { return; }
                 onOpenContextMenu(branch);
@@ -81,6 +91,7 @@ export function BranchTreeNode({ node, depth, selectedBranch, hasRemotes, expans
                 aria-hidden="true"
             />
             <span className="branch-node-name">{node.name}</span>
+            {comparisonIndex >= 0 ? <span className="branch-comparison-order" aria-label={comparisonIndex === 0 ? 'Comparison base' : 'Branch to compare'}>{comparisonIndex + 1}</span> : null}
             {isCurrent && <span className="branch-current-indicator" aria-label="current branch" />}
             {isNotPublished ? (
                 <span

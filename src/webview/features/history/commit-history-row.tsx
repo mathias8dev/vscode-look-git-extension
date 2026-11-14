@@ -13,12 +13,13 @@ interface CommitHistoryRowProps {
     readonly parentHash: string | undefined;
     readonly canUndoCommit: boolean;
     readonly canCherryPick: boolean;
-    readonly hasMultipleSelectedCommits: boolean;
+    readonly selectedCommitCount: number;
     readonly onSelect: (hash: string, mode: HistoryCommitSelectionMode) => void;
     readonly onContextMenu: () => void;
 }
 
-export function CommitHistoryRow({ commit, expanded, selected, showSelectionCheckbox, childHash, parentHash, canUndoCommit, canCherryPick, hasMultipleSelectedCommits, onSelect, onContextMenu }: CommitHistoryRowProps) {
+export function CommitHistoryRow({ commit, expanded, selected, showSelectionCheckbox, childHash, parentHash, canUndoCommit, canCherryPick, selectedCommitCount, onSelect, onContextMenu }: CommitHistoryRowProps) {
+    const hasMultipleSelectedCommits = selectedCommitCount > 1;
     const disabledReasons = historyCommitDisabledReasons({ canCherryPick, canUndoCommit, hasMultipleSelectedCommits, childHash, parentHash });
     return (
         <div
@@ -36,6 +37,7 @@ export function CommitHistoryRow({ commit, expanded, selected, showSelectionChec
                 historyCanUndoCommit: canUndoCommit,
                 historyCanCherryPick: canCherryPick,
                 historyHasMultipleSelectedCommits: hasMultipleSelectedCommits,
+                historySelectedCount: selectedCommitCount,
                 historyCommitDisabledReason: disabledReasons.join('\n'),
                 preventDefaultContextMenuItems: true,
             })}

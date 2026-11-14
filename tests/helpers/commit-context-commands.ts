@@ -8,6 +8,7 @@ export const COMMIT_CONTEXT_COMMANDS = [
     'checkoutRevision',
     'showRepositoryAtRevision',
     'compareWithLocal',
+    'compareSelected',
     'newWorktreeFromCommit',
     'compareCommitWithWorktree',
     'resetCurrentBranchToHere',

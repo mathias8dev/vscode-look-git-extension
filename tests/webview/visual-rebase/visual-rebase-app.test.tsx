@@ -85,10 +85,12 @@ describe('VisualRebaseApp', () => {
             />,
         );
 
-        fireEvent.change(screen.getByLabelText('Action for bbb2222'), { target: { value: 'fixup' } });
+        fireEvent.click(screen.getByLabelText('Action for bbb2222'));
+        fireEvent.click(screen.getByRole('option', { name: 'fixup' }));
         fireEvent.click(screen.getByRole('button', { name: 'Reset plan' }));
-        expect(screen.getByLabelText('Action for bbb2222')).toHaveValue('pick');
-        fireEvent.change(screen.getByLabelText('Action for bbb2222'), { target: { value: 'fixup' } });
+        expect(screen.getByLabelText('Action for bbb2222')).toHaveTextContent('pick');
+        fireEvent.click(screen.getByLabelText('Action for bbb2222'));
+        fireEvent.click(screen.getByRole('option', { name: 'fixup' }));
         fireEvent.click(screen.getByRole('button', { name: 'Start Rebase' }));
 
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -205,7 +207,8 @@ describe('VisualRebaseApp', () => {
             />,
         );
 
-        fireEvent.change(screen.getByLabelText('Action for aaa1111'), { target: { value: 'reword' } });
+        fireEvent.click(screen.getByLabelText('Action for aaa1111'));
+        fireEvent.click(screen.getByRole('option', { name: 'reword' }));
         fireEvent.change(screen.getByLabelText('Reword message'), { target: { value: 'feat: better message' } });
         fireEvent.click(screen.getByRole('button', { name: 'Start Rebase' }));
 
@@ -251,8 +254,10 @@ describe('VisualRebaseApp', () => {
             />,
         );
 
-        fireEvent.change(screen.getByLabelText('Action for aaa1111'), { target: { value: 'edit' } });
-        fireEvent.change(screen.getByLabelText('Action for bbb2222'), { target: { value: 'break' } });
+        fireEvent.click(screen.getByLabelText('Action for aaa1111'));
+        fireEvent.click(screen.getByRole('option', { name: 'edit' }));
+        fireEvent.click(screen.getByLabelText('Action for bbb2222'));
+        fireEvent.click(screen.getByRole('option', { name: 'break' }));
         fireEvent.click(screen.getByRole('button', { name: 'Start Rebase' }));
 
         expect(onStart).toHaveBeenCalledWith('main', 'main', [
@@ -745,7 +750,7 @@ describe('VisualRebaseApp', () => {
             />,
         );
 
-        expect(screen.getByLabelText('Action for bbb2222')).toHaveValue('merge');
+        expect(screen.getByLabelText('Action for bbb2222')).toHaveTextContent('merge');
         expect(screen.getByText('Merge topology is preserved; reordering is disabled.')).toBeInTheDocument();
         expect(screen.getAllByTitle('Reordering is disabled for merge-aware plans')).toHaveLength(2);
     });
@@ -788,7 +793,8 @@ describe('VisualRebaseApp', () => {
         );
 
         fireEvent.click(screen.getByText('merge branch'));
-        fireEvent.change(screen.getByLabelText('Action for bbb2222'), { target: { value: 'reword' } });
+        fireEvent.click(screen.getByLabelText('Action for bbb2222'));
+        fireEvent.click(screen.getByRole('option', { name: 'reword' }));
         fireEvent.change(screen.getByLabelText('Reword message'), { target: { value: 'merge: better message' } });
         fireEvent.click(screen.getByRole('button', { name: 'Start Rebase' }));
 

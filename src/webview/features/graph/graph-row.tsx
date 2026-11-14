@@ -15,7 +15,7 @@ interface GraphRowProps {
     readonly parentHash: string | undefined;
     readonly canUndoCommit: boolean;
     readonly canCherryPick: boolean;
-    readonly hasMultipleSelectedCommits: boolean;
+    readonly selectedCommitCount: number;
     readonly rowHeight?: number;
     readonly style: CSSProperties;
     readonly onSelect: (hash: string, mode: CommitSelectMode) => void;
@@ -24,9 +24,10 @@ interface GraphRowProps {
     readonly onMoveFocus: (currentHash: string, direction: 'previous' | 'next', mode?: CommitSelectMode) => void;
 }
 
-export function GraphCommitRow({ row, branches, selected, childHash, parentHash, canUndoCommit, canCherryPick, hasMultipleSelectedCommits, rowHeight, style, onSelect, onOpenContextMenu, onBranchDoubleClick, onMoveFocus }: GraphRowProps) {
+export function GraphCommitRow({ row, branches, selected, childHash, parentHash, canUndoCommit, canCherryPick, selectedCommitCount, rowHeight, style, onSelect, onOpenContextMenu, onBranchDoubleClick, onMoveFocus }: GraphRowProps) {
     const { commit, laneData } = row;
     const refs = parseRefs(commit.refs, branches);
+    const hasMultipleSelectedCommits = selectedCommitCount > 1;
     const disabledReasons = graphCommitDisabledReasons({ canCherryPick, canUndoCommit, hasMultipleSelectedCommits, childHash, parentHash });
     const messageOffset = (getLaneDataMaxLane(laneData) + 1) * LANE_WIDTH + 4;
     const rowStyle: CSSProperties & { readonly '--graph-row-message-offset': string } = {
@@ -50,6 +51,7 @@ export function GraphCommitRow({ row, branches, selected, childHash, parentHash,
                 graphCommitCanCherryPick: canCherryPick,
                 graphCommitCanSquash: hasMultipleSelectedCommits,
                 graphCommitHasMultipleSelectedCommits: hasMultipleSelectedCommits,
+                graphCommitSelectedCount: selectedCommitCount,
                 graphCommitDisabledReason: disabledReasons.join('\n'),
                 preventDefaultContextMenuItems: true,
             })}

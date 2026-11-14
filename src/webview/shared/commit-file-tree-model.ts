@@ -1,16 +1,16 @@
 import type { CommitFileChange } from '@protocol/shared/commit';
 
-export interface FileTreeNode {
+export interface FileTreeNode<TFile extends CommitFileChange = CommitFileChange> {
     readonly id: string;
     readonly name: string;
     readonly path: string;
-    readonly file?: CommitFileChange;
-    readonly children: readonly FileTreeNode[];
+    readonly file?: TFile;
+    readonly children: readonly FileTreeNode<TFile>[];
     readonly isFolder: boolean;
 }
 
-export function buildFileTree(files: readonly CommitFileChange[]): FileTreeNode[] {
-    const roots = new Map<string, MutableFileNode>();
+export function buildFileTree<TFile extends CommitFileChange>(files: readonly TFile[]): FileTreeNode<TFile>[] {
+    const roots = new Map<string, MutableFileNode<TFile>>();
 
     for (const file of files) {
         const parts = file.filePath.split('/');
@@ -22,17 +22,18 @@ export function buildFileTree(files: readonly CommitFileChange[]): FileTreeNode[
             pathSoFar = pathSoFar ? `${pathSoFar}/${part}` : part;
             const isLeaf = i === parts.length - 1;
 
-            let node = current.get(part);
+            const nodeKey = isLeaf ? `${file.parentHash ?? ''}:${part}:${file.origPath ?? ''}` : part;
+            let node = current.get(nodeKey);
             if (!node) {
                 node = {
-                    id: pathSoFar,
+                    id: isLeaf ? `${file.parentHash ?? ''}:${pathSoFar}:${file.origPath ?? ''}` : pathSoFar,
                     name: part,
                     path: pathSoFar,
                     file: isLeaf ? file : undefined,
                     children: new Map(),
                     isFolder: !isLeaf,
                 };
-                current.set(part, node);
+                current.set(nodeKey, node);
             }
             if (isLeaf) {
                 node.file = file;
@@ -45,16 +46,16 @@ export function buildFileTree(files: readonly CommitFileChange[]): FileTreeNode[
     return freezeFileNodes(roots);
 }
 
-interface MutableFileNode {
+interface MutableFileNode<TFile extends CommitFileChange> {
     id: string;
     name: string;
     path: string;
-    file?: CommitFileChange;
-    children: Map<string, MutableFileNode>;
+    file?: TFile;
+    children: Map<string, MutableFileNode<TFile>>;
     isFolder: boolean;
 }
 
-function freezeFileNodes(nodes: Map<string, MutableFileNode>): FileTreeNode[] {
+function freezeFileNodes<TFile extends CommitFileChange>(nodes: Map<string, MutableFileNode<TFile>>): FileTreeNode<TFile>[] {
     return [...nodes.values()]
         .sort((a, b) => {
             if (a.isFolder !== b.isFolder) { return a.isFolder ? -1 : 1; }

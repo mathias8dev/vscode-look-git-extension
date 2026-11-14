@@ -184,6 +184,13 @@ export interface BranchCommandRequest {
     readonly repository?: RepositoryLocator;
 }
 
+export interface CompareBranchesCommand {
+    readonly type: 'graph/compareBranches';
+    readonly baseRef: string;
+    readonly headRef: string;
+    readonly repository?: RepositoryLocator;
+}
+
 export type WorktreeCommand =
     | 'open'
     | 'openInNewWindow'
@@ -219,6 +226,7 @@ export type CommitCommand =
     | 'checkoutRevision'
     | 'showRepositoryAtRevision'
     | 'compareWithLocal'
+    | 'compareSelected'
     | 'resetCurrentBranchToHere'
     | 'revertCommit'
     | 'undoCommit'
@@ -323,6 +331,7 @@ export type GraphWebviewToExtensionMessage =
     | GraphContextTargetMessage
     | GraphRepositoryCommandRequest
     | BranchCommandRequest
+    | CompareBranchesCommand
     | WorktreeCommandRequest
     | CommitCommandRequest
     | OpenDiffRequest
