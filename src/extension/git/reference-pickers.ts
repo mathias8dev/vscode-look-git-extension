@@ -49,10 +49,13 @@ export async function pickLocalBranch(
     return vscode.window.showQuickPick(ordered, { placeHolder });
 }
 
-export async function pickRemote(placeHolder: string, repository: GitRepository): Promise<string | undefined> {
-    const remotes = await repository.listRemotes();
+export async function pickRemote(placeHolder: string, repository: GitRepository, signal?: AbortSignal): Promise<string | undefined> {
+    const remotes = await repository.listRemotes(signal);
+    if (remotes.length === 0) { throw new Error('No Git remotes are configured.'); }
     if (remotes.length === 1) { return remotes[0]; }
-    return vscode.window.showQuickPick(remotes, { placeHolder });
+    const remote = await vscode.window.showQuickPick(remotes, { placeHolder });
+    signal?.throwIfAborted();
+    return remote;
 }
 
 export async function pickRef(placeHolder: string, repository: GitRepository): Promise<string | undefined> {

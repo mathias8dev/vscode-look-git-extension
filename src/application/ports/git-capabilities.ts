@@ -1,4 +1,5 @@
 import type { GitCommit, GitFileChange } from '@core/git/domain/git-commit';
+import type { GitTagRef } from '@core/git/domain/git-tag-ref';
 import type { Page, PageRequest } from '@core/git/domain/page';
 import type { ChangedFilesPage, ChangedFilesPageRequest } from '@core/git/domain/git-comparison';
 import type { GitBranch, GitStash, GitStatus, GitTag } from '@core/git/domain/git-status';
@@ -158,6 +159,7 @@ export interface GitReferenceOperations {
     listBranches(signal?: AbortSignal): Promise<readonly GitBranch[]>;
     listRemoteBranches(signal?: AbortSignal): Promise<readonly GitBranch[]>;
     listTags(signal?: AbortSignal): Promise<readonly GitTag[]>;
+    listRemoteTags(remote: string, names: readonly string[], signal?: AbortSignal): Promise<readonly GitTagRef[]>;
     listRemotes(signal?: AbortSignal): Promise<readonly string[]>;
     resolveRef(ref: string, signal?: AbortSignal): Promise<string>;
     updateRef(ref: string, newValue: string, signal?: AbortSignal): Promise<void>;

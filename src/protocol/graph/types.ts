@@ -48,6 +48,7 @@ export interface BranchDetails extends BranchInfo {
 export interface TagInfo {
     readonly name: string;
     readonly hash: string;
+    readonly objectHash?: string;
 }
 
 export interface WorktreeInfo {
@@ -140,6 +141,14 @@ export interface GraphBranchPairContextTarget {
 
 export type GraphContextTarget =
     | GraphCommitContextTarget
+    | GraphTagContextTarget
     | GraphBranchContextTarget
     | GraphBranchPairContextTarget
     | GraphWorktreeContextTarget;
+
+export interface GraphTagContextTarget {
+    readonly kind: 'tag';
+    readonly tag: string;
+    readonly isCurrent: boolean;
+    readonly repository?: RepositoryLocator;
+}

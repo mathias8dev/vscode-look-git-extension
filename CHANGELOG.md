@@ -19,6 +19,12 @@ All notable changes to Look Git are documented in this file.
 #### Commit History and Look Graph
 - Compare two selected commits in the native VS Code changes editor
 
+#### Look Graph Tags
+- Browse and search tags in the branch panel, select their commits, and open native tag context menus from the list or graph badges
+- Check out a tag in detached HEAD mode or create and check out a branch from it, with an explicit detached-state notice and a return action for the previous branch
+- Distinguish local-only, published, differing and unverifiable tags using per-remote checks, with a manual refresh action
+- Push only the selected tag to a chosen remote without force-overwriting remote tags
+
 ### Changed
 
 #### Changes Panel
@@ -32,6 +38,7 @@ All notable changes to Look Git are documented in this file.
 
 #### Commit History and Look Graph
 - Adapt context menus to the selection and hide single-item actions, including comparisons with Local or Worktree, when multiple items are selected
+- Honour detached checkout options and resolve annotated tags to their target commits while retaining their tag object IDs
 
 ## [1.2.14] - 2026-10-20
 

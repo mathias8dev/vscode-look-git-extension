@@ -3,6 +3,7 @@ import * as path from 'path';
 import type { GitPushOutcome, PushOptions } from '@application/ports/git-capabilities';
 import type { GitRepository, Worktree } from '@application/ports/git-topology';
 import { CheckoutBranchUseCase } from '@application/usecases/branches/checkout-branch';
+import { createAndCheckoutBranch } from '@extension/commands/create-and-checkout-branch';
 import type { BranchCommand } from '@protocol/graph/messages';
 import type { GitBranch } from '@core/git/domain/git-status';
 import type { GitWorktree } from '@core/git/domain/git-worktree';
@@ -39,13 +40,11 @@ export async function runBranchCommand(
             await checkoutBranch.execute(runtimeRepository, requireRuntimeWorktree(runtimeTargets), { branch, isRemote });
             return commandExecutionResult(true);
         case 'newBranchFrom': {
-            const name = await showBranchNameInput({
-                prompt: `Create branch from "${branch}":`,
+            const changed = await createAndCheckoutBranch(requireRuntimeWorktree(runtimeTargets), branch, {
+                label: branch,
                 value: isRemote ? localBranchNameForRemote(branch) : undefined,
             });
-            if (!name) { return commandExecutionResult(false); }
-            await requireRuntimeWorktree(runtimeTargets).checkoutNewBranch(name, branch);
-            return commandExecutionResult(true);
+            return commandExecutionResult(changed);
         }
         case 'checkoutRebaseOnto':
             await assertRuntimeNoUnmergedFiles(requireRuntimeWorktree(runtimeTargets), 'checking out and rebasing branches');

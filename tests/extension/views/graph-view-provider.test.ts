@@ -8,6 +8,25 @@ import { commitContextActionIds } from '@tests/helpers/commit-context-commands';
 import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
 
 describe('GraphViewProvider', () => {
+    it.each(['checkout', 'newBranch', 'push'] as const)('routes tag %s to the repository from the context target', async command => {
+        resetVscodeMock();
+        const handle = vi.spyOn(GraphMessageRouter.prototype, 'handle').mockResolvedValue();
+        try {
+            const provider = new GraphViewProvider(vscode.Uri.file('/extension'), { currentContext: undefined, contexts: [] });
+            const view = makeWebviewView(); provider.resolveWebviewView(view); provider.registerNativeContextCommands();
+            const repository = { repoId: 'child', kind: 'submodule', path: '/repo/child', parentRepoId: 'parent' } as const;
+            view.messageHandler?.({ type: 'graph/contextTarget', target: { kind: 'tag', tag: 'v1', isCurrent: false, repository } });
+            await vscode.commands.executeCommand(`lookGit.graph.tag.${command}`);
+            expect(handle).toHaveBeenCalledWith({ type: 'graph/tagCommand', command, tag: 'v1', repository });
+            handle.mockClear();
+            await vscode.commands.executeCommand('lookGit.graph.commit.checkoutRevision');
+            expect(handle).not.toHaveBeenCalled();
+            view.messageHandler?.({ type: 'graph/contextTarget', target: { kind: 'tag', tag: 'v1', isCurrent: true, repository } });
+            await vscode.commands.executeCommand('lookGit.graph.tag.checkout');
+            expect(handle).not.toHaveBeenCalled();
+        } finally { handle.mockRestore(); }
+    });
+
     it('registers every graph commit context action', () => {
         resetVscodeMock();
         const provider = new GraphViewProvider(vscode.Uri.file('/extension'), { currentContext: undefined, contexts: [] });

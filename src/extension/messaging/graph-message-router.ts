@@ -25,11 +25,13 @@ import { GetGraphDataUseCase, type GraphDataResult, type GraphWorktreeWip } from
 import { GetCommitDetailsUseCase } from '@application/usecases/graph/get-commit-details';
 import { GetWorktreeDetailsUseCase } from '@application/usecases/graph/get-worktree-details';
 import { GetBranchDetailsUseCase } from '@application/usecases/graph/get-branch-details';
+import { GetTagPublicationUseCase } from '@application/usecases/graph/get-tag-publication';
 import { openComparisonPanel } from '@extension/views/comparison-panel';
 import type { RepositoryContextAccessor } from '@extension/repositories/repository-selection-store';
 import { toProtocolBranch, toProtocolGraphCommit, toProtocolGraphSubmodule, toProtocolWorktree } from '@extension/mapping/to-protocol';
 import { runCommitCommand } from '@extension/commands/commit-commands';
 import { runBranchCommand } from '@extension/commands/branch-commands';
+import { runTagCommand } from '@extension/commands/tag-commands';
 import { runWorktreeCommand } from '@extension/commands/worktree-commands';
 import { requireRuntimeRepository, requireRuntimeWorktree, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
 import { operationActionsForStatus } from '@extension/utils/operation-feedback';
@@ -101,6 +103,10 @@ export class GraphMessageRouter {
         try {
             existingConflicts = await this.conflictFilesBeforeOperation(msg);
             const outcome = await this.dispatch(msg);
+            if (outcome === false && operationId) {
+                this.postMessage({ type: 'graph/operationDismissed', operationId });
+                return;
+            }
             if (operation && operationId) {
                 this.postGraphOperation({
                     ...operation,
@@ -160,7 +166,7 @@ export class GraphMessageRouter {
         }
     }
 
-    private async dispatch(msg: GraphWebviewToExtensionMessage): Promise<GitPushOutcome | undefined> {
+    private async dispatch(msg: GraphWebviewToExtensionMessage): Promise<GitPushOutcome | false | undefined> {
         switch (msg.type) {
             case 'graph/ready':
                 break;
@@ -292,6 +298,26 @@ export class GraphMessageRouter {
 
             case 'graph/branchCommand':
                 return this.handleBranchCommand(msg);
+
+            case 'graph/tagCommand':
+                return this.handleTagCommand(msg);
+
+            case 'graph/tagStatusRequest': {
+                const repository = this.requireRuntimeRepositoryForRequest(msg.repository);
+                const key = `tagStatus:${repository.repoId}`;
+                this.pending.get(key)?.abort();
+                const controller = new AbortController();
+                this.pending.set(key, controller);
+                try {
+                    const tags = await new GetTagPublicationUseCase().execute(repository, msg.tags, controller.signal);
+                    controller.signal.throwIfAborted();
+                    this.postMessage({ type: 'graph/tagStatusResponse', requestId: msg.requestId, tags,
+                        ...repositoryMessageProperty(msg.repository), checkedAt: new Date().toISOString() });
+                } finally {
+                    if (this.pending.get(key) === controller) { this.pending.delete(key); }
+                }
+                break;
+            }
 
             case 'graph/worktreeCommand':
                 return this.handleWorktreeCommand(msg);
@@ -602,6 +628,24 @@ export class GraphMessageRouter {
         return result.pushOutcome;
     }
 
+    private async handleTagCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/tagCommand' }>): Promise<false | undefined> {
+        const targets = this.runtimeTargetsForRepository(msg.repository);
+        const repository = requireRuntimeRepository(targets);
+        const key = `tagCommand:${repository.repoId}`;
+        this.pending.get(key)?.abort();
+        const controller = new AbortController();
+        this.pending.set(key, controller);
+        try {
+            const changed = await runTagCommand(repository, requireRuntimeWorktree(targets), msg.command, msg.tag, controller.signal);
+            controller.signal.throwIfAborted();
+            if (!changed) { return false; }
+            if (msg.command === 'push') { this.postMessage({ type: 'graph/tagStatusInvalidated', ...repositoryMessageProperty(msg.repository) }); }
+            await this.refreshAfterRepositoryChange();
+        } finally {
+            if (this.pending.get(key) === controller) { this.pending.delete(key); }
+        }
+    }
+
     private async handleCommitCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/commitCommand' }>): Promise<void> {
         const runtimeTargets = this.runtimeTargetsForRepository(msg.repository);
         const shouldRefresh = await runCommitCommand(requireRuntimeRepository(runtimeTargets), msg.command, msg.hash, msg.hashes, undefined, undefined, undefined, diffExplanationScopeFor(msg.repository), this.extensionUri, this.storageUri, undefined, runtimeTargets);
@@ -731,7 +775,7 @@ function toProtocolGraphData(result: GraphDataResult, repository: RepositoryLoca
     return {
         repository,
         branches: result.branches.map(toProtocolBranch),
-        tags: result.tags.map((tag) => ({ name: tag.name, hash: tag.hash })),
+        tags: result.tags.map((tag) => ({ name: tag.name, hash: tag.hash, ...(tag.objectHash ? { objectHash: tag.objectHash } : {}) })),
         commits: result.commits.map((commit) => ({
             ...toProtocolGraphCommit(commit),
             canCherryPick: !currentBranchCommits.has(commit.hash),
@@ -821,6 +865,7 @@ function errorCodeFor(msg: GraphWebviewToExtensionMessage): ErrorCode {
 
 function shouldNotifyUserForError(msg: GraphWebviewToExtensionMessage): boolean {
     return msg.type === 'graph/branchCommand'
+        || msg.type === 'graph/tagCommand'
         || msg.type === 'graph/compareBranches'
         || msg.type === 'graph/commitCommand'
         || msg.type === 'graph/worktreeCommand'
@@ -868,6 +913,13 @@ function hasNewConflicts(current: ReadonlySet<string>, previous: ReadonlySet<str
 
 function graphOperationForMessage(msg: GraphWebviewToExtensionMessage): GraphOperationDescriptor | undefined {
     switch (msg.type) {
+        case 'graph/tagCommand':
+            return msg.command !== 'newBranch' ? {
+                category: GraphOperationCategory.Tag,
+                command: msg.command,
+                target: msg.tag,
+                ...repositoryMessageProperty(msg.repository),
+            } : undefined;
         case 'graph/repositoryCommand':
             return {
                 category: GraphOperationCategory.Repository,

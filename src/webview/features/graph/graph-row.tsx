@@ -1,7 +1,10 @@
+import type { TagPublication } from '@protocol/graph/messages';
 import type { CSSProperties } from 'react';
-import type { BranchInfo, GraphCommit } from '@protocol/graph/types';
+import type { BranchInfo, GraphCommit, GraphContextTarget } from '@protocol/graph/types';
 import { getLaneDataMaxLane, type GraphRow } from '@webview/features/graph/layout/graph-lane-model';
 import { GraphLaneCell, LANE_WIDTH } from '@webview/features/graph/graph-lane-cell';
+import { GraphTag } from '@webview/features/graph/graph-tag';
+import { openNativeContextMenu } from '@webview/shared/open-native-context-menu';
 import { RefBadge } from '@webview/features/graph/ref-badge';
 import { parseRefs } from '@webview/features/graph/ref-model';
 
@@ -10,6 +13,10 @@ export type CommitSelectMode = 'replace' | 'toggle' | 'range';
 interface GraphRowProps {
     readonly row: GraphRow;
     readonly branches: readonly BranchInfo[];
+    readonly currentTagNames?: readonly string[];
+    readonly tagPublications?: readonly TagPublication[];
+    readonly tagStatusCheckedAt?: string;
+    readonly onTagContextTarget: (target: GraphContextTarget) => void;
     readonly selected: boolean;
     readonly childHash: string | undefined;
     readonly parentHash: string | undefined;
@@ -24,7 +31,7 @@ interface GraphRowProps {
     readonly onMoveFocus: (currentHash: string, direction: 'previous' | 'next', mode?: CommitSelectMode) => void;
 }
 
-export function GraphCommitRow({ row, branches, selected, childHash, parentHash, canUndoCommit, canCherryPick, selectedCommitCount, rowHeight, style, onSelect, onOpenContextMenu, onBranchDoubleClick, onMoveFocus }: GraphRowProps) {
+export function GraphCommitRow({ row, branches, currentTagNames = [], tagPublications = [], tagStatusCheckedAt, onTagContextTarget, selected, childHash, parentHash, canUndoCommit, canCherryPick, selectedCommitCount, rowHeight, style, onSelect, onOpenContextMenu, onBranchDoubleClick, onMoveFocus }: GraphRowProps) {
     const { commit, laneData } = row;
     const refs = parseRefs(commit.refs, branches);
     const hasMultipleSelectedCommits = selectedCommitCount > 1;
@@ -77,7 +84,7 @@ export function GraphCommitRow({ row, branches, selected, childHash, parentHash,
                 if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
                     e.preventDefault();
                     onOpenContextMenu(commit);
-                    openKeyboardContextMenu(e.currentTarget);
+                    openNativeContextMenu(e.currentTarget);
                 }
             }}
         >
@@ -85,7 +92,12 @@ export function GraphCommitRow({ row, branches, selected, childHash, parentHash,
                 <GraphLaneCell laneData={laneData} merge={commit.parentHashes.length > 1} rowHeight={rowHeight} />
             </div>
             <div className="graph-message-cell">
-                {refs.map((ref) => (
+                {refs.map((ref) => ref.kind === 'tag' ? (
+                    <GraphTag key={ref.fullRef} tag={{ name: ref.label, hash: commit.hash }}
+                        isCurrent={currentTagNames.includes(ref.label)} variant="badge"
+                        publication={tagPublications.find(tag => tag.name === ref.label)} checkedAt={tagStatusCheckedAt}
+                        onSelect={hash => onSelect(hash, 'replace')} onContextTarget={onTagContextTarget} />
+                ) : (
                     <RefBadge
                         key={ref.fullRef}
                         parsed={ref}
@@ -136,14 +148,4 @@ function graphCommitDisabledReasons(input: {
     if (!input.childHash) { reasons.push('Go to Child Commit unavailable: no visible child commit.'); }
     if (!input.parentHash) { reasons.push('Go to Parent Commit unavailable: no visible parent commit.'); }
     return reasons;
-}
-
-function openKeyboardContextMenu(element: HTMLElement): void {
-    const rect = element.getBoundingClientRect();
-    element.dispatchEvent(new MouseEvent('contextmenu', {
-        bubbles: true,
-        cancelable: true,
-        clientX: rect.left + 12,
-        clientY: rect.top + 12,
-    }));
 }

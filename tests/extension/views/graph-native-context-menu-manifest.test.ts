@@ -27,6 +27,9 @@ describe('Graph native context menu manifest', () => {
         for (const command of [
             ...expectedCommitCommands,
             'lookGit.graph.branch.checkout',
+            'lookGit.graph.tag.checkout',
+            'lookGit.graph.tag.newBranch',
+            'lookGit.graph.tag.push',
             'lookGit.graph.branch.update',
             'lookGit.graph.branch.publish',
             'lookGit.graph.branch.removeBranchWorktree',
@@ -69,6 +72,9 @@ describe('Graph native context menu manifest', () => {
             .map((entry) => entry.command))
             .toEqual(expectedCommitCommands);
         expect(webviewContextMenu).toEqual(expect.arrayContaining([
+            expect.objectContaining({ command: 'lookGit.graph.tag.checkout', when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphTag'" }),
+            expect.objectContaining({ command: 'lookGit.graph.tag.newBranch', when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphTag'" }),
+            expect.objectContaining({ command: 'lookGit.graph.tag.push', when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphTag'" }),
             expect.objectContaining({
                 command: 'lookGit.graph.commit.copyRevisionNumber',
                 when: "webviewId == 'lookGit.graphView' && webviewSection == 'graphCommit' && !graphCommitHasMultipleSelectedCommits",

@@ -246,7 +246,7 @@ describe('CliGitRuntime', () => {
             { name: 'origin/main', isCurrent: false, hash: 'def456', upstream: undefined, ahead: 0, behind: 0, isRemote: true },
         ]);
         await expect(runtime.execute('listTags', context, undefined)).resolves.toEqual([
-            { name: 'v1.0.0', hash: 'abc123' },
+            { name: 'v1.0.0', hash: 'abc123', objectHash: 'abc123' },
         ]);
     });
 

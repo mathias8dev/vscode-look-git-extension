@@ -1,5 +1,108 @@
 /* ── Look Graph ──────────────────────────────────────────────────────────── */
 
+.graph-tag-badge {
+    font: inherit;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.graph-resource-row.graph-tag-row {
+    padding-left: 28px;
+    color: var(--vscode-gitDecoration-modifiedResourceForeground);
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    background: transparent;
+    border: none;
+}
+
+.graph-tag-publication {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.85em;
+    color: var(--vscode-descriptionForeground);
+}
+
+.graph-tag-row .graph-tag-publication {
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.graph-tag-badge .graph-tag-publication .codicon {
+    font-size: 12px;
+}
+
+.graph-tag-badge .graph-tag-publication {
+    color: inherit;
+}
+
+.graph-tag-badge:focus-visible,
+.graph-tag-row:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.graph-detached-notice {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 8px 10px;
+    padding: 8px 10px;
+    border-left: 2px solid var(--vscode-editorWarning-foreground);
+    background: var(--vscode-textBlockQuote-background);
+}
+
+.graph-detached-copy {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: min(100%, 200px);
+    overflow-wrap: anywhere;
+}
+
+.graph-detached-copy strong {
+    font-size: 0.95em;
+    font-weight: 600;
+}
+
+.graph-detached-copy span {
+    font-size: 0.9em;
+    color: var(--vscode-descriptionForeground);
+}
+
+.graph-detached-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.graph-detached-actions button {
+    color: var(--vscode-textLink-foreground);
+    font: inherit;
+    padding: 4px 6px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+.graph-detached-actions button:hover {
+    background: var(--vscode-toolbar-hoverBackground);
+}
+
+.graph-detached-actions button:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+}
+
+.graph-detached-actions button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
 .graph-shell {
     --look-git-graph-panel-row-height: max(1.95em, 26px);
     --look-git-graph-panel-control-height: max(2.1em, 28px);

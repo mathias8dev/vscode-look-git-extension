@@ -1109,6 +1109,17 @@
         "enablement": "graphCommitCanGoToParent"
       },
       {
+        "command": "lookGit.graph.tag.checkout",
+        "title": "Checkout Tag (Detached HEAD)",
+        "category": "Look Git",
+        "enablement": "!graphTagIsCurrent"
+      },
+      {
+        "command": "lookGit.graph.tag.newBranch",
+        "title": "New Branch from Tag...",
+        "category": "Look Git"
+      },
+      {
         "command": "lookGit.graph.branch.checkout",
         "title": "Checkout",
         "category": "Look Git",
@@ -1352,6 +1363,11 @@
         "title": "Force Remove...",
         "category": "Look Git",
         "icon": "$(trash)"
+      },
+      {
+        "command": "lookGit.graph.tag.push",
+        "title": "Push Tag...",
+        "category": "Look Git"
       }
     ],
     "submenus": [
@@ -2447,6 +2463,16 @@
           "group": "6_graph_commit_navigation@2"
         },
         {
+          "command": "lookGit.graph.tag.checkout",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphTag'",
+          "group": "1_graph_tag_checkout@1"
+        },
+        {
+          "command": "lookGit.graph.tag.newBranch",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphTag'",
+          "group": "2_graph_tag_branch@1"
+        },
+        {
           "command": "lookGit.graph.branch.checkout",
           "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && !graphBranchHasSelectedPair",
           "group": "1_graph_branch_open@1"
@@ -2650,6 +2676,11 @@
           "command": "lookGit.graph.branch.compareSelected",
           "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphBranch' && graphBranchHasSelectedPair",
           "group": "2_compare@1"
+        },
+        {
+          "command": "lookGit.graph.tag.push",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphTag'",
+          "group": "3_graph_tag_push@1"
         }
       ]
     }

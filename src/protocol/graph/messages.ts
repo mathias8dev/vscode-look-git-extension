@@ -68,6 +68,7 @@ export enum GraphOperationCategory {
     Branch = 'branch',
     Worktree = 'worktree',
     Commit = 'commit',
+    Tag = 'tag',
 }
 
 export interface GraphOperationStatusPush {
@@ -75,11 +76,16 @@ export interface GraphOperationStatusPush {
     readonly operationId: string;
     readonly status: OperationStatus;
     readonly category: GraphOperationCategory;
-    readonly command: GraphRepositoryCommand | BranchCommand | WorktreeCommand | CommitCommand;
+    readonly command: GraphRepositoryCommand | BranchCommand | WorktreeCommand | CommitCommand | TagCommand;
     readonly target?: string;
     readonly background?: boolean;
     readonly repository?: RepositoryLocator;
     readonly actions?: readonly OperationNoticeActionKind[];
+}
+
+export interface GraphOperationDismissedPush {
+    readonly type: 'graph/operationDismissed';
+    readonly operationId: string;
 }
 
 // ── Extension → Webview (responses — echo requestId) ───────────────────────
@@ -175,6 +181,44 @@ export type BranchCommand =
     | 'lockBranchWorktree'
     | 'unlockBranchWorktree'
     | 'removeBranchWorktree';
+
+export type TagCommand = 'checkout' | 'newBranch' | 'push';
+
+export interface TagPublication {
+    readonly name: string;
+    readonly remotes: readonly {
+        readonly name: string;
+        readonly status: 'same' | 'missing' | 'different' | 'unavailable';
+        readonly error?: string;
+    }[];
+}
+
+export interface TagStatusRequest {
+    readonly type: 'graph/tagStatusRequest';
+    readonly requestId: RequestId;
+    readonly tags: readonly string[];
+    readonly repository?: RepositoryLocator;
+}
+
+export interface TagStatusResponse {
+    readonly type: 'graph/tagStatusResponse';
+    readonly requestId: RequestId;
+    readonly tags: readonly TagPublication[];
+    readonly repository?: RepositoryLocator;
+    readonly checkedAt: string;
+}
+
+export interface TagStatusInvalidatedPush {
+    readonly type: 'graph/tagStatusInvalidated';
+    readonly repository?: RepositoryLocator;
+}
+
+export interface TagCommandRequest {
+    readonly type: 'graph/tagCommand';
+    readonly command: TagCommand;
+    readonly tag: string;
+    readonly repository?: RepositoryLocator;
+}
 
 export interface BranchCommandRequest {
     readonly type: 'graph/branchCommand';
@@ -315,7 +359,10 @@ export type GraphExtensionToWebviewMessage =
     | GraphRevealCommitPush
     | GraphSelectWorktreePush
     | GraphOperationStatusPush
+    | GraphOperationDismissedPush
     | GraphErrorPush
+    | TagStatusResponse
+    | TagStatusInvalidatedPush
     | ErrorMessage;
 
 export type GraphWebviewToExtensionMessage =
@@ -331,6 +378,8 @@ export type GraphWebviewToExtensionMessage =
     | GraphContextTargetMessage
     | GraphRepositoryCommandRequest
     | BranchCommandRequest
+    | TagCommandRequest
+    | TagStatusRequest
     | CompareBranchesCommand
     | WorktreeCommandRequest
     | CommitCommandRequest

@@ -1,3 +1,4 @@
+import type { TagPublication } from '@protocol/graph/messages';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { BranchInfo, GraphContextTarget } from '@protocol/graph/types';
 import type { GraphRow } from '@webview/features/graph/layout/graph-lane-model';
@@ -18,6 +19,9 @@ interface GraphTableProps {
     readonly rows: readonly GraphRow[];
     readonly displayRows: readonly DisplayRow[];
     readonly branches: readonly BranchInfo[];
+    readonly currentTagNames?: readonly string[];
+    readonly tagPublications?: readonly TagPublication[];
+    readonly tagStatusCheckedAt?: string;
     readonly selectedHashes: readonly string[];
     readonly selectedWorktreePath: string | undefined;
     readonly hasMore: boolean;
@@ -34,6 +38,9 @@ export function GraphTable({
     rows,
     displayRows,
     branches,
+    currentTagNames = [],
+    tagPublications = [],
+    tagStatusCheckedAt,
     selectedHashes,
     selectedWorktreePath,
     hasMore,
@@ -177,6 +184,10 @@ export function GraphTable({
                                     key={row.commit.hash}
                                     row={row}
                                     branches={branches}
+                                    currentTagNames={currentTagNames}
+                                    tagPublications={tagPublications}
+                                    tagStatusCheckedAt={tagStatusCheckedAt}
+                                    onTagContextTarget={onContextTarget}
                                     selected={rowSelected}
                                     childHash={childHash(rows, row.commit.hash)}
                                     parentHash={parentHash(rows, row.commit.hash)}

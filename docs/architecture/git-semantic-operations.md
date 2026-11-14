@@ -46,7 +46,8 @@ Repository-scoped operations do not require a mutable checkout unless explicitly
 
 - `listBranches(signal)`: list local branches.
 - `listRemoteBranches(signal)`: list remote-tracking branches.
-- `listTags(signal)`: list tags.
+- `listTags(signal)`: list tag target commits and tag object IDs.
+- `listRemoteTags(remote, names, signal)`: inspect up to 50 exact remote tag refs without fetching or changing local refs.
 - `listRemotes(signal)`: list remotes.
 - `resolveRef(ref, signal)`: resolve a ref to a commit.
 - `createBranch(name, startPoint, signal)`: create a branch.
