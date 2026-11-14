@@ -21,6 +21,7 @@ describe('GraphCommitRow', () => {
                 style={{}}
                 onSelect={() => undefined}
                 onMoveFocus={() => undefined}
+                onTagContextTarget={() => undefined}
                 onOpenContextMenu={() => undefined}
                 onBranchDoubleClick={() => undefined}
             />,
@@ -38,6 +39,7 @@ describe('GraphCommitRow', () => {
                 style={{}}
                 onSelect={() => undefined}
                 onMoveFocus={() => undefined}
+                onTagContextTarget={() => undefined}
                 onOpenContextMenu={() => undefined}
                 onBranchDoubleClick={() => undefined}
             />,
@@ -61,6 +63,7 @@ describe('GraphCommitRow', () => {
                 style={{}}
                 onSelect={() => undefined}
                 onMoveFocus={() => undefined}
+                onTagContextTarget={() => undefined}
                 onOpenContextMenu={() => undefined}
                 onBranchDoubleClick={() => undefined}
             />,
@@ -85,6 +88,7 @@ describe('GraphCommitRow', () => {
                 style={{ height: 35 }}
                 onSelect={() => undefined}
                 onMoveFocus={() => undefined}
+                onTagContextTarget={() => undefined}
                 onOpenContextMenu={() => undefined}
                 onBranchDoubleClick={() => undefined}
             />,
@@ -107,6 +111,7 @@ describe('GraphCommitRow', () => {
                 style={{}}
                 onSelect={() => undefined}
                 onMoveFocus={() => undefined}
+                onTagContextTarget={() => undefined}
                 onOpenContextMenu={() => undefined}
                 onBranchDoubleClick={() => undefined}
             />,
@@ -130,6 +135,7 @@ describe('GraphCommitRow', () => {
                 style={{}}
                 onSelect={() => undefined}
                 onMoveFocus={() => undefined}
+                onTagContextTarget={() => undefined}
                 onOpenContextMenu={onOpenContextMenu}
                 onBranchDoubleClick={() => undefined}
             />,

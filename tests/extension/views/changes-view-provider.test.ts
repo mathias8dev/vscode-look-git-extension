@@ -118,6 +118,23 @@ describe('ChangesViewProvider', () => {
         }));
     });
 
+    it('updates a hidden activity badge before slow stash metadata finishes loading', async () => {
+        const { provider, view, worktree } = badgeFixture();
+        await provider.refresh();
+        vi.clearAllTimers();
+        expect(view.badge?.value).toBe(2);
+        view.visible = false;
+        let finishMetadata: (() => void) | undefined;
+        const metadata = new Promise<Page<never>>(resolve => { finishMetadata = () => resolve(new Page([], false)); });
+        vi.spyOn(worktree, 'listStashes').mockReturnValue(metadata);
+        const status = vi.spyOn(worktree, 'getStatus').mockResolvedValue(statusWithUnstagedFile());
+        const refresh = provider.refresh();
+        try {
+            await vi.waitFor(() => expect(status).toHaveBeenCalled());
+            expect(view.badge).toBeUndefined();
+        } finally { finishMetadata?.(); await refresh; }
+    });
+
     it('clears a workbench badge that outlives its extension-host view state', async () => {
         const context: RepoContext = { id: 'repo-1', cwd: '/repo', kind: RepoKind.Main, label: 'repo' };
         const provider = new ChangesViewProvider(

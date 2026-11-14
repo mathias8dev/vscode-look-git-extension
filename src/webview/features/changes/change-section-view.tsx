@@ -7,6 +7,7 @@ import { CHANGE_SECTION_PAGE_SIZE, visibleChangeItems } from '@webview/features/
 import { ChangeRow } from '@webview/features/changes/change-row';
 import { compareChangeItems } from '@webview/features/changes/change-view-model';
 import { TreeNodeView } from '@webview/features/changes/tree-node-view';
+import { ResizableChangesList } from '@webview/features/changes/resizable-changes-list';
 
 interface ChangeSectionViewProps {
     readonly section: ChangeSection;
@@ -26,6 +27,7 @@ interface ChangeSectionViewProps {
     readonly onStashSelected?: (items: readonly ChangeListItem[], message: string) => void;
     readonly stashTitle?: string;
     readonly showWhenEmpty?: boolean;
+    readonly submodulePath?: string;
 }
 
 export function ChangeSectionView({
@@ -46,6 +48,7 @@ export function ChangeSectionView({
     onStashSelected,
     stashTitle = 'Stash changes',
     showWhenEmpty = false,
+    submodulePath,
 }: ChangeSectionViewProps) {
     const [visibleLimit, setVisibleLimit] = useState(CHANGE_SECTION_PAGE_SIZE);
     const [showStashPrompt, setShowStashPrompt] = useState(false);
@@ -148,43 +151,45 @@ export function ChangeSectionView({
                 </div>
             ) : null}
             {!collapsed && (
-                <div id={`${section.id}-items`} className="change-list">
-                    {viewMode === ChangesViewMode.Tree
-                        ? tree.map((node) => (
-                            <TreeNodeView
-                                key={node.id}
-                                node={node}
-                                selectedItemIds={selectedItemIds}
-                                showSelectionCheckboxes={showSelectionCheckboxes}
-                                contextForItem={contextForItem}
-                                onSelectItem={onSelectItem}
-                                onOpenSelectionContext={onOpenSelectionContext}
-                                onRowAction={onRowAction}
-                            />
-                        ))
-                        : visible.items.map((item) => (
-                            <ChangeRow
-                                key={item.id}
-                                item={item}
-                                depth={0}
-                                selected={selectedItemIds.has(item.id)}
-                                showSelectionCheckbox={showSelectionCheckboxes}
-                                context={contextForItem(item)}
-                                onSelect={onSelectItem}
-                                onOpenContextMenu={onOpenSelectionContext}
-                                onAction={onRowAction}
-                            />
-                        ))}
-                    {visible.hasMore ? (
-                        <button
-                            type="button"
-                            className="show-more-changes"
-                            onClick={() => setVisibleLimit(visible.nextLimit)}
-                        >
-                            Show more
-                        </button>
-                    ) : null}
-                </div>
+                <ResizableChangesList id={section.id} title={section.title} submodulePath={submodulePath}>
+                    <div id={`${section.id}-items`} className="change-list">
+                        {viewMode === ChangesViewMode.Tree
+                            ? tree.map((node) => (
+                                <TreeNodeView
+                                    key={node.id}
+                                    node={node}
+                                    selectedItemIds={selectedItemIds}
+                                    showSelectionCheckboxes={showSelectionCheckboxes}
+                                    contextForItem={contextForItem}
+                                    onSelectItem={onSelectItem}
+                                    onOpenSelectionContext={onOpenSelectionContext}
+                                    onRowAction={onRowAction}
+                                />
+                            ))
+                            : visible.items.map((item) => (
+                                <ChangeRow
+                                    key={item.id}
+                                    item={item}
+                                    depth={0}
+                                    selected={selectedItemIds.has(item.id)}
+                                    showSelectionCheckbox={showSelectionCheckboxes}
+                                    context={contextForItem(item)}
+                                    onSelect={onSelectItem}
+                                    onOpenContextMenu={onOpenSelectionContext}
+                                    onAction={onRowAction}
+                                />
+                            ))}
+                        {visible.hasMore ? (
+                            <button
+                                type="button"
+                                className="show-more-changes"
+                                onClick={() => setVisibleLimit(visible.nextLimit)}
+                            >
+                                Show more
+                            </button>
+                        ) : null}
+                    </div>
+                </ResizableChangesList>
             )}
         </section>
     );

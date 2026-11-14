@@ -58,6 +58,8 @@ function operationLabel(operation: GraphOperationStatusPush): string {
             return worktreeOperationLabel(operation.command, target);
         case GraphOperationCategory.Commit:
             return commitOperationLabel(operation.command, target);
+        case GraphOperationCategory.Tag:
+            return operation.command === 'push' ? `push tag${target}` : `checkout tag${target} (detached HEAD)`;
     }
 }
 

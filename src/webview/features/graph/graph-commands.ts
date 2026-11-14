@@ -1,5 +1,5 @@
 import type { GraphContextTarget, GraphFilters, GraphPage } from '@protocol/graph/types';
-import type { BranchCommand, BranchDetailsRequest, CommitCommand, GraphDataRequest, GraphRepositoryCommand, GraphWebviewToExtensionMessage, LoadMoreGraphRequest, WorktreeCommand } from '@protocol/graph/messages';
+import type { BranchCommand, BranchDetailsRequest, CommitCommand, GraphDataRequest, GraphRepositoryCommand, GraphWebviewToExtensionMessage, LoadMoreGraphRequest, TagCommand, TagStatusRequest, WorktreeCommand } from '@protocol/graph/messages';
 import type { RepositoryLocator, WorktreeLocator } from '@protocol/shared/repo';
 
 let requestCounter = 0;
@@ -76,6 +76,14 @@ export function messageForWorktreeDetails(path: string, repository?: RepositoryL
 
 export function messageForBranchCheckout(branch: string, isRemote: boolean, repository?: RepositoryLocator): GraphWebviewToExtensionMessage {
     return messageForBranchCommand('checkout', branch, isRemote, repository);
+}
+
+export function messageForTagStatus(tags: readonly string[], repository?: RepositoryLocator): TagStatusRequest {
+    return { type: 'graph/tagStatusRequest', requestId: nextRequestId(), tags, ...repositoryProperty(repository) };
+}
+
+export function messageForTagCommand(command: TagCommand, tag: string, repository?: RepositoryLocator): GraphWebviewToExtensionMessage {
+    return { type: 'graph/tagCommand', command, tag, ...repositoryProperty(repository) };
 }
 
 export function messageForBranchComparison(baseRef: string, headRef: string, repository?: RepositoryLocator): GraphWebviewToExtensionMessage {

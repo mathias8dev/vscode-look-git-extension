@@ -40,6 +40,22 @@ describe('SubmoduleItem', () => {
         expect(screen.queryByLabelText('Commit message')).not.toBeInTheDocument();
     });
 
+    it('keeps submodule list sizes separate from the main repository', () => {
+        localStorage.clear();
+        renderSubmodule({ statusData: statusData({
+            unstaged: [{ indexStatus: ' ', workTreeStatus: 'M', filePath: 'src/app.ts' }],
+            stashes: [{ index: 0, message: 'WIP' }],
+        }) });
+        fireEvent.keyDown(screen.getByRole('separator', { name: /Resize Changes list in / }), { key: 'ArrowDown' });
+        fireEvent.keyDown(screen.getByRole('separator', { name: /Resize Stashed list in / }), { key: 'ArrowUp' });
+        expect(localStorage.getItem('lookGit.changes.unstaged.maxHeight')).toBeNull();
+        expect(localStorage.getItem('lookGit.changes.stashes.maxHeight')).toBeNull();
+        const sizes = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index))
+            .filter((key): key is string => key?.startsWith('lookGit.changes.submodule.') ?? false)
+            .map(key => localStorage.getItem(key));
+        expect(sizes).toEqual(expect.arrayContaining(['256', '224']));
+    });
+
     it('shows the commit composer only when staged changes exist', () => {
         renderSubmodule({
             statusData: statusData({

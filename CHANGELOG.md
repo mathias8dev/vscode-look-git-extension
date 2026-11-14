@@ -4,7 +4,12 @@ All notable changes to Look Git are documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-14
+
 ### Added
+
+#### Changes Panel
+- Resize staged, unstaged, conflict, stash and submodule lists vertically, with independent scrolling and remembered sizes
 
 #### Branch Comparison
 - Compare any two local or remote branches in a separate editor window, with changes since divergence or between branch tips
@@ -16,7 +21,16 @@ All notable changes to Look Git are documented in this file.
 #### Commit History and Look Graph
 - Compare two selected commits in the native VS Code changes editor
 
+#### Look Graph Tags
+- Browse and search tags in the branch panel, select their commits, and open native tag context menus from the list or graph badges
+- Check out a tag in detached HEAD mode or create and check out a branch from it, with an explicit detached-state notice and a return action for the previous branch
+- Distinguish local-only, published, differing and unverifiable tags using per-remote checks, with a manual refresh action
+- Push only the selected tag to a chosen remote without force-overwriting remote tags
+
 ### Changed
+
+#### Changes Panel
+- Indent section children consistently and remove duplicate borders around resizable stash and submodule lists
 
 #### Webview
 - Share searchable dropdowns across branch comparison and graph filters, with keyboard navigation, loading states and paginated branch choices
@@ -24,8 +38,15 @@ All notable changes to Look Git are documented in this file.
 
 ### Fixed
 
+#### Changes Panel
+- Refresh the activity badge from the latest Git status without waiting for worktree topology, stashes or submodule metadata, including while Changes is hidden
+
+#### Look Graph Tags
+- Allow mouse and keyboard tag context-menu events to reach VS Code without replacing the tag context with its parent commit
+
 #### Commit History and Look Graph
 - Adapt context menus to the selection and hide single-item actions, including comparisons with Local or Worktree, when multiple items are selected
+- Honour detached checkout options and resolve annotated tags to their target commits while retaining their tag object IDs
 
 ## [1.2.14] - 2026-10-20
 

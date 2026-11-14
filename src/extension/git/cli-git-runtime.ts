@@ -4,6 +4,7 @@ import * as path from 'path';
 import { Page } from '@core/git/domain/page';
 import { ChangedFilesPage } from '@core/git/domain/git-comparison';
 import { parseNumstat } from '@core/parsing/parse-numstat';
+import { parseRemoteTagRefs } from '@core/parsing/parse-remote-tag-refs';
 import { parseDiffRawZ } from '@core/parsing/parse-diff-raw';
 import type { GitExec } from '@extension/git/git-exec';
 import { queryAllBranches, queryAllTags, queryCommitFiles, queryCommitLineRangeLog, queryCommitLog, queryCommitMessage, queryCurrentBranch, queryGraphLog } from '@extension/git/queries/query-graph';
@@ -110,7 +111,7 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     dropStash: (input) => ({ args: ['stash', 'drop', requiredString(input, 'stash')] }),
     clearStashes: () => ({ args: ['stash', 'clear'] }),
     getStashSummary: (input) => ({ args: ['stash', 'show', '--include-untracked', '--stat', requiredStringField(input, 'stash')] }),
-    checkout: (input) => ({ args: ['checkout', requiredStringField(input, 'ref')] }),
+    checkout: (input) => ({ args: checkoutArgs(input) }),
     checkoutNewBranch: (input) => ({ args: checkoutNewBranchArgs(input) }),
     restorePaths: (input) => ({ args: restorePathsArgs(input) }),
     restoreStaged: (input) => ({ args: ['restore', '--staged', '--', ...requiredStringArrayField(input, 'paths')] }),
@@ -171,6 +172,14 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
     },
     listTags: async (_input, runProcess, context, signal) => {
         return await queryAllTags(readonlyRawExec(runProcess, context), signal);
+    },
+    listRemoteTags: async (input, runProcess, context, signal) => {
+        const names = requiredStringArrayField(input, 'names');
+        if (names.length === 0) { return []; }
+        if (names.length > 50) { throw new Error('Check at most 50 remote tags per request.'); }
+        const output = await runProcess(['ls-remote', '--refs', '--tags', '--', requiredStringField(input, 'remote'),
+            ...names.map(name => `refs/tags/${name}`)], context, { signal, env: { GIT_TERMINAL_PROMPT: '0' } });
+        return parseRemoteTagRefs(output);
     },
     listWorktrees: async (_input, runProcess, context, signal) => {
         return await queryWorktrees(readonlyRawExec(runProcess, context), signal);
@@ -1230,6 +1239,14 @@ function checkoutNewBranchArgs(input: unknown): readonly string[] {
     const branch = requiredStringField(input, 'name');
     const startPoint = optionalStringField(input, 'startPoint');
     return startPoint ? ['checkout', '-b', branch, startPoint] : ['checkout', '-b', branch];
+}
+
+function checkoutArgs(input: unknown): readonly string[] {
+    const options = objectField(input, 'options');
+    return ['checkout',
+        ...(booleanOption(options, 'detach') ? ['--detach'] : []),
+        requiredStringField(input, 'ref'),
+    ];
 }
 
 function restorePathsArgs(input: unknown): readonly string[] {

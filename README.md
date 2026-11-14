@@ -27,6 +27,7 @@ A modern, Git extension for Visual Studio Code — featuring a visual commit gra
 - **Submodule command menus** — run commit, pull, push, fetch, branch, stash, tag, and output actions against a submodule without leaving the Changes panel
 - **Conflict resolution** — dedicated section with merge editor, Accept Ours / Accept Theirs actions per file
 - **Tree & list view** — toggle between hierarchical folder tree and flat file list
+- **Resizable lists** — adjust the height of staged, unstaged, conflict, stash and submodule lists with remembered sizes and independent scrolling
 - **Sort controls** — order changes by path, file name, status, or extension
 - **Keyboard navigation** — ↑↓ to move between files, Enter to open diff
 
@@ -57,6 +58,9 @@ A modern, Git extension for Visual Studio Code — featuring a visual commit gra
 - **Commit details panel** — click any commit to see its full message, author, and changed files in a side panel
 - **Commit actions** — copy revisions, create patches, explain diffs, cherry-pick, checkout revisions, compare with local or worktrees, reset, revert, undo, reword, fixup, squash, drop, visual rebase, branch, tag, and push up to a commit
 - **Branch actions** — checkout, push, publish, rename, delete, rebase, merge, compare with current or worktrees, and create new branches or worktrees from any branch
+- **Tag actions** — browse and search tags, inspect their commits, check out a tag with detached HEAD, create and check out a branch from a tag, or push only that tag to a selected remote. Native context menus are available on tag badges and list entries.
+- **Tag publication status** — distinguish local-only, pushed, differing and unknown tags with per-remote details and a refresh action. Checks run separately from graph loading; published status requires an identical tag object on a remote. Unavailable remotes remain explicit.
+- **Detached HEAD notice** — see the current tag or revision, create a branch from it, and return to the previous local branch when known
 - **Selection-aware menus** — right-click a pair of selected commits in the graph or history to compare their snapshots in the native VS Code changes editor, ordered from older to newer. Multi-selection hides actions that apply to a single item, including comparisons with Local or Worktree.
 - **Branch comparison** — open “Compare with Current Branch” or “Compare Branches...” in the branch panel to open a separate editor window, then choose any local or remote base and target. Ctrl/Cmd-click two branches and use “Compare Selected Branches” in the context menu or toolbar to compare them directly; the first selected branch is the base. The results and commit-message panels are resizable. Review changes since divergence or between branch tips, search paginated files, open native VS Code diffs, and track viewed files. The Commits tab searches messages, authors and hashes across all pages and opens the existing file tree and full commit message for each selected commit. Comparisons pin commit revisions and offer a refresh when branches change; uncommitted changes are excluded.
 - **Safe branch pushing** — publish branches directly, update branches that are behind, recover diverged branches through checkout or update actions, prefer force-with-lease, and keep raw force push behind an explicit confirmation

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useReducer } from 'react';
 import type { GraphExtensionToWebviewMessage, GraphWebviewToExtensionMessage } from '@protocol/graph/messages';
 import type { CommitFileChange, GraphContextTarget, GraphSubmoduleInfo } from '@protocol/graph/types';
 import type { RepositoryLocator } from '@protocol/shared/repo';
+import { DetachedHeadNotice } from '@webview/features/graph/detached-head-notice';
+import { detachedHeadModel } from '@webview/features/graph/detached-head-model';
 import { BranchPanel } from '@webview/features/graph/branch-panel';
 import { CommitDetailsPanel } from '@webview/features/graph/commit-details-panel';
 import { BranchDetailsPanel } from '@webview/features/graph/branch-details-panel';
@@ -28,6 +30,8 @@ import {
     messageForWorktreeCommand,
     messageForWorktreeDetails,
     messageForBranchCheckout,
+    messageForTagCommand,
+    messageForTagStatus,
 } from '@webview/features/graph/graph-commands';
 import { ErrorNotice } from '@webview/shared/error-notice';
 import { GraphOperationStatus } from '@protocol/graph/messages';
@@ -58,6 +62,11 @@ interface GraphAppProps {
 
 export function GraphApp({ sendMessage }: GraphAppProps) {
     const [state, dispatch] = useReducer(reduceGraphState, undefined, createInitialGraphState);
+    const detachedHead = detachedHeadModel({ currentBranch: state.currentBranch, repositoryPath: state.repository?.path,
+        commits: state.rows.map(row => row.commit), tags: state.tags, worktrees: state.worktrees });
+    const previousBranch = state.branches.some(branch => !branch.isRemote && branch.name === state.previousBranch)
+        ? state.previousBranch : undefined;
+    const operationRunning = state.operationStatus?.status === GraphOperationStatus.Running;
     const scopeAnimationKey = graphRepositorySelectionKey(state.selectedRepository);
     const loadingEmptyGraph = state.loading && state.rows.length === 0;
     const loadingUnpreparedGraph = loadingEmptyGraph
@@ -150,6 +159,15 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
         const timeout = window.setTimeout(() => dispatch({ type: 'clearOperationStatus', operationId }), OPERATION_NOTICE_TIMEOUT_MS);
         return () => window.clearTimeout(timeout);
     }, [state.operationStatus]);
+
+    useEffect(() => {
+        if (state.loading || state.tagStatusRequestId || state.tagStatusFailed) { return; }
+        const names = state.tags.filter(tag => !state.tagPublications.some(item => item.name === tag.name)).slice(0, 50).map(tag => tag.name);
+        if (names.length === 0) { return; }
+        const request = messageForTagStatus(names, state.repository);
+        dispatch({ type: 'startTagStatusRequest', requestId: request.requestId });
+        sendMessage(request);
+    }, [sendMessage, state.loading, state.repository, state.tags, state.tagPublications, state.tagStatusFailed, state.tagStatusRequestId]);
 
     const handleLoadMore = useCallback(() => {
         if (!state.hasMore || state.loading || state.loadingMore) { return; }
@@ -262,6 +280,13 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                             key={`branch-panel:${state.repository?.repoId ?? ''}:${scopeAnimationKey}`}
                             style={style}
                             branches={state.branches}
+                            tags={state.tags}
+                            tagPublications={state.tagPublications}
+                            tagStatusCheckedAt={state.tagStatusCheckedAt}
+                            checkingTags={Boolean(state.tagStatusRequestId)}
+                            onRefreshTagStatus={() => dispatch({ type: 'refreshTagStatus' })}
+                            currentTagNames={detachedHead?.tags}
+                            onSelectTag={hash => dispatch({ type: 'selectCommit', hash })}
                             worktrees={state.worktrees}
                             submodules={state.submodules}
                             selectedRepository={state.selectedRepository}
@@ -295,6 +320,13 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                             onBranchFilterChange={(branch) => dispatch({ type: 'setBranchFilter', branch })}
                             onRefresh={() => dispatch({ type: 'refreshRequested' })}
                         /> : null}
+
+                        {detachedHead ? <DetachedHeadNotice label={detachedHead.label} previousBranch={previousBranch}
+                            busy={operationRunning}
+                            onReturn={() => { if (previousBranch) { sendMessage(messageForBranchCheckout(previousBranch, false, state.repository)); } }}
+                            onCreateBranch={() => sendMessage(detachedHead.tags[0]
+                                ? messageForTagCommand('newBranch', detachedHead.tags[0], state.repository)
+                                : messageForBranchCommand('newBranchFrom', detachedHead.hash, false, state.repository))} /> : null}
 
                         <GraphOperationNotice
                             operation={state.operationStatus}
@@ -333,6 +365,9 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                                 rows={state.rows}
                                 displayRows={state.displayRows}
                                 branches={state.branches}
+                                currentTagNames={detachedHead?.tags}
+                                tagPublications={state.tagPublications}
+                                tagStatusCheckedAt={state.tagStatusCheckedAt}
                                 selectedHashes={state.selectedHashes}
                                 selectedWorktreePath={state.selectedWorktreePath}
                                 hasMore={state.hasMore}

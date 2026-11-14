@@ -1,4 +1,4 @@
-import type { GraphExtensionToWebviewMessage, GraphOperationStatusPush } from '@protocol/graph/messages';
+import type { GraphExtensionToWebviewMessage, GraphOperationStatusPush, TagPublication } from '@protocol/graph/messages';
 import type { BranchDetails, BranchInfo, CommitFileChange, GraphCommit, GraphData, GraphFilters, GraphSubmoduleInfo, TagInfo, WorktreeInfo, WorktreeWip } from '@protocol/graph/types';
 import type { ProtocolError, Resource } from '@protocol/shared/base';
 import type { RepositoryLocator, RepositorySummary } from '@protocol/shared/repo';
@@ -109,9 +109,14 @@ export interface GraphState {
     readonly displayRows: readonly DisplayRow[];
     readonly branches: readonly BranchInfo[];
     readonly tags: readonly TagInfo[];
+    readonly tagPublications: readonly TagPublication[];
+    readonly tagStatusRequestId: string | undefined;
+    readonly tagStatusFailed: boolean;
+    readonly tagStatusCheckedAt: string | undefined;
     readonly worktrees: readonly WorktreeInfo[];
     readonly submodules: readonly GraphSubmoduleInfo[];
     readonly currentBranch: string;
+    readonly previousBranch: string | undefined;
     readonly currentUser: string;
     readonly hasRemotes: boolean;
     readonly hasMore: boolean;
@@ -151,6 +156,8 @@ export type GraphAction =
     | { readonly type: 'toggleCommitSelection'; readonly hash: string }
     | { readonly type: 'selectCommitRange'; readonly hashes: readonly string[]; readonly focusHash: string }
     | { readonly type: 'clearSelection' }
+    | { readonly type: 'startTagStatusRequest'; readonly requestId: string }
+    | { readonly type: 'refreshTagStatus' }
     | { readonly type: 'clearError' }
     | { readonly type: 'clearOperationStatus'; readonly operationId: string }
     | { readonly type: 'clearFilters' }
@@ -169,9 +176,14 @@ export function createInitialGraphState(): GraphState {
         displayRows: [],
         branches: [],
         tags: [],
+        tagPublications: [],
+        tagStatusRequestId: undefined,
+        tagStatusFailed: false,
+        tagStatusCheckedAt: undefined,
         worktrees: [],
         submodules: [],
         currentBranch: '',
+        previousBranch: undefined,
         currentUser: '',
         hasRemotes: false,
         hasMore: false,
@@ -201,6 +213,10 @@ export function createInitialGraphState(): GraphState {
 
 export function reduceGraphState(state: GraphState, action: GraphAction): GraphState {
     switch (action.type) {
+        case 'startTagStatusRequest':
+            return { ...state, tagStatusRequestId: action.requestId };
+        case 'refreshTagStatus':
+            return { ...state, tagPublications: [], tagStatusRequestId: undefined, tagStatusFailed: false, tagStatusCheckedAt: undefined };
         case 'message':
             return reduceMessage(state, action.message);
         case 'setFilters':
@@ -388,6 +404,13 @@ function toggleCommitSelection(state: GraphState, hash: string): GraphState {
 
 function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessage): GraphState {
     switch (message.type) {
+        case 'graph/tagStatusResponse':
+            if (state.tagStatusRequestId !== message.requestId || !matchesSelectedRuntimeRepository(message.repository, state.repository)) { return state; }
+            return { ...state, tagStatusRequestId: undefined, tagStatusCheckedAt: message.checkedAt,
+                tagPublications: [...state.tagPublications.filter(tag => !message.tags.some(item => item.name === tag.name)), ...message.tags] };
+        case 'graph/tagStatusInvalidated':
+            return matchesSelectedRuntimeRepository(message.repository, state.repository)
+                ? reduceGraphState(state, { type: 'refreshTagStatus' }) : state;
         case 'graph/dataPush':
             return reduceGraphDataPush(state, message.data, message.repoId);
         case 'graph/submodulesPush':
@@ -454,7 +477,12 @@ function reduceMessage(state: GraphState, message: GraphExtensionToWebviewMessag
             return selectWorktree(state, message.path);
         case 'graph/operationStatus':
             return reduceGraphOperationStatus(state, message);
+        case 'graph/operationDismissed':
+            return state.operationStatus?.operationId === message.operationId ? { ...state, operationStatus: undefined } : state;
         case 'graph/error':
+            if (message.requestId && message.requestId === state.tagStatusRequestId) {
+                return { ...state, tagStatusRequestId: undefined, tagStatusFailed: true, error: message.error };
+            }
             if (isExpectedGraphError(state, message.requestId)) {
                 return message.requestId
                     ? { ...state, loading: false, loadingMore: false, activeGraphRequestId: undefined, error: message.error }
@@ -621,10 +649,16 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
         displayRows,
         branches: data.branches,
         tags: data.tags,
+        ...(tagsEqual(state.tags, data.tags) && sameRepositoryLocator(state.repository, data.repository) ? {} : {
+            tagPublications: [], tagStatusRequestId: undefined, tagStatusFailed: false, tagStatusCheckedAt: undefined,
+        }),
         worktrees: data.worktrees,
         submodules,
         repository,
         currentBranch,
+        previousBranch: sameRepositoryLocator(state.repository, data.repository)
+            ? (currentBranch === 'HEAD' && state.currentBranch && state.currentBranch !== 'HEAD' ? state.currentBranch : state.previousBranch)
+            : undefined,
         currentUser: data.currentUser,
         hasRemotes: data.hasRemotes,
         hasMore: data.hasMore,
@@ -682,9 +716,14 @@ function clearGraphContent(state: GraphState): GraphState {
         displayRows: [],
         branches: [],
         tags: [],
+        tagPublications: [],
+        tagStatusRequestId: undefined,
+        tagStatusFailed: false,
+        tagStatusCheckedAt: undefined,
         worktrees: [],
         submodules: [],
         currentBranch: '',
+        previousBranch: undefined,
         hasRemotes: false,
         hasMore: false,
         loadedCount: 0,

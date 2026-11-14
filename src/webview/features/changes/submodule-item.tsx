@@ -270,6 +270,7 @@ export function SubmoduleItem({
                             {sections.map((section) => (
                                 <ChangeSectionView
                                     key={section.id}
+                                    submodulePath={submodule.path}
                                     section={section}
                                     viewMode={ChangesViewMode.List}
                                     sortMode={ChangesSortMode.Path}
@@ -290,6 +291,7 @@ export function SubmoduleItem({
                             {!conflictsOnly ? (
                                 <StashList
                                     title="Stashed"
+                                    submodulePath={submodule.path}
                                     stashes={statusData.stashes}
                                     expandedIndexes={expandedStashIndexes}
                                     filesByIndex={stashFilesByIndex}

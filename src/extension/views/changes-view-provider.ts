@@ -708,14 +708,18 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
                 if (!await this.beforeRefresh()) { continue; }
                 controller.signal.throwIfAborted();
 
-                const { status, stashes, submodules, currentBranch, worktree } = await this.loadChangesStatus(controller.signal);
+                const { status, stashes, submodules, currentBranch, worktree } = await this.loadChangesStatus(controller.signal, status => {
+                    controller.signal.throwIfAborted();
+                    if (context.id !== this.repositories.currentContext?.id) { return; }
+                    const visibleStatus = excludeNestedRepositoryChanges(status, nestedRepositoryPaths(context, this.repositories.contexts));
+                    this.updateBadge(visibleStatus.staged.length + visibleStatus.unstaged.length + visibleStatus.conflicts.length);
+                });
                 controller.signal.throwIfAborted();
                 const visibleStatus = excludeNestedRepositoryChanges(
                     status,
                     nestedRepositoryPaths(context, this.repositories.contexts),
                 );
                 this.router?.setKnownSubmodulePaths(submodules.map((submodule) => submodule.path));
-                this.updateBadge(visibleStatus.staged.length + visibleStatus.unstaged.length + visibleStatus.conflicts.length);
                 this.postStatusDataIfChanged(buildStatusData(visibleStatus, stashes, submodules, currentBranch));
                 await this.postSquashMergeMessagePresetIfNeeded(worktree, controller.signal);
             } catch (error) {
@@ -756,13 +760,14 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
         this.statusDataPoster.postIfChanged(ACTIVE_STATUS_DATA_KEY, message.data, message);
     }
 
-    private async loadChangesStatus(signal?: AbortSignal): Promise<RuntimeChangesStatusResult & { readonly worktree: Worktree }> {
+    private async loadChangesStatus(signal?: AbortSignal, onStatus?: (status: GitStatus) => void): Promise<RuntimeChangesStatusResult & { readonly worktree: Worktree }> {
         const locator = requireRuntimeLocator(this.runtimeRepositories, this.repositories.currentContext);
         const worktree = locator.worktree();
         const result = await this.getRuntimeChangesStatus.execute(
             locator.repository(),
             worktree,
             signal,
+            onStatus,
         );
         return { ...result, worktree };
     }

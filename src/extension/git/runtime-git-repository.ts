@@ -12,6 +12,7 @@ import type {
     SubmoduleUpdateOptions,
 } from '@application/ports/git-capabilities';
 import type { GitRepository } from '@application/ports/git-topology';
+import type { GitTagRef } from '@core/git/domain/git-tag-ref';
 import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime, type RepositoryKind } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
 import { HybridGitRuntime } from '@extension/git/hybrid-git-runtime';
@@ -160,6 +161,10 @@ export class RuntimeGitRepository implements GitRepository {
 
     listTags(signal?: AbortSignal): Promise<readonly GitTag[]> {
         return this.execute('listTags', undefined, signal);
+    }
+
+    listRemoteTags(remote: string, names: readonly string[], signal?: AbortSignal): Promise<readonly GitTagRef[]> {
+        return this.execute('listRemoteTags', { remote, names }, signal);
     }
 
     listRemotes(signal?: AbortSignal): Promise<readonly string[]> {

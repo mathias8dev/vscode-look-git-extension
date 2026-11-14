@@ -1,11 +1,13 @@
+import type { TagPublication } from '@protocol/graph/messages';
 import { useReducer, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { GraphOperationCategory, GraphOperationStatus, type BranchCommand, type GraphOperationStatusPush } from '@protocol/graph/messages';
-import type { BranchInfo, GraphContextTarget, GraphSubmoduleInfo, WorktreeInfo } from '@protocol/graph/types';
+import type { BranchInfo, GraphContextTarget, GraphSubmoduleInfo, TagInfo, WorktreeInfo } from '@protocol/graph/types';
 import { mainGraphRepositorySelection, type GraphRepositorySelection } from '@webview/features/graph/graph-repository-selection';
 import { buildBranchTree, buildRemoteBranchTree } from '@webview/features/graph/graph-branch-tree';
 import { BranchTreeNode, type BranchTreeExpansionRequest } from '@webview/features/graph/branch-tree-node';
 import { GraphSubmoduleNode } from '@webview/features/graph/graph-submodule-node';
+import { GraphTag } from '@webview/features/graph/graph-tag';
 import { IconButton } from '@webview/shared/icon-button';
 import { SearchInput } from '@webview/shared/search-input';
 import { selectBranchFilter } from '@webview/features/graph/graph-branch-selection';
@@ -15,6 +17,13 @@ import { comparisonBranchRef, reduceBranchComparisonSelection } from '@webview/f
 interface BranchPanelProps {
     readonly style?: CSSProperties;
     readonly branches: readonly BranchInfo[];
+    readonly tags?: readonly TagInfo[];
+    readonly currentTagNames?: readonly string[];
+    readonly tagPublications?: readonly TagPublication[];
+    readonly tagStatusCheckedAt?: string;
+    readonly checkingTags?: boolean;
+    readonly onRefreshTagStatus?: () => void;
+    readonly onSelectTag?: (hash: string) => void;
     readonly worktrees: readonly WorktreeInfo[];
     readonly submodules: readonly GraphSubmoduleInfo[];
     readonly selectedRepository?: GraphRepositorySelection;
@@ -39,6 +48,13 @@ interface BranchPanelProps {
 export function BranchPanel({
     style,
     branches,
+    tags = [],
+    currentTagNames = [],
+    tagPublications = [],
+    tagStatusCheckedAt,
+    checkingTags = false,
+    onRefreshTagStatus = () => undefined,
+    onSelectTag,
     worktrees,
     submodules,
     selectedRepository = mainGraphRepositorySelection(),
@@ -67,6 +83,7 @@ export function BranchPanel({
     });
     const baseBranch = comparisonBranches[0];
     const headBranch = comparisonBranches[1];
+    const [tagsCollapsed, setTagsCollapsed] = useState(false);
     const [localCollapsed, setLocalCollapsed] = useState(false);
     const [remoteCollapsed, setRemoteCollapsed] = useState(false);
     const [worktreesCollapsed, setWorktreesCollapsed] = useState(false);
@@ -84,6 +101,7 @@ export function BranchPanel({
         ? submodules.filter((submodule) => submoduleMatchesSearch(submodule, normalizedSearch))
         : submodules;
 
+    const filteredTags = tags.filter(tag => tag.name.toLowerCase().includes(normalizedSearch));
     const localBranches = filtered.filter((b) => !b.isRemote);
     const remoteBranches = filtered.filter((b) => b.isRemote);
     const localTree = buildBranchTree(localBranches);
@@ -133,12 +151,14 @@ export function BranchPanel({
     const expandBranches = () => {
         setLocalCollapsed(false);
         setRemoteCollapsed(false);
+        setTagsCollapsed(false);
         setTreeExpansionRequest((request) => ({ mode: 'expanded', version: request.version + 1 }));
     };
 
     const collapseBranches = () => {
         setLocalCollapsed(false);
         setRemoteCollapsed(false);
+        setTagsCollapsed(true);
         setTreeExpansionRequest((request) => ({ mode: 'collapsed', version: request.version + 1 }));
     };
 
@@ -276,8 +296,8 @@ export function BranchPanel({
                     <div className="branch-search">
                         <SearchInput
                             value={search}
-                            placeholder="Branch, worktree, submodule"
-                            ariaLabel="Search branches, worktrees, and submodules"
+                            placeholder="Branch, tag, worktree, submodule"
+                            ariaLabel="Search branches, tags, worktrees, and submodules"
                             onChange={setSearch}
                         />
                     </div>
@@ -368,6 +388,25 @@ export function BranchPanel({
                                 ))}
                             </div>
                         )}
+
+                        {tags.length > 0 && onSelectTag ? (
+                            <div className="branch-group">
+                                <div className="graph-group-header-row">
+                                    <button type="button" className="branch-group-header" aria-expanded={!tagsCollapsed}
+                                        onClick={() => setTagsCollapsed(!tagsCollapsed)}>
+                                        <i className={`codicon codicon-chevron-${tagsCollapsed ? 'right' : 'down'}`} aria-hidden="true" />
+                                        <span>Tags</span><span className="graph-resource-count">{filteredTags.length}</span>
+                                    </button>
+                                    <IconButton icon="sync" title={checkingTags ? 'Checking remote tag status…' : 'Refresh remote tag status'}
+                                        className="graph-resource-action" busy={checkingTags} onClick={onRefreshTagStatus} />
+                                </div>
+                                {!tagsCollapsed && filteredTags.map(tag => (
+                                    <GraphTag key={tag.name} tag={tag} variant="list" isCurrent={currentTagNames.includes(tag.name)}
+                                        publication={tagPublications.find(item => item.name === tag.name)} checkedAt={tagStatusCheckedAt}
+                                        onSelect={onSelectTag} onContextTarget={onContextTarget} />
+                                ))}
+                            </div>
+                        ) : null}
 
                         <div className="branch-group">
                             <div className="graph-group-header-row">

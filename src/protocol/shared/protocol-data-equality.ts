@@ -47,7 +47,7 @@ export function branchesEqual(a: readonly BranchInfo[], b: readonly BranchInfo[]
 }
 
 export function tagsEqual(a: readonly TagInfo[], b: readonly TagInfo[]): boolean {
-    return arraysEqual(a, b, (left, right) => left.name === right.name && left.hash === right.hash);
+    return arraysEqual(a, b, (left, right) => left.name === right.name && left.hash === right.hash && left.objectHash === right.objectHash);
 }
 
 export function worktreesEqual(a: readonly WorktreeInfo[], b: readonly WorktreeInfo[]): boolean {

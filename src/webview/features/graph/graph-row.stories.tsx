@@ -8,6 +8,7 @@ const meta = {
     args: {
         row: graphRows[0],
         branches,
+        onTagContextTarget: noop,
         selected: false,
         childHash: undefined,
         parentHash: graphRows[0].commit.parentHashes[0],

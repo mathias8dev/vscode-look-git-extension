@@ -3,6 +3,7 @@ import { CoalescingTask } from '@extension/utils/coalescing-task';
 interface RepositoryRefreshCoordinatorOptions {
     readonly isReady: () => boolean;
     readonly refreshRuntime: () => Promise<void>;
+    readonly refreshChanges: () => Promise<void>;
     readonly refreshViews: () => Promise<void>;
 }
 
@@ -15,8 +16,9 @@ export class RepositoryRefreshCoordinator {
         this.task = new CoalescingTask(() => this.refreshOnce());
     }
 
-    refresh(): Promise<void> {
-        return this.task.run();
+    async refresh(): Promise<void> {
+        if (!this.options.isReady()) { return; }
+        await Promise.all([this.options.refreshChanges(), this.task.run()]);
     }
 
     private async refreshOnce(): Promise<void> {

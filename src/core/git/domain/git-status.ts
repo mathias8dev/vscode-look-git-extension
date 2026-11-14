@@ -36,4 +36,5 @@ export interface GitBranch {
 export interface GitTag {
     readonly name: string;
     readonly hash: string;
+    readonly objectHash?: string;
 }

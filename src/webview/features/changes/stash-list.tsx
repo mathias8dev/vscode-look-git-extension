@@ -3,6 +3,7 @@ import type { StashEntry, StashFileEntry } from '@protocol/changes/types';
 import { Codicon } from '@webview/shared/codicon';
 import type { StashEntryAction } from '@webview/features/changes/stash-commands';
 import { StashItem } from '@webview/features/changes/stash-item';
+import { ResizableChangesList } from '@webview/features/changes/resizable-changes-list';
 
 interface StashListProps {
     readonly stashes: readonly StashEntry[];
@@ -13,6 +14,7 @@ interface StashListProps {
     readonly onStashFileDiff: (index: number, file: StashFileEntry) => void;
     readonly title?: string;
     readonly showWhenEmpty?: boolean;
+    readonly submodulePath?: string;
 }
 
 export function StashList({
@@ -24,6 +26,7 @@ export function StashList({
     onStashFileDiff,
     title = 'Stashes',
     showWhenEmpty = false,
+    submodulePath,
 }: StashListProps) {
     const [panelCollapsed, setPanelCollapsed] = useState(false);
 
@@ -60,19 +63,21 @@ export function StashList({
                 <span>{stashes.length}</span>
             </header>
             {!panelCollapsed ? (
-                <div className="stash-list">
-                    {stashes.map((stash) => (
-                        <StashItem
-                            key={stash.index}
-                            stash={stash}
-                            expanded={expandedIndexes.includes(stash.index)}
-                            files={filesByIndex[stash.index]}
-                            onToggle={onToggleStash}
-                            onAction={onStashAction}
-                            onFileDiff={onStashFileDiff}
-                        />
-                    ))}
-                </div>
+                <ResizableChangesList id="stashes" title={title} submodulePath={submodulePath}>
+                    <div className="stash-list">
+                        {stashes.map((stash) => (
+                            <StashItem
+                                key={stash.index}
+                                stash={stash}
+                                expanded={expandedIndexes.includes(stash.index)}
+                                files={filesByIndex[stash.index]}
+                                onToggle={onToggleStash}
+                                onAction={onStashAction}
+                                onFileDiff={onStashFileDiff}
+                            />
+                        ))}
+                    </div>
+                </ResizableChangesList>
             ) : null}
         </section>
     );

@@ -11,6 +11,7 @@ import type { ActiveConflictState, OperationAction } from '@webview/features/cha
 import { SubmoduleAction } from '@webview/features/changes/submodule-commands';
 import { SubmoduleItem } from '@webview/features/changes/submodule-item';
 import type { StashEntryAction } from '@webview/features/changes/stash-commands';
+import { ResizableChangesList } from '@webview/features/changes/resizable-changes-list';
 
 interface SubmoduleSectionProps {
     readonly submodules: readonly SubmoduleEntry[];
@@ -100,50 +101,52 @@ export function SubmoduleSection({
                 <span>{submodules.length}</span>
             </header>
             {!collapsed ? (
-                <div className="submodule-list">
-                    {submodules.map((submodule) => {
-                        const stashEntries = statusByPath[submodule.path]?.stashes ?? [];
-                        return (
-                            <SubmoduleItem
-                                key={submodule.path}
-                                submodule={submodule}
-                                expanded={expandedPaths.includes(submodule.path)}
-                                statusData={statusByPath[submodule.path]}
-                                loadingStatus={loadingStatusPaths.includes(submodule.path)}
-                                focusRequest={commitFocusRequestByPath[submodule.path] ?? 0}
-                                onToggle={() => onToggle(submodule.path)}
-                                onOpenContextMenu={() => onContextTarget(submodule.path)}
-                                onAction={(action) => onAction(submodule.path, action)}
-                                onReviewChanges={() => onReviewChanges(submodule.path)}
-                                expandedStashIndexes={stashEntries
-                                    .map((stash) => stash.index)
-                                    .filter((index) => expandedStashKeys.includes(submoduleStashKey(submodule.path, index)))}
-                                stashFilesByIndex={stashEntries.reduce<Record<number, readonly StashFileEntry[]>>((acc, stash) => {
-                                    const files = stashFilesByKey[submoduleStashKey(submodule.path, stash.index)];
-                                    if (files) { acc[stash.index] = files; }
-                                    return acc;
-                                }, {})}
-                                onRowAction={(item, action) => onRowAction(submodule.path, item, action)}
-                                onBulkAction={(section, action) => onBulkAction(submodule.path, section, action)}
-                                onExplainSelection={onExplainSelection}
-                                onSelectionContextTarget={onSelectionContextTarget}
-                                onOperationAction={(conflictState, action) => onOperationAction(submodule.path, conflictState, action)}
-                                commitFeedback={commitFeedbackByPath[submodule.path]}
-                                commitMessageGenerating={commitMessageGenerationRequestIdByPath[submodule.path] !== undefined}
-                                generatedCommitMessage={generatedCommitMessageByPath[submodule.path]}
-                                commitMessageGenerationError={commitMessageGenerationErrorByPath[submodule.path]}
-                                onCommit={(message, mode) => onCommit(submodule.path, message, mode)}
-                                onCommitComposerContextTarget={(message) => onCommitComposerContextTarget(submodule.path, message)}
-                                onGenerateCommitMessage={() => onGenerateCommitMessage(submodule.path)}
-                                onCreateStash={(message) => onCreateStash(submodule.path, message)}
-                                onCreateSelectedStash={onCreateSelectedStash}
-                                onToggleStash={(index) => onToggleStash(submodule.path, index)}
-                                onStashAction={(index, action) => onStashAction(submodule.path, index, action)}
-                                onStashFileDiff={(index, file) => onStashFileDiff(submodule.path, index, file)}
-                            />
-                        );
-                    })}
-                </div>
+                <ResizableChangesList id="submodules" title="Submodules">
+                    <div className="submodule-list">
+                        {submodules.map((submodule) => {
+                            const stashEntries = statusByPath[submodule.path]?.stashes ?? [];
+                            return (
+                                <SubmoduleItem
+                                    key={submodule.path}
+                                    submodule={submodule}
+                                    expanded={expandedPaths.includes(submodule.path)}
+                                    statusData={statusByPath[submodule.path]}
+                                    loadingStatus={loadingStatusPaths.includes(submodule.path)}
+                                    focusRequest={commitFocusRequestByPath[submodule.path] ?? 0}
+                                    onToggle={() => onToggle(submodule.path)}
+                                    onOpenContextMenu={() => onContextTarget(submodule.path)}
+                                    onAction={(action) => onAction(submodule.path, action)}
+                                    onReviewChanges={() => onReviewChanges(submodule.path)}
+                                    expandedStashIndexes={stashEntries
+                                        .map((stash) => stash.index)
+                                        .filter((index) => expandedStashKeys.includes(submoduleStashKey(submodule.path, index)))}
+                                    stashFilesByIndex={stashEntries.reduce<Record<number, readonly StashFileEntry[]>>((acc, stash) => {
+                                        const files = stashFilesByKey[submoduleStashKey(submodule.path, stash.index)];
+                                        if (files) { acc[stash.index] = files; }
+                                        return acc;
+                                    }, {})}
+                                    onRowAction={(item, action) => onRowAction(submodule.path, item, action)}
+                                    onBulkAction={(section, action) => onBulkAction(submodule.path, section, action)}
+                                    onExplainSelection={onExplainSelection}
+                                    onSelectionContextTarget={onSelectionContextTarget}
+                                    onOperationAction={(conflictState, action) => onOperationAction(submodule.path, conflictState, action)}
+                                    commitFeedback={commitFeedbackByPath[submodule.path]}
+                                    commitMessageGenerating={commitMessageGenerationRequestIdByPath[submodule.path] !== undefined}
+                                    generatedCommitMessage={generatedCommitMessageByPath[submodule.path]}
+                                    commitMessageGenerationError={commitMessageGenerationErrorByPath[submodule.path]}
+                                    onCommit={(message, mode) => onCommit(submodule.path, message, mode)}
+                                    onCommitComposerContextTarget={(message) => onCommitComposerContextTarget(submodule.path, message)}
+                                    onGenerateCommitMessage={() => onGenerateCommitMessage(submodule.path)}
+                                    onCreateStash={(message) => onCreateStash(submodule.path, message)}
+                                    onCreateSelectedStash={onCreateSelectedStash}
+                                    onToggleStash={(index) => onToggleStash(submodule.path, index)}
+                                    onStashAction={(index, action) => onStashAction(submodule.path, index, action)}
+                                    onStashFileDiff={(index, file) => onStashFileDiff(submodule.path, index, file)}
+                                />
+                            );
+                        })}
+                    </div>
+                </ResizableChangesList>
             ) : null}
         </section>
     );

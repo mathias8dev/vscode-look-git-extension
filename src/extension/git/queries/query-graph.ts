@@ -1,3 +1,4 @@
+import { parseTagList } from '@core/parsing/parse-tag-list';
 import type { GitExec } from '@extension/git/git-exec';
 import type { GitGraphCommit, GitFileChange, GitCommit } from '@core/git/domain/git-commit';
 import type { GitBranch, GitTag } from '@core/git/domain/git-status';
@@ -132,14 +133,10 @@ export async function queryAllBranches(
     }, ...branches];
 }
 
-export async function queryAllTags(execRawReadonly: GitExec, signal?: AbortSignal): Promise<GitTag[]> {
-    const format = '%(refname:short)%00%(objectname)';
+export async function queryAllTags(execRawReadonly: GitExec, signal?: AbortSignal): Promise<readonly GitTag[]> {
+    const format = '%(refname:strip=2)%00%(objectname)%00%(*objectname)';
     const output = await execRawReadonly(['tag', `--format=${format}`], signal);
-    if (!output) { return []; }
-    return output.split(/\r?\n/).filter(Boolean).map((line) => {
-        const parts = line.split('\0');
-        return { name: parts[0] ?? '', hash: parts[1] ?? '' };
-    });
+    return parseTagList(output);
 }
 
 export async function queryCurrentBranch(execReadonly: GitExec, signal?: AbortSignal): Promise<string> {
