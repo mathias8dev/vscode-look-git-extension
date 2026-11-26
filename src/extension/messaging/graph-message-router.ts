@@ -39,7 +39,7 @@ import { requireRuntimeRepository, requireRuntimeWorktree, type RuntimeCommandTa
 import { operationActionsForStatus } from '@extension/utils/operation-feedback';
 import { openWorktreeGitlinkDiff } from '@extension/utils/gitlink-diff';
 import { emptyDiffUri, openCommitFileDiff } from '@extension/utils/diff-uris';
-import { gitBlobUri } from '@extension/utils/git-blob-documents';
+import { gitBlobUri } from '@extension/utils/git-blob-file-system';
 import { createErrorPayload, isAbortError } from '@extension/messaging/error-serialization';
 import { appendErrorToOutput, showErrorOutput } from '@extension/messaging/error-output-channel';
 import type { RepositoryRegistry } from '@extension/repositories/repository-registry';
@@ -1082,7 +1082,7 @@ async function worktreeHeadBlobUri(
     runtimeTargets: RuntimeCommandTargets,
 ): Promise<vscode.Uri> {
     const content = await requireRuntimeWorktree(runtimeTargets).getFileAtRevision(filePath, 'HEAD');
-    return gitBlobUri('worktree-head', filePath, 'head', content);
+    return gitBlobUri('worktree-head', path.join(requireRuntimeWorktree(runtimeTargets).path, filePath), 'head', content);
 }
 
 function emptyGraphData(): GraphData {

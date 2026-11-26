@@ -23,7 +23,9 @@ import type { RepositoryRegistry } from '@extension/repositories/repository-regi
 import type { GitRepository as RuntimeGitRepository, Worktree } from '@application/ports/git-topology';
 import { GitPushOutcome } from '@application/ports/git-capabilities';
 import { confirmTypedPhrase, showModalWarningMessage } from '@extension/utils/confirmation';
-import { createReadonlyDocumentUri, openReadonlyDiffDocument } from '@extension/utils/readonly-diff-documents';
+import { openReadonlyDiffDocument } from '@extension/utils/readonly-diff-documents';
+import { gitBlobUri } from '@extension/utils/git-blob-file-system';
+import { emptyDiffUri } from '@extension/utils/diff-uris';
 import { toProtocolSubmoduleStatus } from '@extension/mapping/to-protocol';
 import { GenerateCommitMessageUseCase } from '@application/usecases/changes/generate-commit-message';
 import { CheckoutBranchUseCase } from '@application/usecases/branches/checkout-branch';
@@ -1536,7 +1538,7 @@ async function openStatusDiff(cwd: string, msg: StatusDiffInput, runtimeTargets?
     const status = msg.isStaged ? msg.indexStatus : msg.workTreeStatus;
     const basePath = isRenameLikeStatus(status) ? msg.origPath ?? msg.filePath : msg.filePath;
     const baseRef = msg.isStaged ? 'HEAD' : ':';
-    const emptyUri = readonlyContentUri(`${baseName} empty`, msg.filePath, '');
+    const emptyUri = emptyDiffUri('working-tree', filePath, 'empty');
 
     let left: vscode.Uri;
     let right: vscode.Uri;
@@ -1577,7 +1579,7 @@ interface StashDiffInput {
 }
 
 async function openStashDiff(msg: StashDiffInput, runtimeTargets?: DiffRuntimeTargets): Promise<void> {
-    const emptyUri = readonlyContentUri(`${path.basename(msg.filePath)} empty`, msg.filePath, '');
+    const emptyUri = emptyDiffUri('stash', msg.filePath, 'empty');
     const stashRef = `stash@{${msg.index}}`;
     const basePath = isRenameLikeStatus(msg.status) ? msg.origPath ?? msg.filePath : msg.filePath;
     const left = isAddedStatus(msg.status)
@@ -1606,14 +1608,16 @@ async function gitContentUri(
     runtimeTargets?: DiffRuntimeTargets,
 ): Promise<vscode.Uri> {
     const content = await gitContent(filePath, ref, runtimeTargets);
-    return readonlyContentUri(title, filePath, content);
+    const cwd = runtimeTargets?.worktree?.path ?? runtimeTargets?.repository?.cwd;
+    if (!cwd) { throw new Error('Runtime repository context is required to read Git file contents.'); }
+    return gitBlobUri(ref, path.join(cwd, filePath), title, content);
 }
 
 async function gitContent(
     filePath: string,
     ref: string,
     runtimeTargets?: DiffRuntimeTargets,
-): Promise<string> {
+): Promise<Uint8Array> {
     if (ref === ':' && runtimeTargets?.worktree) {
         return runtimeTargets.worktree.getFileFromIndex(filePath);
     }
@@ -1638,15 +1642,6 @@ async function gitContentUriFromRefs(
         }
     }
     throw lastError instanceof Error ? lastError : new Error(`Could not read ${filePath}.`);
-}
-
-function readonlyContentUri(title: string, filePath: string, content: string): vscode.Uri {
-    return createReadonlyDocumentUri(title, content, documentExtension(filePath));
-}
-
-function documentExtension(filePath: string): string {
-    const extension = path.extname(filePath).replace(/^\./, '');
-    return extension || 'txt';
 }
 
 async function discardRuntimeFile(worktree: Worktree, filePath: string): Promise<void> {

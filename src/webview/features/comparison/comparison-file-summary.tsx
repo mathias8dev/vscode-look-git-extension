@@ -24,7 +24,7 @@ export function ComparisonFileSummary({ state, onReview, onOpen }: ComparisonFil
             </div>
         );
     }
-    const binary = !file.isSubmodule && (file.additions === null || file.deletions === null);
+    const hasLineCounts = file.additions !== null && file.deletions !== null;
     return (
         <>
             <header className="comparison-preview-toolbar">
@@ -41,13 +41,11 @@ export function ComparisonFileSummary({ state, onReview, onOpen }: ComparisonFil
                             <dt>After</dt><dd><code>{revisionLabel(file.newRevision)}</code></dd>
                         </dl>
                     </>
-                ) : binary ? (
-                    <><h2>Binary file changed</h2><p className="comparison-muted">A text diff is unavailable for binary contents.</p></>
                 ) : (
                     <>
                         <p className="comparison-muted">Click a file to open its changes in the VS Code diff editor.</p>
                         {file.origPath ? <p><code>{file.origPath} → {file.filePath}</code></p> : null}
-                        <p><span className="comparison-add">+{file.additions}</span>{' '}<span className="comparison-delete">−{file.deletions}</span></p>
+                        {hasLineCounts ? <p><span className="comparison-add">+{file.additions}</span>{' '}<span className="comparison-delete">−{file.deletions}</span></p> : <p className="comparison-muted">Line counts unavailable.</p>}
                         <button type="button" className="comparison-button" onClick={onOpen} disabled={Boolean(state.pending.open)}>
                             <i className="codicon codicon-go-to-file" aria-hidden="true" />Open diff
                         </button>

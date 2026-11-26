@@ -1,33 +1,48 @@
-import { execFile } from 'child_process';
+import { spawn } from 'child_process';
 import * as path from 'path';
-import { promisify } from 'util';
 import type { GitBackend, GitRunOptions } from '@application/ports/git-backend';
+import { GitOutputFormat } from '@application/ports/git-output-format';
 
-const execFileAsync = promisify(execFile);
-const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024;
 const DEFAULT_MAX_LOCK_RETRIES = 8;
 
 export class GitCliBackend implements GitBackend {
     constructor(
         private readonly cwd: string,
-        private readonly maxBuffer = DEFAULT_MAX_BUFFER,
         private readonly maxLockRetries = DEFAULT_MAX_LOCK_RETRIES,
         private readonly gitPath = 'git',
     ) {}
 
-    async run(args: readonly string[], options: GitRunOptions = {}): Promise<string> {
+    run(args: readonly string[], options?: GitRunOptions & { readonly outputFormat?: GitOutputFormat.Text }): Promise<string>;
+    run(args: readonly string[], options: GitRunOptions & { readonly outputFormat: GitOutputFormat.Bytes }): Promise<Uint8Array>;
+    run(args: readonly string[], options: GitRunOptions): Promise<string | Uint8Array>;
+    async run(args: readonly string[], options: GitRunOptions = {}): Promise<string | Uint8Array> {
         let delayMs = 80;
         for (let attempt = 0; ; attempt++) {
             options.signal?.throwIfAborted();
             try {
                 const invocation = executableInvocation(this.gitPath, args);
-                const { stdout } = await execFileAsync(invocation.command, invocation.args, {
-                    cwd: this.cwd,
-                    maxBuffer: this.maxBuffer,
-                    env: { ...process.env, ...options.env },
-                    signal: options.signal,
+                const stdout = await new Promise<Buffer>((resolve, reject) => {
+                    const child = spawn(invocation.command, invocation.args, {
+                        cwd: this.cwd,
+                        env: { ...process.env, ...options.env },
+                        signal: options.signal,
+                        stdio: ['ignore', 'pipe', 'pipe'],
+                    });
+                    const stdoutChunks: Buffer[] = [];
+                    const stderrChunks: Buffer[] = [];
+                    child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
+                    child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+                    child.once('error', reject);
+                    child.once('close', (code, signal) => {
+                        const output = Buffer.concat(stdoutChunks);
+                        if (code === 0) { resolve(output); return; }
+                        const stderr = Buffer.concat(stderrChunks).toString('utf8');
+                        reject(Object.assign(new Error(`Command failed: ${invocation.command} ${invocation.args.join(' ')}\n${stderr}`), {
+                            code, signal, stdout: output.toString('utf8'), stderr,
+                        }));
+                    });
                 });
-                return stdout;
+                return options.outputFormat === GitOutputFormat.Bytes ? stdout : stdout.toString('utf8');
             } catch (error) {
                 if (attempt >= this.maxLockRetries || !isIndexLockError(error)) { throw error; }
                 await sleep(delayMs, options.signal);

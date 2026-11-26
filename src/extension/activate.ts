@@ -18,7 +18,7 @@ import { ChangesViewProvider } from '@extension/views/changes-view-provider';
 import { CommitHistoryViewProvider } from '@extension/views/commit-history-view-provider';
 import { GraphViewProvider } from '@extension/views/graph-view-provider';
 import { registerReadonlyDiffDocumentProvider } from '@extension/utils/readonly-diff-documents';
-import { registerGitBlobDocumentProvider } from '@extension/utils/git-blob-documents';
+import { registerGitBlobFileSystemProvider } from '@extension/utils/git-blob-file-system';
 import { CoalescingTask } from '@extension/utils/coalescing-task';
 import { registerWebviewFontSizeSync } from '@extension/views/webview-font';
 import { RepositoryRegistry } from '@extension/repositories/repository-registry';
@@ -389,7 +389,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         repositories,
         repositoryNavigationCoordinator,
         registerReadonlyDiffDocumentProvider(),
-        registerGitBlobDocumentProvider(),
+        registerGitBlobFileSystemProvider(),
         gitWatcher,
         repositoryDiscoveryWatcher,
         registerRepositoryScanMaxDepthListener(debouncedSyncDiscoveredRepositories),

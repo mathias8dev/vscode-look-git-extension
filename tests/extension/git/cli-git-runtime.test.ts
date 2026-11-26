@@ -436,15 +436,15 @@ describe('CliGitRuntime', () => {
         const calls: string[][] = [];
         const runtime = new CliGitRuntime(async (args) => {
             calls.push([...args]);
-            return 'content\n\n';
+            return Buffer.from('content\n\n');
         });
 
-        await expect(runtime.execute('getFileAtRevision', context, { path: 'src/app.ts', revision: 'HEAD' })).resolves.toBe('content\n\n');
-        await expect(runtime.execute('getFileFromIndex', context, { path: 'src/app.ts' })).resolves.toBe('content\n\n');
+        await expect(runtime.execute('getFileAtRevision', context, { path: 'src/app.ts', revision: 'HEAD' })).resolves.toEqual(Buffer.from('content\n\n'));
+        await expect(runtime.execute('getFileFromIndex', context, { path: 'src/app.ts' })).resolves.toEqual(Buffer.from('content\n\n'));
 
         expect(calls).toEqual([
-            ['show', 'HEAD:src/app.ts'],
-            ['show', ':src/app.ts'],
+            ['show', '--textconv', 'HEAD:src/app.ts'],
+            ['show', '--textconv', ':src/app.ts'],
         ]);
     });
 
@@ -460,20 +460,20 @@ describe('CliGitRuntime', () => {
                     '',
                 ].join('\0');
             }
-            return `${args.at(-1)}\n\n`;
+            return Buffer.from(`${args.at(-1)}\n\n`);
         });
 
         await expect(runtime.execute('getConflictStages', context, { path: 'src/conflict.ts' })).resolves.toEqual({
-            base: `${'1'.repeat(40)}\n\n`,
-            ours: `${'2'.repeat(40)}\n\n`,
-            theirs: `${'3'.repeat(40)}\n\n`,
+            base: Buffer.from(`${'1'.repeat(40)}\n\n`),
+            ours: Buffer.from(`${'2'.repeat(40)}\n\n`),
+            theirs: Buffer.from(`${'3'.repeat(40)}\n\n`),
         });
 
         expect(calls).toEqual([
             ['ls-files', '-u', '-z', '--', 'src/conflict.ts'],
-            ['cat-file', '-p', '1'.repeat(40)],
-            ['cat-file', '-p', '2'.repeat(40)],
-            ['cat-file', '-p', '3'.repeat(40)],
+            ['cat-file', '--textconv', '--path=src/conflict.ts', '1'.repeat(40)],
+            ['cat-file', '--textconv', '--path=src/conflict.ts', '2'.repeat(40)],
+            ['cat-file', '--textconv', '--path=src/conflict.ts', '3'.repeat(40)],
         ]);
     });
 

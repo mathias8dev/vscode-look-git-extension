@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { Worktree } from '@application/ports/git-topology';
-import { createReadonlyDocumentUri } from '@extension/utils/readonly-diff-documents';
+import { gitBlobUri } from '@extension/utils/git-blob-file-system';
 
 const OpenMergeEditorCommand = '_open.mergeEditor';
 
@@ -15,14 +15,14 @@ export async function openRuntimeThreeWayMergeEditor(worktree: Worktree, filePat
         worktree.getConflictStages(filePath),
         worktree.getStatus(),
     ]);
-    const extension = fileExtension(filePath);
-    const base = createReadonlyDocumentUri(`${filePath} base`, stages.base, extension);
+    const originalPath = path.join(worktree.path, filePath);
+    const base = gitBlobUri('merge', originalPath, 'base', stages.base);
     const current = {
-        uri: createReadonlyDocumentUri(`${filePath} current`, stages.ours, extension),
+        uri: gitBlobUri('merge', originalPath, 'current', stages.ours),
         title: 'Current',
     } satisfies MergeEditorInputData;
     const incoming = {
-        uri: createReadonlyDocumentUri(`${filePath} incoming`, stages.theirs, extension),
+        uri: gitBlobUri('merge', originalPath, 'incoming', stages.theirs),
         title: 'Incoming',
     } satisfies MergeEditorInputData;
     const output = vscode.Uri.file(path.join(worktree.path, filePath));
@@ -61,11 +61,6 @@ export async function notifyRuntimeConflictsDetected(
     if (choice === 'Open All in Merge Editor') {
         await openAllRuntimeThreeWayMergeEditors(worktree, mergeEditorFilePaths);
     }
-}
-
-function fileExtension(filePath: string): string {
-    const extension = path.extname(filePath).replace(/^\./, '');
-    return extension || 'txt';
 }
 
 function conflictCountText(count: number): string {

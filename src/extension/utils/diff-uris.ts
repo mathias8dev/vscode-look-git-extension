@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import type { GitRepository } from '@application/ports/git-topology';
-import { gitBlobUri } from '@extension/utils/git-blob-documents';
+import { gitBlobUri } from '@extension/utils/git-blob-file-system';
 import { openCommitGitlinkDiff } from '@extension/utils/gitlink-diff';
 
 export interface CommitDiffFile {
@@ -18,14 +18,12 @@ type DiffUris = {
     readonly right: vscode.Uri;
 };
 
-export type BlobContentReader = (ref: string, filePath: string) => Promise<string>;
-
 export async function openCommitFileDiff(repo: GitRepository, file: CommitDiffFile, preview?: boolean, signal?: AbortSignal): Promise<void> {
     if (file.isSubmodule) {
         await openCommitGitlinkDiff(repo, file, signal);
         return;
     }
-    const { left, right } = await commitFileTempDiffUris(repo, repo.cwd, file, signal);
+    const { left, right } = await commitFileDiffUris(repo, file, signal);
     signal?.throwIfAborted();
     const args = [left, right, `${path.basename(file.filePath)} (${file.commitHash.substring(0, 7)})`] as const;
     if (preview === undefined) {
@@ -35,7 +33,7 @@ export async function openCommitFileDiff(repo: GitRepository, file: CommitDiffFi
     }
 }
 
-export async function commitFileTempDiffUris(repo: GitRepository, cwd: string, file: CommitDiffFile, signal?: AbortSignal): Promise<DiffUris> {
+export async function commitFileDiffUris(repo: GitRepository, file: CommitDiffFile, signal?: AbortSignal): Promise<DiffUris> {
     const parentRef = file.parentHash ?? `${file.commitHash}~1`;
     const status = file.status.charAt(0);
     const origPath = file.origPath ?? file.filePath;
@@ -43,45 +41,34 @@ export async function commitFileTempDiffUris(repo: GitRepository, cwd: string, f
     if (status === 'A') {
         return {
             left: emptyDiffUri(file.commitHash, file.filePath, 'parent'),
-            right: await refBlobUri(repo, cwd, file.commitHash, file.filePath, 'commit', signal),
+            right: await refBlobUri(repo, file.commitHash, file.filePath, 'commit', signal),
         };
     }
 
     if (status === 'D') {
         return {
-            left: await refBlobUri(repo, cwd, parentRef, origPath, 'parent', signal),
+            left: await refBlobUri(repo, parentRef, origPath, 'parent', signal),
             right: emptyDiffUri(file.commitHash, file.filePath, 'commit'),
         };
     }
 
     return {
-        left: await refBlobUri(repo, cwd, parentRef, origPath, 'parent', signal),
-        right: await refBlobUri(repo, cwd, file.commitHash, file.filePath, 'commit', signal),
+        left: await refBlobUri(repo, parentRef, origPath, 'parent', signal),
+        right: await refBlobUri(repo, file.commitHash, file.filePath, 'commit', signal),
     };
 }
 
 export function emptyDiffUri(namespace: string, filePath: string, side: string): vscode.Uri {
-    return gitBlobUri(namespace, filePath, side, '');
+    return gitBlobUri(namespace, filePath, side, new Uint8Array());
 }
 
 export async function refBlobUri(
     repo: GitRepository,
-    _cwd: string,
     ref: string,
     filePath: string,
     side: string,
     signal?: AbortSignal,
 ): Promise<vscode.Uri> {
     const content = await repo.getFileAtRevision(filePath, ref, signal);
-    return gitBlobUri(ref, filePath, side, content);
-}
-
-export async function refBlobUriFrom(
-    readBlob: BlobContentReader,
-    ref: string,
-    filePath: string,
-    side: string,
-): Promise<vscode.Uri> {
-    const content = await readBlob(ref, filePath);
-    return gitBlobUri(ref, filePath, side, content);
+    return gitBlobUri(ref, path.join(repo.cwd, filePath), side, content);
 }

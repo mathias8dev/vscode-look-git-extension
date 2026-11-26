@@ -7,6 +7,7 @@ import type {
     CherryPickOptions,
     CleanOptions,
     CommitOptions,
+    ConflictStageContents,
     FileSelection,
     MergeOptions,
     PatchApplyOptions,
@@ -108,11 +109,11 @@ export class RuntimeWorktree implements Worktree {
         return this.execute('unstageHunks', { hunks }, signal);
     }
 
-    getFileFromIndex(path: string, signal?: AbortSignal): Promise<string> {
+    getFileFromIndex(path: string, signal?: AbortSignal): Promise<Uint8Array> {
         return this.execute('getFileFromIndex', { path }, signal);
     }
 
-    getConflictStages(path: string, signal?: AbortSignal): Promise<{ readonly base: string; readonly ours: string; readonly theirs: string }> {
+    getConflictStages(path: string, signal?: AbortSignal): Promise<ConflictStageContents> {
         return this.execute('getConflictStages', { path }, signal);
     }
 
@@ -136,7 +137,7 @@ export class RuntimeWorktree implements Worktree {
         return this.execute('acceptTheirs', { paths }, signal);
     }
 
-    getFileAtRevision(path: string, revision: string, signal?: AbortSignal): Promise<string> {
+    getFileAtRevision(path: string, revision: string, signal?: AbortSignal): Promise<Uint8Array> {
         return this.execute('getFileAtRevision', { path, revision }, signal);
     }
 

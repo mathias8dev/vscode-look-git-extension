@@ -5,6 +5,7 @@ import type { ComparisonRequest, ComparisonResponse } from '@protocol/comparison
 import { createComparisonFixture } from '@tests/helpers/comparison-fixture';
 import { commands, resetMockVscode } from '@tests/mocks/vscode';
 import type { GitBranch } from '@core/git/domain/git-status';
+import { ChangedFilesPage } from '@core/git/domain/git-comparison';
 
 describe('ComparisonMessageRouter', () => {
     const cleanups: (() => void)[] = [];
@@ -37,6 +38,21 @@ describe('ComparisonMessageRouter', () => {
         expect(native?.args[0]).toEqual(expect.objectContaining({ scheme: 'lookgit-blob', path: expect.stringContaining('src/original.ts') }));
         expect(native?.args[1]).toEqual(expect.objectContaining({ scheme: 'lookgit-blob', path: expect.stringContaining('src/renamed.ts') }));
         expect(() => JSON.stringify(messages)).not.toThrow();
+    });
+
+    it('delegates binary-stored files to the native diff reader without relying on numstat', async () => {
+        const { router, request, messages, repository } = setup();
+        vi.spyOn(repository, 'listChangedFiles').mockResolvedValue(new ChangedFilesPage([
+            { status: 'M', filePath: 'secret.txt', additions: null, deletions: null },
+        ], false, undefined, 1, 1, 0, 0));
+        const readContent = vi.spyOn(repository, 'getFileAtRevision').mockResolvedValue(Buffer.from('decrypted content\n'));
+        await router.handle(request);
+        const snapshot = snapshotFrom(messages);
+        await router.handle({ type: 'comparison/openDiff', requestId: 'open-converted', snapshotId: snapshot.id, filePath: 'secret.txt' });
+        expect(messages.at(-1)?.type).toBe('comparison/opened');
+        expect(readContent).toHaveBeenCalledWith('secret.txt', snapshot.leftHash, expect.any(AbortSignal));
+        expect(readContent).toHaveBeenCalledWith('secret.txt', snapshot.headHash, expect.any(AbortSignal));
+        expect(commands.calls.at(-1)?.command).toBe('vscode.diff');
     });
 
     it('paginates and searches comparison files and selected commit files', async () => {

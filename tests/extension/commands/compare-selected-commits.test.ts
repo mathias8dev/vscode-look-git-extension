@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runCommitCommand } from '@extension/commands/commit-commands';
 import { openChangesBetweenRefs } from '@extension/commands/git-command-helpers';
-import { registerGitBlobDocumentProvider } from '@extension/utils/git-blob-documents';
+import { registerGitBlobFileSystemProvider } from '@extension/utils/git-blob-file-system';
 import { createComparisonFixture } from '@tests/helpers/comparison-fixture';
 import { commands, resetMockVscode } from '@tests/mocks/vscode';
 
@@ -11,7 +11,7 @@ describe('compare selected commits', () => {
 
     it('opens the native changes editor with both committed file versions, including renames, additions and deletions', async () => {
         const { repo, repository, ancestor, feature } = createComparisonFixture();
-        const provider = registerGitBlobDocumentProvider();
+        const provider = registerGitBlobFileSystemProvider();
         try {
             await runCommitCommand(repository, 'compareSelected', feature, [feature, ancestor],
                 undefined, undefined, undefined, undefined, undefined, undefined, undefined, { repository });

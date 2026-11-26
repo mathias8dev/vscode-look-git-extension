@@ -16,6 +16,13 @@ All notable changes to Look Git are documented in this file.
 
 ### Fixed
 
+#### Diffs
+- Apply Git textconv drivers when reading revisions, the index, merge conflict stages and comparison patches, matching VS Code Git and displaying decrypted git-crypt content in unlocked repositories
+- Preserve original file bytes through a read-only file system so VS Code handles text encodings, binary files and image previews in native editors
+- Reuse identical diff snapshots without duplicate tabs or cached contents, while keeping changed file versions and repository contexts isolated
+- Open branch comparison diffs independently of Git's stored-content line counts, including files decrypted by textconv drivers
+- Stream Git output without the former 10 MiB buffer limit, preserving cancellation and Git error details
+
 #### Git Operations
 - Use the existing push recovery actions across views when upstream commits reject a push, and distinguish recovery or cancellation from a completed push
 - Preserve commit drafts when cancelling an operation or when the commit fails

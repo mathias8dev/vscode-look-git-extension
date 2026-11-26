@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { GitCliBackend } from '@extension/git/git-cli-backend';
+import { GitOutputFormat } from '@application/ports/git-output-format';
 import { createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
 
 describe('GitCliBackend', () => {
@@ -24,6 +25,36 @@ describe('GitCliBackend', () => {
         await expect(backend.run(['rev-parse', '--show-toplevel'])).resolves.toBe(`${r.cwd}\n`);
     });
 
+    it('preserves non-UTF-8 bytes and reads files larger than the former 10 MiB limit', async () => {
+        const r = repo();
+        const content = Buffer.alloc(12 * 1024 * 1024, 0xff);
+        content.set(Buffer.from([0xff, 0xfe, 0, 0, 0x80, 0xe9]), 0);
+        r.writeBuffer('large.bin', content);
+        r.commit('Large binary');
+        const backend = new GitCliBackend(r.cwd);
+
+        const bytes = await backend.run(['show', 'HEAD:large.bin'], { outputFormat: GitOutputFormat.Bytes });
+        expect(Buffer.from(bytes).equals(content)).toBe(true);
+        const text = await backend.run(['show', 'HEAD:large.bin']);
+        expect(text.length).toBeGreaterThan(10 * 1024 * 1024);
+    });
+
+    it('preserves Git failure codes and stderr for existing error classification', async () => {
+        const r = repo();
+        await expect(new GitCliBackend(r.cwd).run(['show', 'missing:path'], { outputFormat: GitOutputFormat.Bytes }))
+            .rejects.toMatchObject({ code: 128, stderr: expect.stringContaining('fatal:') });
+    });
+
+    it('cancels a running streamed read', async () => {
+        const r = repo();
+        const wrapper = path.join(r.cwd, 'slow-git.js');
+        fs.writeFileSync(wrapper, "process.stdout.write('started'); setInterval(() => process.stdout.write('chunk'), 20);\n");
+        const controller = new AbortController();
+        const operation = new GitCliBackend(r.cwd, undefined, wrapper).run(['show'], { outputFormat: GitOutputFormat.Bytes, signal: controller.signal });
+        setTimeout(() => controller.abort(), 150);
+        await expect(operation).rejects.toMatchObject({ name: 'AbortError' });
+    });
+
     it('uses a configured git executable path', async () => {
         const r = repo();
         const gitWrapperPath = path.join(r.cwd, 'git-wrapper.js');
@@ -38,7 +69,7 @@ describe('GitCliBackend', () => {
             '',
         ].join('\n'));
         fs.chmodSync(gitWrapperPath, 0o755);
-        const backend = new GitCliBackend(r.cwd, undefined, undefined, gitWrapperPath);
+        const backend = new GitCliBackend(r.cwd, undefined, gitWrapperPath);
 
         await expect(backend.run(['rev-parse', '--show-toplevel'])).resolves.toBe(`${r.cwd}\n`);
         expect(fs.readFileSync(markerPath, 'utf8')).toContain('rev-parse');

@@ -4,8 +4,8 @@ import * as fs from 'fs/promises';
 import type { GitRepository, Worktree } from '@application/ports/git-topology';
 import type { GitFileChange } from '@core/git/domain/git-commit';
 import { openReadonlyDiffDocument } from '@extension/utils/readonly-diff-documents';
-import { commitFileTempDiffUris, emptyDiffUri, refBlobUriFrom } from '@extension/utils/diff-uris';
-import { gitBlobUri } from '@extension/utils/git-blob-documents';
+import { commitFileDiffUris, emptyDiffUri, refBlobUri } from '@extension/utils/diff-uris';
+import { gitBlobUri } from '@extension/utils/git-blob-file-system';
 import { samePath } from '@extension/utils/path-compare';
 
 type ChangesResource = readonly [vscode.Uri, vscode.Uri, vscode.Uri];
@@ -53,9 +53,9 @@ export async function openChangesBetweenRefs(
         for (const file of page.items) {
             signal.throwIfAborted();
             const uris = file.isSubmodule ? {
-                left: gitBlobUri(baseRef, file.filePath, 'submodule-before', `${file.oldRevision ?? ''}\n`),
-                right: gitBlobUri(headRef, file.filePath, 'submodule-after', `${file.newRevision ?? ''}\n`),
-            } : await commitFileTempDiffUris(repo, repo.cwd, { ...file, commitHash: headRef, parentHash: baseRef }, signal);
+                left: gitBlobUri(baseRef, path.join(repo.cwd, file.filePath), 'submodule-before', new TextEncoder().encode(`${file.oldRevision ?? ''}\n`)),
+                right: gitBlobUri(headRef, path.join(repo.cwd, file.filePath), 'submodule-after', new TextEncoder().encode(`${file.newRevision ?? ''}\n`)),
+            } : await commitFileDiffUris(repo, { ...file, commitHash: headRef, parentHash: baseRef }, signal);
             resources.push([vscode.Uri.file(path.join(repo.cwd, file.filePath)), uris.left, uris.right]);
             onProgress(resources.length);
         }
@@ -102,15 +102,11 @@ async function workingTreeChangeResource(repo: GitRepository, worktreePath: stri
         return [fileUri, emptyDiffUri('working-tree', entry.filePath, 'original'), fileUri];
     }
     if (entry.status === 'D') {
-        return [fileUri, await runtimeRefBlobUri(repo, baseRef, origPath, 'original'), emptyDiffUri(baseRef, entry.filePath, 'modified')];
+        return [fileUri, await refBlobUri(repo, baseRef, origPath, 'original'), emptyDiffUri(baseRef, entry.filePath, 'modified')];
     }
-    return [fileUri, await runtimeRefBlobUri(repo, baseRef, origPath, 'original'), fileUri];
+    return [fileUri, await refBlobUri(repo, baseRef, origPath, 'original'), fileUri];
 }
 
 async function openDiffDocument(title: string, content: string): Promise<void> {
     await openReadonlyDiffDocument(title, content);
-}
-
-async function runtimeRefBlobUri(repo: GitRepository, ref: string, filePath: string, side: string): Promise<vscode.Uri> {
-    return refBlobUriFrom((revision, pathValue) => repo.getFileAtRevision(pathValue, revision), ref, filePath, side);
 }

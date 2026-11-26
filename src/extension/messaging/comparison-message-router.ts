@@ -155,7 +155,6 @@ export class ComparisonMessageRouter implements vscode.Disposable {
                 } else {
                     const file = this.requireFile(message.filePath);
                     if (file.isSubmodule) { throw new Error('Submodule pointers cannot be opened as file diffs.'); }
-                    if (file.additions === null || file.deletions === null) { throw new Error('A text diff is unavailable for this binary file.'); }
                     await openCommitFileDiff(this.repository, { ...file, commitHash: snapshot.headHash, parentHash: snapshot.leftHash }, undefined, signal);
                 }
                 return { type: 'comparison/opened', requestId };

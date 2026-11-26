@@ -3,6 +3,7 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { verifyGitFileDiffs } from './git-file-diffs';
 
 export async function run(): Promise<void> {
     const repo = requiredEnv('LOOK_GIT_SEMANTIC_FIXTURE_REPO');
@@ -19,6 +20,7 @@ export async function run(): Promise<void> {
     assert.ok(gitRepository.state.indexChanges.length >= 1, 'Expected staged fixture changes.');
     assert.ok(gitRepository.state.workingTreeChanges.length >= 1, 'Expected unstaged fixture changes.');
 
+    await verifyGitFileDiffs();
     await activateLookGit();
 
     const commands = await vscode.commands.getCommands(true);

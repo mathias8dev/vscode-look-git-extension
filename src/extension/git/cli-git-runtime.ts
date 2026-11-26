@@ -6,6 +6,8 @@ import * as os from 'os';
 import * as path from 'path';
 import { Page } from '@core/git/domain/page';
 import { ChangedFilesPage } from '@core/git/domain/git-comparison';
+import { GitOutputFormat } from '@application/ports/git-output-format';
+import type { GitRunOptions } from '@application/ports/git-backend';
 import { parseNumstat } from '@core/parsing/parse-numstat';
 import { parseRemoteTagRefs } from '@core/parsing/parse-remote-tag-refs';
 import { parseDiffRawZ } from '@core/parsing/parse-diff-raw';
@@ -17,25 +19,20 @@ import { querySubmoduleStatus, updateSubmodule } from '@extension/git/queries/qu
 import { addWorktree, queryWorktrees, removeWorktree } from '@extension/git/queries/query-worktrees';
 import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
-import { GitPushOutcome, type CommitGraphQuery, type RebaseOptions } from '@application/ports/git-capabilities';
+import { GitPushOutcome, type CommitGraphQuery, type ConflictStageContents, type RebaseOptions } from '@application/ports/git-capabilities';
 import { requireRemoteBranchName } from '@extension/git/remote-branch';
 import { normalizePathForComparison } from '@extension/utils/path-compare';
 
 interface CliInvocation {
     readonly args: readonly string[];
-    readonly trim?: boolean;
-}
-
-export interface CliGitRuntimeProcessOptions {
-    readonly signal?: AbortSignal;
-    readonly env?: Readonly<Record<string, string>>;
+    readonly outputFormat?: GitOutputFormat;
 }
 
 export type CliGitRuntimeProcess = (
     args: readonly string[],
     context: GitExecutionContext,
-    options: CliGitRuntimeProcessOptions,
-) => Promise<string>;
+    options: GitRunOptions,
+) => Promise<string | Uint8Array>;
 
 export class CliGitRuntime implements GitRuntime {
     private readonly runProcess: CliGitRuntimeProcess;
@@ -69,8 +66,9 @@ export class CliGitRuntime implements GitRuntime {
         }
 
         const invocation = buildInvocation(input);
-        const output = await this.runProcess(invocation.args, context, { signal });
-        return resultFor(operation, invocation.trim === false ? output : output.trim()) as TResult;
+        const output = await this.runProcess(invocation.args, context, { signal, outputFormat: invocation.outputFormat });
+        const result = invocation.outputFormat === GitOutputFormat.Bytes ? byteOutput(output) : resultFor(operation, textOutput(output).trim());
+        return result as TResult; // The semantic operation contract determines TResult at the caller.
     }
 }
 
@@ -93,8 +91,8 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     setRemoteUrl: (input) => ({ args: ['remote', 'set-url', requiredStringField(input, 'remote'), requiredStringField(input, 'url')] }),
     addRemote: (input) => ({ args: ['remote', 'add', requiredStringField(input, 'name'), requiredStringField(input, 'url')] }),
     removeRemote: (input) => ({ args: ['remote', 'remove', requiredString(input, 'remote')] }),
-    getFileAtRevision: (input) => ({ args: ['show', `${requiredStringField(input, 'revision')}:${requiredStringField(input, 'path')}`], trim: false }),
-    getFileFromIndex: (input) => ({ args: ['show', `:${requiredStringField(input, 'path')}`], trim: false }),
+    getFileAtRevision: (input) => ({ args: ['show', '--textconv', `${requiredStringField(input, 'revision')}:${requiredStringField(input, 'path')}`], outputFormat: GitOutputFormat.Bytes }),
+    getFileFromIndex: (input) => ({ args: ['show', '--textconv', `:${requiredStringField(input, 'path')}`], outputFormat: GitOutputFormat.Bytes }),
     createBranch: (input) => ({ args: createBranchArgs(input) }),
     renameBranch: (input) => ({ args: ['branch', '-m', requiredStringField(input, 'oldName'), requiredStringField(input, 'newName')] }),
     deleteBranch: (input) => ({ args: deleteBranchArgs(input) }),
@@ -193,7 +191,7 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
         if (names.length > 50) { throw new Error('Check at most 50 remote tags per request.'); }
         const output = await runProcess(['ls-remote', '--refs', '--tags', '--', requiredStringField(input, 'remote'),
             ...names.map(name => `refs/tags/${name}`)], context, { signal, env: { GIT_TERMINAL_PROMPT: '0' } });
-        return parseRemoteTagRefs(output);
+        return parseRemoteTagRefs(textOutput(output));
     },
     listWorktrees: async (_input, runProcess, context, signal) => {
         return await queryWorktrees(readonlyRawExec(runProcess, context), signal);
@@ -298,7 +296,7 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
             signal,
             env: { LC_ALL: 'C', LANG: 'C' },
         });
-        return resultFor('previewClean', output.trim());
+        return resultFor('previewClean', textOutput(output).trim());
     },
     getCommitGraph: handleCommitGraph,
     getCommitDetails: async (input, runProcess, context, signal) => {
@@ -463,7 +461,7 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
     },
     compareFiles: async (input, runProcess, context, signal) => {
         const filePath = requiredStringField(input, 'path');
-        return readonlyRawExec(runProcess, context)(['diff', '--no-ext-diff', '--no-textconv', '--no-color', '-M',
+        return readonlyRawExec(runProcess, context)(['diff', '--no-ext-diff', '--textconv', '--no-color', '-M',
             requiredStringField(input, 'baseRef'), requiredStringField(input, 'headRef'), '--',
             `:(literal)${filePath}`], signal);
     },
@@ -890,12 +888,12 @@ async function readConflictStages(
     context: GitExecutionContext,
     filePath: string,
     signal?: AbortSignal,
-): Promise<{ readonly base: string; readonly ours: string; readonly theirs: string }> {
+): Promise<ConflictStageContents> {
     const hashes = await readConflictStageHashes(runProcess, context, filePath, signal);
     const [base, ours, theirs] = await Promise.all([
-        readObject(runProcess, context, hashes.get(ConflictStage.Base), signal),
-        readObject(runProcess, context, hashes.get(ConflictStage.Ours), signal),
-        readObject(runProcess, context, hashes.get(ConflictStage.Theirs), signal),
+        readConflictStageContent(runProcess, context, hashes.get(ConflictStage.Base), filePath, signal),
+        readConflictStageContent(runProcess, context, hashes.get(ConflictStage.Ours), filePath, signal),
+        readConflictStageContent(runProcess, context, hashes.get(ConflictStage.Theirs), filePath, signal),
     ]);
     return { base, ours, theirs };
 }
@@ -917,13 +915,14 @@ async function readConflictStageHashes(
     return hashes;
 }
 
-async function readObject(
+async function readConflictStageContent(
     runProcess: CliGitRuntimeProcess,
     context: GitExecutionContext,
     hash: string | undefined,
+    filePath: string,
     signal?: AbortSignal,
-): Promise<string> {
-    return hash ? runRaw(runProcess, context, ['cat-file', '-p', hash], signal) : '';
+): Promise<Uint8Array> {
+    return hash ? byteOutput(await runProcess(['cat-file', '--textconv', `--path=${filePath}`, hash], context, { signal, outputFormat: GitOutputFormat.Bytes })) : new Uint8Array();
 }
 
 async function handleCommitGraph(
@@ -1152,7 +1151,17 @@ async function runRaw(
     signal?: AbortSignal,
     env?: Readonly<Record<string, string>>,
 ): Promise<string> {
-    return runProcess(args, context, { signal, env });
+    return textOutput(await runProcess(args, context, { signal, env }));
+}
+
+function textOutput(output: string | Uint8Array): string {
+    if (typeof output !== 'string') { throw new Error('Git process returned bytes for a text operation.'); }
+    return output;
+}
+
+function byteOutput(output: string | Uint8Array): Uint8Array {
+    if (typeof output === 'string') { throw new Error('Git process returned text for a byte operation.'); }
+    return output;
 }
 
 async function runTrimmed(
@@ -1404,7 +1413,7 @@ async function resolveBranchUpstream(
     signal?: AbortSignal,
 ): Promise<string | undefined> {
     try {
-        return (await runProcess(['rev-parse', '--abbrev-ref', `${branch}@{upstream}`], context, { signal })).trim();
+        return await runTrimmed(runProcess, context, ['rev-parse', '--abbrev-ref', `${branch}@{upstream}`], signal);
     } catch (error) {
         if (isAbortError(error)) { throw error; }
         return undefined;
@@ -1417,7 +1426,7 @@ async function resolveCurrentBranch(
     signal?: AbortSignal,
 ): Promise<string | undefined> {
     try {
-        const branch = (await runProcess(['rev-parse', '--abbrev-ref', 'HEAD'], context, { signal })).trim();
+        const branch = await runTrimmed(runProcess, context, ['rev-parse', '--abbrev-ref', 'HEAD'], signal);
         return branch && branch !== 'HEAD' ? branch : undefined;
     } catch (error) {
         if (isAbortError(error)) { throw error; }
@@ -1430,7 +1439,7 @@ async function defaultRemote(
     context: GitExecutionContext,
     signal?: AbortSignal,
 ): Promise<string> {
-    const remote = (await runProcess(['remote'], context, { signal }))
+    const remote = (await runRaw(runProcess, context, ['remote'], signal))
         .split(/\r?\n/)
         .map((line) => line.trim())
         .find((line) => line.length > 0);
@@ -1457,10 +1466,7 @@ function cleanPreviewPath(line: string): string {
 }
 
 function readonlyRawExec(runProcess: CliGitRuntimeProcess, context: GitExecutionContext): GitExec {
-    return async (args, signal) => await runProcess(args, context, {
-        signal,
-        env: { GIT_OPTIONAL_LOCKS: '0' },
-    });
+    return (args, signal) => runRaw(runProcess, context, args, signal, { GIT_OPTIONAL_LOCKS: '0' });
 }
 
 function readonlyTrimmedExec(runProcess: CliGitRuntimeProcess, context: GitExecutionContext): GitExec {
@@ -1469,7 +1475,7 @@ function readonlyTrimmedExec(runProcess: CliGitRuntimeProcess, context: GitExecu
 }
 
 function trimmedExec(runProcess: CliGitRuntimeProcess, context: GitExecutionContext): GitExec {
-    return async (args, signal) => (await runProcess(args, context, { signal })).trim();
+    return (args, signal) => runTrimmed(runProcess, context, args, signal);
 }
 
 function pageRequestFromInput(input: unknown): { readonly limit: number; readonly encodedCursor?: string } {

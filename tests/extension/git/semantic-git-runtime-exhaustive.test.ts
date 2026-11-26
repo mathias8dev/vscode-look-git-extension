@@ -64,7 +64,7 @@ describe('semantic git runtime exhaustive coverage', () => {
             expect(await repository.orderCommits([head, resetBase], 'newestFirst')).toEqual([head, resetBase]);
             expect((await repository.getFileHistory('src/conflict.ts', {}, { limit: 5 })).items.length).toBeGreaterThan(0);
             expect((await repository.getFileSelectionHistory('src/conflict.ts', { startLine: 1, endLine: 1 }, {}, { limit: 5 })).items.length).toBeGreaterThan(0);
-            expect(await repository.getFileAtRevision('src/conflict.ts', 'semantic-reset-base')).toContain('current');
+            expect(new TextDecoder().decode(await repository.getFileAtRevision('src/conflict.ts', 'semantic-reset-base'))).toContain('current');
             expect(await repository.compareRefs('semantic-reset-base', 'HEAD', { includeRenames: true })).toEqual(expect.arrayContaining([
                 expect.objectContaining({ filePath: 'src/reset/local-head.ts' }),
             ]));
@@ -99,7 +99,7 @@ describe('semantic git runtime exhaustive coverage', () => {
             expect(await worktree.getCombinedDiff(['README.md', 'src/semantic-staged.ts'])).toContain('Semantic actions fixture');
             expect(await worktree.getPatch('workingTree', ['README.md'])).toContain('Unstaged README change');
             expect(await worktree.previewClean(['notes/semantic-untracked.md'], { force: true })).toContain('notes/semantic-untracked.md');
-            expect(await worktree.getFileAtRevision('src/conflict.ts', 'semantic-reset-base')).toContain('current');
+            expect(new TextDecoder().decode(await worktree.getFileAtRevision('src/conflict.ts', 'semantic-reset-base'))).toContain('current');
         } finally {
             fixture.cleanup();
         }
@@ -199,9 +199,9 @@ describe('semantic git runtime exhaustive coverage', () => {
             expect(status.conflictState).toBe('merge');
             expect(status.conflicts.map((entry) => entry.filePath)).toContain('src/conflict.ts');
             const stages = await fixture.worktree.getConflictStages('src/conflict.ts');
-            expect(stages.base).toContain('base');
-            expect(stages.ours).toContain('current');
-            expect(stages.theirs).toContain('incoming');
+            expect(new TextDecoder().decode(stages.base)).toContain('base');
+            expect(new TextDecoder().decode(stages.ours)).toContain('current');
+            expect(new TextDecoder().decode(stages.theirs)).toContain('incoming');
 
             await fixture.worktree.acceptTheirs(['src/conflict.ts']);
             status = await fixture.worktree.getStatus();

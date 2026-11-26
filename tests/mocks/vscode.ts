@@ -8,7 +8,23 @@ export const ProgressLocation = { Notification: 15 } as const;
 export const InputBoxValidationSeverity = { Info: 1, Warning: 2, Error: 3 } as const;
 export const ViewColumn = { Active: -1, Beside: -2, One: 1 } as const;
 export const FileType = { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 } as const;
+export const FilePermission = { Readonly: 1 } as const;
 export const DecorationRangeBehavior = { ClosedClosed: 0 } as const;
+
+export class Disposable {
+    constructor(private readonly disposeCallback: () => void) {}
+    dispose(): void { this.disposeCallback(); }
+    static from(...items: { dispose(): unknown }[]): Disposable {
+        return new Disposable(() => { items.forEach(item => item.dispose()); });
+    }
+}
+
+export class FileSystemError extends Error {
+    constructor(readonly code: string, message: string) { super(message); }
+    static FileNotFound(uri: TestUri): FileSystemError { return new FileSystemError('FileNotFound', uri.toString()); }
+    static FileNotADirectory(uri: TestUri): FileSystemError { return new FileSystemError('FileNotADirectory', uri.toString()); }
+    static NoPermissions(uri: TestUri): FileSystemError { return new FileSystemError('NoPermissions', uri.toString()); }
+}
 
 export class TreeItem {
     public description: unknown;
@@ -612,6 +628,15 @@ type TextDocumentContentProvider = {
     provideTextDocumentContent(uri: TestUri): string;
 };
 
+type MockFileSystemProvider = {
+    readFile(uri: TestUri): Uint8Array;
+    stat(uri: TestUri): { readonly size: number; readonly permissions?: number };
+    writeFile(uri: TestUri): void;
+    delete(uri: TestUri): void;
+    rename(uri: TestUri): void;
+    createDirectory(uri: TestUri): void;
+};
+
 type TextDocumentOptions = {
     readonly content: string;
     readonly language?: string;
@@ -625,6 +650,7 @@ export const workspace = {
     values: new Map<string, unknown>(),
     documents: [] as MockTextDocument[],
     contentProviders: new Map<string, TextDocumentContentProvider>(),
+    fileSystemProviders: new Map<string, MockFileSystemProvider>(),
     workspaceFolders: undefined as readonly { readonly uri: TestUri; readonly name: string; readonly index: number }[] | undefined,
     fileSystemWatchers: [] as MockFileSystemWatcher[],
     workspaceFoldersEmitter: new EventEmitter<void>(),
@@ -638,6 +664,10 @@ export const workspace = {
         writes: [] as Array<{ uri: unknown; content: Uint8Array }>,
         deletes: [] as unknown[],
         readFile(uri: unknown) {
+            if (uri instanceof TestUri) {
+                const provider = workspace.fileSystemProviders.get(uri.scheme);
+                if (provider) { return Promise.resolve(provider.readFile(uri)); }
+            }
             const key = typeof uri === 'object' && uri !== null && 'fsPath' in uri && typeof uri.fsPath === 'string'
                 ? uri.fsPath
                 : String(uri);
@@ -721,12 +751,17 @@ export const workspace = {
         this.contentProviders.set(scheme, provider);
         return { dispose: () => { this.contentProviders.delete(scheme); } };
     },
-    openTextDocument(input: TextDocumentOptions | TestUri) {
+    registerFileSystemProvider(scheme: string, provider: MockFileSystemProvider, _options?: unknown) {
+        this.fileSystemProviders.set(scheme, provider);
+        return new Disposable(() => { this.fileSystemProviders.delete(scheme); });
+    },
+    async openTextDocument(input: TextDocumentOptions | TestUri) {
         if (input instanceof TestUri) {
             const provider = this.contentProviders.get(input.scheme);
+            const fileSystem = this.fileSystemProviders.get(input.scheme);
             const document = createMockTextDocument({
                 uri: input,
-                content: provider?.provideTextDocumentContent(input) ?? readFileContent(input),
+                content: fileSystem ? new TextDecoder().decode(fileSystem.readFile(input)) : provider?.provideTextDocumentContent(input) ?? readFileContent(input),
                 language: languageForPath(input.path),
             });
             this.documents.push(document);
@@ -740,6 +775,7 @@ export const workspace = {
         this.values = new Map();
         this.documents = [];
         this.contentProviders = new Map();
+        this.fileSystemProviders = new Map();
         this.workspaceFolders = undefined;
         this.fileSystemWatchers.forEach((watcher) => watcher.dispose());
         this.fileSystemWatchers = [];

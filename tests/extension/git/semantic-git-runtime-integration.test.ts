@@ -64,9 +64,9 @@ describe('semantic git runtime integration', () => {
             expect(status.conflictState).toBe('none');
             expect(status.conflicts.some((entry) => entry.filePath === 'src/conflict.ts')).toBe(true);
             const conflictStages = await worktree.getConflictStages('src/conflict.ts');
-            expect(conflictStages.base).toContain('base');
-            expect(conflictStages.ours).toContain('current');
-            expect(conflictStages.theirs).toContain('incoming');
+            expect(new TextDecoder().decode(conflictStages.base)).toContain('base');
+            expect(new TextDecoder().decode(conflictStages.ours)).toContain('current');
+            expect(new TextDecoder().decode(conflictStages.theirs)).toContain('incoming');
             await worktree.abortCherryPick();
 
             await expect(worktree.previewClean(['notes/semantic-untracked.md'], { force: true })).resolves.toContain('notes/semantic-untracked.md');

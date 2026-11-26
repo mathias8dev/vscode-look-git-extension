@@ -111,7 +111,7 @@ export class RuntimeGitRepository implements GitRepository {
         return this.execute('getFileSelectionHistory', { path, selection, query, pageRequest }, signal);
     }
 
-    getFileAtRevision(path: string, revision: string, signal?: AbortSignal): Promise<string> {
+    getFileAtRevision(path: string, revision: string, signal?: AbortSignal): Promise<Uint8Array> {
         return this.execute('getFileAtRevision', { path, revision }, signal);
     }
 

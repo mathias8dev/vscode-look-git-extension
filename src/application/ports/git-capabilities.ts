@@ -23,9 +23,9 @@ export interface FileSelection {
 }
 
 export interface ConflictStageContents {
-    readonly base: string;
-    readonly ours: string;
-    readonly theirs: string;
+    readonly base: Uint8Array;
+    readonly ours: Uint8Array;
+    readonly theirs: Uint8Array;
 }
 
 export interface RefCompareOptions {
@@ -144,7 +144,7 @@ export interface GitHistoryOperations {
 export interface GitFileHistoryOperations {
     getFileHistory(path: string, query: CommitGraphQuery, pageRequest: PageRequest, signal?: AbortSignal): Promise<Page<GitCommit>>;
     getFileSelectionHistory(path: string, selection: FileSelection, query: CommitGraphQuery, pageRequest: PageRequest, signal?: AbortSignal): Promise<Page<GitCommit>>;
-    getFileAtRevision(path: string, revision: string, signal?: AbortSignal): Promise<string>;
+    getFileAtRevision(path: string, revision: string, signal?: AbortSignal): Promise<Uint8Array>;
     getFileRenameHistory(path: string, pageRequest: PageRequest, signal?: AbortSignal): Promise<Page<GitFileChange>>;
 }
 
@@ -226,7 +226,7 @@ export interface GitStatusOperations {
 }
 
 export interface GitIndexOperations {
-    getFileFromIndex(path: string, signal?: AbortSignal): Promise<string>;
+    getFileFromIndex(path: string, signal?: AbortSignal): Promise<Uint8Array>;
     getConflictStages(path: string, signal?: AbortSignal): Promise<ConflictStageContents>;
     stage(paths: readonly string[], signal?: AbortSignal): Promise<void>;
     stageAll(signal?: AbortSignal): Promise<void>;
@@ -243,7 +243,7 @@ export interface GitIndexOperations {
 }
 
 export interface GitPatchOperations {
-    getFileAtRevision(path: string, revision: string, signal?: AbortSignal): Promise<string>;
+    getFileAtRevision(path: string, revision: string, signal?: AbortSignal): Promise<Uint8Array>;
     getWorkingTreeDiff(paths: readonly string[], signal?: AbortSignal): Promise<string>;
     getIndexDiff(paths: readonly string[], signal?: AbortSignal): Promise<string>;
     getCombinedDiff(paths: readonly string[], signal?: AbortSignal): Promise<string>;
