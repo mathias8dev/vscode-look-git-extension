@@ -4,6 +4,8 @@ All notable changes to Look Git are documented in this file.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-26
+
 ### Added
 
 #### Look Graph Tags
