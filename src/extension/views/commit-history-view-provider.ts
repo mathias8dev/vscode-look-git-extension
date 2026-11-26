@@ -1,3 +1,6 @@
+import { pushOperationStatus } from '@extension/utils/push-operation-status';
+import { pushWithRecovery } from '@extension/git/branch-remote-actions';
+import { pickPullOptions } from '@extension/git/git-option-pickers';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import type { GitCommit, GitFileChange } from '@core/git/domain/git-commit';
@@ -297,6 +300,9 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 : await this.selectedNonCurrentLocalHistoryBranch(runtimeRepository, operation);
             const selectedBranchWorktree = selectedBranch ? runtimeWorktreeForBranch(runtimeTargets.worktrees ?? [], selectedBranch) : undefined;
             conflictWorktree = selectedBranchWorktree ?? (selectedBranch ? undefined : this.requireRuntimeWorktreeForHistoryScope());
+            const pullWorktree = conflictWorktree;
+            const pullOptions = operation === 'pull' && pullWorktree ? await pickPullOptions() : undefined;
+            if (operation === 'pull' && pullWorktree && !pullOptions) { return; }
             const existingConflicts = operation === 'pull' && conflictWorktree ? await conflictFileSet(conflictWorktree) : undefined;
             if (!nativeFileContext) {
                 this.postHistoryOperation({ operationId, status: OperationStatus.Running, command: operation });
@@ -305,21 +311,22 @@ export class CommitHistoryViewProvider implements vscode.WebviewViewProvider {
                 await runtimeRepository.fetchAll({});
             } else {
                 if (operation === 'pull') {
-                    if (selectedBranch) {
+                    if (pullWorktree && pullOptions) {
+                        await pullWorktree.pull(pullOptions);
+                    } else if (selectedBranch) {
                         await runBranchCommand(runtimeRepository, 'update', selectedBranch, false, undefined, runtimeTargets);
-                    } else {
-                        await this.requireRuntimeWorktreeForHistoryScope().pull({});
                     }
                 } else {
                     let outcome: GitPushOutcome;
                     if (selectedBranch) {
-                        outcome = await (selectedBranchWorktree ?? this.requireRuntimeWorktreeForHistoryScope()).pushBranch(undefined, selectedBranch, {});
+                        outcome = await pushWithRecovery(runtimeRepository, selectedBranchWorktree ?? this.requireRuntimeWorktreeForHistoryScope(), selectedBranch);
                     } else {
-                        outcome = await this.requireRuntimeWorktreeForHistoryScope().push(undefined, {});
+                        outcome = await pushWithRecovery(runtimeRepository, this.requireRuntimeWorktreeForHistoryScope());
                     }
-                    if (outcome === GitPushOutcome.Delegated) {
+                    if (outcome === GitPushOutcome.Delegated || outcome === GitPushOutcome.Cancelled || outcome === GitPushOutcome.NotPushed) {
+                        if (outcome !== GitPushOutcome.Delegated) { await this.onRepositoryUpdated(); }
                         if (!nativeFileContext) {
-                            this.postHistoryOperation({ operationId, status: OperationStatus.Delegated, command: operation });
+                            this.postHistoryOperation({ operationId, status: pushOperationStatus(outcome), command: operation });
                         }
                         return;
                     }

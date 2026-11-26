@@ -38,6 +38,10 @@ function operationText(operation: GraphOperationStatusPush): string {
             return operation.background ? `Starting ${label}...` : `${sentenceCase(label)}...`;
         case OperationStatus.Success:
             return operation.background ? `${sentenceCase(label)} started.` : `${pastTense(label)}.`;
+        case OperationStatus.Cancelled:
+            return `${sentenceCase(label)} cancelled.`;
+        case OperationStatus.NotPushed:
+            return 'Push not performed. Review the branch before pushing again.';
         case OperationStatus.Delegated:
             return `${sentenceCase(label)} continues in VS Code.`;
         case OperationStatus.Failed:

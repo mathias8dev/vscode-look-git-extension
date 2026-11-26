@@ -1,3 +1,4 @@
+import type { CommitResultStatus } from '@protocol/changes/commit-result-status';
 import type { RequestId, ErrorMessage, ProtocolError } from '@protocol/shared/base';
 import type { OperationNoticeActionKind, OperationStatus } from '@protocol/shared/operation';
 import type { RepositoriesChangedPush, RepositoryNavigationMessage, SerializedRepoContext } from '@protocol/shared/repo';
@@ -23,7 +24,7 @@ export interface StatusDataPush {
 
 export interface CommitResultPush {
     readonly type: 'changes/commitResult';
-    readonly success: boolean;
+    readonly status: CommitResultStatus;
     readonly message?: string;
     readonly error?: ProtocolError;
 }
@@ -57,7 +58,7 @@ export interface SubmoduleCommitMessagePresetPush {
 export interface SubmoduleCommitResultPush {
     readonly type: 'changes/submoduleCommitResult';
     readonly path: string;
-    readonly success: boolean;
+    readonly status: CommitResultStatus;
     readonly message?: string;
     readonly error?: ProtocolError;
 }

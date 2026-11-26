@@ -1,3 +1,6 @@
+import type { MergeStrategy } from '@application/ports/merge-strategy';
+import type { PullStrategy } from '@application/ports/pull-strategy';
+import type { ResetMode } from '@application/ports/reset-mode';
 import type { GitCommit, GitFileChange } from '@core/git/domain/git-commit';
 import type { GitTagRef } from '@core/git/domain/git-tag-ref';
 import type { Page, PageRequest } from '@core/git/domain/page';
@@ -72,7 +75,9 @@ export interface CheckoutOptions {
 
 export interface MergeOptions {
     readonly noCommit?: boolean;
-    readonly squash?: boolean;
+    readonly strategy?: MergeStrategy;
+    readonly message?: string;
+    readonly squashMessage?: string;
 }
 
 export interface RebaseOptions {
@@ -97,15 +102,15 @@ export interface RevertOptions {
     readonly noEdit?: boolean;
 }
 
-export type ResetMode = 'soft' | 'mixed' | 'hard';
-
 export interface CleanOptions {
     readonly directories?: boolean;
     readonly force?: boolean;
 }
 
 export interface PullOptions {
-    readonly rebase?: boolean;
+    readonly strategy: PullStrategy;
+    readonly remote?: string;
+    readonly branch?: string;
 }
 
 export interface PushOptions {
@@ -117,6 +122,8 @@ export interface PushOptions {
 export enum GitPushOutcome {
     Completed = 'completed',
     Delegated = 'delegated',
+    NotPushed = 'notPushed',
+    Cancelled = 'cancelled',
 }
 
 export interface GitHistoryOperations {

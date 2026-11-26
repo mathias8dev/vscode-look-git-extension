@@ -1,16 +1,19 @@
 import * as vscode from 'vscode';
+import { randomUUID } from 'node:crypto';
+import { isAbortError } from '@core/shared/type-guards';
+import { withCancellationSignal } from '@extension/utils/vscode-cancellation';
+import { CommitMessageEditorMode } from '@extension/utils/commit-message-editor-mode';
 import type { CommitMessageWebviewToExtensionMessage } from '@protocol/commit-message/messages';
 import { getWebviewHtml } from '@extension/views/webview-html';
 import { movePanelToFloatingWindow as moveWebviewPanelToFloatingWindow } from '@extension/utils/floating-editor-window';
 
-export type CommitMessageEditorMode = 'window' | 'editor' | 'input';
-
 const CONFIG_SECTION = 'lookGit';
 const CONFIG_KEY = 'commitMessageEditor';
-const DEFAULT_MODE: CommitMessageEditorMode = 'window';
+const DEFAULT_MODE = CommitMessageEditorMode.Window;
 
 export interface CommitMessageEditorOptions {
     readonly generateMessage?: (signal: AbortSignal) => Promise<string>;
+    readonly autoGenerate?: boolean;
 }
 
 export function promptForCommitMessage(
@@ -22,13 +25,29 @@ export function promptForCommitMessage(
     const mode = vscode.workspace
         .getConfiguration(CONFIG_SECTION)
         .get<CommitMessageEditorMode>(CONFIG_KEY, DEFAULT_MODE);
-    if (mode === 'input') {
+    if (mode === CommitMessageEditorMode.Input) {
+        if (options.autoGenerate && options.generateMessage) {
+            return promptForGeneratedInput(currentMessage, options.generateMessage);
+        }
         return Promise.resolve(vscode.window.showInputBox({ prompt: 'New commit message:', value: currentMessage }));
     }
     if (!extensionUri) {
         throw new Error('Commit message editor requires the extension URI.');
     }
-    return openCommitMessagePanel(currentMessage, title, extensionUri, mode === 'window', options);
+    return openCommitMessagePanel(currentMessage, title, extensionUri, mode === CommitMessageEditorMode.Window, options);
+}
+
+async function promptForGeneratedInput(currentMessage: string, generate: (signal: AbortSignal) => Promise<string>): Promise<string | undefined> {
+    let message = currentMessage;
+    try {
+        message = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Generating commit message', cancellable: true },
+            (_progress, token) => withCancellationSignal(token, generate));
+    } catch (error) {
+        if (isAbortError(error)) { return undefined; }
+        const details = error instanceof Error ? error.message : String(error);
+        void vscode.window.showWarningMessage(`Could not generate a commit message: ${details} You can edit the draft manually.`);
+    }
+    return vscode.window.showInputBox({ prompt: 'New commit message:', value: message });
 }
 
 async function openCommitMessagePanel(
@@ -53,6 +72,13 @@ async function openCommitMessagePanel(
     return new Promise<string | undefined>((resolve) => {
         let settled = false;
         let generateController: AbortController | undefined;
+        let autoGenerationStarted = false;
+        const startGeneration = (requestId: string): void => {
+            if (!options.generateMessage) { return; }
+            generateController?.abort();
+            generateController = new AbortController();
+            void generateMessage(panel, requestId, options.generateMessage, generateController.signal);
+        };
         const finish = (message: string | undefined): void => {
             if (settled) { return; }
             settled = true;
@@ -71,12 +97,13 @@ async function openCommitMessagePanel(
                         message: currentMessage,
                         canGenerate: options.generateMessage !== undefined,
                     });
+                    if (options.autoGenerate && !autoGenerationStarted) {
+                        autoGenerationStarted = true;
+                        startGeneration(randomUUID());
+                    }
                     return;
                 case 'commitMessage/generate':
-                    if (!options.generateMessage) { return; }
-                    generateController?.abort();
-                    generateController = new AbortController();
-                    void generateMessage(panel, message.requestId, options.generateMessage, generateController.signal);
+                    startGeneration(message.requestId);
                     return;
                 case 'commitMessage/apply':
                     finish(message.message);

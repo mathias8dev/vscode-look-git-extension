@@ -1,3 +1,4 @@
+import type { CommitResultStatus } from '@protocol/changes/commit-result-status';
 import { describe, it } from 'vitest';
 import type { GraphExtensionToWebviewMessage, GraphWebviewToExtensionMessage } from '@protocol/graph/messages';
 import type { ChangesExtensionToWebviewMessage, ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
@@ -75,7 +76,7 @@ describe('protocol discriminated unions', () => {
                 case 'repo/contextChanged': return msg.context?.id satisfies string | undefined;
                 case 'repo/repositoriesChanged': return msg.activeContextId.status satisfies string;
                 case 'changes/statusData': return msg.data.staged satisfies readonly unknown[];
-                case 'changes/commitResult': return msg.success satisfies boolean;
+                case 'changes/commitResult': return msg.status satisfies CommitResultStatus;
                 case 'changes/generatedCommitMessage': return msg.requestId satisfies string;
                 case 'changes/commitMessagePreset': return msg.presetId satisfies string;
                 case 'changes/submoduleCommitResult': return msg.path satisfies string;

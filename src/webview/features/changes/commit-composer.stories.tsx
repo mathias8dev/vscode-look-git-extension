@@ -1,3 +1,4 @@
+import { CommitResultStatus } from '@protocol/changes/commit-result-status';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ConflictState } from '@protocol/changes/types';
 import { noop } from '@webview/storybook-fixtures';
@@ -66,7 +67,7 @@ export const BlockedByConflicts = {
 export const SuccessFeedback = {
     args: {
         feedback: {
-            success: true,
+            status: CommitResultStatus.Success,
             message: 'Committed successfully.',
         },
     },

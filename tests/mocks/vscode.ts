@@ -392,7 +392,10 @@ export const window = {
         this.inputBoxOptions.push(options);
         return Promise.resolve(this.inputBoxValues.shift() ?? this.inputBoxValue);
     },
-    showQuickPick() { return Promise.resolve(this.quickPickValues.shift() ?? this.quickPickValue); },
+    showQuickPick(items: readonly (string | { readonly label: string })[]) {
+        const value = this.quickPickValues.length > 0 ? this.quickPickValues.shift() : this.quickPickValue;
+        return Promise.resolve(items.find(item => (typeof item === 'string' ? item : item.label) === value));
+    },
     showOpenDialog(options: unknown) { this.openDialogOptions.push(options); return Promise.resolve(this.openDialogValue); },
     showSaveDialog(options: unknown) { this.saveDialogOptions.push(options); return Promise.resolve(this.saveDialogValue); },
     showTextDocument(document: MockTextDocument) {

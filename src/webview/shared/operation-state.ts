@@ -9,5 +9,5 @@ export function nextOperationStatus<T extends OperationState>(current: T | undef
     if (message.status !== OperationStatus.Running && current?.operationId && current.operationId !== message.operationId) {
         return current;
     }
-    return message.status === OperationStatus.Delegated ? undefined : message;
+    return (message.status === OperationStatus.Delegated || message.status === OperationStatus.Cancelled) ? undefined : message;
 }

@@ -1,3 +1,4 @@
+import { pushOperationStatus } from '@extension/utils/push-operation-status';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import {
@@ -103,21 +104,22 @@ export class GraphMessageRouter {
         try {
             existingConflicts = await this.conflictFilesBeforeOperation(msg);
             const outcome = await this.dispatch(msg);
-            if (outcome === false && operationId) {
-                this.postMessage({ type: 'graph/operationDismissed', operationId });
+            if (outcome === false) {
+                if (operationId) { this.postMessage({ type: 'graph/operationDismissed', operationId }); }
                 return;
             }
             if (operation && operationId) {
                 this.postGraphOperation({
                     ...operation,
                     operationId,
-                    status: outcome === GitPushOutcome.Delegated
-                        ? GraphOperationStatus.Delegated
-                        : GraphOperationStatus.Success,
+                    status: outcome === undefined ? GraphOperationStatus.Success : pushOperationStatus(outcome),
                 });
             }
         } catch (error) {
-            if (isAbortError(error)) { return; }
+            if (isAbortError(error)) {
+                if (operationId) { this.postMessage({ type: 'graph/operationDismissed', operationId }); }
+                return;
+            }
             if (operation && operationId) {
                 if (await this.detectOperationConflicts(msg, existingConflicts, error)) {
                     this.postGraphOperation({ ...operation, operationId, status: GraphOperationStatus.Conflict });
@@ -603,11 +605,11 @@ export class GraphMessageRouter {
         await this.refreshAfterRepositoryChange();
     }
 
-    private async handleBranchCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/branchCommand' }>): Promise<GitPushOutcome | undefined> {
+    private async handleBranchCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/branchCommand' }>): Promise<GitPushOutcome | false | undefined> {
         const runtimeTargets = this.runtimeTargetsForRepository(msg.repository);
         const repo = requireRuntimeRepository(runtimeTargets);
         const result = await runBranchCommand(repo, msg.command, msg.branch, msg.isRemote, undefined, runtimeTargets, this.extensionUri, this.storageUri);
-        if (!result.shouldRefresh) { return result.pushOutcome; }
+        if (!result.shouldRefresh) { return result.pushOutcome ?? false; }
         // `delete` removes the branch and `rename` frees its old name; if the graph is
         // filtered to that branch, the next reload would query a now-missing ref, so the
         // webview has to drop the filter first.
@@ -615,17 +617,17 @@ export class GraphMessageRouter {
         await this.refreshAfterRepositoryChange(invalidatesBranchFilter
             ? { branch: msg.branch, repository: msg.repository }
             : undefined);
-        return result.pushOutcome;
+        return result.pushOutcome ?? (msg.command === 'push' ? GitPushOutcome.NotPushed : undefined);
     }
 
-    private async handleWorktreeCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/worktreeCommand' }>): Promise<GitPushOutcome | undefined> {
+    private async handleWorktreeCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/worktreeCommand' }>): Promise<GitPushOutcome | false | undefined> {
         const runtimeTargets = msg.path
             ? this.runtimeTargetsForWorktree(msg.repository, msg.worktree, msg.path)
             : this.runtimeTargetsForRepository(msg.repository);
         const repo = requireRuntimeRepository(runtimeTargets);
         const result = await runWorktreeCommand(repo, msg.command, msg.path, runtimeTargets);
         if (result.shouldRefresh) { await this.refreshAfterRepositoryChange(); }
-        return result.pushOutcome;
+        return result.pushOutcome ?? (result.shouldRefresh ? undefined : false);
     }
 
     private async handleTagCommand(msg: Extract<GraphWebviewToExtensionMessage, { readonly type: 'graph/tagCommand' }>): Promise<false | undefined> {

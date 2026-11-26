@@ -1,3 +1,4 @@
+import { CommitResultStatus } from '@protocol/changes/commit-result-status';
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { CommitMode, ConflictState } from '@protocol/changes/types';
 import type { ProtocolError } from '@protocol/shared/base';
@@ -37,14 +38,15 @@ export function CommitComposer({
     onOpenNativeMenu,
 }: CommitComposerProps) {
     const [message, setMessage] = useState('');
+    const submitting = feedback?.status === CommitResultStatus.Running;
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const appliedGeneratedRequestIdRef = useRef<string | undefined>(undefined);
     const appliedSuccessFeedbackRef = useRef<CommitFeedback | undefined>(undefined);
     const ignoreSyntheticContextMenuRef = useRef(false);
 
-    const canCommit = canSubmitCommit({ message, mode: CommitMode.Commit, stagedCount, conflictState });
+    const canCommit = !submitting && canSubmitCommit({ message, mode: CommitMode.Commit, stagedCount, conflictState });
     const blockedReason = commitBlockReason({ message, mode: CommitMode.Commit, stagedCount, conflictState });
-    const canGenerateMessage = showGenerateMessage && stagedCount > 0 && conflictState === ConflictState.None && !generatingMessage;
+    const canGenerateMessage = !submitting && showGenerateMessage && stagedCount > 0 && conflictState === ConflictState.None && !generatingMessage;
 
     useEffect(() => {
         if (focusRequest === 0) { return; }
@@ -60,7 +62,8 @@ export function CommitComposer({
     }, [generatedMessage]);
 
     useEffect(() => {
-        if (!feedback?.success) { return; }
+        if (!feedback) { return; }
+        if (feedback.status !== CommitResultStatus.Success) { return; }
         if (appliedSuccessFeedbackRef.current === feedback) { return; }
         appliedSuccessFeedbackRef.current = feedback;
         setMessage('');
@@ -75,9 +78,8 @@ export function CommitComposer({
     }, [message]);
 
     const submitCommit = (mode: CommitMode) => {
-        if (!canSubmitCommit({ message, mode, stagedCount, conflictState })) { return; }
+        if (submitting || !canSubmitCommit({ message, mode, stagedCount, conflictState })) { return; }
         onCommit(message.trim(), mode);
-        setMessage('');
     };
 
     const rememberNativeMenuTarget = () => {
@@ -107,6 +109,7 @@ export function CommitComposer({
                     className="commit-message-input"
                     rows={1}
                     value={message}
+                    disabled={submitting}
                     placeholder={commitPlaceholder(targetLabel)}
                     aria-label="Commit message"
                     onChange={(event) => setMessage(event.currentTarget.value)}
@@ -134,9 +137,9 @@ export function CommitComposer({
                 <span className="commit-hint commit-hint-error">{generationError.message}</span>
             ) : message.trim() && !canCommit && blockedReason ? (
                 <span className="commit-hint">{blockedReason}</span>
-            ) : feedback && !feedback.success ? (
+            ) : feedback?.status === CommitResultStatus.Failed ? (
                 <span className="commit-hint commit-hint-error">{feedback.message}</span>
-            ) : feedback?.success ? (
+            ) : feedback?.status === CommitResultStatus.Success ? (
                 <span className="commit-hint">Committed successfully.</span>
             ) : null}
             <div className="commit-primary-row">

@@ -1,3 +1,4 @@
+import { PullStrategy } from '@application/ports/pull-strategy';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { Page } from '@core/git/domain/page';
@@ -144,12 +145,43 @@ describe('CommitHistoryViewProvider', () => {
             },
         });
 
+        setQuickPickValue('Cherry-pick');
         await vscode.commands.executeCommand('lookGit.history.cherryPick');
 
         expect(calls
             .filter((call) => call.operation === 'cherryPick')
             .map((call) => isRecord(call.input) ? call.input.commit : undefined))
             .toEqual(['newest', 'clicked', 'oldest']);
+    });
+
+    it('uses the shared strategy picker for the current history branch', async () => {
+        const calls: RuntimeCall[] = [];
+        const provider = providerFor(historyRuntime(calls));
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        setQuickPickValue('Pull (--rebase)');
+
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'pull' });
+
+        await expect.poll(() => calls).toContainEqual(expect.objectContaining({
+            operation: 'pull', input: { options: { strategy: PullStrategy.Rebase } },
+        }));
+        expect(calls.some(call => call.operation === 'merge')).toBe(false);
+    });
+
+    it('does not announce or execute a history pull when strategy selection is cancelled', async () => {
+        const calls: RuntimeCall[] = [];
+        const provider = providerFor(historyRuntime(calls));
+        const view = makeWebviewView();
+        provider.resolveWebviewView(view);
+        const picker = vi.spyOn(window, 'showQuickPick');
+
+        view.messageHandler?.({ type: 'history/toolbarCommand', command: 'pull' });
+
+        await expect.poll(() => picker.mock.calls.length).toBe(1);
+        expect(calls.some(call => call.operation === 'pull' || call.operation === 'merge')).toBe(false);
+        expect(view.messages).not.toContainEqual(expect.objectContaining({ type: 'history/operationStatus' }));
+        picker.mockRestore();
     });
 
     it('pulls the selected non-current history branch by updating that branch ref', async () => {
@@ -620,6 +652,7 @@ function historyRuntime(calls: RuntimeCall[], pushOutcome = GitPushOutcome.Compl
                 case 'pushBranch':
                 case 'push':
                     return runtimeResult(pushOutcome);
+                case 'pull':
                 case 'cherryPick':
                     return runtimeResult(undefined);
                 default:

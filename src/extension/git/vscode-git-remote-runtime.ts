@@ -1,3 +1,4 @@
+import { PullStrategy } from '@application/ports/pull-strategy';
 import * as vscode from 'vscode';
 import { GitPushOutcome } from '@application/ports/git-capabilities';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
@@ -46,7 +47,9 @@ export class VscodeGitRemoteRuntime implements GitRuntime {
                 await repository.fetch({ all: true, ...fetchOptionsFromOptionsField(input) });
                 return runtimeResult(undefined);
             case 'pull':
-                if (booleanOption(objectField(input, 'options'), 'rebase')) {
+                if (requiredStringField(objectField(input, 'options'), 'strategy') !== PullStrategy.GitConfig
+                    || optionalStringField(objectField(input, 'options'), 'remote') !== undefined
+                    || optionalStringField(objectField(input, 'options'), 'branch') !== undefined) {
                     throw new UnsupportedGitOperationError(operation, context);
                 }
                 await repository.pull();

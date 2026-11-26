@@ -1,3 +1,4 @@
+import { CommitResultStatus } from '@protocol/changes/commit-result-status';
 import { describe, expect, it } from 'vitest';
 import { createInitialChangesState, getChangeCount, reduceChangesState, ChangesViewMode, ChangesSortMode, ChangeSelectionMode, submoduleStashKey } from '@webview/features/changes/changes-state';
 import { ChangeSectionId } from '@webview/features/changes/change-tree';
@@ -285,16 +286,16 @@ describe('changesState', () => {
     it('stores commit feedback from commit result messages', () => {
         const state = reduceChangesState(createInitialChangesState(), {
             type: 'message',
-            message: { type: 'changes/commitResult', success: true },
+            message: { type: 'changes/commitResult', status: CommitResultStatus.Success },
         });
 
-        expect(state.commitFeedback).toEqual({ success: true, message: undefined });
+        expect(state.commitFeedback).toEqual({ status: CommitResultStatus.Success, message: undefined });
     });
 
     it('clears commit feedback locally', () => {
         const withFeedback = reduceChangesState(createInitialChangesState(), {
             type: 'message',
-            message: { type: 'changes/commitResult', success: true },
+            message: { type: 'changes/commitResult', status: CommitResultStatus.Success },
         });
         const cleared = reduceChangesState(withFeedback, { type: 'clearCommitFeedback' });
 
@@ -307,7 +308,7 @@ describe('changesState', () => {
             message: {
                 type: 'changes/submoduleCommitResult',
                 path: 'modules/lib',
-                success: true,
+                status: CommitResultStatus.Success,
             },
         });
         const cleared = reduceChangesState(withFeedback, {

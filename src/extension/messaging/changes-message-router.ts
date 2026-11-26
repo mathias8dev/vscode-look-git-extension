@@ -1,3 +1,11 @@
+import { GenerateSquashCommitMessageUseCase } from '@application/usecases/commits/generate-squash-commit-message';
+import { mergeWithProgress } from '@extension/utils/merge-with-progress';
+import { CommitResultStatus } from '@protocol/changes/commit-result-status';
+import { pushOperationStatus } from '@extension/utils/push-operation-status';
+import { pushWithRecovery } from '@extension/git/branch-remote-actions';
+import { PullStrategy } from '@application/ports/pull-strategy';
+import { ResetMode } from '@application/ports/reset-mode';
+import { pickMergeOptions, pickPullOptions, pickRebaseOptions, pickStashOptions } from '@extension/git/git-option-pickers';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import type { GitStash, GitStatus, GitStatusEntry } from '@core/git/domain/git-status';
@@ -24,7 +32,7 @@ import { operationActionsForStatus } from '@extension/utils/operation-feedback';
 import { requireRuntimeLocator } from '@extension/repositories/runtime-repository-locator';
 import { currentLocalBranchName } from '@extension/git/current-branch';
 import { requireRemoteBranchName } from '@extension/git/remote-branch';
-import { inputBranchName, inputText, pickBranch, pickLocalBranch, pickMergeOptions, pickRef, pickRemote, pickRemoteBranch, pickStash, pickTag } from '@extension/git/reference-pickers';
+import { inputBranchName, inputText, pickBranch, pickLocalBranch, pickRef, pickRemote, pickRemoteBranch, pickStash, pickTag } from '@extension/git/reference-pickers';
 import { excludeNestedRepositoryChanges, nestedRepositoryPaths } from '@extension/repositories/nested-repository-boundaries';
 
 type PostMessage = (msg: ChangesExtensionToWebviewMessage) => void;
@@ -55,6 +63,8 @@ export class ChangesMessageRouter {
         private readonly onRepositoryUpdated: RepositoryUpdatedCallback = async () => {},
         private readonly generateCommitMessage = new GenerateCommitMessageUseCase(new VscodeLanguageModelCommitMessageGenerator()),
         private readonly runtimeRepositories?: RepositoryRegistry,
+        private readonly extensionUri?: vscode.Uri,
+        private readonly generateSquashMessage = new GenerateSquashCommitMessageUseCase(new VscodeLanguageModelCommitMessageGenerator()),
     ) {}
 
     setKnownSubmodulePaths(paths: readonly string[]): void {
@@ -227,7 +237,7 @@ export class ChangesMessageRouter {
                 if (!message) {
                     this.postMessage({
                         type: 'changes/commitResult',
-                        success: false,
+                        status: CommitResultStatus.Failed,
                         ...createErrorPayload(new Error('Commit message cannot be empty.'), {
                             code: 'validationFailed',
                             operation: msg.type,
@@ -236,6 +246,7 @@ export class ChangesMessageRouter {
                     });
                     return;
                 }
+                this.postMessage({ type: 'changes/commitResult', status: CommitResultStatus.Running });
                 try {
                     switch (msg.mode) {
                         case CommitMode.Amend:
@@ -243,23 +254,29 @@ export class ChangesMessageRouter {
                             break;
                         case CommitMode.CommitPush:
                             await currentRuntimeWorktree().commit(message, {});
-                            await currentRuntimeWorktree().push(undefined, {});
+                            await pushWithRecovery(this.requireCurrentRuntimeRepository(), currentRuntimeWorktree());
                             break;
-                        case CommitMode.CommitSync:
+                        case CommitMode.CommitSync: {
+                            const options = await pickPullOptions('Commit and Sync: pull strategy');
+                            if (!options) {
+                                this.postMessage({ type: 'changes/commitResult', status: CommitResultStatus.Cancelled });
+                                return;
+                            }
                             await currentRuntimeWorktree().commit(message, {});
-                            await currentRuntimeWorktree().pull({ rebase: true });
-                            await currentRuntimeWorktree().push(undefined, {});
+                            await currentRuntimeWorktree().pull(options);
+                            await pushWithRecovery(this.requireCurrentRuntimeRepository(), currentRuntimeWorktree());
                             break;
+                        }
                         default:
                             await currentRuntimeWorktree().commit(message, {});
                             break;
                     }
-                    this.postMessage({ type: 'changes/commitResult', success: true });
+                    this.postMessage({ type: 'changes/commitResult', status: CommitResultStatus.Success });
                     await vscode.window.showInformationMessage('Committed successfully.');
                 } catch (error) {
                     this.postMessage({
                         type: 'changes/commitResult',
-                        success: false,
+                        status: CommitResultStatus.Failed,
                         ...createErrorPayload(error, {
                             code: 'gitOperationFailed',
                             operation: msg.type,
@@ -340,7 +357,7 @@ export class ChangesMessageRouter {
                     this.postMessage({
                         type: 'changes/submoduleCommitResult',
                         path: submodulePath,
-                        success: false,
+                        status: CommitResultStatus.Failed,
                         ...createErrorPayload(new Error('Commit message cannot be empty.'), {
                             code: 'validationFailed',
                             operation: msg.type,
@@ -350,6 +367,7 @@ export class ChangesMessageRouter {
                     return;
                 }
                 const runtimeSubmoduleWorktree = this.requireRuntimeSubmoduleWorktree(submodulePath);
+                this.postMessage({ type: 'changes/submoduleCommitResult', path: submodulePath, status: CommitResultStatus.Running });
                 try {
                     switch (msg.mode) {
                         case CommitMode.Amend:
@@ -357,24 +375,30 @@ export class ChangesMessageRouter {
                             break;
                         case CommitMode.CommitPush:
                             await runtimeSubmoduleWorktree.commit(message, {});
-                            await runtimeSubmoduleWorktree.push(undefined, {});
+                            await pushWithRecovery(this.requireRuntimeSubmoduleRepository(submodulePath), runtimeSubmoduleWorktree);
                             break;
-                        case CommitMode.CommitSync:
+                        case CommitMode.CommitSync: {
+                            const options = await pickPullOptions('Commit and Sync: pull strategy');
+                            if (!options) {
+                                this.postMessage({ type: 'changes/submoduleCommitResult', path: submodulePath, status: CommitResultStatus.Cancelled });
+                                return;
+                            }
                             await runtimeSubmoduleWorktree.commit(message, {});
-                            await runtimeSubmoduleWorktree.pull({ rebase: true });
-                            await runtimeSubmoduleWorktree.push(undefined, {});
+                            await runtimeSubmoduleWorktree.pull(options);
+                            await pushWithRecovery(this.requireRuntimeSubmoduleRepository(submodulePath), runtimeSubmoduleWorktree);
                             break;
+                        }
                         default:
                             await runtimeSubmoduleWorktree.commit(message, {});
                             break;
                     }
-                    this.postMessage({ type: 'changes/submoduleCommitResult', path: submodulePath, success: true });
+                    this.postMessage({ type: 'changes/submoduleCommitResult', path: submodulePath, status: CommitResultStatus.Success });
                     await vscode.window.showInformationMessage(`Committed ${submodulePath} successfully.`);
                 } catch (error) {
                     this.postMessage({
                         type: 'changes/submoduleCommitResult',
                         path: submodulePath,
-                        success: false,
+                        status: CommitResultStatus.Failed,
                         ...createErrorPayload(error, {
                             code: 'gitOperationFailed',
                             operation: msg.type,
@@ -557,10 +581,13 @@ export class ChangesMessageRouter {
                 break;
             }
 
-            case 'changes/stash':
-                await currentRuntimeWorktree().stash(msg.message, { includeUntracked: true });
+            case 'changes/stash': {
+                const options = await pickStashOptions();
+                if (!options) { return; }
+                await currentRuntimeWorktree().stash(msg.message, options);
                 await this.refreshAfterRepositoryUpdate();
                 break;
+            }
 
             case 'changes/stashStaged':
                 await currentRuntimeWorktree().stash(msg.message, { staged: true });
@@ -620,10 +647,13 @@ export class ChangesMessageRouter {
                 const submodulePath = await this.requireKnownSubmodulePath(msg.submodulePath);
                 const runtimeSubmoduleWorktree = () => this.requireRuntimeSubmoduleWorktree(submodulePath);
                 switch (msg.type) {
-                    case 'changes/submoduleStash':
-                        await runtimeSubmoduleWorktree().stash(msg.message, { includeUntracked: true });
+                    case 'changes/submoduleStash': {
+                        const options = await pickStashOptions();
+                        if (!options) { return; }
+                        await runtimeSubmoduleWorktree().stash(msg.message, options);
                         await this.refreshAfterRepositoryUpdate();
                         break;
+                    }
                     case 'changes/submoduleStashSelectedFiles': {
                         if (msg.filePaths.length === 0) { break; }
                         const message = msg.message?.trim();
@@ -911,12 +941,19 @@ export class ChangesMessageRouter {
         };
         switch (command) {
             case 'pull':
+            case 'sync': {
+                const options = await pickPullOptions(command === 'sync' ? 'Sync: pull strategy' : 'Pull strategy');
+                if (!options) { return; }
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => requireRuntimeWorktree().pull({}), 'Pull stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), async () => {
+                        await requireRuntimeWorktree().pull(options);
+                        if (command === 'sync') { return pushWithRecovery(requireRuntimeRepository(), requireRuntimeWorktree()); }
+                    }, command === 'sync' ? 'Sync stopped with conflicts.' : 'Pull stopped with conflicts.'));
                 return;
+            }
             case 'push':
                 await this.runTrackedToolbarOperation(command, async () => {
-                    return this.completePush(await requireRuntimeWorktree().push(undefined, {}));
+                    return this.completePush(await pushWithRecovery(requireRuntimeRepository(), requireRuntimeWorktree()));
                 });
                 return;
             case 'fetch':
@@ -935,27 +972,22 @@ export class ChangesMessageRouter {
                     return undefined;
                 });
                 return;
-            case 'sync':
-                await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), async () => {
-                        await requireRuntimeWorktree().pull({ rebase: true });
-                        return requireRuntimeWorktree().push(undefined, {});
-                    }, 'Sync stopped with conflicts.'));
-                return;
             case 'pullRebase':
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => requireRuntimeWorktree().pull({ rebase: true }), 'Pull with rebase stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => requireRuntimeWorktree().pull({ strategy: PullStrategy.Rebase }), 'Pull with rebase stopped with conflicts.'));
                 return;
-            case 'pullFrom':
+            case 'pullFrom': {
+                const ref = await pickRemoteBranch('Pull from remote branch', requireRuntimeRepository());
+                if (!ref) { return; }
+                const parsed = requireRemoteBranchName(ref);
+                const options = await pickPullOptions(`Pull from "${ref}"`);
+                if (!options) { return; }
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), async () => {
-                        const ref = await pickRemoteBranch('Pull from remote branch', requireRuntimeRepository());
-                        if (!ref) { return; }
-                        const parsed = requireRemoteBranchName(ref);
-                        await requireRuntimeRepository().fetch(parsed.remote, {});
-                        await requireRuntimeWorktree().merge(ref, {});
-                    }, 'Pull from remote stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () =>
+                        requireRuntimeWorktree().pull({ ...options, remote: parsed.remote, branch: parsed.branchName }),
+                    'Pull from remote stopped with conflicts.'));
                 return;
+            }
             case 'pushForce':
                 await this.runTrackedToolbarOperation(command, async () => {
                     await requireRuntimeWorktree().push(undefined, { forceWithLease: true });
@@ -1007,7 +1039,7 @@ export class ChangesMessageRouter {
             case 'undoLastCommit': {
                 const choice = await showModalWarningMessage('Undo the last commit and keep its changes staged?', 'Undo Commit');
                 if (choice !== 'Undo Commit') { return; }
-                await requireRuntimeWorktree().undoLastCommit('soft');
+                await requireRuntimeWorktree().undoLastCommit(ResetMode.Soft);
                 await this.refreshAfterRepositoryUpdate();
                 return;
             }
@@ -1021,18 +1053,20 @@ export class ChangesMessageRouter {
             case 'mergeBranch': {
                 const branch = await pickBranch('Merge branch', requireRuntimeRepository());
                 if (!branch) { return; }
-                const options = await pickMergeOptions(branch);
+                const options = await pickMergeOptions(branch, this.extensionUri, signal => this.generateSquashMessage.execute(requireRuntimeRepository(), requireRuntimeWorktree(), branch, signal));
                 if (!options) { return; }
                 const worktree = requireRuntimeWorktree();
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(worktree, () => worktree.merge(branch, options), 'Merge stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(worktree, () => mergeWithProgress(worktree, branch, options), 'Merge stopped with conflicts.'));
                 return;
             }
             case 'rebaseBranch': {
                 const branch = await pickBranch('Rebase current branch onto', requireRuntimeRepository());
                 if (!branch) { return; }
+                const options = await pickRebaseOptions(branch);
+                if (!options) { return; }
                 await this.runTrackedToolbarOperation(command, () =>
-                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => requireRuntimeWorktree().rebase(branch, undefined, {}), 'Rebase stopped with conflicts.'));
+                    this.runRepositoryMutationWithConflictNotice(requireRuntimeWorktree(), () => requireRuntimeWorktree().rebase(branch, undefined, options), 'Rebase stopped with conflicts.'));
                 return;
             }
             case 'createBranch': {
@@ -1085,7 +1119,7 @@ export class ChangesMessageRouter {
             }
             case 'publishBranch': {
                 await this.runTrackedToolbarOperation(command, async () => {
-                    return this.completePush(await requireRuntimeWorktree().push(undefined, {}));
+                    return this.completePush(await pushWithRecovery(requireRuntimeRepository(), requireRuntimeWorktree()));
                 });
                 return;
             }
@@ -1107,13 +1141,16 @@ export class ChangesMessageRouter {
                 await this.refreshAfterRepositoryUpdate();
                 return;
             }
-            case 'stash':
+            case 'stash': {
+                const options = await pickStashOptions();
+                if (!options) { return; }
                 await this.runTrackedToolbarOperation(command, async () => {
-                    await requireRuntimeWorktree().stash(undefined, {});
+                    await requireRuntimeWorktree().stash(undefined, options);
                     await this.refreshAfterRepositoryUpdate();
                     return undefined;
                 });
                 return;
+            }
             case 'stashIncludeUntracked':
                 await this.runTrackedToolbarOperation(command, async () => {
                     await requireRuntimeWorktree().stash(undefined, { includeUntracked: true });
@@ -1268,9 +1305,10 @@ export class ChangesMessageRouter {
         } catch (error) {
             this.postChangesOperation({
                 operationId,
-                status: OperationStatus.Failed,
+                status: isAbortError(error) ? OperationStatus.Cancelled : OperationStatus.Failed,
                 command,
             });
+            if (isAbortError(error)) { return; }
             throw error;
         }
     }
@@ -1303,7 +1341,7 @@ export class ChangesMessageRouter {
             if (await this.notifyNewConflicts(worktree, existingConflicts, conflictMessage)) {
                 return OperationStatus.Conflict;
             }
-            return outcome === GitPushOutcome.Delegated ? OperationStatus.Delegated : undefined;
+            return outcome === undefined ? undefined : pushOperationStatus(outcome);
         } catch (error) {
             if (await this.refreshAndNotifyNewConflicts(worktree, existingConflicts, conflictMessage)) { return OperationStatus.Conflict; }
             throw error;
@@ -1353,7 +1391,7 @@ export class ChangesMessageRouter {
     private async completePush(outcome: GitPushOutcome): Promise<OperationStatus | undefined> {
         if (outcome === GitPushOutcome.Delegated) { return OperationStatus.Delegated; }
         await this.refreshAfterRepositoryUpdate();
-        return undefined;
+        return pushOperationStatus(outcome);
     }
 
     private postChangesError(

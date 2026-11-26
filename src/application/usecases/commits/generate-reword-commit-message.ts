@@ -1,4 +1,4 @@
-import type { RewordCommitMessageGenerator } from '@application/ports/commit-message-generator';
+import type { CommitMessageGenerator } from '@application/ports/commit-message-generator';
 import type { GitRepository } from '@application/ports/git-topology';
 import { truncateText } from '@core/shared/text';
 import { normalizeGeneratedCommitMessage } from '@application/usecases/commit-message-normalization';
@@ -12,7 +12,7 @@ export interface GenerateRewordCommitMessageResult {
 
 
 export class GenerateRewordCommitMessageUseCase {
-    constructor(private readonly generator: RewordCommitMessageGenerator) {}
+    constructor(private readonly generator: CommitMessageGenerator) {}
 
     async execute(repo: GitRepository, commitHash: string, currentMessage: string, signal?: AbortSignal): Promise<GenerateRewordCommitMessageResult> {
         const [files, commitDiff, recentCommits] = await Promise.all([
@@ -30,12 +30,12 @@ export class GenerateRewordCommitMessageUseCase {
         }
 
         const truncatedDiff = truncateText(commitDiff, MAX_COMMIT_DIFF_LENGTH);
-        const rawMessage = await this.generator.generateRewordCommitMessage({
+        const rawMessage = await this.generator.generateCommitMessage({
             currentMessage,
             changedFiles,
             diffStat: '',
-            commitDiff: truncatedDiff.text,
-            commitDiffTruncated: truncatedDiff.truncated,
+            diff: truncatedDiff.text,
+            diffTruncated: truncatedDiff.truncated,
             recentCommitSubjects: recentCommits,
         }, signal);
 

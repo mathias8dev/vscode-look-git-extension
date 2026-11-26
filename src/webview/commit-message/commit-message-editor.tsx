@@ -41,7 +41,7 @@ export function CommitMessageEditor({
         return () => cancelAnimationFrame(frame);
     }, [focusToken]);
 
-    const canCommit = message.trim().length > 0;
+    const canCommit = !generating && message.trim().length > 0;
 
     return (
         <main className="commit-message-editor">
@@ -61,6 +61,7 @@ export function CommitMessageEditor({
                 ref={textareaRef}
                 className="commit-message-editor-textarea"
                 value={message}
+                disabled={generating}
                 spellCheck="false"
                 onChange={(event) => { onMessageChange(event.target.value); }}
             />

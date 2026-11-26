@@ -1,3 +1,4 @@
+import { MergeStrategy } from '@application/ports/merge-strategy';
 import { describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -160,7 +161,7 @@ describe('CliGitRuntime', () => {
         const runtime = new CliGitRuntime(recordingProcess(calls));
 
         await runtime.execute('merge', context, { ref: 'feature/ui', options: {} });
-        await runtime.execute('merge', context, { ref: 'feature/api', options: { squash: true } });
+        await runtime.execute('merge', context, { ref: 'feature/api', options: { strategy: MergeStrategy.Squash } });
 
         expect(calls).toEqual([
             ['merge', 'feature/ui'],

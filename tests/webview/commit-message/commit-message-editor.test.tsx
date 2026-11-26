@@ -62,4 +62,23 @@ describe('CommitMessageEditor', () => {
         expect(onApply).toHaveBeenCalledTimes(1);
         expect(onCancel).toHaveBeenCalledTimes(1);
     });
+
+    it('allows editing after generation without letting a pending response overwrite user input', () => {
+        const onMessageChange = vi.fn();
+        const props = {
+            title: 'Squash commit message', message: 'draft', canGenerate: true, generating: true,
+            generationError: undefined, focusToken: 0, onMessageChange, onGenerate: vi.fn(), onApply: vi.fn(), onCancel: vi.fn(),
+        };
+        const { rerender } = render(<CommitMessageEditor {...props} />);
+        expect(screen.getByRole('textbox')).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Commit' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Cancel' })).not.toBeDisabled();
+
+        rerender(<CommitMessageEditor {...props} generating={false} message="feat: generated squash" />);
+
+        expect(screen.getByRole('textbox')).not.toBeDisabled();
+        expect(screen.getByRole('textbox')).toHaveValue('feat: generated squash');
+        fireEvent.change(screen.getByRole('textbox'), { target: { value: 'feat: edited squash' } });
+        expect(onMessageChange).toHaveBeenCalledWith('feat: edited squash');
+    });
 });

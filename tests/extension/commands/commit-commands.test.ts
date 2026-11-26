@@ -4,7 +4,7 @@ import { CreateCommitPatchResultKind, type CreateCommitPatchUseCase } from '@app
 import type { ExplainCommitDiffUseCase } from '@application/usecases/commits/explain-commit-diff';
 import { runCommitCommand } from '@extension/commands/commit-commands';
 import type { RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
-import { resetMockVscode, setInputBoxValue, setWarningChoice } from '@tests/mocks/vscode';
+import { resetMockVscode, setInputBoxValue, setQuickPickValue, setWarningChoice } from '@tests/mocks/vscode';
 
 const SELECTED_HASHES = ['newest', 'clicked', 'oldest'] as const;
 const OLDEST_FIRST = ['oldest', 'clicked', 'newest'] as const;
@@ -36,13 +36,35 @@ describe('runCommitCommand multi-selection', () => {
     it('cherry-picks oldest first and reverts newest first across the selection', async () => {
         const fixture = commandFixture();
 
+        setQuickPickValue('Cherry-pick');
         await execute(fixture, 'cherryPick');
+        setQuickPickValue('Revert');
         await execute(fixture, 'revertCommit');
 
         expect(fixture.orderCommits).toHaveBeenNthCalledWith(1, SELECTED_HASHES, 'oldestFirst');
         expect(fixture.orderCommits).toHaveBeenNthCalledWith(2, SELECTED_HASHES, 'newestFirst');
         expect(fixture.cherryPick.mock.calls.map(([hash]) => hash)).toEqual(OLDEST_FIRST);
         expect(fixture.revertCommit.mock.calls.map(([hash]) => hash)).toEqual(NEWEST_FIRST);
+    });
+
+    it('applies every selected commit without committing when no-commit is selected', async () => {
+        const fixture = commandFixture();
+        setQuickPickValue('Cherry-pick (--no-commit)');
+        await execute(fixture, 'cherryPick');
+        setQuickPickValue('Revert (--no-commit)');
+        await execute(fixture, 'revertCommit');
+
+        for (const hash of OLDEST_FIRST) { expect(fixture.cherryPick).toHaveBeenCalledWith(hash, { noCommit: true }); }
+        for (const hash of NEWEST_FIRST) { expect(fixture.revertCommit).toHaveBeenCalledWith(hash, { noCommit: true, noEdit: true }); }
+    });
+
+    it.each(['cherryPick', 'revertCommit', 'resetCurrentBranchToHere'] as const)('does not mutate when %s is cancelled', async command => {
+        const fixture = commandFixture();
+
+        expect(await execute(fixture, command)).toBe(false);
+
+        expect(fixture.cherryPick).not.toHaveBeenCalled();
+        expect(fixture.revertCommit).not.toHaveBeenCalled();
     });
 
     it('squashes and drops the complete selection in topology order', async () => {

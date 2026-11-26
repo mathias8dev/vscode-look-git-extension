@@ -1,11 +1,15 @@
+import { VscodeLanguageModelCommitMessageGenerator } from '@extension/adapters/vscode/vscode-language-model-commit-message-generator';
+import { GenerateSquashCommitMessageUseCase } from '@application/usecases/commits/generate-squash-commit-message';
+import { mergeWithProgress } from '@extension/utils/merge-with-progress';
+import { pushSelectedBranch, pushWithRecovery, updateSelectedLocalBranch } from '@extension/git/branch-remote-actions';
+import { pickMergeOptions, pickPullOptions, pickRebaseOptions } from '@extension/git/git-option-pickers';
 import * as vscode from 'vscode';
 import * as path from 'path';
-import type { GitPushOutcome, PushOptions } from '@application/ports/git-capabilities';
+import type { GitPushOutcome } from '@application/ports/git-capabilities';
 import type { GitRepository, Worktree } from '@application/ports/git-topology';
 import { CheckoutBranchUseCase } from '@application/usecases/branches/checkout-branch';
 import { createAndCheckoutBranch } from '@extension/commands/create-and-checkout-branch';
 import type { BranchCommand } from '@protocol/graph/messages';
-import type { GitBranch } from '@core/git/domain/git-status';
 import type { GitWorktree } from '@core/git/domain/git-worktree';
 import { showModalWarningMessage } from '@extension/utils/confirmation';
 import { showBranchNameInput } from '@extension/utils/branch-name-input';
@@ -16,8 +20,6 @@ import {
 } from '@extension/commands/git-command-helpers';
 import { requireRuntimeRepository, requireRuntimeWorktree, requireRuntimeWorktreePath, requireRuntimeWorktrees, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
 import { currentBranchName } from '@extension/git/current-branch';
-import { isNonFastForwardPushError } from '@extension/git/git-error';
-import { confirmBehindBranchUpdate, pickDivergedPushAction, pickMergeOptions } from '@extension/git/reference-pickers';
 import { localBranchNameForRemote, localNameForRemoteBranch, resolveRemoteBranch } from '@extension/git/remote-branch';
 import { openVisualRebasePanel } from '@extension/utils/visual-rebase-panel';
 import { openComparisonPanel } from '@extension/views/comparison-panel';
@@ -32,6 +34,7 @@ export async function runBranchCommand(
     runtimeTargets: RuntimeCommandTargets = {},
     extensionUri?: vscode.Uri,
     storageUri?: vscode.Uri,
+    generateSquashMessage = new GenerateSquashCommitMessageUseCase(new VscodeLanguageModelCommitMessageGenerator()),
 ): Promise<CommandExecutionResult> {
     const runtimeRepository = requireRuntimeRepository(runtimeTargets);
     const currentBranch = await currentBranchName(runtimeRepository);
@@ -46,11 +49,14 @@ export async function runBranchCommand(
             });
             return commandExecutionResult(changed);
         }
-        case 'checkoutRebaseOnto':
+        case 'checkoutRebaseOnto': {
+            const options = await pickRebaseOptions(currentBranch);
+            if (!options) { return commandExecutionResult(false); }
             await assertRuntimeNoUnmergedFiles(requireRuntimeWorktree(runtimeTargets), 'checking out and rebasing branches');
             await checkoutBranch.execute(runtimeRepository, requireRuntimeWorktree(runtimeTargets), { branch, isRemote });
-            await requireRuntimeWorktree(runtimeTargets).rebase(currentBranch, undefined, {});
+            await requireRuntimeWorktree(runtimeTargets).rebase(currentBranch, undefined, options);
             return commandExecutionResult(true);
+        }
         case 'newWorktreeFromBranch':
             return commandExecutionResult(await createWorktreeFromBranch(repo, branch, isRemote, runtimeTargets));
         case 'openBranchWorktree':
@@ -96,8 +102,7 @@ export async function runBranchCommand(
             return pushSelectedBranch(runtimeRepository, runtimeTargets, checkoutBranch, branch, currentBranch);
         }
         case 'pullBranchWorktree':
-            await pullBranchWorktree(repo, branch, isRemote, runtimeTargets);
-            return commandExecutionResult(true);
+            return commandExecutionResult(await pullBranchWorktree(repo, branch, isRemote, runtimeTargets));
         case 'pushBranchWorktree': {
             const outcome = await pushBranchWorktree(repo, branch, isRemote, runtimeTargets);
             return pushCommandExecutionResult(outcome);
@@ -112,13 +117,15 @@ export async function runBranchCommand(
             return commandExecutionResult(await removeBranchWorktree(repo, branch, isRemote, runtimeTargets));
         case 'update': {
             if (isRemote) { throw new Error('Update selected branch is only available for local branches.'); }
-            await updateSelectedLocalBranch(runtimeRepository, requireRuntimeWorktree(runtimeTargets), runtimeTargets, branch, currentBranch);
+            return commandExecutionResult(await updateSelectedLocalBranch(runtimeRepository, requireRuntimeWorktree(runtimeTargets), runtimeTargets, branch, currentBranch));
+        }
+        case 'rebaseOnto': {
+            const options = await pickRebaseOptions(branch);
+            if (!options) { return commandExecutionResult(false); }
+            await assertRuntimeNoUnmergedFiles(requireRuntimeWorktree(runtimeTargets), 'rebasing branches');
+            await requireRuntimeWorktree(runtimeTargets).rebase(branch, undefined, options);
             return commandExecutionResult(true);
         }
-        case 'rebaseOnto':
-            await assertRuntimeNoUnmergedFiles(requireRuntimeWorktree(runtimeTargets), 'rebasing branches');
-            await requireRuntimeWorktree(runtimeTargets).rebase(branch, undefined, {});
-            return commandExecutionResult(true);
         case 'planInteractiveRebaseOnto':
             if (isRemote) { throw new Error('Visual Rebase onto a remote branch is not supported.'); }
             if (!extensionUri) { throw new Error('Visual Rebase requires the extension URI.'); }
@@ -130,7 +137,7 @@ export async function runBranchCommand(
             });
             return commandExecutionResult(false);
         case 'mergeInto':
-            return commandExecutionResult(await mergeBranchIntoCurrent(branch, runtimeTargets));
+            return commandExecutionResult(await mergeBranchIntoCurrent(branch, runtimeTargets, generateSquashMessage, extensionUri));
     }
 }
 
@@ -230,9 +237,12 @@ async function pullBranchWorktree(
     branch: string,
     isRemote: boolean,
     runtimeTargets: RuntimeCommandTargets,
-): Promise<void> {
+): Promise<boolean> {
     const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
-    await requireRuntimeWorktreePath(runtimeTargets, worktree.path).pull({});
+    const options = await pickPullOptions();
+    if (!options) { return false; }
+    await requireRuntimeWorktreePath(runtimeTargets, worktree.path).pull(options);
+    return true;
 }
 
 async function pushBranchWorktree(
@@ -242,7 +252,7 @@ async function pushBranchWorktree(
     runtimeTargets: RuntimeCommandTargets,
 ): Promise<GitPushOutcome> {
     const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
-    return requireRuntimeWorktreePath(runtimeTargets, worktree.path).pushBranch(undefined, branch, {});
+    return pushWithRecovery(requireRuntimeRepository(runtimeTargets), requireRuntimeWorktreePath(runtimeTargets, worktree.path), branch);
 }
 
 async function lockBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean, runtimeRepository: GitRepository): Promise<void> {
@@ -281,117 +291,13 @@ function worktreeForBranch(worktrees: readonly GitWorktree[], branch: string): G
     return worktrees.find((candidate) => shortWorktreeBranch(candidate.branch) === branch);
 }
 
-async function pushBranch(runtimeTargets: RuntimeCommandTargets, branch: string, options: PushOptions): Promise<GitPushOutcome> {
-    return requireRuntimeWorktree(runtimeTargets).pushBranch(undefined, branch, options);
-}
-
-async function pushSelectedBranch(
-    repository: GitRepository,
-    runtimeTargets: RuntimeCommandTargets,
-    checkoutBranch: CheckoutBranchUseCase,
-    branch: string,
-    currentBranch: string,
-): Promise<CommandExecutionResult> {
-    const branchState = await localBranchState(repository, branch);
-    if (branchState?.upstream && branchState.behind > 0) {
-        return resolvePushRecovery(repository, runtimeTargets, checkoutBranch, branchState, currentBranch);
-    }
-    try {
-        const outcome = await pushBranch(runtimeTargets, branch, {});
-        return pushCommandExecutionResult(outcome);
-    } catch (error) {
-        if (!isNonFastForwardPushError(error)) { throw error; }
-        await repository.fetchAll({});
-        const refreshedState = await localBranchState(repository, branch);
-        if (!refreshedState?.upstream || refreshedState.behind === 0) { throw error; }
-        const recovery = await resolvePushRecovery(repository, runtimeTargets, checkoutBranch, refreshedState, currentBranch);
-        return commandExecutionResult(true, recovery.pushOutcome);
-    }
-}
-
-async function localBranchState(repository: GitRepository, branch: string): Promise<GitBranch | undefined> {
-    return (await repository.listBranches()).find((candidate) => !candidate.isRemote && candidate.name === branch);
-}
-
-async function resolvePushRecovery(
-    repository: GitRepository,
-    runtimeTargets: RuntimeCommandTargets,
-    checkoutBranch: CheckoutBranchUseCase,
-    branchState: GitBranch,
-    currentBranch: string,
-): Promise<CommandExecutionResult> {
-    const branch = branchState.name;
-    const upstream = branchState.upstream;
-    if (!upstream) { return commandExecutionResult(false); }
-    if (branchState.ahead === 0) {
-        if (!await confirmBehindBranchUpdate(branch, upstream)) { return commandExecutionResult(false); }
-        await updateSelectedLocalBranch(repository, requireRuntimeWorktree(runtimeTargets), runtimeTargets, branch, currentBranch);
-        return commandExecutionResult(true);
-    }
-    const canUpdate = branch === currentBranch || runtimeWorktreeForBranch(runtimeTargets.worktrees ?? [], branch) !== undefined;
-    const action = await pickDivergedPushAction(branch, upstream, canUpdate ? 'update' : 'checkout');
-    switch (action) {
-        case 'update':
-            await updateSelectedLocalBranch(repository, requireRuntimeWorktree(runtimeTargets), runtimeTargets, branch, currentBranch);
-            return commandExecutionResult(true);
-        case 'checkout':
-            await checkoutBranch.execute(repository, requireRuntimeWorktree(runtimeTargets), { branch, isRemote: false });
-            return commandExecutionResult(true);
-        case 'forceWithLease': {
-            const outcome = await pushBranch(runtimeTargets, branch, { forceWithLease: true });
-            return pushCommandExecutionResult(outcome);
-        }
-        case 'force': {
-            const outcome = await pushBranch(runtimeTargets, branch, { force: true });
-            return pushCommandExecutionResult(outcome);
-        }
-        case undefined:
-            return commandExecutionResult(false);
-    }
-}
-
-async function mergeBranchIntoCurrent(branch: string, runtimeTargets: RuntimeCommandTargets): Promise<boolean> {
+async function mergeBranchIntoCurrent(branch: string, runtimeTargets: RuntimeCommandTargets, generateSquashMessage: GenerateSquashCommitMessageUseCase, extensionUri?: vscode.Uri): Promise<boolean> {
     const worktree = requireRuntimeWorktree(runtimeTargets);
     await assertRuntimeNoUnmergedFiles(worktree, 'merging branches');
-    const options = await pickMergeOptions(branch);
+    const options = await pickMergeOptions(branch, extensionUri, signal => generateSquashMessage.execute(requireRuntimeRepository(runtimeTargets), worktree, branch, signal));
     if (!options) { return false; }
-    await worktree.merge(branch, options);
+    await mergeWithProgress(worktree, branch, options);
     return true;
-}
-
-async function updateSelectedLocalBranch(
-    repository: GitRepository,
-    worktree: Worktree,
-    runtimeTargets: RuntimeCommandTargets,
-    branch: string,
-    currentBranch: string,
-): Promise<void> {
-    const upstream = await repository.getUpstreamBranch(branch);
-    if (!upstream) { throw new Error(`Branch "${branch}" has no upstream.`); }
-    await repository.fetchAll({});
-    if (branch !== currentBranch) {
-        const branchWorktree = runtimeWorktreeForBranch(runtimeTargets.worktrees ?? [], branch);
-        if (branchWorktree) {
-            await branchWorktree.pull({});
-            return;
-        }
-        const { ahead, behind } = await repository.getAheadBehind(branch, upstream);
-        if (behind === 0) { return; }
-        if (ahead > 0) {
-            throw new Error(`Branch "${branch}" and "${upstream}" have diverged. Check out the branch or update its worktree to merge or rebase it.`);
-        }
-        await repository.updateRef(localBranchRef(branch), await repository.resolveRef(upstream));
-        return;
-    }
-    await worktree.merge(upstream, {});
-}
-
-function runtimeWorktreeForBranch(worktrees: readonly Worktree[], branch: string): Worktree | undefined {
-    return worktrees.find((candidate) => shortWorktreeBranch(candidate.branch) === branch);
-}
-
-function localBranchRef(branch: string): string {
-    return branch.startsWith('refs/heads/') ? branch : `refs/heads/${branch}`;
 }
 
 async function deleteLocalBranch(repository: GitRepository, branch: string): Promise<void> {

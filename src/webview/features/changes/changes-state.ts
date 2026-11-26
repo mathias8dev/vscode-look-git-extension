@@ -1,3 +1,4 @@
+import { CommitResultStatus } from '@protocol/changes/commit-result-status';
 import type { ChangesExtensionToWebviewMessage, ChangesOperationStatusPush } from '@protocol/changes/messages';
 import { ConflictState, RepositoryState } from '@protocol/changes/types';
 import type { StashFileEntry, StatusData, SubmoduleStatusData } from '@protocol/changes/types';
@@ -71,7 +72,7 @@ export interface ChangesStatePreferences {
 }
 
 export interface CommitFeedback {
-    readonly success: boolean;
+    readonly status: CommitResultStatus;
     readonly message: string | undefined;
 }
 
@@ -93,6 +94,7 @@ export type ChangesAction =
     | { readonly type: 'setPathFilter'; readonly pathFilter: string }
     | { readonly type: 'setShowConflictsOnly'; readonly showConflictsOnly: boolean }
     | { readonly type: 'rememberCommitMessage'; readonly message: string }
+    | { readonly type: 'commitStarted'; readonly path?: string }
     | { readonly type: 'requestCommitMessageGeneration'; readonly requestId: string }
     | { readonly type: 'requestSubmoduleCommitMessageGeneration'; readonly path: string; readonly requestId: string }
     | { readonly type: 'clearSubmoduleCommitMessageGeneration'; readonly path: string }
@@ -158,6 +160,12 @@ export function reduceChangesState(state: ChangesState, action: ChangesAction): 
             return { ...state, pathFilter: action.pathFilter, selectedItemIds: [], selectionAnchorId: undefined };
         case 'setShowConflictsOnly':
             return { ...state, showConflictsOnly: action.showConflictsOnly, selectedItemIds: [], selectionAnchorId: undefined };
+        case 'commitStarted': {
+            const feedback: CommitFeedback = { status: CommitResultStatus.Running, message: undefined };
+            return action.path === undefined
+                ? { ...state, error: undefined, commitFeedback: feedback }
+                : { ...state, error: undefined, submoduleCommitFeedbackByPath: { ...state.submoduleCommitFeedbackByPath, [action.path]: feedback } };
+        }
         case 'rememberCommitMessage':
             return {
                 ...state,
@@ -341,29 +349,29 @@ function reduceMessage(state: ChangesState, message: ChangesExtensionToWebviewMe
                 },
             };
         case 'changes/commitResult':
-            return message.success
+            return message.status === CommitResultStatus.Success
                 ? {
                     ...state,
                     error: undefined,
                     generatedCommitMessage: undefined,
                     commitMessageGenerationError: undefined,
-                    commitFeedback: { success: true, message: undefined },
+                    commitFeedback: { status: CommitResultStatus.Success, message: undefined },
                 }
-                : { ...state, error: message.error, commitFeedback: { success: false, message: message.message } };
+                : { ...state, error: message.error, commitFeedback: { status: message.status, message: message.message } };
         case 'changes/submoduleCommitResult':
             return {
                 ...state,
-                error: message.success ? undefined : message.error,
-                generatedSubmoduleCommitMessageByPath: message.success
+                error: message.status === CommitResultStatus.Success ? undefined : message.error,
+                generatedSubmoduleCommitMessageByPath: message.status === CommitResultStatus.Success
                     ? withoutKey(state.generatedSubmoduleCommitMessageByPath, message.path)
                     : state.generatedSubmoduleCommitMessageByPath,
-                submoduleCommitMessageGenerationErrorByPath: message.success
+                submoduleCommitMessageGenerationErrorByPath: message.status === CommitResultStatus.Success
                     ? withoutKey(state.submoduleCommitMessageGenerationErrorByPath, message.path)
                     : state.submoduleCommitMessageGenerationErrorByPath,
                 submoduleCommitFeedbackByPath: {
                     ...state.submoduleCommitFeedbackByPath,
                     [message.path]: {
-                        success: message.success,
+                        status: message.status,
                         message: message.message,
                     },
                 },

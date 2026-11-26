@@ -1,3 +1,4 @@
+import { CommitResultStatus } from '@protocol/changes/commit-result-status';
 // @vitest-environment jsdom
 
 import * as fs from 'node:fs';
@@ -181,7 +182,7 @@ async function handleMessage(message: ChangesWebviewToExtensionMessage, fixture:
         case 'changes/commit':
             await fixture.worktree.commit(message.message, {});
             await act(async () => {
-                sendToWebview({ type: 'changes/commitResult', success: true });
+                sendToWebview({ type: 'changes/commitResult', status: CommitResultStatus.Success });
             });
             return;
         case 'changes/stash':

@@ -1,3 +1,4 @@
+import { ResetMode } from '@application/ports/reset-mode';
 import { describe, expect, it } from 'vitest';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
 import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '@application/ports/git-runtime';
@@ -105,7 +106,7 @@ describe('RuntimeWorktree', () => {
         await worktree.cherryPick('e5', { noCommit: true });
         await worktree.revertCommit('f6', { noCommit: true, noEdit: true });
         await worktree.resetPaths(['src/a.ts'], 'HEAD~1');
-        await worktree.restoreFromReflog('HEAD@{1}', 'mixed');
+        await worktree.restoreFromReflog('HEAD@{1}', ResetMode.Mixed);
         await worktree.cleanIgnored(['dist'], { directories: true, force: true });
         await worktree.pushRef('upstream', 'HEAD', 'refs/heads/main', { forceWithLease: true });
         await worktree.forcePushWithLease('upstream', 'main', signal);

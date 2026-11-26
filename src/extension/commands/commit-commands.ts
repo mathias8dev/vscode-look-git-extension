@@ -1,3 +1,6 @@
+import { ResetMode } from '@application/ports/reset-mode';
+import { CommitCreationMode } from '@extension/git/commit-creation-mode';
+import { pickCommitCreationMode, pickResetMode } from '@extension/git/git-option-pickers';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
@@ -13,7 +16,7 @@ import { defaultExplainCommitDiff } from '@extension/adapters/vscode/default-exp
 import { GenerateRewordCommitMessageUseCase } from '@application/usecases/commits/generate-reword-commit-message';
 import { orderSelectedCommits } from '@application/usecases/commits/order-selected-commits';
 import { getReachableCommitHashes } from '@application/usecases/commits/get-reachable-commit-hashes';
-import { VscodeLanguageModelRewordCommitMessageGenerator } from '@extension/adapters/vscode/vscode-language-model-reword-commit-message-generator';
+import { VscodeLanguageModelCommitMessageGenerator } from '@extension/adapters/vscode/vscode-language-model-commit-message-generator';
 import { showModalWarningMessage } from '@extension/utils/confirmation';
 import { openDiffExplanationDocument, showDiffExplanationError } from '@extension/utils/diff-explanation-document';
 import { isAbortError } from '@extension/messaging/error-serialization';
@@ -30,7 +33,7 @@ export interface CommitCommandDiffExplanationScope {
     readonly value: string;
 }
 
-const defaultGenerateRewordCommitMessage = new GenerateRewordCommitMessageUseCase(new VscodeLanguageModelRewordCommitMessageGenerator());
+const defaultGenerateRewordCommitMessage = new GenerateRewordCommitMessageUseCase(new VscodeLanguageModelCommitMessageGenerator());
 
 
 export async function runCommitCommand(
@@ -65,8 +68,10 @@ export async function runCommitCommand(
             const { repository, worktree } = requireRuntimeTargets(runtimeTargets);
             await assertRuntimeNoUnmergedFiles(worktree, 'cherry-picking commits');
             await assertCherryPickableCommits(repository, selected);
+            const mode = await pickCommitCreationMode('Cherry-pick');
+            if (mode === undefined) { return false; }
             for (const commitHash of await orderSelectedCommits(repository, selected, 'oldestFirst')) {
-                await worktree.cherryPick(commitHash, {});
+                await worktree.cherryPick(commitHash, { noCommit: mode === CommitCreationMode.NoCommit });
             }
             return true;
         }
@@ -91,13 +96,14 @@ export async function runCommitCommand(
             return false;
         }
         case 'resetCurrentBranchToHere':
-            await resetCurrentBranchToHere(repo, hash, runtimeTargets);
-            return true;
+            return resetCurrentBranchToHere(repo, hash, runtimeTargets);
         case 'revertCommit': {
             const { repository, worktree } = requireRuntimeTargets(runtimeTargets);
             await assertRuntimeNoUnmergedFiles(worktree, 'reverting commits');
+            const mode = await pickCommitCreationMode('Revert');
+            if (mode === undefined) { return false; }
             for (const commitHash of await orderSelectedCommits(repository, selected, 'newestFirst')) {
-                await worktree.revertCommit(commitHash, { noEdit: true });
+                await worktree.revertCommit(commitHash, { noCommit: mode === CommitCreationMode.NoCommit, noEdit: true });
             }
             return true;
         }
@@ -225,18 +231,19 @@ async function createWorktreeFromCommit(repo: GitRepository, hash: string, runti
     return true;
 }
 
-async function resetCurrentBranchToHere(_repo: GitRepository, hash: string, runtimeTargets: RuntimeCommandTargets): Promise<void> {
-    const mode = await vscode.window.showQuickPick(['Soft reset', 'Mixed reset', 'Hard reset', 'Keep reset'], { placeHolder: 'Reset current branch to selected revision' });
-    if (!mode) { return; }
-    if (mode === 'Hard reset') {
+async function resetCurrentBranchToHere(_repo: GitRepository, hash: string, runtimeTargets: RuntimeCommandTargets): Promise<boolean> {
+    const mode = await pickResetMode();
+    if (!mode) { return false; }
+    if (mode === ResetMode.Hard) {
         const choice = await showModalWarningMessage('Hard reset current branch and discard working tree changes?', 'Hard Reset');
-        if (choice !== 'Hard Reset') { return; }
+        if (choice !== 'Hard Reset') { return false; }
     }
     const worktree = requireRuntimeWorktree(runtimeTargets);
-    if (mode === 'Soft reset') { await worktree.resetSoft(hash); }
-    else if (mode === 'Hard reset') { await worktree.resetHard(hash); }
-    else if (mode === 'Keep reset') { await worktree.resetKeep(hash); }
+    if (mode === ResetMode.Soft) { await worktree.resetSoft(hash); }
+    else if (mode === ResetMode.Hard) { await worktree.resetHard(hash); }
+    else if (mode === ResetMode.Keep) { await worktree.resetKeep(hash); }
     else { await worktree.resetMixed(hash); }
+    return true;
 }
 
 async function undoHeadCommit(_repo: GitRepository, hash: string, runtimeTargets: RuntimeCommandTargets): Promise<void> {
@@ -245,7 +252,7 @@ async function undoHeadCommit(_repo: GitRepository, hash: string, runtimeTargets
     if (head !== hash) { throw new Error('Only the current HEAD commit can be undone.'); }
     const choice = await showModalWarningMessage('Undo the current HEAD commit and keep its changes staged?', 'Undo Commit');
     if (choice !== 'Undo Commit') { return; }
-    await worktree.undoLastCommit('soft');
+    await worktree.undoLastCommit(ResetMode.Soft);
 }
 
 async function editCommitMessage(

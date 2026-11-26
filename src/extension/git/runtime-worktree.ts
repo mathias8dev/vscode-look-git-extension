@@ -1,3 +1,4 @@
+import type { ResetMode } from '@application/ports/reset-mode';
 import type { GitFileChange } from '@core/git/domain/git-commit';
 import type { Page, PageRequest } from '@core/git/domain/page';
 import type { GitStash, GitStatus } from '@core/git/domain/git-status';
@@ -14,7 +15,6 @@ import type {
     GitPushOutcome,
     PushOptions,
     RebaseOptions,
-    ResetMode,
     RevertOptions,
     StashOptions,
 } from '@application/ports/git-capabilities';

@@ -1,3 +1,6 @@
+import { MergeStrategy } from '@application/ports/merge-strategy';
+import { PullStrategy } from '@application/ports/pull-strategy';
+import { mergeSquashNoFastForward } from '@extension/git/merge-squash-no-ff';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
@@ -116,7 +119,6 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     restorePaths: (input) => ({ args: restorePathsArgs(input) }),
     restoreStaged: (input) => ({ args: ['restore', '--staged', '--', ...requiredStringArrayField(input, 'paths')] }),
     restoreWorkingTree: (input) => ({ args: ['restore', '--', ...requiredStringArrayField(input, 'paths')] }),
-    merge: (input) => ({ args: mergeArgs(input) }),
     continueMerge: () => ({ args: ['-c', 'core.editor=true', 'merge', '--continue'] }),
     abortMerge: () => ({ args: ['merge', '--abort'] }),
     quitMerge: () => ({ args: ['merge', '--quit'] }),
@@ -152,6 +154,18 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
 };
 
 const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = {
+    merge: async (input, runProcess, context, signal) => {
+        const options = objectField(input, 'options');
+        if (optionalStringField(options, 'strategy') === MergeStrategy.SquashNoFastForward) {
+            await mergeSquashNoFastForward(trimmedExec(runProcess, context), requiredStringField(input, 'ref'), {
+                squashMessage: optionalStringField(options, 'squashMessage'),
+                message: optionalStringField(options, 'message'),
+                noCommit: optionalBooleanField(options, 'noCommit'),
+            }, signal);
+            return;
+        }
+        await runTrimmed(runProcess, context, mergeArgs(input), signal);
+    },
     stash: async (input, runProcess, context, signal) => {
         await createStash(input, runProcess, context, signal);
     },
@@ -1258,8 +1272,17 @@ function restorePathsArgs(input: unknown): readonly string[] {
 function mergeArgs(input: unknown): readonly string[] {
     const args = ['merge'];
     const options = objectField(input, 'options');
-    if (booleanOption(options, 'squash')) { args.push('--squash'); }
+    switch (optionalStringField(options, 'strategy')) {
+        case undefined: break;
+        case MergeStrategy.FastForward: args.push('--ff'); break;
+        case MergeStrategy.FastForwardOnly: args.push('--ff-only'); break;
+        case MergeStrategy.NoFastForward: args.push('--no-ff'); break;
+        case MergeStrategy.Squash: args.push('--squash'); break;
+        default: throw new Error('Unsupported merge strategy.');
+    }
     if (booleanOption(options, 'noCommit')) { args.push('--no-commit'); }
+    const message = optionalStringField(options, 'message');
+    if (message !== undefined) { args.push('-m', message); }
     args.push(requiredStringField(input, 'ref'));
     return args;
 }
@@ -1295,7 +1318,21 @@ function resetPathsArgs(input: unknown): readonly string[] {
 
 function pullArgs(input: unknown): readonly string[] {
     const options = objectField(input, 'options');
-    return booleanOption(options, 'rebase') ? ['pull', '--rebase'] : ['pull'];
+    const strategy = requiredStringField(options, 'strategy');
+    const args = ['pull'];
+    switch (strategy) {
+        case PullStrategy.GitConfig: break;
+        case PullStrategy.Rebase: args.push('--rebase', '--ff'); break;
+        case PullStrategy.Merge: args.push('--no-rebase', '--ff'); break;
+        case PullStrategy.FastForwardOnly: args.push('--ff-only'); break;
+        default: throw new Error(`Unsupported pull strategy: ${strategy}`);
+    }
+    const remote = optionalStringField(options, 'remote');
+    const branch = optionalStringField(options, 'branch');
+    if (branch && !remote) { throw new Error('An explicit pull branch requires a remote.'); }
+    if (remote) { args.push(remote); }
+    if (branch) { args.push(branch); }
+    return args;
 }
 
 async function push(

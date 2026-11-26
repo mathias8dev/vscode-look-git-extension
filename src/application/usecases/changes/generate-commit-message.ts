@@ -34,8 +34,8 @@ export class GenerateCommitMessageUseCase {
         const rawMessage = await this.generator.generateCommitMessage({
             changedFiles,
             diffStat: '',
-            stagedDiff: truncatedDiff.text,
-            stagedDiffTruncated: truncatedDiff.truncated,
+            diff: truncatedDiff.text,
+            diffTruncated: truncatedDiff.truncated,
             recentCommitSubjects,
         }, signal);
 

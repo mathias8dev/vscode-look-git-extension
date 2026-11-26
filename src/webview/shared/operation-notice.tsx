@@ -52,6 +52,8 @@ function iconForStatus(status: OperationStatus): CodiconName {
             return 'loading';
         case OperationStatus.Success:
             return 'check';
+        case OperationStatus.Cancelled:
+        case OperationStatus.NotPushed:
         case OperationStatus.Delegated:
             return 'source-control';
         case OperationStatus.Failed:

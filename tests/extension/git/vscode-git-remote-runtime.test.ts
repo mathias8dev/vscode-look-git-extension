@@ -1,3 +1,4 @@
+import { PullStrategy } from '@application/ports/pull-strategy';
 import { describe, expect, it } from 'vitest';
 import * as vscode from 'vscode';
 import { GitPushOutcome } from '@application/ports/git-capabilities';
@@ -126,7 +127,7 @@ describe('VscodeGitRemoteRuntime', () => {
 
         await runtime.execute('fetch', childContext, { remote: 'origin', options: { prune: true } });
         await runtime.execute('fetchAll', childContext, { options: { prune: true } });
-        await runtime.execute('pull', childContext, { options: {} });
+        await runtime.execute('pull', childContext, { options: { strategy: PullStrategy.GitConfig } });
         await runtime.execute('push', childContext, { remote: 'origin', options: {} });
         await runtime.execute('pushBranch', childContext, { remote: 'origin', branch: 'feature/app', options: {} });
         await runtime.execute('forcePushWithLease', childContext, { remote: 'origin', branch: 'feature/app' });
@@ -179,11 +180,11 @@ describe('VscodeGitRemoteRuntime', () => {
         ]);
     });
 
-    it('falls back for pull rebase because the public VS Code Git API only exposes plain pull', async () => {
+    it.each([PullStrategy.Rebase, PullStrategy.Merge, PullStrategy.FastForwardOnly])('falls back for explicit pull strategy %s because the public VS Code Git API only exposes plain pull', async strategy => {
         const repository = recordingRepository('/repo');
         const runtime = new VscodeGitRemoteRuntime(async () => gitApi(repository));
 
-        await expect(runtime.execute('pull', context, { options: { rebase: true } }))
+        await expect(runtime.execute('pull', context, { options: { strategy } }))
             .rejects.toBeInstanceOf(UnsupportedGitOperationError);
         expect(repository.pullCalls).toBe(0);
     });

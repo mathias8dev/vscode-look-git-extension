@@ -1,3 +1,4 @@
+import { CommitResultStatus } from '@protocol/changes/commit-result-status';
 import { useEffect, useReducer } from 'react';
 import type { ChangesExtensionToWebviewMessage, ChangesWebviewToExtensionMessage } from '@protocol/changes/messages';
 import type { CommitMode, StashFileEntry } from '@protocol/changes/types';
@@ -77,7 +78,7 @@ export function ChangesWebview() {
     }, [state]);
 
     useEffect(() => {
-        if (!state.commitFeedback?.success) { return undefined; }
+        if (state.commitFeedback?.status !== CommitResultStatus.Success) { return undefined; }
         const timeout = window.setTimeout(() => dispatch({ type: 'clearCommitFeedback' }), COMMIT_FEEDBACK_TIMEOUT_MS);
         return () => window.clearTimeout(timeout);
     }, [state.commitFeedback]);
@@ -91,7 +92,7 @@ export function ChangesWebview() {
 
     useEffect(() => {
         const successfulSubmodulePaths = Object.entries(state.submoduleCommitFeedbackByPath)
-            .filter(([, feedback]) => feedback.success)
+            .filter(([, feedback]) => feedback.status === CommitResultStatus.Success)
             .map(([path]) => path);
         if (successfulSubmodulePaths.length === 0) { return undefined; }
         const timeout = window.setTimeout(() => {
@@ -191,6 +192,7 @@ export function ChangesWebview() {
             }}
             onClearSelection={() => dispatch({ type: 'clearSelection' })}
             onCommit={(message: string, mode: CommitMode) => {
+                dispatch({ type: 'commitStarted' });
                 dispatch({ type: 'rememberCommitMessage', message });
                 postToExtension({ type: 'changes/commit', message, mode });
             }}
@@ -239,6 +241,7 @@ export function ChangesWebview() {
             onSubmoduleOperationAction={(submodulePath: string, conflictState: ActiveConflictState, action: OperationAction) =>
                 postToExtension(messageForSubmoduleOperationAction(submodulePath, conflictState, action))}
             onSubmoduleCommit={(submodulePath: string, message: string, mode: CommitMode) => {
+                dispatch({ type: 'commitStarted', path: submodulePath });
                 dispatch({ type: 'rememberCommitMessage', message });
                 dispatch({ type: 'clearSubmoduleCommitMessageGeneration', path: submodulePath });
                 postToExtension(messageForSubmoduleCommit(submodulePath, message, mode));

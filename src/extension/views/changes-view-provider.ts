@@ -246,7 +246,7 @@ export class ChangesViewProvider implements vscode.WebviewViewProvider {
 
         this.router = new ChangesMessageRouter(this.repositories, (msg) => {
             webviewView.webview.postMessage(msg);
-        }, () => this.refresh(), this.onRepositoryUpdated, this.generateCommitMessage, this.runtimeRepositories);
+        }, () => this.refresh(), this.onRepositoryUpdated, this.generateCommitMessage, this.runtimeRepositories, this.extensionUri);
 
         webviewView.webview.onDidReceiveMessage((msg: ChangesWebviewToExtensionMessage) => {
             if (isRepositoryNavigationMessage(msg)) {

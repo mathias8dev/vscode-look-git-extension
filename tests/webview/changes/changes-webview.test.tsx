@@ -1,3 +1,4 @@
+import { CommitResultStatus } from '@protocol/changes/commit-result-status';
 // @vitest-environment jsdom
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -222,7 +223,7 @@ describe('ChangesWebview', () => {
             act(() => sendStatusDataWithStagedChange());
             expect(screen.getByLabelText('Commit message')).toBeInTheDocument();
 
-            act(() => sendToWebview({ type: 'changes/commitResult', success: true }));
+            act(() => sendToWebview({ type: 'changes/commitResult', status: CommitResultStatus.Success }));
             expect(screen.getByText('Committed successfully.')).toBeInTheDocument();
 
             act(() => {

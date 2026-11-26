@@ -1,3 +1,5 @@
+import { pushWithRecovery } from '@extension/git/branch-remote-actions';
+import { pickPullOptions, pickStashOptions } from '@extension/git/git-option-pickers';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import type { GitRepository } from '@application/ports/git-topology';
@@ -41,11 +43,14 @@ export async function runWorktreeCommand(
         case 'fetch':
             await runtimeRepository.fetchAll({});
             return commandExecutionResult(true);
-        case 'pull':
-            await requireRuntimeWorktree(runtimeTargets).pull({});
+        case 'pull': {
+            const options = await pickPullOptions();
+            if (!options) { return commandExecutionResult(false); }
+            await requireRuntimeWorktree(runtimeTargets).pull(options);
             return commandExecutionResult(true);
+        }
         case 'push': {
-            const outcome = await requireRuntimeWorktree(runtimeTargets).push(undefined, {});
+            const outcome = await pushWithRecovery(runtimeRepository, requireRuntimeWorktree(runtimeTargets));
             return pushCommandExecutionResult(outcome);
         }
         case 'commit':
@@ -149,8 +154,10 @@ async function commitWorktree(_repo: GitRepository, _wtPath: string, runtimeTarg
 }
 
 async function stashWorktree(_repo: GitRepository, _wtPath: string, runtimeTargets: RuntimeCommandTargets): Promise<boolean> {
+    const options = await pickStashOptions();
+    if (!options) { return false; }
     const message = await vscode.window.showInputBox({ prompt: 'Stash message:', placeHolder: 'Optional' });
     if (message === undefined) { return false; }
-    await requireRuntimeWorktree(runtimeTargets).stash(message.trim() || undefined, { includeUntracked: true });
+    await requireRuntimeWorktree(runtimeTargets).stash(message.trim() || undefined, options);
     return true;
 }

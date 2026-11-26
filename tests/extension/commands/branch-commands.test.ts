@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import type { CommitMessageGeneratorInput } from '@application/ports/commit-message-generator';
+import { GenerateSquashCommitMessageUseCase } from '@application/usecases/commits/generate-squash-commit-message';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GitPushOutcome } from '@application/ports/git-capabilities';
 import { runBranchCommand } from '@extension/commands/branch-commands';
 import type { RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
@@ -7,7 +9,7 @@ import { GitCliBackend } from '@extension/git/git-cli-backend';
 import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
 import { RuntimeWorktree } from '@extension/git/runtime-worktree';
 import { createRemoteWorkflowFixture, type RemoteWorkflowFixture } from '@tests/helpers/git-repo';
-import { resetMockVscode, setQuickPickValue, setWarningChoice } from '@tests/mocks/vscode';
+import { resetMockVscode, setInputBoxValues, setQuickPickValue, setQuickPickValues, setWarningChoice, workspace } from '@tests/mocks/vscode';
 
 describe('runBranchCommand', () => {
     const fixtures: RemoteWorkflowFixture[] = [];
@@ -126,7 +128,7 @@ describe('runBranchCommand', () => {
         divergeLocalOnlyBranch(fixture);
         fixture.local.git(['checkout', '-q', 'local-only']);
         const remoteHead = fixture.remote.gitTrim(['rev-parse', 'refs/heads/local-only']);
-        setQuickPickValue('Update Branch');
+        setQuickPickValues(['Update Branch', 'Pull (--no-rebase)']);
 
         await expect(runBranchCommand(targets.repository, 'push', 'local-only', false, undefined, targets))
             .resolves.toEqual({ shouldRefresh: true });
@@ -225,13 +227,54 @@ describe('runBranchCommand', () => {
     it('prompts for merge mode and runs a squash merge when selected', async () => {
         const fixture = track(createRemoteWorkflowFixture());
         const targets = runtimeTargetsFor(fixture);
-        setQuickPickValue('Squash Merge');
+        setQuickPickValue('Squash (--squash)');
 
         await runBranchCommand(targets.repository, 'mergeInto', 'origin/feature/nested', true, undefined, targets);
 
         expect(fixture.local.gitTrim(['rev-parse', '--abbrev-ref', 'HEAD'])).toBe('main');
         expect(fixture.local.gitTrim(['status', '--porcelain'])).toContain('A  feature.txt');
         expect(() => fixture.local.gitTrim(['rev-parse', '--verify', 'MERGE_HEAD'])).toThrow();
+    });
+
+    it('runs Squash + no-ff from the branch menu with both chosen messages', async () => {
+        const fixture = track(createRemoteWorkflowFixture());
+        const targets = runtimeTargetsFor(fixture);
+        fixture.local.commitFile('target-only.txt', 'target only content\n', 'chore: target-only change');
+        const previousHead = fixture.local.gitTrim(['rev-parse', 'HEAD']);
+        const generateCommitMessage = vi.fn<(input: CommitMessageGeneratorInput) => Promise<string>>(async () => '{"message":"feat: generated feature"}');
+        const sourceHead = fixture.local.gitTrim(['rev-parse', 'origin/feature/nested']);
+        workspace.values.set('lookGit.commitMessageEditor', 'input');
+        setQuickPickValue('Squash + no-ff');
+        setInputBoxValues(['feat: combined feature', 'Merge feature']);
+
+        expect(await runBranchCommand(targets.repository, 'mergeInto', 'origin/feature/nested', true, undefined, targets, undefined, undefined, new GenerateSquashCommitMessageUseCase({ generateCommitMessage })))
+            .toEqual({ shouldRefresh: true });
+
+        expect(generateCommitMessage).toHaveBeenCalledOnce();
+        expect(generateCommitMessage.mock.calls[0]?.[0].diff).toContain('feature.txt');
+        expect(generateCommitMessage.mock.calls[0]?.[0].diff).not.toContain('target-only.txt');
+        expect(fixture.local.gitTrim(['rev-parse', 'HEAD^1'])).toBe(previousHead);
+        expect(fixture.local.gitTrim(['rev-list', '--count', `${previousHead}..HEAD`])).toBe('2');
+        expect(fixture.local.gitTrim(['log', '-1', '--format=%s', 'HEAD^2'])).toBe('feat: combined feature');
+        expect(fixture.local.gitTrim(['log', '-1', '--format=%s'])).toBe('Merge feature');
+        expect(fixture.local.gitTrim(['rev-parse', 'origin/feature/nested'])).toBe(sourceHead);
+    });
+
+    it('leaves both branches unchanged when the second message is cancelled', async () => {
+        const fixture = track(createRemoteWorkflowFixture());
+        const targets = runtimeTargetsFor(fixture);
+        const previousHead = fixture.local.gitTrim(['rev-parse', 'HEAD']);
+        const sourceHead = fixture.local.gitTrim(['rev-parse', 'origin/feature/nested']);
+        workspace.values.set('lookGit.commitMessageEditor', 'input');
+        setQuickPickValue('Squash + no-ff');
+        setInputBoxValues(['feat: combined feature']);
+
+        expect(await runBranchCommand(targets.repository, 'mergeInto', 'origin/feature/nested', true, undefined, targets, undefined, undefined, new GenerateSquashCommitMessageUseCase({ generateCommitMessage: async () => '{"message":"feat: generated feature"}' })))
+            .toEqual({ shouldRefresh: false });
+
+        expect(fixture.local.gitTrim(['rev-parse', 'HEAD'])).toBe(previousHead);
+        expect(fixture.local.gitTrim(['rev-parse', 'origin/feature/nested'])).toBe(sourceHead);
+        expect(fixture.local.gitTrim(['status', '--porcelain'])).toBe('');
     });
 
     function track(fixture: RemoteWorkflowFixture): RemoteWorkflowFixture {

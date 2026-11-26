@@ -1,3 +1,4 @@
+import { ResetMode } from '@application/ports/reset-mode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -242,7 +243,7 @@ describe('semantic git runtime exhaustive coverage', () => {
             expect(fixture.git(['log', '-1', '--format=%s']).trim()).toBe('test(core): commit through semantic runtime');
             await worktree.amendCommit('test(core): amend through semantic runtime', {});
             expect(fixture.git(['log', '-1', '--format=%s']).trim()).toBe('test(core): amend through semantic runtime');
-            await worktree.undoLastCommit('soft');
+            await worktree.undoLastCommit(ResetMode.Soft);
             expect(fixture.git(['status', '--porcelain', '--', 'src/commit-target.ts'])).toContain('A  src/commit-target.ts');
 
             await worktree.resetMixed('HEAD');

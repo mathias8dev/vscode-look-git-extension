@@ -4,6 +4,19 @@ All notable changes to Look Git are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+#### Git Operations
+- Add Squash + no-ff merging with separate squash and merge messages, an automatically generated, editable squash message, source branch preservation and native merge conflict recovery
+- Choose Git pull strategies consistently from Changes, History, Graph, worktrees and submodules, including Sync, Commit & Sync, Pull From and push recovery
+- Select merge `--ff`, `--no-ff`, `--ff-only` or `--squash`, rebase `--rebase-merges` and `--autostash`, cherry-pick/revert `--no-commit`, and stash scope through shared native Quick Picks
+
+### Fixed
+
+#### Git Operations
+- Use the existing push recovery actions across views when upstream commits reject a push, and distinguish recovery or cancellation from a completed push
+- Preserve commit drafts when cancelling an operation or when the commit fails
+
 ## [1.3.0] - 2026-11-14
 
 ### Added

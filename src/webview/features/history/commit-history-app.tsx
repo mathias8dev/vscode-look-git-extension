@@ -220,6 +220,10 @@ function historyOperationMessage(command: HistoryToolbarCommand, status: Operati
             return `${sentenceCase(label)}...`;
         case OperationStatus.Success:
             return `${pastTense(label)}.`;
+        case OperationStatus.Cancelled:
+            return `${sentenceCase(label)} cancelled.`;
+        case OperationStatus.NotPushed:
+            return 'Push not performed. Review the branch before pushing again.';
         case OperationStatus.Delegated:
             return `${sentenceCase(label)} continues in VS Code.`;
         case OperationStatus.Failed:
