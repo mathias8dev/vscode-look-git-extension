@@ -82,7 +82,7 @@ export async function runCommitCommand(
             await showRepositoryAtRevision(hash, requireRuntimeRepository(runtimeTargets));
             return false;
         case 'compareWithLocal':
-            await openChangesWithWorkingTree(repo, repo.cwd, hash, `Diff ${hash.substring(0, 7)}..local`);
+            await openChangesWithWorkingTree(repo, requireRuntimeWorktree(runtimeTargets), hash, `Diff ${hash.substring(0, 7)}..local`);
             return false;
         case 'compareSelected': {
             if (selected.length !== 2) { throw new Error('Select exactly two commits to compare.'); }

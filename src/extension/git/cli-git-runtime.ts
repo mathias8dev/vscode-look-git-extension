@@ -20,8 +20,9 @@ import { addWorktree, queryWorktrees, removeWorktree } from '@extension/git/quer
 import { UnsupportedGitOperationError, type GitExecutionContext, type GitRuntime } from '@application/ports/git-runtime';
 import type { SemanticGitOperation } from '@application/ports/git-operation';
 import { GitPushOutcome, type CommitGraphQuery, type ConflictStageContents, type RebaseOptions } from '@application/ports/git-capabilities';
-import { requireRemoteBranchName } from '@extension/git/remote-branch';
-import { normalizePathForComparison } from '@extension/utils/path-compare';
+import { normalizePathForComparison, samePath } from '@extension/utils/path-compare';
+import { pushBranchRefspec } from '@core/git/push-branch-refspec';
+import { parsePushUpstream, type PushUpstream } from '@core/parsing/parse-push-upstream';
 
 interface CliInvocation {
     readonly args: readonly string[];
@@ -84,8 +85,8 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     listRemotes: () => ({ args: ['remote'] }),
     resolveRef: (input) => ({ args: ['rev-parse', requiredString(input, 'ref')] }),
     updateRef: (input) => ({ args: ['update-ref', requiredStringField(input, 'ref'), requiredStringField(input, 'newValue')] }),
-    fetch: (input) => ({ args: withOptionalRemote(['fetch'], optionalStringField(input, 'remote')) }),
-    fetchAll: () => ({ args: ['fetch', '--all'] }),
+    fetch: (input) => ({ args: fetchArgs(input, false) }),
+    fetchAll: (input) => ({ args: fetchArgs(input, true) }),
     pruneRemote: (input) => ({ args: ['remote', 'prune', requiredString(input, 'remote')] }),
     getRemoteUrl: (input) => ({ args: ['remote', 'get-url', requiredString(input, 'remote')] }),
     setRemoteUrl: (input) => ({ args: ['remote', 'set-url', requiredStringField(input, 'remote'), requiredStringField(input, 'url')] }),
@@ -105,8 +106,8 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     unstageAll: () => ({ args: ['reset', 'HEAD'] }),
     discard: (input) => ({ args: ['checkout', '--', ...requiredStringArrayField(input, 'paths')] }),
     markResolved: (input) => ({ args: ['add', '--', ...requiredStringArrayField(input, 'paths')] }),
-    commit: (input) => ({ args: ['commit', '-m', requiredStringField(input, 'message')] }),
-    amendCommit: (input) => ({ args: ['commit', '--amend', '-m', requiredStringField(input, 'message')] }),
+    commit: (input) => ({ args: commitArgs(input, false) }),
+    amendCommit: (input) => ({ args: commitArgs(input, true) }),
     applyStash: (input) => ({ args: ['stash', 'apply', requiredStringField(input, 'stash')] }),
     popStash: (input) => ({ args: ['stash', 'pop', requiredStringField(input, 'stash')] }),
     dropStash: (input) => ({ args: ['stash', 'drop', requiredString(input, 'stash')] }),
@@ -120,7 +121,6 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
     continueMerge: () => ({ args: ['-c', 'core.editor=true', 'merge', '--continue'] }),
     abortMerge: () => ({ args: ['merge', '--abort'] }),
     quitMerge: () => ({ args: ['merge', '--quit'] }),
-    rebase: (input) => ({ args: rebaseArgs(input) }),
     abortRebase: () => ({ args: ['rebase', '--abort'] }),
     quitRebase: () => ({ args: ['rebase', '--quit'] }),
     cherryPick: (input) => ({ args: cherryPickArgs(input) }),
@@ -152,6 +152,10 @@ const CLI_INVOCATIONS: Partial<Record<SemanticGitOperation, CliInvocationBuilder
 };
 
 const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = {
+    rebase: async (input, runProcess, context, signal) => {
+        const options = rebaseOptions(input);
+        await runTrimmed(runProcess, context, rebaseArgs(requiredStringField(input, 'upstream'), optionalStringField(input, 'branch'), options), signal, options.editorEnv);
+    },
     merge: async (input, runProcess, context, signal) => {
         const options = objectField(input, 'options');
         if (optionalStringField(options, 'strategy') === MergeStrategy.SquashNoFastForward) {
@@ -432,12 +436,16 @@ const CLI_HANDLERS: Partial<Record<SemanticGitOperation, CliSemanticHandler>> = 
     },
     compareWithWorkingTree: async (input, runProcess, context, signal) => {
         const baseRef = requiredStringField(input, 'baseRef');
+        const worktreePath = requiredStringField(input, 'worktree');
+        const worktrees = await queryWorktrees(readonlyRawExec(runProcess, context), signal);
+        if (!worktrees.some(worktree => samePath(worktree.path, worktreePath))) { throw new Error(`Unknown worktree: ${worktreePath}`); }
+        const worktreeContext = { ...context, cwd: worktreePath };
         const options = objectField(input, 'options');
         const args = ['diff', '--name-status', '-z'];
         if (booleanOption(options, 'includeRenames')) { args.push('-M'); }
         if (booleanOption(options, 'ignoreWhitespace')) { args.push('-w'); }
         args.push(baseRef, '--');
-        const output = await readonlyRawExec(runProcess, context)(args, signal);
+        const output = await readonlyRawExec(runProcess, worktreeContext)(args, signal);
         return output ? parseNameStatusZ(output) : [];
     },
     listChangedFiles: async (input, runProcess, context, signal) => {
@@ -742,14 +750,8 @@ async function startInteractiveRebase(
 ): Promise<void> {
     const baseRef = requiredStringField(input, 'baseRef');
     const options = rebaseOptions(input);
-    const args = ['rebase'];
-    if (options.autostash) { args.push('--autostash'); }
-    args.push('-i');
-    if (options.rebaseMerges) { args.push('--rebase-merges'); }
-    if (options.onto) { args.push('--onto', options.onto); }
-    args.push(baseRef);
     const branch = optionalStringField(input, 'branch');
-    if (branch) { args.push(branch); }
+    const args = rebaseArgs(baseRef, branch, { ...options, interactive: true });
 
     let tempDir: string | undefined;
     let env = options.editorEnv;
@@ -841,8 +843,10 @@ function rebaseOptions(input: unknown): RebaseOptions {
     if (!isRecord(options)) { throw new Error('options must be an object.'); }
     const editorEnv = stringRecordField(options, 'editorEnv');
     return {
-        ...(booleanOption(options, 'autostash') ? { autostash: true } : {}),
-        ...(booleanOption(options, 'rebaseMerges') ? { rebaseMerges: true } : {}),
+        interactive: optionalBooleanField(options, 'interactive'),
+        autosquash: optionalBooleanField(options, 'autosquash'),
+        autostash: optionalBooleanField(options, 'autostash'),
+        rebaseMerges: optionalBooleanField(options, 'rebaseMerges'),
         ...(optionalStringField(options, 'onto') ? { onto: optionalStringField(options, 'onto') } : {}),
         ...(editorEnv ? { editorEnv } : {}),
     };
@@ -1247,6 +1251,17 @@ async function createStash(
     }
 }
 
+function fetchArgs(input: unknown, all: boolean): readonly string[] {
+    const args = ['fetch'];
+    if (all) { args.push('--all'); }
+    const options = objectField(input, 'options');
+    const prune = optionalBooleanField(options, 'prune');
+    if (prune !== undefined) { args.push(prune ? '--prune' : '--no-prune'); }
+    const tags = optionalBooleanField(options, 'tags');
+    if (tags !== undefined) { args.push(tags ? '--tags' : '--no-tags'); }
+    return all ? args : withOptionalRemote(args, optionalStringField(input, 'remote'));
+}
+
 function booleanOption(input: unknown, field: string): boolean {
     if (input === undefined) { return false; }
     if (typeof input !== 'object' || input === null) {
@@ -1268,6 +1283,7 @@ function checkoutArgs(input: unknown): readonly string[] {
     const options = objectField(input, 'options');
     return ['checkout',
         ...(booleanOption(options, 'detach') ? ['--detach'] : []),
+        ...(booleanOption(options, 'force') ? ['--force'] : []),
         requiredStringField(input, 'ref'),
     ];
 }
@@ -1296,10 +1312,24 @@ function mergeArgs(input: unknown): readonly string[] {
     return args;
 }
 
-function rebaseArgs(input: unknown): readonly string[] {
-    const upstream = requiredStringField(input, 'upstream');
-    const branch = optionalStringField(input, 'branch');
-    return branch ? ['rebase', upstream, branch] : ['rebase', upstream];
+function commitArgs(input: unknown, amend: boolean): readonly string[] {
+    const options = objectField(input, 'options');
+    return ['commit', ...(amend ? ['--amend'] : []),
+        ...(booleanOption(options, 'signoff') ? ['--signoff'] : []),
+        ...(booleanOption(options, 'allowEmpty') ? ['--allow-empty'] : []),
+        '-m', requiredStringField(input, 'message')];
+}
+
+function rebaseArgs(upstream: string, branch: string | undefined, options: RebaseOptions): readonly string[] {
+    const args = ['rebase'];
+    if (options.autostash !== undefined) { args.push(options.autostash ? '--autostash' : '--no-autostash'); }
+    if (options.interactive) { args.push('-i'); }
+    if (options.autosquash !== undefined) { args.push(options.autosquash ? '--autosquash' : '--no-autosquash'); }
+    if (options.rebaseMerges !== undefined) { args.push(options.rebaseMerges ? '--rebase-merges' : '--no-rebase-merges'); }
+    if (options.onto) { args.push('--onto', options.onto); }
+    args.push(upstream);
+    if (branch) { args.push(branch); }
+    return args;
 }
 
 function cherryPickArgs(input: unknown): readonly string[] {
@@ -1363,7 +1393,7 @@ async function push(
         return;
     }
 
-    const upstream = await resolveBranchUpstream(runProcess, context, branch, signal);
+    const upstream = await queryPushUpstream(runProcess, context, branch, signal);
     if (upstream) {
         await runProcess(pushArgs(undefined, options), context, { signal });
         return;
@@ -1387,9 +1417,10 @@ async function pushBranch(
     const branch = requiredStringField(input, 'branch');
     const options = objectField(input, 'options');
     const requestedRemote = optionalStringField(input, 'remote');
-    const upstream = await resolveBranchUpstream(runProcess, context, branch, signal);
-    const remote = requestedRemote ?? (upstream ? requireRemoteBranchName(upstream).remote : await defaultRemote(runProcess, context, signal));
-    await runProcess(pushBranchArgs(remote, branch, options, requestedRemote === undefined && upstream === undefined), context, { signal });
+    const upstream = await queryPushUpstream(runProcess, context, branch, signal);
+    const remote = requestedRemote ?? upstream?.remote ?? await defaultRemote(runProcess, context, signal);
+    const refspec = pushBranchRefspec(branch, requestedRemote === undefined ? upstream?.ref : undefined);
+    await runProcess(pushBranchArgs(remote, refspec, options, requestedRemote === undefined && upstream === undefined), context, { signal });
 }
 
 function pushBranchArgs(remote: string, branch: string, options: unknown, setUpstreamByDefault: boolean): readonly string[] {
@@ -1406,18 +1437,14 @@ function pushForceArg(options: unknown): string | undefined {
     return booleanOption(options, 'force') ? '--force' : undefined;
 }
 
-async function resolveBranchUpstream(
+async function queryPushUpstream(
     runProcess: CliGitRuntimeProcess,
     context: GitExecutionContext,
     branch: string,
     signal?: AbortSignal,
-): Promise<string | undefined> {
-    try {
-        return await runTrimmed(runProcess, context, ['rev-parse', '--abbrev-ref', `${branch}@{upstream}`], signal);
-    } catch (error) {
-        if (isAbortError(error)) { throw error; }
-        return undefined;
-    }
+): Promise<PushUpstream | undefined> {
+    return parsePushUpstream(await runRaw(runProcess, context,
+        ['for-each-ref', '--format=%(upstream:remotename)%00%(upstream:remoteref)', `refs/heads/${branch}`], signal));
 }
 
 async function resolveCurrentBranch(

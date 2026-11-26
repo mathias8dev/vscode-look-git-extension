@@ -11,6 +11,7 @@ import {
     type VscodeGitRepository,
 } from '@extension/git/vscode-git-api';
 import { samePath } from '@extension/utils/path-compare';
+import { pushBranchRefspec } from '@core/git/push-branch-refspec';
 
 const VSCODE_REMOTE_OPERATIONS = new Set<SemanticGitOperation>([
     'fetch',
@@ -39,12 +40,14 @@ export class VscodeGitRemoteRuntime implements GitRuntime {
     ): Promise<TResult> {
         signal?.throwIfAborted();
         const repository = await this.resolveRepository(operation, context);
+        signal?.throwIfAborted();
         switch (operation) {
             case 'fetch':
-                await repository.fetch(fetchOptions(input));
-                return runtimeResult(undefined);
             case 'fetchAll':
-                await repository.fetch({ all: true, ...fetchOptionsFromOptionsField(input) });
+                if (optionalBooleanField(objectField(input, 'options'), 'tags') !== undefined) {
+                    throw new UnsupportedGitOperationError(operation, context);
+                }
+                await repository.fetch(operation === 'fetch' ? fetchOptions(input) : { all: true, ...fetchOptionsFromOptionsField(input) });
                 return runtimeResult(undefined);
             case 'pull':
                 if (requiredStringField(objectField(input, 'options'), 'strategy') !== PullStrategy.GitConfig
@@ -57,7 +60,7 @@ export class VscodeGitRemoteRuntime implements GitRuntime {
             case 'push':
                 return runtimeResult(await this.push(repository, context, input));
             case 'pushBranch':
-                return runtimeResult(await this.pushBranch(repository, context, input));
+                return runtimeResult(await this.pushBranch(repository, context, input, signal));
             case 'forcePushWithLease':
                 await repository.push(
                     requiredStringField(input, 'remote'),
@@ -81,10 +84,13 @@ export class VscodeGitRemoteRuntime implements GitRuntime {
         return repository;
     }
 
-    private async pushBranch(repository: VscodeGitRepository, context: GitExecutionContext, input: unknown): Promise<GitPushOutcome> {
+    private async pushBranch(repository: VscodeGitRepository, context: GitExecutionContext, input: unknown, signal?: AbortSignal): Promise<GitPushOutcome> {
         const branch = requiredStringField(input, 'branch');
         const options = objectField(input, 'options');
-        const remote = optionalStringField(input, 'remote') ?? remoteForBranch(repository, branch);
+        const requestedRemote = optionalStringField(input, 'remote');
+        const branchState = await repository.getBranch(`refs/heads/${branch}`);
+        signal?.throwIfAborted();
+        const remote = requestedRemote ?? branchState?.upstream?.remote ?? singleWritableRemote(repository);
         if (!remote) {
             if (!isHeadBranch(repository, branch) || hasForceOption(options)) {
                 throw new UnsupportedGitOperationError('pushBranch', context);
@@ -92,7 +98,9 @@ export class VscodeGitRemoteRuntime implements GitRuntime {
             this.delegateNativePublish(repository);
             return GitPushOutcome.Delegated;
         }
-        await repository.push(remote, branch, optionalBooleanField(options, 'setUpstream') ?? !hasUpstream(repository, branch), forceMode(input));
+        const upstreamRef = branchState?.upstream ? `refs/heads/${branchState.upstream.name}` : undefined;
+        const refspec = pushBranchRefspec(branch, requestedRemote === undefined ? upstreamRef : undefined);
+        await repository.push(remote, refspec, optionalBooleanField(options, 'setUpstream') ?? branchState?.upstream === undefined, forceMode(input));
         return GitPushOutcome.Completed;
     }
 
@@ -187,15 +195,9 @@ function booleanOption(input: unknown, key: string): boolean {
     return optionalBooleanField(input, key) === true;
 }
 
-function remoteForBranch(repository: VscodeGitRepository, branch: string): string | undefined {
-    const head = repository.state.HEAD;
-    if (head?.name === branch && head.upstream) { return head.remote ?? head.upstream.remote; }
+function singleWritableRemote(repository: VscodeGitRepository): string | undefined {
     const writableRemotes = repository.state.remotes.filter((remote) => remote.isReadOnly !== true);
     return writableRemotes.length === 1 ? writableRemotes[0]?.name : undefined;
-}
-
-function hasUpstream(repository: VscodeGitRepository, branch: string): boolean {
-    return repository.state.HEAD?.name === branch && repository.state.HEAD.upstream !== undefined;
 }
 
 function hasCurrentUpstream(repository: VscodeGitRepository): boolean {

@@ -70,13 +70,13 @@ export async function runBranchCommand(
             openComparisonPanel(repo, extensionUri, currentBranch, `${isRemote ? 'refs/remotes/' : 'refs/heads/'}${branch}`);
             return commandExecutionResult(false);
         case 'showDiffWithWorkingTree':
-            await openChangesWithWorkingTree(repo, repo.cwd, branch, `Diff ${branch}..working tree`);
+            await openChangesWithWorkingTree(repo, requireRuntimeWorktree(runtimeTargets), branch, `Diff ${branch}..working tree`);
             return commandExecutionResult(false);
         case 'compareBranchWithWorktree':
             await compareRefWithPickedWorktree(repo, requireRuntimeWorktrees(runtimeTargets), branch, `Diff ${branch}`);
             return commandExecutionResult(false);
         case 'showDiffWithBranchWorktree':
-            await showDiffWithBranchWorktree(repo, branch, isRemote);
+            await showDiffWithBranchWorktree(repo, branch, isRemote, runtimeTargets);
             return commandExecutionResult(false);
         case 'delete': {
             if (!isRemote && branch === currentBranch) { throw new Error('The current branch cannot be deleted.'); }
@@ -227,9 +227,9 @@ async function revealBranchWorktree(repo: GitRepository, branch: string, isRemot
     await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(worktree.path));
 }
 
-async function showDiffWithBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean): Promise<void> {
+async function showDiffWithBranchWorktree(repo: GitRepository, branch: string, isRemote: boolean, runtimeTargets: RuntimeCommandTargets): Promise<void> {
     const worktree = await requireWorktreeForBranch(repo, branch, isRemote);
-    await openChangesWithWorkingTree(repo, worktree.path, branch, `Diff ${branch} with ${path.basename(worktree.path)}`);
+    await openChangesWithWorkingTree(repo, requireRuntimeWorktreePath(runtimeTargets, worktree.path), branch, `Diff ${branch} with ${path.basename(worktree.path)}`);
 }
 
 async function pullBranchWorktree(

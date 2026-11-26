@@ -70,7 +70,7 @@ describe('CliGitRuntime', () => {
         const calls: string[][] = [];
         const runtime = new CliGitRuntime(async (args) => {
             calls.push([...args]);
-            if (args.join(' ') === 'rev-parse --abbrev-ref main@{upstream}') { return 'upstream/main\n'; }
+            if (args[0] === 'for-each-ref') { return 'upstream\0refs/heads/main\n'; }
             return '';
         });
 
@@ -78,7 +78,7 @@ describe('CliGitRuntime', () => {
             .resolves.toBe(GitPushOutcome.Completed);
 
         expect(calls).toEqual([
-            ['rev-parse', '--abbrev-ref', 'main@{upstream}'],
+            ['for-each-ref', '--format=%(upstream:remotename)%00%(upstream:remoteref)', 'refs/heads/main'],
             ['push', 'upstream', 'main'],
         ]);
     });
@@ -87,7 +87,7 @@ describe('CliGitRuntime', () => {
         const calls: string[][] = [];
         const runtime = new CliGitRuntime(async (args) => {
             calls.push([...args]);
-            if (args[0] === 'rev-parse') { throw new Error('no upstream'); }
+            if (args[0] === 'for-each-ref') { return '\0\n'; }
             if (args[0] === 'remote') { return 'origin\nupstream\n'; }
             return '';
         });
@@ -95,7 +95,7 @@ describe('CliGitRuntime', () => {
         await runtime.execute('pushBranch', context, { branch: 'feature/auth', options: { forceWithLease: true } });
 
         expect(calls).toEqual([
-            ['rev-parse', '--abbrev-ref', 'feature/auth@{upstream}'],
+            ['for-each-ref', '--format=%(upstream:remotename)%00%(upstream:remoteref)', 'refs/heads/feature/auth'],
             ['remote'],
             ['push', '-u', '--force-with-lease', 'origin', 'feature/auth'],
         ]);
@@ -105,14 +105,14 @@ describe('CliGitRuntime', () => {
         const calls: string[][] = [];
         const runtime = new CliGitRuntime(async (args) => {
             calls.push([...args]);
-            if (args.join(' ') === 'rev-parse --abbrev-ref main@{upstream}') { return 'origin/main\n'; }
+            if (args[0] === 'for-each-ref') { return 'origin\0refs/heads/main\n'; }
             return '';
         });
 
         await runtime.execute('pushBranch', context, { branch: 'main', options: { force: true } });
 
         expect(calls).toEqual([
-            ['rev-parse', '--abbrev-ref', 'main@{upstream}'],
+            ['for-each-ref', '--format=%(upstream:remotename)%00%(upstream:remoteref)', 'refs/heads/main'],
             ['push', '--force', 'origin', 'main'],
         ]);
     });
@@ -122,7 +122,7 @@ describe('CliGitRuntime', () => {
         const runtime = new CliGitRuntime(async (args) => {
             calls.push([...args]);
             if (args.join(' ') === 'rev-parse --abbrev-ref HEAD') { return 'feature/auth\n'; }
-            if (args.join(' ') === 'rev-parse --abbrev-ref feature/auth@{upstream}') { throw new Error('no upstream'); }
+            if (args[0] === 'for-each-ref') { return '\0\n'; }
             if (args[0] === 'remote') { return 'origin\n'; }
             return '';
         });
@@ -132,7 +132,7 @@ describe('CliGitRuntime', () => {
 
         expect(calls).toEqual([
             ['rev-parse', '--abbrev-ref', 'HEAD'],
-            ['rev-parse', '--abbrev-ref', 'feature/auth@{upstream}'],
+            ['for-each-ref', '--format=%(upstream:remotename)%00%(upstream:remoteref)', 'refs/heads/feature/auth'],
             ['remote'],
             ['push', '-u', 'origin', 'feature/auth'],
         ]);
@@ -143,7 +143,7 @@ describe('CliGitRuntime', () => {
         const runtime = new CliGitRuntime(async (args) => {
             calls.push([...args]);
             if (args.join(' ') === 'rev-parse --abbrev-ref HEAD') { return 'main\n'; }
-            if (args.join(' ') === 'rev-parse --abbrev-ref main@{upstream}') { return 'origin/main\n'; }
+            if (args[0] === 'for-each-ref') { return 'origin\0refs/heads/main\n'; }
             return '';
         });
 
@@ -151,7 +151,7 @@ describe('CliGitRuntime', () => {
 
         expect(calls).toEqual([
             ['rev-parse', '--abbrev-ref', 'HEAD'],
-            ['rev-parse', '--abbrev-ref', 'main@{upstream}'],
+            ['for-each-ref', '--format=%(upstream:remotename)%00%(upstream:remoteref)', 'refs/heads/main'],
             ['push', '--force-with-lease'],
         ]);
     });

@@ -24,6 +24,11 @@ All notable changes to Look Git are documented in this file.
 - Stream Git output without the former 10 MiB buffer limit, preserving cancellation and Git error details
 
 #### Git Operations
+- Honor standard rebase options, including autostash, merge preservation, interactive autosquash, onto and the supplied editor environment
+- Push selected branches to their configured upstream destination even when local and remote branch names differ or the tracking reference was pruned
+- Read comparison file lists and revision contents from the selected worktree rather than the main working directory
+- Respect explicit fetch tag options, forced checkout, commit sign-off trailers and empty commits/amendments; use CLI fallback when native Git APIs cannot express the requested options
+- Prune deleted remote-tracking branches during Fetch and Fetch All across views and both Git backends, so Look Graph removes branches deleted on the server while preserving local branches
 - Use the existing push recovery actions across views when upstream commits reject a push, and distinguish recovery or cancellation from a completed push
 - Preserve commit drafts when cancelling an operation or when the commit fails
 

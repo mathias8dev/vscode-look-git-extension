@@ -4,7 +4,7 @@ import * as fs from 'fs/promises';
 import type { GitRepository, Worktree } from '@application/ports/git-topology';
 import type { GitFileChange } from '@core/git/domain/git-commit';
 import { openReadonlyDiffDocument } from '@extension/utils/readonly-diff-documents';
-import { commitFileDiffUris, emptyDiffUri, refBlobUri } from '@extension/utils/diff-uris';
+import { commitFileDiffUris, emptyDiffUri } from '@extension/utils/diff-uris';
 import { gitBlobUri } from '@extension/utils/git-blob-file-system';
 import { samePath } from '@extension/utils/path-compare';
 
@@ -30,12 +30,12 @@ export async function promptNewWorktreePath(repoCwd: string, prompt: string): Pr
 export async function compareRefWithPickedWorktree(repo: GitRepository, worktrees: readonly Worktree[], ref: string, titlePrefix: string): Promise<boolean> {
     const worktree = await pickWorktree(worktrees, 'Select worktree to compare');
     if (!worktree) { return false; }
-    await openChangesWithWorkingTree(repo, worktree.path, ref, `${titlePrefix} with ${path.basename(worktree.path)}`);
+    await openChangesWithWorkingTree(repo, worktree, ref, `${titlePrefix} with ${path.basename(worktree.path)}`);
     return true;
 }
 
-export async function openChangesWithWorkingTree(repo: GitRepository, worktreePath: string, baseRef: string, title: string): Promise<void> {
-    const resources = await workingTreeChangeResources(repo, worktreePath, baseRef);
+export async function openChangesWithWorkingTree(repo: GitRepository, worktree: Worktree, baseRef: string, title: string): Promise<void> {
+    const resources = await workingTreeChangeResources(repo, worktree, baseRef);
     await openChangesEditor(title, resources);
 }
 
@@ -89,22 +89,21 @@ async function openChangesEditor(title: string, resources: readonly ChangesResou
     await vscode.commands.executeCommand('vscode.changes', title, resources);
 }
 
-async function workingTreeChangeResources(repo: GitRepository, worktreePath: string, baseRef: string): Promise<readonly ChangesResource[]> {
-    const changes = await repo.compareWithWorkingTree(baseRef, worktreePath, { includeRenames: true });
-    return Promise.all(changes.map((entry) => workingTreeChangeResource(repo, worktreePath, baseRef, entry)));
+async function workingTreeChangeResources(repo: GitRepository, worktree: Worktree, baseRef: string): Promise<readonly ChangesResource[]> {
+    const changes = await repo.compareWithWorkingTree(baseRef, worktree.path, { includeRenames: true });
+    return Promise.all(changes.map((entry) => workingTreeChangeResource(worktree, baseRef, entry)));
 }
 
-async function workingTreeChangeResource(repo: GitRepository, worktreePath: string, baseRef: string, entry: GitFileChange): Promise<ChangesResource> {
-    const fileUri = vscode.Uri.file(path.join(worktreePath, entry.filePath));
+async function workingTreeChangeResource(worktree: Worktree, baseRef: string, entry: GitFileChange): Promise<ChangesResource> {
+    const fileUri = vscode.Uri.file(path.join(worktree.path, entry.filePath));
     const origPath = entry.origPath ?? entry.filePath;
 
     if (entry.status === 'A') {
         return [fileUri, emptyDiffUri('working-tree', entry.filePath, 'original'), fileUri];
     }
-    if (entry.status === 'D') {
-        return [fileUri, await refBlobUri(repo, baseRef, origPath, 'original'), emptyDiffUri(baseRef, entry.filePath, 'modified')];
-    }
-    return [fileUri, await refBlobUri(repo, baseRef, origPath, 'original'), fileUri];
+    const content = await worktree.getFileAtRevision(origPath, baseRef);
+    const originalUri = gitBlobUri(baseRef, path.join(worktree.path, origPath), 'original', content);
+    return [fileUri, originalUri, entry.status === 'D' ? emptyDiffUri(baseRef, entry.filePath, 'modified') : fileUri];
 }
 
 async function openDiffDocument(title: string, content: string): Promise<void> {

@@ -7,7 +7,7 @@ import type { WorktreeCommand } from '@protocol/graph/messages';
 import { showModalWarningMessage } from '@extension/utils/confirmation';
 import { showBranchNameInput } from '@extension/utils/branch-name-input';
 import { openChangesWithWorkingTree } from '@extension/commands/git-command-helpers';
-import { requireRuntimeRepository, requireRuntimeTargets, requireRuntimeWorktree, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
+import { requireRuntimeRepository, requireRuntimeTargets, requireRuntimeWorktree, requireRuntimeWorktreePath, type RuntimeCommandTargets } from '@extension/commands/runtime-command-targets';
 import { samePath } from '@extension/utils/path-compare';
 import { commandExecutionResult, pushCommandExecutionResult, type CommandExecutionResult } from '@extension/commands/command-execution-result';
 
@@ -34,11 +34,11 @@ export async function runWorktreeCommand(
             return commandExecutionResult(false);
         case 'showDiffWithHead': {
             const pathValue = requireWorktreePath(wtPath);
-            await openChangesWithWorkingTree(repo, pathValue, 'HEAD', `Diff ${path.basename(pathValue)} with HEAD`);
+            await openChangesWithWorkingTree(repo, requireRuntimeWorktreePath(runtimeTargets, pathValue), 'HEAD', `Diff ${path.basename(pathValue)} with HEAD`);
             return commandExecutionResult(false);
         }
         case 'showDiffWithMainWorktree':
-            await showDiffWithMainWorktree(repo, requireWorktreePath(wtPath));
+            await showDiffWithMainWorktree(repo, requireWorktreePath(wtPath), runtimeTargets);
             return commandExecutionResult(false);
         case 'fetch':
             await runtimeRepository.fetchAll({});
@@ -119,14 +119,14 @@ async function assertNotMainWorktree(repo: GitRepository, wtPath: string, operat
     if (worktree?.isMain) { throw new Error(`The main worktree cannot be ${operation}.`); }
 }
 
-async function showDiffWithMainWorktree(repo: GitRepository, wtPath: string): Promise<void> {
+async function showDiffWithMainWorktree(repo: GitRepository, wtPath: string, runtimeTargets: RuntimeCommandTargets): Promise<void> {
     const worktrees = await repo.listWorktrees();
     const main = worktrees.find((worktree) => worktree.isMain);
     const selected = worktrees.find((worktree) => samePath(worktree.path, wtPath));
     if (!main) { throw new Error('Main worktree not found.'); }
     if (!selected) { throw new Error(`Unknown worktree: ${wtPath}`); }
     if (selected.isMain) { throw new Error('Cannot compare the main worktree with itself.'); }
-    await openChangesWithWorkingTree(repo, wtPath, main.head, `Diff ${path.basename(wtPath)} with ${path.basename(main.path)}`);
+    await openChangesWithWorkingTree(repo, requireRuntimeWorktreePath(runtimeTargets, wtPath), main.head, `Diff ${path.basename(wtPath)} with ${path.basename(main.path)}`);
 }
 
 async function commitWorktree(_repo: GitRepository, _wtPath: string, runtimeTargets: RuntimeCommandTargets): Promise<boolean> {

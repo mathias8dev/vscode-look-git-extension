@@ -15,6 +15,7 @@ export interface VscodeGitApi {
 export interface VscodeGitRepository {
     readonly rootUri: vscode.Uri;
     readonly state: VscodeGitRepositoryState;
+    getBranch(name: string): Promise<VscodeGitBranch>;
     fetch(options?: VscodeFetchOptions): Promise<void>;
     pull(unshallow?: boolean): Promise<void>;
     push(remoteName?: string, branchName?: string, setUpstream?: boolean, force?: VscodeForcePushMode): Promise<void>;

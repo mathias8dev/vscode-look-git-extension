@@ -1,10 +1,13 @@
 import { PullStrategy } from '@application/ports/pull-strategy';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { GitPushOutcome } from '@application/ports/git-capabilities';
 import { UnsupportedGitOperationError, type GitExecutionContext } from '@application/ports/git-runtime';
 import type { VscodeGitApi, VscodeGitRepository } from '@extension/git/vscode-git-api';
 import { VscodeGitRemoteRuntime, type VscodeCommandExecutor } from '@extension/git/vscode-git-remote-runtime';
+import { RuntimeGitRepository } from '@extension/git/runtime-git-repository';
+import { HybridGitRuntime } from '@extension/git/hybrid-git-runtime';
+import { CliGitRuntime } from '@extension/git/cli-git-runtime';
 import { window } from '@tests/mocks/vscode';
 
 const context = {
@@ -15,6 +18,78 @@ const context = {
 } satisfies GitExecutionContext;
 
 describe('VscodeGitRemoteRuntime', () => {
+    it('reads fresh upstream metadata instead of reusing a stale HEAD cache', async () => {
+        const repository = recordingRepository('/repo', { HEAD: { name: 'topic', upstream: { remote: 'origin', name: 'old' } }, remotes: [{ name: 'origin' }] });
+        const getBranch = vi.spyOn(repository, 'getBranch').mockResolvedValue({ name: 'topic', upstream: { remote: 'origin', name: 'new' } });
+        const runtime = new VscodeGitRemoteRuntime(async () => gitApi(repository));
+
+        await runtime.execute('pushBranch', context, { branch: 'topic', options: {} });
+
+        expect(getBranch).toHaveBeenCalledWith('refs/heads/topic');
+        expect(repository.pushCalls[0]?.branchName).toBe('refs/heads/topic:refs/heads/new');
+    });
+
+    it('resolves the upstream destination of a non-current branch without changing its upstream', async () => {
+        const repository = recordingRepository('/repo', { HEAD: { name: 'main' }, remotes: [{ name: 'origin' }, { name: 'upstream' }] });
+        vi.spyOn(repository, 'getBranch').mockResolvedValue({ name: 'local-topic', upstream: { remote: 'upstream', name: 'server/topic' } });
+        const runtime = new VscodeGitRemoteRuntime(async () => gitApi(repository));
+
+        await runtime.execute('pushBranch', context, { branch: 'local-topic', options: {} });
+        await runtime.execute('pushBranch', context, { remote: 'origin', branch: 'local-topic', options: {} });
+
+        expect(repository.pushCalls).toEqual([
+            { remoteName: 'upstream', branchName: 'refs/heads/local-topic:refs/heads/server/topic', setUpstream: false, force: undefined },
+            { remoteName: 'origin', branchName: 'local-topic', setUpstream: false, force: undefined },
+        ]);
+    });
+
+    it('uses the CLI fallback for explicit tag fetching options unsupported by the native API', async () => {
+        const native = recordingRepository('/repo');
+        const calls: string[][] = [];
+        const runtime = new HybridGitRuntime([
+            new VscodeGitRemoteRuntime(async () => gitApi(native)),
+            new CliGitRuntime(async args => { calls.push([...args]); return ''; }),
+        ]);
+        const repository = new RuntimeGitRepository({ repoId: 'repo', cwd: '/repo', gitDir: '/repo/.git', kind: 'main', label: 'repo' }, runtime);
+
+        await repository.fetch('upstream', { tags: true });
+        await repository.fetchAll({ tags: false });
+
+        expect(native.fetchCalls).toEqual([]);
+        expect(calls).toEqual([['fetch', '--prune', '--tags', 'upstream'], ['fetch', '--all', '--prune', '--no-tags']]);
+    });
+
+    it('does not push if cancellation occurs while resolving the selected branch', async () => {
+        const repository = recordingRepository('/repo', { HEAD: { name: 'main' }, remotes: [{ name: 'origin' }] });
+        const controller = new AbortController();
+        vi.spyOn(repository, 'getBranch').mockImplementation(async name => {
+            controller.abort();
+            return { name, upstream: { remote: 'origin', name: 'main' } };
+        });
+        const runtime = new VscodeGitRemoteRuntime(async () => gitApi(repository));
+
+        await expect(runtime.execute('pushBranch', context, { branch: 'topic', options: {} }, controller.signal)).rejects.toThrow();
+        expect(repository.pushCalls).toEqual([]);
+    });
+
+    it('prunes by default through the repository boundary and preserves explicit opt-outs', async () => {
+        const native = recordingRepository('/repo');
+        const repository = new RuntimeGitRepository({ repoId: 'repo', cwd: '/repo', gitDir: '/repo/.git', kind: 'main', label: 'repo' },
+            new VscodeGitRemoteRuntime(async () => gitApi(native)));
+
+        await repository.fetch('upstream', {});
+        await repository.fetchAll({});
+        await repository.fetch('upstream', { prune: false });
+        await repository.fetchAll({ prune: false });
+
+        expect(native.fetchCalls).toEqual([
+            { remote: 'upstream', prune: true },
+            { all: true, prune: true },
+            { remote: 'upstream', prune: false },
+            { all: true, prune: false },
+        ]);
+    });
+
     it('delegates fetch and fetch all to the VS Code Git repository', async () => {
         const repository = recordingRepository('/repo');
         const runtime = new VscodeGitRemoteRuntime(async () => gitApi(repository));
@@ -251,6 +326,10 @@ function recordingRepository(rootPath: string, state: Partial<VscodeGitRepositor
         fetchCalls: [],
         pushCalls: [],
         pullCalls: 0,
+        async getBranch(ref) {
+            const name = ref.replace(/^refs\/heads\//, '');
+            return this.state.HEAD?.name === name ? this.state.HEAD : { name };
+        },
         async fetch(options = {}): Promise<void> {
             this.fetchCalls.push(options);
         },

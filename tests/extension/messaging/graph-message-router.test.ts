@@ -18,7 +18,7 @@ import { RuntimeWorktree } from '@extension/git/runtime-worktree';
 import { GraphMessageRouter } from '@extension/messaging/graph-message-router';
 import { RepositoryRegistry } from '@extension/repositories/repository-registry';
 import type { RepositoryContextAccessor } from '@extension/repositories/repository-selection-store';
-import { createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
+import { createRemoteWorkflowFixture, createTempGitRepo, type TempGitRepo } from '@tests/helpers/git-repo';
 
 describe('GraphMessageRouter', () => {
     const repos: TempGitRepo[] = [];
@@ -161,6 +161,36 @@ describe('GraphMessageRouter', () => {
         expect(messages.filter((message) => message.type === 'graph/dataResponse')).toHaveLength(1);
         expect(messages.filter((message) => message.type === 'graph/dataPush')).toHaveLength(0);
         expect(executeGraphData).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([false, true])('removes server-deleted branches after fetch and recovers an active branch filter: %s', async filtered => {
+        const fixture = createRemoteWorkflowFixture();
+        repos.push(fixture.local, fixture.remote, fixture.seed);
+        const context = repoContext({ id: 'repo-id', cwd: fixture.local.cwd, kind: RepoKind.Main, label: 'repo' });
+        const messages: GraphExtensionToWebviewMessage[] = [];
+        const updated = vi.fn(async () => undefined);
+        const router = new GraphMessageRouter(repositoryAccessor(context), message => { messages.push(message); }, updated,
+            undefined, undefined, undefined, undefined, undefined, runtimeRegistryForUnbornContext(context));
+        const filters = filtered ? { branches: ['origin/feature/nested'] } : {};
+        const page = { offset: 0, limit: 300 };
+        await router.handle({ type: 'graph/dataRequest', requestId: 'before-fetch', repoId: context.id, filters, page });
+        expect(messages).toContainEqual(expect.objectContaining({ type: 'graph/dataResponse', data: expect.objectContaining({ branches: expect.arrayContaining([expect.objectContaining({ name: 'origin/feature/nested' })]) }) }));
+        fixture.remote.git(['update-ref', '-d', 'refs/heads/feature/nested']);
+        messages.length = 0;
+
+        await router.handle({ type: 'graph/repositoryCommand', command: 'fetch' });
+        expect(updated).toHaveBeenCalled();
+        expect(messages).toContainEqual({ type: 'graph/refreshRequested' });
+        await router.refreshGraphData();
+        if (filtered) {
+            expect(messages).toContainEqual({ type: 'graph/branchFilterInvalidated', branch: 'origin/feature/nested' });
+            await router.handle({ type: 'graph/dataRequest', requestId: 'after-fetch', repoId: context.id, filters: {}, page });
+        }
+        const refreshed = messages.find(message => message.type === (filtered ? 'graph/dataResponse' : 'graph/dataPush'));
+        if (!refreshed || (refreshed.type !== 'graph/dataResponse' && refreshed.type !== 'graph/dataPush')) { throw new Error('Expected refreshed graph data.'); }
+        expect(refreshed.data.branches.some(branch => branch.name === 'origin/feature/nested')).toBe(false);
+        expect(messages.some(message => message.type === 'graph/error')).toBe(false);
+        router.dispose();
     });
 
     it('invalidates a selected branch renamed outside Look Git before refreshing', async () => {

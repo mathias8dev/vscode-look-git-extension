@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { verifyGitFileDiffs } from './git-file-diffs';
+import { verifyNativePushDestination } from './native-git-operations';
 
 export async function run(): Promise<void> {
     const repo = requiredEnv('LOOK_GIT_SEMANTIC_FIXTURE_REPO');
@@ -37,6 +38,7 @@ export async function run(): Promise<void> {
 
     await vscode.commands.executeCommand('lookGit.history.refresh');
     await vscode.commands.executeCommand('lookGit.changes.refresh');
+    await verifyNativePushDestination(repo);
 }
 
 interface NativeGitExtension {

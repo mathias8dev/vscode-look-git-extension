@@ -216,11 +216,11 @@ export class RuntimeGitRepository implements GitRepository {
     }
 
     fetch(remote: string, options: FetchOptions, signal?: AbortSignal): Promise<void> {
-        return this.execute('fetch', { remote, options }, signal);
+        return this.execute('fetch', { remote, options: { ...options, prune: options.prune ?? true } }, signal);
     }
 
     fetchAll(options: FetchOptions, signal?: AbortSignal): Promise<void> {
-        return this.execute('fetchAll', { options }, signal);
+        return this.execute('fetchAll', { options: { ...options, prune: options.prune ?? true } }, signal);
     }
 
     pruneRemote(remote: string, signal?: AbortSignal): Promise<void> {
