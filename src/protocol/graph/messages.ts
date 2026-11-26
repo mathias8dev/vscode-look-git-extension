@@ -182,7 +182,12 @@ export type BranchCommand =
     | 'unlockBranchWorktree'
     | 'removeBranchWorktree';
 
-export type TagCommand = 'checkout' | 'newBranch' | 'push';
+export enum TagCommand {
+    Checkout = 'checkout',
+    NewBranch = 'newBranch',
+    Push = 'push',
+    Delete = 'delete',
+}
 
 export interface TagPublication {
     readonly name: string;

@@ -1,5 +1,7 @@
 import { GenerateSquashCommitMessageUseCase } from '@application/usecases/commits/generate-squash-commit-message';
 import { mergeWithProgress } from '@extension/utils/merge-with-progress';
+import { deleteTag } from '@extension/commands/delete-tag';
+import { TagDeletionScope } from '@extension/git/tag-deletion-scope';
 import { CommitResultStatus } from '@protocol/changes/commit-result-status';
 import { pushOperationStatus } from '@extension/utils/push-operation-status';
 import { pushWithRecovery } from '@extension/git/branch-remote-actions';
@@ -1225,21 +1227,16 @@ export class ChangesMessageRouter {
             case 'deleteTag': {
                 const tag = await pickTag('Delete tag', requireRuntimeRepository());
                 if (!tag) { return; }
-                const choice = await showModalWarningMessage(`Delete tag "${tag}"?`, 'Delete');
-                if (choice !== 'Delete') { return; }
-                await requireRuntimeRepository().deleteTag(tag);
+                if (!await deleteTag(requireRuntimeRepository(), requireRuntimeWorktree(), tag, TagDeletionScope.Local)) { return; }
                 await this.refreshAfterRepositoryUpdate();
                 return;
             }
             case 'deleteRemoteTag': {
+                const tag = await pickTag('Delete remote tag', requireRuntimeRepository());
+                if (!tag) { return; }
                 await this.runTrackedToolbarOperation(command, async () => {
-                    const tag = await pickTag('Delete remote tag', requireRuntimeRepository());
-                    if (!tag) { return undefined; }
-                    const remote = await pickRemote('Delete tag from remote', requireRuntimeRepository());
-                    if (!remote) { return undefined; }
-                    const choice = await showModalWarningMessage(`Delete tag "${tag}" from "${remote}"?`, 'Delete');
-                    if (choice !== 'Delete') { return undefined; }
-                    await requireRuntimeWorktree().pushRef(remote, '', `refs/tags/${tag}`, {});
+                    const changed = await deleteTag(requireRuntimeRepository(), requireRuntimeWorktree(), tag, TagDeletionScope.Remote);
+                    if (!changed) { return OperationStatus.Cancelled; }
                     await this.refreshAfterRepositoryUpdate();
                     return undefined;
                 });

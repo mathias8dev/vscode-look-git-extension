@@ -89,6 +89,33 @@ describe('graph tag interactions', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Refresh remote tag status' }));
         await waitFor(() => expect(api.messages.filter(isTagStatusRequest)).toHaveLength(2));
     });
+
+    it('refreshes publication badges after remote deletion and removes locally deleted tags', async () => {
+        globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+        const api = createMockVsCodeApi();
+        render(<GraphApp sendMessage={message => api.postMessage(message)} />);
+        await act(async () => sendToWebview({ type: 'graph/dataResponse', requestId: graphRequestId(0, 'replace'), data }));
+        await waitFor(() => expect(api.messages.some(isTagStatusRequest)).toBe(true));
+        const first = api.messages.find(isTagStatusRequest);
+        if (!first) { throw new Error('Expected a tag status request'); }
+        await act(async () => sendToWebview({ type: 'graph/tagStatusResponse', requestId: first.requestId, repository,
+            checkedAt: '2026-11-26T12:00:00Z', tags: [{ name: 'v1', remotes: [{ name: 'upstream', status: 'same' }] }] }));
+        expect(screen.getAllByLabelText('Pushed')).toHaveLength(2);
+
+        await act(async () => sendToWebview({ type: 'graph/tagStatusInvalidated', repository }));
+        await waitFor(() => expect(api.messages.filter(isTagStatusRequest)).toHaveLength(2));
+        const second = api.messages.filter(isTagStatusRequest)[1];
+        if (!second) { throw new Error('Expected a refreshed tag status request'); }
+        await act(async () => sendToWebview({ type: 'graph/tagStatusResponse', requestId: second.requestId, repository,
+            checkedAt: '2026-11-26T12:01:00Z', tags: [{ name: 'v1', remotes: [{ name: 'upstream', status: 'missing' }] }] }));
+        expect(screen.getAllByLabelText('Local only')).toHaveLength(2);
+        expect(screen.queryAllByLabelText('Pushed')).toHaveLength(0);
+
+        await act(async () => sendToWebview({ type: 'graph/dataPush', repoId: 'repo', data: {
+            ...data, tags: [], commits: data.commits.map(commit => ({ ...commit, refs: [] })),
+        } }));
+        expect(screen.queryAllByRole('button', { name: /v1/ })).toHaveLength(0);
+    });
 });
 
 describe('tag publication presentation', () => {

@@ -1,3 +1,4 @@
+import { TagCommand } from '@protocol/graph/messages';
 import { describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { GraphViewProvider } from '@extension/views/graph-view-provider';
@@ -8,7 +9,7 @@ import { commitContextActionIds } from '@tests/helpers/commit-context-commands';
 import { RepoKind, type RepoContext } from '@core/git/domain/repo-context';
 
 describe('GraphViewProvider', () => {
-    it.each(['checkout', 'newBranch', 'push'] as const)('routes tag %s to the repository from the context target', async command => {
+    it.each(Object.values(TagCommand))('routes tag %s to the repository from the context target', async command => {
         resetVscodeMock();
         const handle = vi.spyOn(GraphMessageRouter.prototype, 'handle').mockResolvedValue();
         try {

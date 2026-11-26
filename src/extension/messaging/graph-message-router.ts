@@ -4,6 +4,7 @@ import * as path from 'path';
 import {
     GraphOperationCategory,
     GraphOperationStatus,
+    TagCommand,
     type GraphWebviewToExtensionMessage,
     type GraphExtensionToWebviewMessage,
     type GraphDataResponse,
@@ -641,8 +642,12 @@ export class GraphMessageRouter {
             const changed = await runTagCommand(repository, requireRuntimeWorktree(targets), msg.command, msg.tag, controller.signal);
             controller.signal.throwIfAborted();
             if (!changed) { return false; }
-            if (msg.command === 'push') { this.postMessage({ type: 'graph/tagStatusInvalidated', ...repositoryMessageProperty(msg.repository) }); }
+            if (msg.command === TagCommand.Push || msg.command === TagCommand.Delete) { this.postMessage({ type: 'graph/tagStatusInvalidated', ...repositoryMessageProperty(msg.repository) }); }
             await this.refreshAfterRepositoryChange();
+        } catch (error) {
+            // Remote deletion can succeed before a local deletion fails.
+            if (msg.command === TagCommand.Delete) { this.postMessage({ type: 'graph/tagStatusInvalidated', ...repositoryMessageProperty(msg.repository) }); }
+            throw error;
         } finally {
             if (this.pending.get(key) === controller) { this.pending.delete(key); }
         }
@@ -916,7 +921,7 @@ function hasNewConflicts(current: ReadonlySet<string>, previous: ReadonlySet<str
 function graphOperationForMessage(msg: GraphWebviewToExtensionMessage): GraphOperationDescriptor | undefined {
     switch (msg.type) {
         case 'graph/tagCommand':
-            return msg.command !== 'newBranch' ? {
+            return msg.command !== TagCommand.NewBranch ? {
                 category: GraphOperationCategory.Tag,
                 command: msg.command,
                 target: msg.tag,

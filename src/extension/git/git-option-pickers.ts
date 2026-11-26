@@ -8,6 +8,16 @@ import { StashMode } from '@extension/git/stash-mode';
 import { pickAction } from '@extension/utils/pick-action';
 import type * as vscode from 'vscode';
 import { promptForCommitMessage } from '@extension/utils/commit-message-editor';
+import { TagDeletionScope } from '@extension/git/tag-deletion-scope';
+
+export function pickTagDeletionScope(tag: string, hasRemotes: boolean): Promise<TagDeletionScope | undefined> {
+    if (!hasRemotes) { return Promise.resolve(TagDeletionScope.Local); }
+    return pickAction([
+        { value: TagDeletionScope.Local, label: 'Delete Local Tag', description: 'Delete only the tag in this repository' },
+        { value: TagDeletionScope.Remote, label: 'Delete Remote Tag', description: 'Delete the tag on a selected remote; keep the local tag' },
+        { value: TagDeletionScope.LocalAndRemote, label: 'Delete Local and Remote Tag', description: 'Delete the tag locally and on a selected remote' },
+    ], `Delete tag "${tag}"`);
+}
 
 export async function pickPullOptions(placeHolder = 'Pull strategy'): Promise<PullOptions | undefined> {
     const strategy = await pickAction([

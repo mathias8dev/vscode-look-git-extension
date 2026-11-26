@@ -1,5 +1,6 @@
 import {
     GraphOperationCategory,
+    TagCommand,
     type GraphOperationStatusPush,
 } from '@protocol/graph/messages';
 import { OperationStatus } from '@protocol/shared/operation';
@@ -63,7 +64,8 @@ function operationLabel(operation: GraphOperationStatusPush): string {
         case GraphOperationCategory.Commit:
             return commitOperationLabel(operation.command, target);
         case GraphOperationCategory.Tag:
-            return operation.command === 'push' ? `push tag${target}` : `checkout tag${target} (detached HEAD)`;
+            if (operation.command === TagCommand.Delete) { return `delete tag${target}`; }
+            return operation.command === TagCommand.Push ? `push tag${target}` : `checkout tag${target} (detached HEAD)`;
     }
 }
 
@@ -128,6 +130,7 @@ function commitOperationLabel(command: string, target: string): string {
 }
 
 function pastTense(label: string): string {
+    if (label.startsWith('delete ')) { return sentenceCase(label.replace(/^delete /, 'deleted ')); }
     if (label.startsWith('fetch ')) { return sentenceCase(label.replace(/^fetch /, 'fetched ')); }
     if (label.startsWith('push ')) { return sentenceCase(label.replace(/^push /, 'pushed ')); }
     if (label.startsWith('pull ')) { return sentenceCase(label.replace(/^pull /, 'pulled ')); }

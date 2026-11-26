@@ -1,8 +1,9 @@
+import { TagCommand } from '@protocol/graph/messages';
 import * as vscode from 'vscode';
 import type { RepositoryContextAccessor } from '@extension/repositories/repository-selection-store';
 import type { GitRepository } from '@application/ports/git-topology';
 import type { GitBranch } from '@core/git/domain/git-status';
-import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, RepoContextChangedPush, RepoNavigationStartedPush, TagCommand, WorktreeCommand } from '@protocol/graph/messages';
+import type { BranchCommand, CommitCommand, GraphWebviewToExtensionMessage, RepoContextChangedPush, RepoNavigationStartedPush, WorktreeCommand } from '@protocol/graph/messages';
 import type { GraphContextTarget } from '@protocol/graph/types';
 import type { RepoContext } from '@core/git/domain/repo-context';
 import type { RepositoriesChangedPush, RepositoryNavigationMessage } from '@protocol/shared/repo';
@@ -138,9 +139,10 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
             ...GRAPH_COMMIT_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runCommitContextCommand(command))),
             ...GRAPH_BRANCH_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runBranchContextCommand(command, { allowUnpublishedBranchPush: id === 'lookGit.graph.branch.publish' }))),
             ...GRAPH_WORKTREE_COMMANDS.map(({ id, command }) => vscode.commands.registerCommand(id, () => this.runWorktreeContextCommand(command))),
-            vscode.commands.registerCommand('lookGit.graph.tag.checkout', () => this.runTagContextCommand('checkout')),
-            vscode.commands.registerCommand('lookGit.graph.tag.newBranch', () => this.runTagContextCommand('newBranch')),
-            vscode.commands.registerCommand('lookGit.graph.tag.push', () => this.runTagContextCommand('push')),
+            vscode.commands.registerCommand('lookGit.graph.tag.checkout', () => this.runTagContextCommand(TagCommand.Checkout)),
+            vscode.commands.registerCommand('lookGit.graph.tag.newBranch', () => this.runTagContextCommand(TagCommand.NewBranch)),
+            vscode.commands.registerCommand('lookGit.graph.tag.push', () => this.runTagContextCommand(TagCommand.Push)),
+            vscode.commands.registerCommand('lookGit.graph.tag.delete', () => this.runTagContextCommand(TagCommand.Delete)),
             vscode.commands.registerCommand(REVEAL_GRAPH_COMMIT_COMMAND, (hash: unknown) => this.revealCommit(hash)),
             vscode.commands.registerCommand('lookGit.graph.commit.goToChildCommit', () => this.selectContextCommit('child')),
             vscode.commands.registerCommand('lookGit.graph.commit.goToParentCommit', () => this.selectContextCommit('parent')),
@@ -233,7 +235,7 @@ export class GraphViewProvider implements vscode.WebviewViewProvider {
 
     private async runTagContextCommand(command: TagCommand): Promise<void> {
         const target = this.contextTarget;
-        if (target?.kind !== 'tag' || (command === 'checkout' && target.isCurrent)) { return; }
+        if (target?.kind !== 'tag' || (command === TagCommand.Checkout && target.isCurrent)) { return; }
         await this.router?.handle({
             type: 'graph/tagCommand', command, tag: target.tag,
             ...(target.repository ? { repository: target.repository } : {}),

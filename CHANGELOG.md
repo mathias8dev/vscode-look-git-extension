@@ -6,6 +6,9 @@ All notable changes to Look Git are documented in this file.
 
 ### Added
 
+#### Look Graph Tags
+- Delete tags from graph badge and tag list context menus, choosing local, a selected remote or both, with explicit confirmation and refreshed publication status
+
 #### Git Operations
 - Add Squash + no-ff merging with separate squash and merge messages, an automatically generated, editable squash message, source branch preservation and native merge conflict recovery
 - Choose Git pull strategies consistently from Changes, History, Graph, worktrees and submodules, including Sync, Commit & Sync, Pull From and push recovery

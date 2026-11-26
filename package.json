@@ -1368,6 +1368,12 @@
         "command": "lookGit.graph.tag.push",
         "title": "Push Tag...",
         "category": "Look Git"
+      },
+      {
+        "command": "lookGit.graph.tag.delete",
+        "title": "Delete Tag...",
+        "category": "Look Git",
+        "icon": "$(trash)"
       }
     ],
     "submenus": [
@@ -2681,6 +2687,11 @@
           "command": "lookGit.graph.tag.push",
           "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphTag'",
           "group": "3_graph_tag_push@1"
+        },
+        {
+          "command": "lookGit.graph.tag.delete",
+          "when": "webviewId == 'lookGit.graphView' && webviewSection == 'graphTag'",
+          "group": "4_graph_tag_manage@1"
         }
       ]
     }

@@ -1,3 +1,4 @@
+import { TagCommand } from '@protocol/graph/messages';
 import { useCallback, useEffect, useReducer } from 'react';
 import type { GraphExtensionToWebviewMessage, GraphWebviewToExtensionMessage } from '@protocol/graph/messages';
 import type { CommitFileChange, GraphContextTarget, GraphSubmoduleInfo } from '@protocol/graph/types';
@@ -325,7 +326,7 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                             busy={operationRunning}
                             onReturn={() => { if (previousBranch) { sendMessage(messageForBranchCheckout(previousBranch, false, state.repository)); } }}
                             onCreateBranch={() => sendMessage(detachedHead.tags[0]
-                                ? messageForTagCommand('newBranch', detachedHead.tags[0], state.repository)
+                                ? messageForTagCommand(TagCommand.NewBranch, detachedHead.tags[0], state.repository)
                                 : messageForBranchCommand('newBranchFrom', detachedHead.hash, false, state.repository))} /> : null}
 
                         <GraphOperationNotice
