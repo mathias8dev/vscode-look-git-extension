@@ -46,6 +46,15 @@
     outline-offset: -1px;
 }
 
+.graph-tag-row[aria-pressed="true"] .graph-tag-publication {
+    color: inherit;
+}
+
+.graph-tag-badge[aria-pressed="true"] {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+}
+
 .graph-detached-notice {
     display: flex;
     align-items: center;
@@ -453,7 +462,8 @@
     background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
 }
 
-.graph-resource-row[aria-selected="true"] {
+.graph-resource-row[aria-selected="true"],
+.graph-resource-row[aria-pressed="true"] {
     background: var(--vscode-list-activeSelectionBackground, rgba(14, 99, 156, 0.4));
     color: var(--vscode-list-activeSelectionForeground, #ffffff);
 }

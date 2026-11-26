@@ -1,6 +1,6 @@
 import type { TagPublication } from '@protocol/graph/messages';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { BranchInfo, GraphContextTarget } from '@protocol/graph/types';
+import type { BranchInfo, GraphContextTarget, TagInfo } from '@protocol/graph/types';
 import type { GraphRow } from '@webview/features/graph/layout/graph-lane-model';
 import { GraphColumnHeader } from '@webview/features/graph/graph-column-header';
 import { sameResourcePath } from '@webview/shared/resource-path';
@@ -20,12 +20,14 @@ interface GraphTableProps {
     readonly displayRows: readonly DisplayRow[];
     readonly branches: readonly BranchInfo[];
     readonly currentTagNames?: readonly string[];
+    readonly selectedTagName?: string;
     readonly tagPublications?: readonly TagPublication[];
     readonly tagStatusCheckedAt?: string;
     readonly selectedHashes: readonly string[];
     readonly selectedWorktreePath: string | undefined;
     readonly hasMore: boolean;
     readonly loadingMore: boolean;
+    readonly onSelectTag: (tag: TagInfo) => void;
     readonly onSelectCommit: (hash: string, mode: CommitSelectMode) => void;
     readonly onSelectWorktree: (path: string) => void;
     readonly onContextTarget: (target: GraphContextTarget) => void;
@@ -39,6 +41,8 @@ export function GraphTable({
     displayRows,
     branches,
     currentTagNames = [],
+    selectedTagName,
+    onSelectTag,
     tagPublications = [],
     tagStatusCheckedAt,
     selectedHashes,
@@ -185,6 +189,8 @@ export function GraphTable({
                                     row={row}
                                     branches={branches}
                                     currentTagNames={currentTagNames}
+                                    selectedTagName={selectedTagName}
+                                    onSelectTag={onSelectTag}
                                     tagPublications={tagPublications}
                                     tagStatusCheckedAt={tagStatusCheckedAt}
                                     onTagContextTarget={onContextTarget}

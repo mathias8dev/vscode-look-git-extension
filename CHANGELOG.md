@@ -16,6 +16,9 @@ All notable changes to Look Git are documented in this file.
 
 ### Fixed
 
+#### Look Graph Tags
+- Highlight the selected tag in the tag list and graph badges while opening its commit details
+
 #### Diffs
 - Apply Git textconv drivers when reading revisions, the index, merge conflict stages and comparison patches, matching VS Code Git and displaying decrypted git-crypt content in unlocked repositories
 - Preserve original file bytes through a read-only file system so VS Code handles text encodings, binary files and image previews in native editors

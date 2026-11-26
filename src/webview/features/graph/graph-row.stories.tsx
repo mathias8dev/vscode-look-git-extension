@@ -9,6 +9,7 @@ const meta = {
         row: graphRows[0],
         branches,
         onTagContextTarget: noop,
+        onSelectTag: noop,
         selected: false,
         childHash: undefined,
         parentHash: graphRows[0].commit.parentHashes[0],
@@ -25,6 +26,7 @@ const meta = {
     argTypes: {
         style: { control: false },
         onSelect: { control: false },
+        onSelectTag: { control: false },
         onOpenContextMenu: { control: false },
         onBranchDoubleClick: { control: false },
         onMoveFocus: { control: false },

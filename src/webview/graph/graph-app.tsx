@@ -287,7 +287,8 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                             checkingTags={Boolean(state.tagStatusRequestId)}
                             onRefreshTagStatus={() => dispatch({ type: 'refreshTagStatus' })}
                             currentTagNames={detachedHead?.tags}
-                            onSelectTag={hash => dispatch({ type: 'selectCommit', hash })}
+                            selectedTagName={state.selectedTagName}
+                            onSelectTag={tag => dispatch({ type: 'selectTag', tag })}
                             worktrees={state.worktrees}
                             submodules={state.submodules}
                             selectedRepository={state.selectedRepository}
@@ -367,6 +368,8 @@ export function GraphApp({ sendMessage }: GraphAppProps) {
                                 displayRows={state.displayRows}
                                 branches={state.branches}
                                 currentTagNames={detachedHead?.tags}
+                                selectedTagName={state.selectedTagName}
+                                onSelectTag={tag => dispatch({ type: 'selectTag', tag })}
                                 tagPublications={state.tagPublications}
                                 tagStatusCheckedAt={state.tagStatusCheckedAt}
                                 selectedHashes={state.selectedHashes}

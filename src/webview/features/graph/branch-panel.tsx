@@ -19,11 +19,12 @@ interface BranchPanelProps {
     readonly branches: readonly BranchInfo[];
     readonly tags?: readonly TagInfo[];
     readonly currentTagNames?: readonly string[];
+    readonly selectedTagName?: string;
     readonly tagPublications?: readonly TagPublication[];
     readonly tagStatusCheckedAt?: string;
     readonly checkingTags?: boolean;
     readonly onRefreshTagStatus?: () => void;
-    readonly onSelectTag?: (hash: string) => void;
+    readonly onSelectTag?: (tag: TagInfo) => void;
     readonly worktrees: readonly WorktreeInfo[];
     readonly submodules: readonly GraphSubmoduleInfo[];
     readonly selectedRepository?: GraphRepositorySelection;
@@ -50,6 +51,7 @@ export function BranchPanel({
     branches,
     tags = [],
     currentTagNames = [],
+    selectedTagName,
     tagPublications = [],
     tagStatusCheckedAt,
     checkingTags = false,
@@ -401,7 +403,7 @@ export function BranchPanel({
                                         className="graph-resource-action" busy={checkingTags} onClick={onRefreshTagStatus} />
                                 </div>
                                 {!tagsCollapsed && filteredTags.map(tag => (
-                                    <GraphTag key={tag.name} tag={tag} variant="list" isCurrent={currentTagNames.includes(tag.name)}
+                                    <GraphTag key={tag.name} tag={tag} selected={selectedTagName === tag.name} variant="list" isCurrent={currentTagNames.includes(tag.name)}
                                         publication={tagPublications.find(item => item.name === tag.name)} checkedAt={tagStatusCheckedAt}
                                         onSelect={onSelectTag} onContextTarget={onContextTarget} />
                                 ))}

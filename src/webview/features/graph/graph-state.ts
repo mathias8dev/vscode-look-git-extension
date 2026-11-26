@@ -125,6 +125,7 @@ export interface GraphState {
     readonly selectedBranchFilter: string | undefined;
     readonly loading: boolean;
     readonly error: ProtocolError | undefined;
+    readonly selectedTagName: string | undefined;
     readonly selectedHash: string | undefined;
     readonly selectedWorktreePath: string | undefined;
     readonly selectedBranchDetailsName: string | undefined;
@@ -149,6 +150,7 @@ export type GraphAction =
     | { readonly type: 'setBranchFilter'; readonly branch: string | undefined }
     | { readonly type: 'selectMainRepository' }
     | { readonly type: 'selectSubmodule'; readonly submodulePath: string; readonly submoduleLabel: string; readonly repository?: RepositoryLocator }
+    | { readonly type: 'selectTag'; readonly tag: TagInfo }
     | { readonly type: 'selectCommit'; readonly hash: string }
     | { readonly type: 'selectWorktree'; readonly path: string }
     | { readonly type: 'selectBranchDetails'; readonly branch: string }
@@ -192,6 +194,7 @@ export function createInitialGraphState(): GraphState {
         selectedBranchFilter: undefined,
         loading: true,
         error: undefined,
+        selectedTagName: undefined,
         selectedHash: undefined,
         selectedWorktreePath: undefined,
         selectedBranchDetailsName: undefined,
@@ -229,6 +232,7 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
             return startGraphReload({
                 ...state,
                 selectedBranchFilter: action.branch,
+                selectedTagName: undefined,
                 filters: {
                     ...state.filters,
                     branches: action.branch ? [action.branch] : undefined,
@@ -242,6 +246,7 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
                 repository: undefined,
                 selectedBranchFilter: undefined,
                 filters: { ...state.filters, branches: undefined },
+                selectedTagName: undefined,
                 selectedHash: undefined,
                 selectedWorktreePath: undefined,
                 selectedBranchDetailsName: undefined,
@@ -261,6 +266,7 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
                 repository: action.repository,
                 selectedBranchFilter: undefined,
                 filters: { ...state.filters, branches: undefined },
+                selectedTagName: undefined,
                 selectedHash: undefined,
                 selectedWorktreePath: undefined,
                 selectedBranchDetailsName: undefined,
@@ -273,6 +279,8 @@ export function reduceGraphState(state: GraphState, action: GraphAction): GraphS
                 activeBranchDetailsRequestId: undefined,
                 activeBranchDetailsRequestOffset: undefined,
             }), state.refreshVersion + 1);
+        case 'selectTag':
+            return { ...selectCommit(state, action.tag.hash, [action.tag.hash], action.tag.hash), selectedTagName: action.tag.name };
         case 'selectCommit':
             return selectCommit(state, action.hash, [action.hash], action.hash);
         case 'selectWorktree':
@@ -321,6 +329,7 @@ function selectCommit(state: GraphState, hash: string, hashes: readonly string[]
     const nextHashes = Array.from(new Set(hashes));
     return {
         ...state,
+        selectedTagName: undefined,
         selectedHash: hash,
         selectedWorktreePath: undefined,
         selectedBranchDetailsName: undefined,
@@ -338,6 +347,7 @@ function selectCommit(state: GraphState, hash: string, hashes: readonly string[]
 function selectWorktree(state: GraphState, path: string): GraphState {
     return {
         ...state,
+        selectedTagName: undefined,
         selectedHash: undefined,
         selectedWorktreePath: path,
         selectedBranchDetailsName: undefined,
@@ -356,6 +366,7 @@ function selectBranchDetails(state: GraphState, branch: string): GraphState {
     const sameBranch = state.selectedBranchDetailsName === branch;
     return {
         ...state,
+        selectedTagName: undefined,
         selectedHash: undefined,
         selectedWorktreePath: undefined,
         selectedBranchDetailsName: branch,
@@ -373,6 +384,7 @@ function selectBranchDetails(state: GraphState, branch: string): GraphState {
 function clearDetailsSelection(state: GraphState): GraphState {
     return {
         ...state,
+        selectedTagName: undefined,
         selectedHash: undefined,
         selectedWorktreePath: undefined,
         selectedBranchDetailsName: undefined,
@@ -397,7 +409,7 @@ function toggleCommitSelection(state: GraphState, hash: string): GraphState {
     const selectedHashes = Array.from(selected);
     const selectedHash = selected.has(hash) ? hash : selectedHashes.at(-1);
     if (!selectedHash) {
-        return { ...state, selectedHash: undefined, selectedWorktreePath: undefined, selectedHashes, selectionAnchorHash: undefined, commitDetails: undefined, detailsLoading: false };
+        return { ...state, selectedTagName: undefined, selectedHash: undefined, selectedWorktreePath: undefined, selectedHashes, selectionAnchorHash: undefined, commitDetails: undefined, detailsLoading: false };
     }
     return selectCommit(state, selectedHash, selectedHashes, hash);
 }
@@ -649,6 +661,9 @@ function applyGraphData(state: GraphState, data: GraphData, repoId: string | und
         displayRows,
         branches: data.branches,
         tags: data.tags,
+        selectedTagName: sameRepositoryLocator(state.repository, data.repository)
+            && data.tags.some(tag => tag.name === state.selectedTagName && tag.hash === state.selectedHash)
+            ? state.selectedTagName : undefined,
         ...(tagsEqual(state.tags, data.tags) && sameRepositoryLocator(state.repository, data.repository) ? {} : {
             tagPublications: [], tagStatusRequestId: undefined, tagStatusFailed: false, tagStatusCheckedAt: undefined,
         }),
@@ -716,6 +731,7 @@ function clearGraphContent(state: GraphState): GraphState {
         displayRows: [],
         branches: [],
         tags: [],
+        selectedTagName: undefined,
         tagPublications: [],
         tagStatusRequestId: undefined,
         tagStatusFailed: false,

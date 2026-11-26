@@ -51,6 +51,7 @@ function GraphScenario({ loadingMore = false }: { readonly loadingMore?: boolean
                     selectedWorktreePath={worktreeWip.path}
                     hasMore={true}
                     loadingMore={loadingMore}
+                    onSelectTag={noop}
                     onSelectCommit={noop}
                     onSelectWorktree={noop}
                     onContextTarget={noop}

@@ -7,17 +7,18 @@ import { openNativeContextMenu } from '@webview/shared/open-native-context-menu'
 interface GraphTagProps {
     readonly tag: TagInfo;
     readonly isCurrent: boolean;
+    readonly selected: boolean;
     readonly variant: 'badge' | 'list';
     readonly publication?: TagPublication;
     readonly checkedAt?: string;
-    readonly onSelect: (hash: string) => void;
+    readonly onSelect: (tag: TagInfo) => void;
     readonly onContextTarget: (target: GraphContextTarget) => void;
 }
 
-export function GraphTag({ tag, isCurrent, variant, publication, checkedAt, onSelect, onContextTarget }: GraphTagProps) {
+export function GraphTag({ tag, isCurrent, selected, variant, publication, checkedAt, onSelect, onContextTarget }: GraphTagProps) {
     const status = tagPublicationModel(publication, checkedAt);
     const selectContext = () => {
-        onSelect(tag.hash);
+        onSelect(tag);
         onContextTarget({ kind: 'tag', tag: tag.name, isCurrent });
     };
     return (
@@ -25,9 +26,10 @@ export function GraphTag({ tag, isCurrent, variant, publication, checkedAt, onSe
             type="button"
             className={variant === 'badge' ? 'ref-badge ref-badge-tag graph-tag-badge' : 'graph-resource-row graph-resource-row-clickable graph-tag-row'}
             title={`Tag: ${tag.name}${isCurrent ? ' · Detached HEAD' : ''}\n${status.title}`}
+            aria-pressed={selected}
             aria-haspopup="menu"
             data-vscode-context={JSON.stringify({ webviewSection: 'graphTag', graphTagIsCurrent: isCurrent, preventDefaultContextMenuItems: true })}
-            onClick={event => { event.stopPropagation(); onSelect(tag.hash); }}
+            onClick={event => { event.stopPropagation(); onSelect(tag); }}
             onDoubleClick={event => event.stopPropagation()}
             onMouseDown={event => {
                 event.stopPropagation();

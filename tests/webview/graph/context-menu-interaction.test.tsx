@@ -27,7 +27,7 @@ describe('graph native context menu targets', () => {
         try {
             render(<GraphTable rows={rows} displayRows={rows.map(row => ({ kind: 'commit', row }))}
                 branches={[]} selectedHashes={[]} selectedWorktreePath={undefined} hasMore={false} loadingMore={false}
-                onSelectCommit={() => undefined} onSelectWorktree={() => undefined} onContextTarget={onContextTarget}
+                onSelectTag={() => undefined} onSelectCommit={() => undefined} onSelectWorktree={() => undefined} onContextTarget={onContextTarget}
                 onLoadMore={() => undefined} onBranchDoubleClick={() => undefined} onMoveFocus={() => undefined} />);
             const tag = screen.getByRole('button', { name: /v1/ });
             const icon = tag.querySelector('.codicon-tag');
@@ -146,6 +146,7 @@ describe('graph native context menu targets', () => {
                 selectedWorktreePath={undefined}
                 hasMore={false}
                 loadingMore={false}
+                onSelectTag={() => undefined}
                 onSelectCommit={onSelectCommit}
                 onSelectWorktree={() => undefined}
                 onContextTarget={onContextTarget}
@@ -206,6 +207,7 @@ describe('graph native context menu targets', () => {
                 selectedWorktreePath={undefined}
                 hasMore={false}
                 loadingMore={false}
+                onSelectTag={() => undefined}
                 onSelectCommit={() => undefined}
                 onSelectWorktree={() => undefined}
                 onContextTarget={onContextTarget}
@@ -245,6 +247,7 @@ describe('graph native context menu targets', () => {
                 selectedWorktreePath={undefined}
                 hasMore={false}
                 loadingMore={false}
+                onSelectTag={() => undefined}
                 onSelectCommit={onSelectCommit}
                 onSelectWorktree={() => undefined}
                 onContextTarget={onContextTarget}

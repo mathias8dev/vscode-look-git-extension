@@ -81,6 +81,7 @@ function renderGraphTable(): RenderResult {
             selectedWorktreePath={undefined}
             hasMore={false}
             loadingMore={false}
+            onSelectTag={() => undefined}
             onSelectCommit={() => undefined}
             onSelectWorktree={() => undefined}
             onContextTarget={() => undefined}

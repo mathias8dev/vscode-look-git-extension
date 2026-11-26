@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { GraphData } from '@protocol/graph/types';
 import type { TagPublication, TagStatusRequest } from '@protocol/graph/messages';
 import { GraphTag } from '@webview/features/graph/graph-tag';
-import { graphRequestId } from '@webview/features/graph/graph-state';
+import { createInitialGraphState, graphRequestId, reduceGraphState, type GraphAction } from '@webview/features/graph/graph-state';
 import { GraphApp } from '@webview/graph/graph-app';
 import { tagPublicationModel } from '@webview/features/graph/tag-publication-model';
 import { detachedHeadModel } from '@webview/features/graph/detached-head-model';
@@ -22,6 +22,68 @@ const data: GraphData = {
 };
 
 describe('graph tag interactions', () => {
+    it('highlights only the chosen tag in the list and graph, even when tags share a commit', async () => {
+        globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+        const api = createMockVsCodeApi();
+        render(<GraphApp sendMessage={message => api.postMessage(message)} />);
+        const taggedData = {
+            ...data,
+            tags: [...data.tags, { name: 'v2', hash: 'base' }],
+            commits: data.commits.map(commit => ({ ...commit, refs: ['tag: v1', 'tag: v2'] })),
+        };
+        await act(async () => sendToWebview({ type: 'graph/dataResponse', requestId: graphRequestId(0, 'replace'), data: taggedData }));
+        const firstTag = screen.getAllByRole('button', { name: /v1/ });
+        const secondTag = screen.getAllByRole('button', { name: /v2/ });
+        expect(firstTag).toHaveLength(2);
+        expect(secondTag).toHaveLength(2);
+        fireEvent.click(firstTag[0]!);
+        expect(firstTag.every(button => button.getAttribute('aria-pressed') === 'true')).toBe(true);
+        expect(secondTag.every(button => button.getAttribute('aria-pressed') === 'false')).toBe(true);
+        await waitFor(() => expect(api.messages).toContainEqual(expect.objectContaining({ type: 'graph/commitDetailsRequest', hash: 'base' })));
+
+        fireEvent.click(secondTag[1]!);
+        expect(firstTag.every(button => button.getAttribute('aria-pressed') === 'false')).toBe(true);
+        expect(secondTag.every(button => button.getAttribute('aria-pressed') === 'true')).toBe(true);
+        await act(async () => sendToWebview({ type: 'graph/dataPush', repoId: 'repo', data: taggedData }));
+        expect(secondTag.every(button => button.getAttribute('aria-pressed') === 'true')).toBe(true);
+
+        fireEvent.contextMenu(firstTag[0]!);
+        expect(firstTag.every(button => button.getAttribute('aria-pressed') === 'true')).toBe(true);
+        fireEvent.keyDown(secondTag[1]!, { key: 'F10', shiftKey: true });
+        expect(secondTag.every(button => button.getAttribute('aria-pressed') === 'true')).toBe(true);
+
+        fireEvent.click(screen.getByText('Release'));
+        expect(screen.queryAllByRole('button', { pressed: true }).filter(button => button.classList.contains('graph-tag-badge') || button.classList.contains('graph-tag-row'))).toHaveLength(0);
+    });
+
+    it.each([
+        { type: 'selectCommit', hash: 'base' },
+        { type: 'toggleCommitSelection', hash: 'base' },
+        { type: 'selectCommitRange', hashes: ['base'], focusHash: 'base' },
+        { type: 'selectWorktree', path: '/repo' },
+        { type: 'selectBranchDetails', branch: 'main' },
+        { type: 'setBranchFilter', branch: 'main' },
+        { type: 'clearSelection' },
+        { type: 'selectMainRepository' },
+        { type: 'selectSubmodule', submodulePath: 'modules/auth', submoduleLabel: 'auth' },
+        { type: 'navigateRepository', contextId: 'other' },
+    ] satisfies readonly GraphAction[])('clears the tag highlight on $type', action => {
+        const state = reduceGraphState(createInitialGraphState(), { type: 'selectTag', tag: data.tags[0]! });
+        expect(state.selectedTagName).toBe('v1');
+        expect(state.selectedHashes).toEqual(['base']);
+        expect(reduceGraphState(state, action).selectedTagName).toBeUndefined();
+    });
+
+    it('clears tag selection when the tag is deleted or retargeted', () => {
+        const loaded = reduceGraphState(createInitialGraphState(), {
+            type: 'message', message: { type: 'graph/dataResponse', requestId: graphRequestId(0, 'replace'), data },
+        });
+        const selected = reduceGraphState(loaded, { type: 'selectTag', tag: data.tags[0]! });
+        for (const tags of [[], [{ name: 'v1', hash: 'other' }]]) {
+            expect(reduceGraphState(selected, { type: 'message', message: { type: 'graph/dataPush', repoId: 'repo', data: { ...data, tags } } }).selectedTagName).toBeUndefined();
+        }
+    });
+
     it('checks large tag lists in bounded batches and rejects stale status responses', async () => {
         globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
         const api = createMockVsCodeApi();
@@ -46,11 +108,11 @@ describe('graph tag interactions', () => {
         const onContextTarget = vi.fn();
         window.addEventListener('contextmenu', nativeMenu);
         try {
-            render(<GraphTag tag={{ name: 'v1', hash: 'base' }} isCurrent={false} variant={variant}
+            render(<GraphTag tag={{ name: 'v1', hash: 'base' }} isCurrent={false} selected={false} variant={variant}
                 onSelect={onSelect} onContextTarget={onContextTarget} />);
             const button = screen.getByRole('button', { name: /v1/ });
             fireEvent.click(button);
-            expect(onSelect).toHaveBeenCalledWith('base');
+            expect(onSelect).toHaveBeenCalledWith({ name: 'v1', hash: 'base' });
             expect(onContextTarget).not.toHaveBeenCalled();
             fireEvent.contextMenu(button);
             expect(nativeMenu).toHaveBeenCalledTimes(1);
